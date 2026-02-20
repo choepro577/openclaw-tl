@@ -34,6 +34,7 @@ describe("iconForTab", () => {
     expect(iconForTab("cron")).toBe("loader");
     expect(iconForTab("skills")).toBe("zap");
     expect(iconForTab("nodes")).toBe("monitor");
+    expect(iconForTab("kb")).toBe("book");
     expect(iconForTab("config")).toBe("settings");
     expect(iconForTab("debug")).toBe("bug");
     expect(iconForTab("logs")).toBe("scrollText");
@@ -59,6 +60,7 @@ describe("titleForTab", () => {
     expect(titleForTab("chat")).toBe("Chat");
     expect(titleForTab("overview")).toBe("Overview");
     expect(titleForTab("cron")).toBe("Cron Jobs");
+    expect(titleForTab("kb")).toBe("KB");
   });
 });
 
@@ -130,6 +132,7 @@ describe("tabFromPath", () => {
     expect(tabFromPath("/chat")).toBe("chat");
     expect(tabFromPath("/overview")).toBe("overview");
     expect(tabFromPath("/sessions")).toBe("sessions");
+    expect(tabFromPath("/kb")).toBe("kb");
   });
 
   it("returns chat for root path", () => {

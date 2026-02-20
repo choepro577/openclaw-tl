@@ -27,6 +27,7 @@ import { rawDataToString } from "../../../infra/ws.js";
 import { isGatewayCliClient, isWebchatClient } from "../../../utils/message-channel.js";
 import { authorizeGatewayConnect, isLocalDirectRequest } from "../../auth.js";
 import { buildDeviceAuthPayload } from "../../device-auth.js";
+import { verifyEnterpriseSocketToken } from "../../enterprise-socket-auth.js";
 import { isLoopbackAddress, isTrustedProxyAddress, resolveGatewayClientIp } from "../../net.js";
 import { resolveNodeCommandAllowlist } from "../../node-command-policy.js";
 import { checkBrowserOrigin } from "../../origin-check.js";
@@ -74,6 +75,8 @@ function resolveHostName(hostHeader?: string): string {
 }
 
 type AuthProvidedKind = "token" | "password" | "none";
+
+const ENTERPRISE_ALLOWED_SCOPES = ["operator.read", "operator.write"] as const;
 
 function formatGatewayAuthFailureMessage(params: {
   authMode: ResolvedGatewayAuth["mode"];
@@ -357,9 +360,9 @@ export function attachGatewayWsMessageHandler(params: {
           return;
         }
         // Default-deny: scopes must be explicit. Empty/missing scopes means no permissions.
-        const scopes = Array.isArray(connectParams.scopes) ? connectParams.scopes : [];
+        const requestedScopes = Array.isArray(connectParams.scopes) ? connectParams.scopes : [];
         connectParams.role = role;
-        connectParams.scopes = scopes;
+        connectParams.scopes = requestedScopes;
 
         const isControlUi = connectParams.client.id === GATEWAY_CLIENT_IDS.CONTROL_UI;
         const isWebchat = isWebchatConnect(connectParams);
@@ -405,26 +408,45 @@ export function attachGatewayWsMessageHandler(params: {
         const allowControlUiBypass = allowInsecureControlUi || disableControlUiDeviceAuth;
         const device = disableControlUiDeviceAuth ? null : deviceRaw;
 
-        const authResult = await authorizeGatewayConnect({
-          auth: resolvedAuth,
-          connectAuth: connectParams.auth,
-          req: upgradeReq,
-          trustedProxies,
+        const enterpriseTokenResult = verifyEnterpriseSocketToken({
+          token: connectParams.auth?.token,
         });
+        const boundEnterpriseAgentId = enterpriseTokenResult.ok
+          ? enterpriseTokenResult.agentId
+          : undefined;
+        const effectiveRole: "operator" | "node" = boundEnterpriseAgentId ? "operator" : role;
+        const effectiveScopes = boundEnterpriseAgentId
+          ? [...ENTERPRISE_ALLOWED_SCOPES]
+          : requestedScopes;
+        connectParams.role = effectiveRole;
+        connectParams.scopes = effectiveScopes;
+
+        const authResult: Awaited<ReturnType<typeof authorizeGatewayConnect>> =
+          boundEnterpriseAgentId
+            ? ({ ok: true, method: "token" } as const)
+            : await authorizeGatewayConnect({
+                auth: resolvedAuth,
+                connectAuth: connectParams.auth,
+                req: upgradeReq,
+                trustedProxies,
+              });
         let authOk = authResult.ok;
-        let authMethod =
-          authResult.method ?? (resolvedAuth.mode === "password" ? "password" : "token");
-        const sharedAuthResult = hasSharedAuth
-          ? await authorizeGatewayConnect({
-              auth: { ...resolvedAuth, allowTailscale: false },
-              connectAuth: connectParams.auth,
-              req: upgradeReq,
-              trustedProxies,
-            })
-          : null;
+        let authMethod: string = boundEnterpriseAgentId
+          ? "enterprise-token"
+          : (authResult.method ?? (resolvedAuth.mode === "password" ? "password" : "token"));
+        const sharedAuthResult =
+          hasSharedAuth && !boundEnterpriseAgentId
+            ? await authorizeGatewayConnect({
+                auth: { ...resolvedAuth, allowTailscale: false },
+                connectAuth: connectParams.auth,
+                req: upgradeReq,
+                trustedProxies,
+              })
+            : null;
         const sharedAuthOk =
-          sharedAuthResult?.ok === true &&
-          (sharedAuthResult.method === "token" || sharedAuthResult.method === "password");
+          Boolean(boundEnterpriseAgentId) ||
+          (sharedAuthResult?.ok === true &&
+            (sharedAuthResult.method === "token" || sharedAuthResult.method === "password"));
         const rejectUnauthorized = () => {
           setHandshakeState("failed");
           logWsControl.warn(
@@ -460,7 +482,7 @@ export function attachGatewayWsMessageHandler(params: {
           close(1008, truncateCloseReason(authMessage));
         };
         if (!device) {
-          const canSkipDevice = sharedAuthOk;
+          const canSkipDevice = sharedAuthOk || Boolean(boundEnterpriseAgentId);
 
           if (isControlUi && !allowControlUiBypass) {
             const errorMessage = "control ui requires HTTPS or localhost (secure context)";
@@ -580,8 +602,8 @@ export function attachGatewayWsMessageHandler(params: {
             deviceId: device.id,
             clientId: connectParams.client.id,
             clientMode: connectParams.client.mode,
-            role,
-            scopes,
+            role: effectiveRole,
+            scopes: effectiveScopes,
             signedAtMs: signedAt,
             token: connectParams.auth?.token ?? null,
             nonce: providedNonce || undefined,
@@ -594,8 +616,8 @@ export function attachGatewayWsMessageHandler(params: {
               deviceId: device.id,
               clientId: connectParams.client.id,
               clientMode: connectParams.client.mode,
-              role,
-              scopes,
+              role: effectiveRole,
+              scopes: effectiveScopes,
               signedAtMs: signedAt,
               token: connectParams.auth?.token ?? null,
               version: "v1",
@@ -657,8 +679,8 @@ export function attachGatewayWsMessageHandler(params: {
           const tokenCheck = await verifyDeviceToken({
             deviceId: device.id,
             token: connectParams.auth.token,
-            role,
-            scopes,
+            role: effectiveRole,
+            scopes: effectiveScopes,
           });
           if (tokenCheck.ok) {
             authOk = true;
@@ -680,8 +702,8 @@ export function attachGatewayWsMessageHandler(params: {
               platform: connectParams.client.platform,
               clientId: connectParams.client.id,
               clientMode: connectParams.client.mode,
-              role,
-              scopes,
+              role: effectiveRole,
+              scopes: effectiveScopes,
               remoteIp: reportedClientIp,
               silent: isLocalClient,
             });
@@ -743,7 +765,7 @@ export function attachGatewayWsMessageHandler(params: {
               if (!ok) {
                 return;
               }
-            } else if (!allowedRoles.has(role)) {
+            } else if (!allowedRoles.has(effectiveRole)) {
               const ok = await requirePairing("role-upgrade", paired);
               if (!ok) {
                 return;
@@ -751,7 +773,7 @@ export function attachGatewayWsMessageHandler(params: {
             }
 
             const pairedScopes = Array.isArray(paired.scopes) ? paired.scopes : [];
-            if (scopes.length > 0) {
+            if (effectiveScopes.length > 0) {
               if (pairedScopes.length === 0) {
                 const ok = await requirePairing("scope-upgrade", paired);
                 if (!ok) {
@@ -759,7 +781,7 @@ export function attachGatewayWsMessageHandler(params: {
                 }
               } else {
                 const allowedScopes = new Set(pairedScopes);
-                const missingScope = scopes.find((scope) => !allowedScopes.has(scope));
+                const missingScope = effectiveScopes.find((scope) => !allowedScopes.has(scope));
                 if (missingScope) {
                   const ok = await requirePairing("scope-upgrade", paired);
                   if (!ok) {
@@ -774,18 +796,22 @@ export function attachGatewayWsMessageHandler(params: {
               platform: connectParams.client.platform,
               clientId: connectParams.client.id,
               clientMode: connectParams.client.mode,
-              role,
-              scopes,
+              role: effectiveRole,
+              scopes: effectiveScopes,
               remoteIp: reportedClientIp,
             });
           }
         }
 
         const deviceToken = device
-          ? await ensureDeviceToken({ deviceId: device.id, role, scopes })
+          ? await ensureDeviceToken({
+              deviceId: device.id,
+              role: effectiveRole,
+              scopes: effectiveScopes,
+            })
           : null;
 
-        if (role === "node") {
+        if (effectiveRole === "node") {
           const cfg = loadConfig();
           const allowlist = resolveNodeCommandAllowlist(cfg, {
             platform: connectParams.client.platform,
@@ -830,8 +856,8 @@ export function attachGatewayWsMessageHandler(params: {
             modelIdentifier: connectParams.client.modelIdentifier,
             mode: connectParams.client.mode,
             deviceId: device?.id,
-            roles: [role],
-            scopes,
+            roles: [effectiveRole],
+            scopes: Array.isArray(connectParams.scopes) ? connectParams.scopes : [],
             instanceId: device?.id ?? instanceId,
             reason: "connect",
           });
@@ -878,10 +904,12 @@ export function attachGatewayWsMessageHandler(params: {
           connId,
           presenceKey,
           clientIp: reportedClientIp,
+          boundAgentId: boundEnterpriseAgentId,
+          authKind: boundEnterpriseAgentId ? "enterprise-token" : "gateway-token",
         };
         setClient(nextClient);
         setHandshakeState("connected");
-        if (role === "node") {
+        if (effectiveRole === "node") {
           const context = buildRequestContext();
           const nodeSession = context.nodeRegistry.register(nextClient, {
             remoteIp: reportedClientIp,

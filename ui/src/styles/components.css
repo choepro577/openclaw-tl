@@ -866,6 +866,191 @@
 }
 
 /* ===========================================
+   KB View
+   =========================================== */
+
+.kb-layout {
+  display: grid;
+  grid-template-columns: minmax(280px, 0.95fr) minmax(420px, 1.05fr);
+  gap: 12px;
+  align-items: start;
+}
+
+.kb-tree-panel,
+.kb-editor-panel {
+  min-width: 0;
+}
+
+.kb-tree-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--card);
+  padding: 10px 12px;
+  box-shadow: inset 0 1px 0 var(--card-highlight);
+  margin-bottom: 8px;
+}
+
+.kb-tree-scroll {
+  max-height: 540px;
+  overflow: auto;
+  display: grid;
+  gap: 6px;
+  padding-right: 2px;
+}
+
+.kb-tree-node {
+  --kb-depth: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 10px 12px;
+  padding-left: calc(12px + var(--kb-depth) * 14px);
+  background: var(--card);
+  cursor: pointer;
+  transition:
+    border-color var(--duration-fast) var(--ease-out),
+    box-shadow var(--duration-fast) var(--ease-out),
+    transform var(--duration-fast) var(--ease-out);
+}
+
+.kb-tree-node:hover {
+  border-color: var(--border-strong);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm);
+}
+
+.kb-tree-node--selected {
+  border-color: var(--accent);
+  background: linear-gradient(135deg, var(--accent-subtle) 0%, transparent 100%);
+  box-shadow: var(--focus-ring);
+}
+
+.kb-tree-main {
+  display: grid;
+  grid-template-columns: 18px 42px minmax(0, 1fr);
+  gap: 8px;
+  align-items: center;
+  min-width: 0;
+}
+
+.kb-tree-chevron {
+  width: 18px;
+  height: 18px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--muted);
+  display: inline-grid;
+  place-items: center;
+  cursor: pointer;
+  padding: 0;
+}
+
+.kb-tree-chevron:hover {
+  background: var(--secondary);
+  color: var(--text);
+}
+
+.kb-tree-chevron--spacer {
+  pointer-events: none;
+}
+
+.kb-tree-kind {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  padding: 2px 8px;
+  min-height: 20px;
+}
+
+.kb-tree-copy {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.kb-tree-name {
+  font-weight: 500;
+  color: var(--text-strong);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kb-tree-path {
+  color: var(--muted);
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kb-tree-meta {
+  color: var(--muted);
+  font-size: 12px;
+  white-space: nowrap;
+  text-align: right;
+}
+
+.kb-tree-empty {
+  margin-top: 6px;
+}
+
+.kb-extra-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: flex-end;
+}
+
+.kb-extra-agent {
+  min-width: 220px;
+}
+
+.kb-extra-path-row {
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+}
+
+.kb-sync-card .card-sub {
+  margin-top: 6px;
+}
+
+@media (max-width: 1024px) {
+  .kb-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .kb-tree-scroll {
+    max-height: 420px;
+  }
+
+  .kb-tree-meta {
+    text-align: left;
+    white-space: normal;
+  }
+}
+
+/* ===========================================
    Chips - Compact and punchy
    =========================================== */
 

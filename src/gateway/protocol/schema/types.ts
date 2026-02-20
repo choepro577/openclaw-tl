@@ -10,6 +10,29 @@ import type {
 import type {
   AgentSummarySchema,
   AgentsFileEntrySchema,
+  AgentsKbDeleteParamsSchema,
+  AgentsKbDeleteResultSchema,
+  AgentsKbExtraPathEntrySchema,
+  AgentsKbExtraPathsGetParamsSchema,
+  AgentsKbExtraPathsGetResultSchema,
+  AgentsKbExtraPathsSetParamsSchema,
+  AgentsKbExtraPathsSetResultSchema,
+  AgentsKbFileGetParamsSchema,
+  AgentsKbFileGetResultSchema,
+  AgentsKbFileSchema,
+  AgentsKbFileSetParamsSchema,
+  AgentsKbFileSetResultSchema,
+  AgentsKbSyncAllStartParamsSchema,
+  AgentsKbSyncAllStartResultSchema,
+  AgentsKbSyncAllStatusParamsSchema,
+  AgentsKbSyncAllStatusResultSchema,
+  AgentsKbMkdirParamsSchema,
+  AgentsKbMkdirResultSchema,
+  AgentsKbSyncParamsSchema,
+  AgentsKbSyncResultSchema,
+  AgentsKbTreeEntrySchema,
+  AgentsKbTreeParamsSchema,
+  AgentsKbTreeResultSchema,
   AgentsCreateParamsSchema,
   AgentsCreateResultSchema,
   AgentsDeleteParamsSchema,
@@ -187,6 +210,8 @@ export type WebLoginStartParams = Static<typeof WebLoginStartParamsSchema>;
 export type WebLoginWaitParams = Static<typeof WebLoginWaitParamsSchema>;
 export type AgentSummary = Static<typeof AgentSummarySchema>;
 export type AgentsFileEntry = Static<typeof AgentsFileEntrySchema>;
+export type AgentsKbTreeEntry = Static<typeof AgentsKbTreeEntrySchema>;
+export type AgentsKbFile = Static<typeof AgentsKbFileSchema>;
 export type AgentsCreateParams = Static<typeof AgentsCreateParamsSchema>;
 export type AgentsCreateResult = Static<typeof AgentsCreateResultSchema>;
 export type AgentsUpdateParams = Static<typeof AgentsUpdateParamsSchema>;
@@ -199,6 +224,27 @@ export type AgentsFilesGetParams = Static<typeof AgentsFilesGetParamsSchema>;
 export type AgentsFilesGetResult = Static<typeof AgentsFilesGetResultSchema>;
 export type AgentsFilesSetParams = Static<typeof AgentsFilesSetParamsSchema>;
 export type AgentsFilesSetResult = Static<typeof AgentsFilesSetResultSchema>;
+export type AgentsKbTreeParams = Static<typeof AgentsKbTreeParamsSchema>;
+export type AgentsKbTreeResult = Static<typeof AgentsKbTreeResultSchema>;
+export type AgentsKbMkdirParams = Static<typeof AgentsKbMkdirParamsSchema>;
+export type AgentsKbMkdirResult = Static<typeof AgentsKbMkdirResultSchema>;
+export type AgentsKbFileGetParams = Static<typeof AgentsKbFileGetParamsSchema>;
+export type AgentsKbFileGetResult = Static<typeof AgentsKbFileGetResultSchema>;
+export type AgentsKbFileSetParams = Static<typeof AgentsKbFileSetParamsSchema>;
+export type AgentsKbFileSetResult = Static<typeof AgentsKbFileSetResultSchema>;
+export type AgentsKbDeleteParams = Static<typeof AgentsKbDeleteParamsSchema>;
+export type AgentsKbDeleteResult = Static<typeof AgentsKbDeleteResultSchema>;
+export type AgentsKbExtraPathEntry = Static<typeof AgentsKbExtraPathEntrySchema>;
+export type AgentsKbExtraPathsGetParams = Static<typeof AgentsKbExtraPathsGetParamsSchema>;
+export type AgentsKbExtraPathsGetResult = Static<typeof AgentsKbExtraPathsGetResultSchema>;
+export type AgentsKbExtraPathsSetParams = Static<typeof AgentsKbExtraPathsSetParamsSchema>;
+export type AgentsKbExtraPathsSetResult = Static<typeof AgentsKbExtraPathsSetResultSchema>;
+export type AgentsKbSyncParams = Static<typeof AgentsKbSyncParamsSchema>;
+export type AgentsKbSyncResult = Static<typeof AgentsKbSyncResultSchema>;
+export type AgentsKbSyncAllStartParams = Static<typeof AgentsKbSyncAllStartParamsSchema>;
+export type AgentsKbSyncAllStartResult = Static<typeof AgentsKbSyncAllStartResultSchema>;
+export type AgentsKbSyncAllStatusParams = Static<typeof AgentsKbSyncAllStatusParamsSchema>;
+export type AgentsKbSyncAllStatusResult = Static<typeof AgentsKbSyncAllStatusResultSchema>;
 export type AgentsListParams = Static<typeof AgentsListParamsSchema>;
 export type AgentsListResult = Static<typeof AgentsListResultSchema>;
 export type ModelChoice = Static<typeof ModelChoiceSchema>;

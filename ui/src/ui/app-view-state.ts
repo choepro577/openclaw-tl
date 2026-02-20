@@ -11,7 +11,11 @@ import type { ThemeTransitionContext } from "./theme-transition.ts";
 import type { ThemeMode } from "./theme.ts";
 import type {
   AgentsListResult,
+  AgentsKbExtraPathRow,
+  AgentsKbSyncAllStatusResult,
   AgentsFilesListResult,
+  AgentsKbTreeResult,
+  AgentsKbSyncResult,
   AgentIdentityResult,
   ChannelsStatusSnapshot,
   ConfigSnapshot,
@@ -142,6 +146,25 @@ export type AppViewState = {
   agentSkillsError: string | null;
   agentSkillsReport: SkillStatusReport | null;
   agentSkillsAgentId: string | null;
+  kbLoading: boolean;
+  kbError: string | null;
+  kbTree: AgentsKbTreeResult | null;
+  kbExpandedDirs: Record<string, boolean>;
+  kbSelectedPath: string | null;
+  kbSelectedType: "dir" | "file" | null;
+  kbFileContent: string;
+  kbFileDraft: string;
+  kbSaving: boolean;
+  kbDeleting: boolean;
+  kbSyncing: boolean;
+  kbSyncResult: AgentsKbSyncResult | null;
+  kbExtraPathsLoading: boolean;
+  kbExtraPathsSaving: boolean;
+  kbExtraPathsRows: AgentsKbExtraPathRow[];
+  kbExtraPathsKbPath: string | null;
+  kbSyncAllStarting: boolean;
+  kbSyncAllJobId: string | null;
+  kbSyncAllStatus: AgentsKbSyncAllStatusResult | null;
   sessionsLoading: boolean;
   sessionsResult: SessionsListResult | null;
   sessionsError: string | null;

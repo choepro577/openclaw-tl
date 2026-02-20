@@ -7,4 +7,6 @@ export type GatewayWsClient = {
   connId: string;
   presenceKey?: string;
   clientIp?: string;
+  boundAgentId?: string;
+  authKind?: "gateway-token" | "enterprise-token";
 };

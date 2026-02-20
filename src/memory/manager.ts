@@ -63,6 +63,7 @@ import {
   sessionPathForFile,
   type SessionFileEntry,
 } from "./session-files.js";
+import { getSharedEmbeddingStore, type SharedEmbeddingStore } from "./shared-embedding-store.js";
 import { loadSqliteVecExtension } from "./sqlite-vec.js";
 import { requireNodeSqlite } from "./sqlite.js";
 
@@ -80,6 +81,13 @@ type MemorySyncProgressState = {
   total: number;
   label?: string;
   report: (update: MemorySyncProgressUpdate) => void;
+};
+
+type SharedCacheSyncStats = {
+  localHits: number;
+  sharedHits: number;
+  writeThrough: number;
+  endedAtMs?: number;
 };
 
 const META_KEY = "memory_index_meta_v1";
@@ -136,6 +144,12 @@ export class MemoryIndexManager implements MemorySearchManager {
   private readonly sources: Set<MemorySource>;
   private providerKey: string;
   private readonly cache: { enabled: boolean; maxEntries?: number };
+  private readonly sharedCacheStore: SharedEmbeddingStore | null;
+  private readonly sharedCachePath?: string;
+  private sharedCacheInitError?: string;
+  private sharedCacheLastError?: string;
+  private activeSyncCacheStats: SharedCacheSyncStats | null = null;
+  private lastSyncCacheStats: SharedCacheSyncStats | null = null;
   private readonly vector: {
     enabled: boolean;
     available: boolean | null;
@@ -229,6 +243,12 @@ export class MemoryIndexManager implements MemorySearchManager {
       enabled: params.settings.cache.enabled,
       maxEntries: params.settings.cache.maxEntries,
     };
+    const sharedStore = this.cache.enabled
+      ? getSharedEmbeddingStore({ env: process.env })
+      : { store: null as SharedEmbeddingStore | null };
+    this.sharedCacheStore = sharedStore.store;
+    this.sharedCachePath = sharedStore.store?.dbPath;
+    this.sharedCacheInitError = sharedStore.error;
     this.fts = { enabled: params.settings.query.hybrid.enabled, available: false };
     this.ensureSchema();
     this.vector = {
@@ -396,7 +416,19 @@ export class MemoryIndexManager implements MemorySearchManager {
     if (this.syncing) {
       return this.syncing;
     }
+    this.activeSyncCacheStats = {
+      localHits: 0,
+      sharedHits: 0,
+      writeThrough: 0,
+    };
     this.syncing = this.runSync(params).finally(() => {
+      if (this.activeSyncCacheStats) {
+        this.lastSyncCacheStats = {
+          ...this.activeSyncCacheStats,
+          endedAtMs: Date.now(),
+        };
+      }
+      this.activeSyncCacheStats = null;
       this.syncing = null;
     });
     return this.syncing;
@@ -510,6 +542,14 @@ export class MemoryIndexManager implements MemorySearchManager {
       }
       return sources.map((source) => Object.assign({ source }, bySource.get(source)!));
     })();
+    const sharedCacheEntries = this.readSharedCacheEntriesCount();
+    const sharedCacheDebug = {
+      enabled: Boolean(this.sharedCacheStore),
+      path: this.sharedCachePath,
+      entries: sharedCacheEntries,
+      lastError: this.sharedCacheLastError ?? this.sharedCacheInitError,
+      lastSync: this.lastSyncCacheStats,
+    };
     return {
       backend: "builtin",
       files: files?.c ?? 0,
@@ -560,6 +600,9 @@ export class MemoryIndexManager implements MemorySearchManager {
         timeoutMs: this.batch.timeoutMs,
         lastError: this.batchFailureLastError,
         lastProvider: this.batchFailureLastProvider,
+      },
+      custom: {
+        sharedEmbeddingStore: sharedCacheDebug,
       },
     };
   }
@@ -1598,6 +1641,7 @@ export class MemoryIndexManager implements MemorySearchManager {
     const out = new Map<string, number[]>();
     const baseParams = [this.provider.id, this.provider.model, this.providerKey];
     const batchSize = 400;
+    let localHits = 0;
     for (let start = 0; start < unique.length; start += batchSize) {
       const batch = unique.slice(start, start + batchSize);
       const placeholders = batch.map(() => "?").join(", ");
@@ -1607,8 +1651,39 @@ export class MemoryIndexManager implements MemorySearchManager {
             ` WHERE provider = ? AND model = ? AND provider_key = ? AND hash IN (${placeholders})`,
         )
         .all(...baseParams, ...batch) as Array<{ hash: string; embedding: string }>;
+      localHits += rows.length;
       for (const row of rows) {
         out.set(row.hash, parseEmbedding(row.embedding));
+      }
+    }
+    this.recordActiveSyncCacheStat("localHits", localHits);
+
+    const missing = unique.filter((hash) => !out.has(hash));
+    if (missing.length > 0 && this.sharedCacheStore) {
+      try {
+        const sharedEntries = this.sharedCacheStore.lookupMany({
+          provider: this.provider.id,
+          model: this.provider.model,
+          providerKey: this.providerKey,
+          hashes: missing,
+        });
+        const toHydrateLocal: Array<{ hash: string; embedding: number[] }> = [];
+        for (const [hash, embedding] of sharedEntries.entries()) {
+          if (embedding.length === 0) {
+            continue;
+          }
+          if (!out.has(hash)) {
+            out.set(hash, embedding);
+            toHydrateLocal.push({ hash, embedding });
+          }
+        }
+        if (toHydrateLocal.length > 0) {
+          this.recordActiveSyncCacheStat("sharedHits", toHydrateLocal.length);
+          this.upsertLocalEmbeddingCache(toHydrateLocal);
+        }
+        this.sharedCacheLastError = undefined;
+      } catch (err) {
+        this.sharedCacheLastError = err instanceof Error ? err.message : String(err);
       }
     }
     return out;
@@ -1618,6 +1693,28 @@ export class MemoryIndexManager implements MemorySearchManager {
     if (!this.cache.enabled) {
       return;
     }
+    if (entries.length === 0) {
+      return;
+    }
+    this.upsertLocalEmbeddingCache(entries);
+    if (!this.sharedCacheStore) {
+      return;
+    }
+    try {
+      const written = this.sharedCacheStore.upsertMany({
+        provider: this.provider.id,
+        model: this.provider.model,
+        providerKey: this.providerKey,
+        entries,
+      });
+      this.recordActiveSyncCacheStat("writeThrough", written);
+      this.sharedCacheLastError = undefined;
+    } catch (err) {
+      this.sharedCacheLastError = err instanceof Error ? err.message : String(err);
+    }
+  }
+
+  private upsertLocalEmbeddingCache(entries: Array<{ hash: string; embedding: number[] }>): void {
     if (entries.length === 0) {
       return;
     }
@@ -1642,6 +1739,30 @@ export class MemoryIndexManager implements MemorySearchManager {
         now,
       );
     }
+  }
+
+  private readSharedCacheEntriesCount(): number | undefined {
+    if (!this.sharedCacheStore) {
+      return undefined;
+    }
+    try {
+      const count = this.sharedCacheStore.countEntries();
+      this.sharedCacheLastError = undefined;
+      return count;
+    } catch (err) {
+      this.sharedCacheLastError = err instanceof Error ? err.message : String(err);
+      return undefined;
+    }
+  }
+
+  private recordActiveSyncCacheStat(
+    key: "localHits" | "sharedHits" | "writeThrough",
+    delta: number,
+  ) {
+    if (!this.activeSyncCacheStats || delta <= 0) {
+      return;
+    }
+    this.activeSyncCacheStats[key] += delta;
   }
 
   private pruneEmbeddingCacheIfNeeded(): void {

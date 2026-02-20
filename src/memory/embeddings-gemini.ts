@@ -55,10 +55,20 @@ function normalizeGeminiModel(model: string): string {
 function normalizeGeminiBaseUrl(raw: string): string {
   const trimmed = raw.replace(/\/+$/, "");
   const openAiIndex = trimmed.indexOf("/openai");
-  if (openAiIndex > -1) {
-    return trimmed.slice(0, openAiIndex);
+  const base = openAiIndex > -1 ? trimmed.slice(0, openAiIndex) : trimmed;
+  try {
+    const parsed = new URL(base);
+    if (parsed.hostname === "generativelanguage.googleapis.com") {
+      const segments = parsed.pathname.split("/").filter(Boolean);
+      if (segments.length === 0) {
+        parsed.pathname = "/v1beta";
+        return `${parsed.origin}${parsed.pathname}`;
+      }
+    }
+  } catch {
+    // Keep original when URL parsing fails; validation happens on request time.
   }
-  return trimmed;
+  return base;
 }
 
 function buildGeminiModelPath(model: string): string {

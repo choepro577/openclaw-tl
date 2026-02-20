@@ -37,6 +37,11 @@ import {
   validateAgentParams,
   validateAgentWaitParams,
 } from "../protocol/index.js";
+import {
+  assertAgentIdInScope,
+  assertSessionKeyInScope,
+  resolveEnterpriseBoundAgentId,
+} from "../server/agent-scope-guard.js";
 import { loadSessionEntry } from "../session-utils.js";
 import { formatForLog } from "../ws-log.js";
 import { waitForAgentJob } from "./agent-job.js";
@@ -165,8 +170,16 @@ export const agentHandlers: GatewayRequestHandlers = {
       }
     }
 
+    const requestedSessionKeyRaw =
+      typeof request.sessionKey === "string" && request.sessionKey.trim()
+        ? request.sessionKey.trim()
+        : undefined;
+    const boundAgentId = resolveEnterpriseBoundAgentId(client);
     const agentIdRaw = typeof request.agentId === "string" ? request.agentId.trim() : "";
-    const agentId = agentIdRaw ? normalizeAgentId(agentIdRaw) : undefined;
+    let agentId = agentIdRaw ? normalizeAgentId(agentIdRaw) : undefined;
+    if (!agentId && !requestedSessionKeyRaw && boundAgentId) {
+      agentId = boundAgentId;
+    }
     if (agentId) {
       const knownAgents = listAgentIds(cfg);
       if (!knownAgents.includes(agentId)) {
@@ -182,16 +195,31 @@ export const agentHandlers: GatewayRequestHandlers = {
       }
     }
 
-    const requestedSessionKeyRaw =
-      typeof request.sessionKey === "string" && request.sessionKey.trim()
-        ? request.sessionKey.trim()
-        : undefined;
     const requestedSessionKey =
       requestedSessionKeyRaw ??
       resolveExplicitAgentSessionKey({
         cfg,
         agentId,
       });
+
+    const agentScope = assertAgentIdInScope({
+      client,
+      agentId,
+    });
+    if (!agentScope.ok) {
+      respond(false, undefined, agentScope.error);
+      return;
+    }
+    const sessionScope = assertSessionKeyInScope({
+      client,
+      sessionKey: requestedSessionKey,
+      cfg,
+    });
+    if (!sessionScope.ok) {
+      respond(false, undefined, sessionScope.error);
+      return;
+    }
+
     if (agentId && requestedSessionKeyRaw) {
       const sessionAgentId = resolveAgentIdFromSessionKey(requestedSessionKeyRaw);
       if (sessionAgentId !== agentId) {
@@ -439,7 +467,7 @@ export const agentHandlers: GatewayRequestHandlers = {
         });
       });
   },
-  "agent.identity.get": ({ params, respond }) => {
+  "agent.identity.get": ({ params, respond, client }) => {
     if (!validateAgentIdentityParams(params)) {
       respond(
         false,
@@ -456,7 +484,11 @@ export const agentHandlers: GatewayRequestHandlers = {
     const p = params;
     const agentIdRaw = typeof p.agentId === "string" ? p.agentId.trim() : "";
     const sessionKeyRaw = typeof p.sessionKey === "string" ? p.sessionKey.trim() : "";
+    const boundAgentId = resolveEnterpriseBoundAgentId(client);
     let agentId = agentIdRaw ? normalizeAgentId(agentIdRaw) : undefined;
+    if (!agentId && !sessionKeyRaw && boundAgentId) {
+      agentId = boundAgentId;
+    }
     if (sessionKeyRaw) {
       const resolved = resolveAgentIdFromSessionKey(sessionKeyRaw);
       if (agentId && resolved !== agentId) {
@@ -473,6 +505,23 @@ export const agentHandlers: GatewayRequestHandlers = {
       agentId = resolved;
     }
     const cfg = loadConfig();
+    const agentScope = assertAgentIdInScope({
+      client,
+      agentId,
+    });
+    if (!agentScope.ok) {
+      respond(false, undefined, agentScope.error);
+      return;
+    }
+    const sessionScope = assertSessionKeyInScope({
+      client,
+      sessionKey: sessionKeyRaw,
+      cfg,
+    });
+    if (!sessionScope.ok) {
+      respond(false, undefined, sessionScope.error);
+      return;
+    }
     const identity = resolveAssistantIdentity({ cfg, agentId });
     const avatarValue =
       resolveAssistantAvatarUrl({

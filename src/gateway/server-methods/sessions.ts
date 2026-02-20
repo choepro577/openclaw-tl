@@ -27,6 +27,11 @@ import {
   validateSessionsResolveParams,
 } from "../protocol/index.js";
 import {
+  assertAgentIdInScope,
+  assertSessionKeyInScope,
+  resolveEnterpriseBoundAgentId,
+} from "../server/agent-scope-guard.js";
+import {
   archiveFileOnDisk,
   listSessionsFromStore,
   loadCombinedSessionStoreForGateway,
@@ -43,7 +48,7 @@ import { applySessionsPatchToStore } from "../sessions-patch.js";
 import { resolveSessionKeyFromResolveParams } from "../sessions-resolve.js";
 
 export const sessionsHandlers: GatewayRequestHandlers = {
-  "sessions.list": ({ params, respond }) => {
+  "sessions.list": ({ params, respond, client }) => {
     if (!validateSessionsListParams(params)) {
       respond(
         false,
@@ -57,16 +62,18 @@ export const sessionsHandlers: GatewayRequestHandlers = {
     }
     const p = params;
     const cfg = loadConfig();
+    const boundAgentId = resolveEnterpriseBoundAgentId(client);
+    const opts = boundAgentId ? { ...p, agentId: boundAgentId } : p;
     const { storePath, store } = loadCombinedSessionStoreForGateway(cfg);
     const result = listSessionsFromStore({
       cfg,
       storePath,
       store,
-      opts: p,
+      opts,
     });
     respond(true, result, undefined);
   },
-  "sessions.preview": ({ params, respond }) => {
+  "sessions.preview": ({ params, respond, client }) => {
     if (!validateSessionsPreviewParams(params)) {
       respond(
         false,
@@ -99,6 +106,17 @@ export const sessionsHandlers: GatewayRequestHandlers = {
     }
 
     const cfg = loadConfig();
+    for (const key of keys) {
+      const scopeCheck = assertSessionKeyInScope({
+        client,
+        sessionKey: key,
+        cfg,
+      });
+      if (!scopeCheck.ok) {
+        respond(false, undefined, scopeCheck.error);
+        return;
+      }
+    }
     const storeCache = new Map<string, Record<string, SessionEntry>>();
     const previews: SessionsPreviewEntry[] = [];
 
@@ -134,7 +152,7 @@ export const sessionsHandlers: GatewayRequestHandlers = {
 
     respond(true, { ts: Date.now(), previews } satisfies SessionsPreviewResult, undefined);
   },
-  "sessions.resolve": ({ params, respond }) => {
+  "sessions.resolve": ({ params, respond, client }) => {
     if (!validateSessionsResolveParams(params)) {
       respond(
         false,
@@ -146,8 +164,32 @@ export const sessionsHandlers: GatewayRequestHandlers = {
       );
       return;
     }
-    const p = params;
+    const p = { ...params };
     const cfg = loadConfig();
+    const boundAgentId = resolveEnterpriseBoundAgentId(client);
+    if (boundAgentId) {
+      const requestedAgentId = typeof p.agentId === "string" ? p.agentId : undefined;
+      const agentScope = assertAgentIdInScope({
+        client,
+        agentId: requestedAgentId,
+      });
+      if (!agentScope.ok) {
+        respond(false, undefined, agentScope.error);
+        return;
+      }
+      if (typeof p.key === "string" && p.key.trim()) {
+        const sessionScope = assertSessionKeyInScope({
+          client,
+          sessionKey: p.key,
+          cfg,
+        });
+        if (!sessionScope.ok) {
+          respond(false, undefined, sessionScope.error);
+          return;
+        }
+      }
+      p.agentId = boundAgentId;
+    }
 
     const resolved = resolveSessionKeyFromResolveParams({ cfg, p });
     if (!resolved.ok) {
@@ -156,7 +198,7 @@ export const sessionsHandlers: GatewayRequestHandlers = {
     }
     respond(true, { ok: true, key: resolved.key }, undefined);
   },
-  "sessions.patch": async ({ params, respond, context }) => {
+  "sessions.patch": async ({ params, respond, context, client }) => {
     if (!validateSessionsPatchParams(params)) {
       respond(
         false,
@@ -176,6 +218,15 @@ export const sessionsHandlers: GatewayRequestHandlers = {
     }
 
     const cfg = loadConfig();
+    const scopeCheck = assertSessionKeyInScope({
+      client,
+      sessionKey: key,
+      cfg,
+    });
+    if (!scopeCheck.ok) {
+      respond(false, undefined, scopeCheck.error);
+      return;
+    }
     const target = resolveGatewaySessionStoreTarget({ cfg, key });
     const storePath = target.storePath;
     const applied = await updateSessionStore(storePath, async (store) => {
@@ -212,7 +263,7 @@ export const sessionsHandlers: GatewayRequestHandlers = {
     };
     respond(true, result, undefined);
   },
-  "sessions.reset": async ({ params, respond }) => {
+  "sessions.reset": async ({ params, respond, client }) => {
     if (!validateSessionsResetParams(params)) {
       respond(
         false,
@@ -232,6 +283,15 @@ export const sessionsHandlers: GatewayRequestHandlers = {
     }
 
     const cfg = loadConfig();
+    const scopeCheck = assertSessionKeyInScope({
+      client,
+      sessionKey: key,
+      cfg,
+    });
+    if (!scopeCheck.ok) {
+      respond(false, undefined, scopeCheck.error);
+      return;
+    }
     const target = resolveGatewaySessionStoreTarget({ cfg, key });
     const storePath = target.storePath;
     const next = await updateSessionStore(storePath, (store) => {
@@ -270,7 +330,7 @@ export const sessionsHandlers: GatewayRequestHandlers = {
     });
     respond(true, { ok: true, key: target.canonicalKey, entry: next }, undefined);
   },
-  "sessions.delete": async ({ params, respond }) => {
+  "sessions.delete": async ({ params, respond, client }) => {
     if (!validateSessionsDeleteParams(params)) {
       respond(
         false,
@@ -290,6 +350,15 @@ export const sessionsHandlers: GatewayRequestHandlers = {
     }
 
     const cfg = loadConfig();
+    const scopeCheck = assertSessionKeyInScope({
+      client,
+      sessionKey: key,
+      cfg,
+    });
+    if (!scopeCheck.ok) {
+      respond(false, undefined, scopeCheck.error);
+      return;
+    }
     const mainKey = resolveMainSessionKey(cfg);
     const target = resolveGatewaySessionStoreTarget({ cfg, key });
     if (target.canonicalKey === mainKey) {
@@ -362,7 +431,7 @@ export const sessionsHandlers: GatewayRequestHandlers = {
 
     respond(true, { ok: true, key: target.canonicalKey, deleted: existed, archived }, undefined);
   },
-  "sessions.compact": async ({ params, respond }) => {
+  "sessions.compact": async ({ params, respond, client }) => {
     if (!validateSessionsCompactParams(params)) {
       respond(
         false,
@@ -387,6 +456,15 @@ export const sessionsHandlers: GatewayRequestHandlers = {
         : 400;
 
     const cfg = loadConfig();
+    const scopeCheck = assertSessionKeyInScope({
+      client,
+      sessionKey: key,
+      cfg,
+    });
+    if (!scopeCheck.ok) {
+      respond(false, undefined, scopeCheck.error);
+      return;
+    }
     const target = resolveGatewaySessionStoreTarget({ cfg, key });
     const storePath = target.storePath;
     // Lock + read in a short critical section; transcript work happens outside.

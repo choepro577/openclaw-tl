@@ -29,6 +29,7 @@ import { loadConfig, writeConfigFile } from "../../config/config.js";
 import { resolveSessionTranscriptsDirForAgent } from "../../config/sessions/paths.js";
 import { DEFAULT_AGENT_ID, normalizeAgentId } from "../../routing/session-key.js";
 import { resolveUserPath } from "../../utils.js";
+import { ensureAgentProvisioned } from "../enterprise-agent-service.js";
 import {
   ErrorCodes,
   errorShape,
@@ -219,40 +220,31 @@ export const agentsHandlers: GatewayRequestHandlers = {
     }
 
     const workspaceDir = resolveUserPath(String(params.workspace ?? "").trim());
-
-    // Resolve agentDir against the config we're about to persist (vs the pre-write config),
-    // so subsequent resolutions can't disagree about the agent's directory.
-    let nextConfig = applyAgentConfig(cfg, {
+    const emoji = resolveOptionalStringParam(params.emoji);
+    const avatar = resolveOptionalStringParam(params.avatar);
+    const ensured = await ensureAgentProvisioned({
+      cfg,
       agentId,
       name: rawName,
       workspace: workspaceDir,
+      failIfExists: true,
+      identity: {
+        name: rawName,
+        emoji,
+        avatar,
+      },
     });
-    const agentDir = resolveAgentDir(nextConfig, agentId);
-    nextConfig = applyAgentConfig(nextConfig, { agentId, agentDir });
 
-    // Ensure workspace & transcripts exist BEFORE writing config so a failure
-    // here does not leave a broken config entry behind.
-    const skipBootstrap = Boolean(nextConfig.agents?.defaults?.skipBootstrap);
-    await ensureAgentWorkspace({ dir: workspaceDir, ensureBootstrapFiles: !skipBootstrap });
-    await fs.mkdir(resolveSessionTranscriptsDirForAgent(agentId), { recursive: true });
-
-    await writeConfigFile(nextConfig);
-
-    // Always write Name to IDENTITY.md; optionally include emoji/avatar.
-    const safeName = sanitizeIdentityLine(rawName);
-    const emoji = resolveOptionalStringParam(params.emoji);
-    const avatar = resolveOptionalStringParam(params.avatar);
-    const identityPath = path.join(workspaceDir, DEFAULT_IDENTITY_FILENAME);
-    const lines = [
-      "",
-      `- Name: ${safeName}`,
-      ...(emoji ? [`- Emoji: ${sanitizeIdentityLine(emoji)}`] : []),
-      ...(avatar ? [`- Avatar: ${sanitizeIdentityLine(avatar)}`] : []),
-      "",
-    ];
-    await fs.appendFile(identityPath, lines.join("\n"), "utf-8");
-
-    respond(true, { ok: true, agentId, name: rawName, workspace: workspaceDir }, undefined);
+    respond(
+      true,
+      {
+        ok: true,
+        agentId,
+        name: rawName,
+        workspace: ensured.workspace,
+      },
+      undefined,
+    );
   },
   "agents.update": async ({ params, respond }) => {
     if (!validateAgentsUpdateParams(params)) {

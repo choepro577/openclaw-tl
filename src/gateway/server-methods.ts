@@ -1,6 +1,7 @@
 import type { GatewayRequestHandlers, GatewayRequestOptions } from "./server-methods/types.js";
 import { ErrorCodes, errorShape } from "./protocol/index.js";
 import { agentHandlers } from "./server-methods/agent.js";
+import { agentsKbHandlers } from "./server-methods/agents-kb.js";
 import { agentsHandlers } from "./server-methods/agents.js";
 import { browserHandlers } from "./server-methods/browser.js";
 import { channelsHandlers } from "./server-methods/channels.js";
@@ -129,6 +130,9 @@ function authorizeGatewayMethod(method: string, client: GatewayRequestOptions["c
   if (PAIRING_METHODS.has(method)) {
     return null;
   }
+  if (method.startsWith("agents.kb.")) {
+    return errorShape(ErrorCodes.INVALID_REQUEST, "missing scope: operator.admin");
+  }
   if (READ_METHODS.has(method)) {
     return null;
   }
@@ -187,6 +191,7 @@ export const coreGatewayHandlers: GatewayRequestHandlers = {
   ...usageHandlers,
   ...agentHandlers,
   ...agentsHandlers,
+  ...agentsKbHandlers,
   ...browserHandlers,
 };
 

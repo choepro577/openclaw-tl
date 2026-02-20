@@ -6,6 +6,17 @@ import { refreshChatAvatar } from "./app-chat.ts";
 import { renderChatControls, renderTab, renderThemeToggle } from "./app-render.helpers.ts";
 import { loadAgentFileContent, loadAgentFiles, saveAgentFile } from "./controllers/agent-files.ts";
 import { loadAgentIdentities, loadAgentIdentity } from "./controllers/agent-identity.ts";
+import {
+  deleteKbPath,
+  loadKbExtraPaths,
+  loadKbTree,
+  mkdirKbFolder,
+  openKbPath,
+  saveKbFile,
+  saveKbExtraPaths,
+  startKbSyncAll,
+  syncKbAgent,
+} from "./controllers/agent-kb.ts";
 import { loadAgentSkills } from "./controllers/agent-skills.ts";
 import { loadAgents } from "./controllers/agents.ts";
 import { loadChannels } from "./controllers/channels.ts";
@@ -71,6 +82,7 @@ import { renderDebug } from "./views/debug.ts";
 import { renderExecApprovalPrompt } from "./views/exec-approval.ts";
 import { renderGatewayUrlConfirmation } from "./views/gateway-url-confirmation.ts";
 import { renderInstances } from "./views/instances.ts";
+import { renderKb } from "./views/kb.ts";
 import { renderLogs } from "./views/logs.ts";
 import { renderNodes } from "./views/nodes.ts";
 import { renderOverview } from "./views/overview.ts";
@@ -80,6 +92,41 @@ import { renderUsage } from "./views/usage.ts";
 
 const AVATAR_DATA_RE = /^data:/i;
 const AVATAR_HTTP_RE = /^https?:\/\//i;
+const KB_MAX_UPLOAD_BYTES = 2 * 1024 * 1024;
+
+function expandKbAncestors(
+  seed: Record<string, boolean>,
+  path: string | null,
+  selectedType: "dir" | "file" | null,
+): Record<string, boolean> {
+  const next: Record<string, boolean> = { ...seed, "": true };
+  if (!path) {
+    return next;
+  }
+  const segments = path.split("/").filter(Boolean);
+  if (segments.length === 0) {
+    return next;
+  }
+  const stop = selectedType === "dir" ? segments.length : Math.max(segments.length - 1, 0);
+  let current = "";
+  for (let i = 0; i < stop; i += 1) {
+    current = current ? `${current}/${segments[i]}` : segments[i]!;
+    next[current] = true;
+  }
+  return next;
+}
+
+function buildKbExpandAllMap(
+  entries: Array<{ type: "dir" | "file"; path: string }>,
+): Record<string, boolean> {
+  const expanded: Record<string, boolean> = { "": true };
+  for (const entry of entries) {
+    if (entry.type === "dir") {
+      expanded[entry.path] = true;
+    }
+  }
+  return expanded;
+}
 
 function resolveAssistantAvatarUrl(state: AppViewState): string | undefined {
   const list = state.agentsList?.agents ?? [];
@@ -1047,6 +1094,171 @@ export function renderApp(state: AppViewState) {
                       ? { kind: "node" as const, nodeId: state.execApprovalsTargetNodeId }
                       : { kind: "gateway" as const };
                   return saveExecApprovals(state, target);
+                },
+              })
+            : nothing
+        }
+
+        ${
+          state.tab === "kb"
+            ? renderKb({
+                loading: state.kbLoading,
+                saving: state.kbSaving,
+                deleting: state.kbDeleting,
+                syncing: state.kbSyncing,
+                syncAllStarting: state.kbSyncAllStarting,
+                extraPathsLoading: state.kbExtraPathsLoading,
+                extraPathsSaving: state.kbExtraPathsSaving,
+                error: state.kbError,
+                tree: state.kbTree
+                  ? {
+                      kbRoot: state.kbTree.kbRoot,
+                      entries: state.kbTree.entries,
+                    }
+                  : null,
+                expandedDirs: state.kbExpandedDirs,
+                agentsList: state.agentsList,
+                selectedAgentId: resolvedAgentId,
+                selectedPath: state.kbSelectedPath,
+                selectedType: state.kbSelectedType,
+                fileDraft: state.kbFileDraft,
+                fileContent: state.kbFileContent,
+                syncResult: state.kbSyncResult,
+                syncAllStatus: state.kbSyncAllStatus,
+                extraPathsRows: state.kbExtraPathsRows,
+                kbPath: state.kbExtraPathsKbPath,
+                onSelectAgent: (agentId) => {
+                  if (state.agentsSelectedId === agentId) {
+                    return;
+                  }
+                  state.agentsSelectedId = agentId;
+                  state.kbError = null;
+                  state.kbSyncResult = null;
+                  state.kbSyncAllStatus = null;
+                  state.kbSyncAllJobId = null;
+                  state.kbExpandedDirs = expandKbAncestors(
+                    { "": true },
+                    state.kbSelectedPath,
+                    state.kbSelectedType,
+                  );
+                  void loadKbTree(state, agentId);
+                  void loadKbExtraPaths(state, agentId);
+                },
+                onRefresh: () => {
+                  if (!resolvedAgentId) {
+                    return;
+                  }
+                  void loadKbTree(state, resolvedAgentId);
+                },
+                onSelectEntry: (path, type) => {
+                  if (!resolvedAgentId) {
+                    return;
+                  }
+                  if (!path && type === "dir") {
+                    state.kbSelectedPath = "";
+                    state.kbSelectedType = "dir";
+                    state.kbFileContent = "";
+                    state.kbFileDraft = "";
+                    state.kbExpandedDirs = { ...state.kbExpandedDirs, "": true };
+                    return;
+                  }
+                  state.kbExpandedDirs = expandKbAncestors(state.kbExpandedDirs, path, type);
+                  void openKbPath(state, resolvedAgentId, { path, type });
+                },
+                onCreateFolder: (parentPath, name) => {
+                  if (!resolvedAgentId) {
+                    return;
+                  }
+                  void mkdirKbFolder(state, resolvedAgentId, { parentPath, name });
+                },
+                onCreateFile: (path, content) => {
+                  if (!resolvedAgentId) {
+                    return;
+                  }
+                  void saveKbFile(state, resolvedAgentId, {
+                    path,
+                    content,
+                    createIfMissing: true,
+                  });
+                },
+                onUploadFile: (parentPath, file) => {
+                  if (!resolvedAgentId) {
+                    return;
+                  }
+                  const name = file.name?.trim() ?? "";
+                  if (!name.toLowerCase().endsWith(".md")) {
+                    state.kbError = "Only .md files are allowed.";
+                    return;
+                  }
+                  if (file.size > KB_MAX_UPLOAD_BYTES) {
+                    state.kbError = "File too large. Maximum upload size is 2MB.";
+                    return;
+                  }
+                  const path = `${parentPath}/${name}`.replace(/^\/+/, "");
+                  void file.text().then((content) => {
+                    void saveKbFile(state, resolvedAgentId, {
+                      path,
+                      content,
+                      createIfMissing: true,
+                    });
+                  });
+                },
+                onSaveFile: (path, content) => {
+                  if (!resolvedAgentId) {
+                    return;
+                  }
+                  void saveKbFile(state, resolvedAgentId, {
+                    path,
+                    content,
+                    createIfMissing: false,
+                  });
+                },
+                onDeletePath: (path, recursive) => {
+                  if (!resolvedAgentId) {
+                    return;
+                  }
+                  void deleteKbPath(state, resolvedAgentId, { path, recursive });
+                },
+                onDraftChange: (value) => {
+                  state.kbFileDraft = value;
+                },
+                onSyncAgent: () => {
+                  if (!resolvedAgentId) {
+                    return;
+                  }
+                  void syncKbAgent(state, resolvedAgentId).then(() => {
+                    void loadKbTree(state, resolvedAgentId);
+                  });
+                },
+                onSyncAll: () => {
+                  void startKbSyncAll(state);
+                },
+                onToggleDir: (path) => {
+                  const next: Record<string, boolean> = { ...state.kbExpandedDirs, "": true };
+                  if (next[path]) {
+                    delete next[path];
+                  } else {
+                    next[path] = true;
+                  }
+                  state.kbExpandedDirs = next;
+                },
+                onExpandAllDirs: () => {
+                  state.kbExpandedDirs = buildKbExpandAllMap(state.kbTree?.entries ?? []);
+                },
+                onCollapseAllDirs: () => {
+                  state.kbExpandedDirs = { "": true };
+                },
+                onReloadExtraPaths: () => {
+                  if (!resolvedAgentId) {
+                    return;
+                  }
+                  void loadKbExtraPaths(state, resolvedAgentId);
+                },
+                onSetExtraPaths: (paths) => {
+                  if (!resolvedAgentId) {
+                    return;
+                  }
+                  void saveKbExtraPaths(state, resolvedAgentId, paths);
                 },
               })
             : nothing

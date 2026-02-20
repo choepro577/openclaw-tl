@@ -25,6 +25,7 @@ import {
   handleControlUiHttpRequest,
   type ControlUiRootState,
 } from "./control-ui.js";
+import { handleEnterpriseAgentHttpRequest } from "./enterprise-agent-http.js";
 import { applyHookMappings } from "./hooks-mapping.js";
 import {
   extractHookToken,
@@ -338,6 +339,14 @@ export function createGatewayHttpServer(opts: {
       }
       if (
         await handleToolsInvokeHttpRequest(req, res, {
+          auth: resolvedAuth,
+          trustedProxies,
+        })
+      ) {
+        return;
+      }
+      if (
+        await handleEnterpriseAgentHttpRequest(req, res, {
           auth: resolvedAuth,
           trustedProxies,
         })

@@ -9,6 +9,7 @@ import {
 } from "./app-polling.ts";
 import { scheduleChatScroll, scheduleLogsScroll } from "./app-scroll.ts";
 import { loadAgentIdentities, loadAgentIdentity } from "./controllers/agent-identity.ts";
+import { loadKbExtraPaths, loadKbTree } from "./controllers/agent-kb.ts";
 import { loadAgentSkills } from "./controllers/agent-skills.ts";
 import { loadAgents } from "./controllers/agents.ts";
 import { loadChannels } from "./controllers/channels.ts";
@@ -51,6 +52,18 @@ type SettingsHost = {
   agentsList?: AgentsListResult | null;
   agentsSelectedId?: string | null;
   agentsPanel?: "overview" | "files" | "tools" | "skills" | "channels" | "cron";
+  kbTree?: import("./types.ts").AgentsKbTreeResult | null;
+  kbError?: string | null;
+  kbLoading?: boolean;
+  kbSelectedPath?: string | null;
+  kbSelectedType?: "dir" | "file" | null;
+  kbFileContent?: string;
+  kbFileDraft?: string;
+  kbSyncResult?: import("./types.ts").AgentsKbSyncResult | null;
+  kbExtraPathsRows?: import("./types.ts").AgentsKbExtraPathRow[];
+  kbExtraPathsKbPath?: string | null;
+  kbSyncAllJobId?: string | null;
+  kbSyncAllStatus?: import("./types.ts").AgentsKbSyncAllStatusResult | null;
   themeMedia: MediaQueryList | null;
   themeMediaHandler: ((event: MediaQueryListEvent) => void) | null;
   pendingGatewayUrl?: string | null;
@@ -227,6 +240,16 @@ export async function refreshActiveTab(host: SettingsHost) {
     await loadDevices(host as unknown as OpenClawApp);
     await loadConfig(host as unknown as OpenClawApp);
     await loadExecApprovals(host as unknown as OpenClawApp);
+  }
+  if (host.tab === "kb") {
+    await loadAgents(host as unknown as OpenClawApp);
+    const agentId =
+      host.agentsSelectedId ?? host.agentsList?.defaultId ?? host.agentsList?.agents?.[0]?.id;
+    if (agentId) {
+      host.agentsSelectedId = agentId;
+      await loadKbTree(host as unknown as OpenClawApp, agentId);
+      await loadKbExtraPaths(host as unknown as OpenClawApp, agentId);
+    }
   }
   if (host.tab === "chat") {
     await refreshChat(host as unknown as Parameters<typeof refreshChat>[0]);

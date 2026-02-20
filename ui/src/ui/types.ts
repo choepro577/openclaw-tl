@@ -377,6 +377,139 @@ export type AgentsFilesSetResult = {
   file: AgentFileEntry;
 };
 
+export type AgentKbEntry = {
+  type: "dir" | "file";
+  name: string;
+  path: string;
+  parentPath: string;
+  size?: number;
+  updatedAtMs?: number;
+};
+
+export type AgentKbFile = {
+  name: string;
+  path: string;
+  parentPath: string;
+  size?: number;
+  updatedAtMs?: number;
+  content?: string;
+};
+
+export type AgentsKbTreeResult = {
+  agentId: string;
+  workspace: string;
+  kbRoot: string;
+  kbRootAbs?: string;
+  entries: AgentKbEntry[];
+};
+
+export type AgentsKbMkdirResult = {
+  ok: true;
+  agentId: string;
+  kbRoot: string;
+  kbRootAbs?: string;
+  path: string;
+  created: boolean;
+};
+
+export type AgentsKbFileGetResult = {
+  agentId: string;
+  workspace: string;
+  kbRoot: string;
+  kbRootAbs?: string;
+  file: AgentKbFile;
+};
+
+export type AgentsKbFileSetResult = {
+  ok: true;
+  agentId: string;
+  workspace: string;
+  kbRoot: string;
+  kbRootAbs?: string;
+  file: AgentKbFile;
+};
+
+export type AgentsKbDeleteResult = {
+  ok: true;
+  agentId: string;
+  kbRoot: string;
+  kbRootAbs?: string;
+  path: string;
+  deleted: boolean;
+  type?: "file" | "dir";
+};
+
+export type AgentsKbSyncResult = {
+  ok: true;
+  agentId: string;
+  kbRootAbs: string;
+  extraPaths: {
+    before: string[];
+    after: string[];
+    added: boolean;
+  };
+  index: {
+    attempted: boolean;
+    ok: boolean;
+    backend?: string;
+    files?: number;
+    chunks?: number;
+    error?: string;
+  };
+};
+
+export type AgentsKbExtraPathRow = {
+  path: string;
+  exists: boolean;
+  isKb: boolean;
+};
+
+export type AgentsKbExtraPathsGetResult = {
+  agentId: string;
+  kbPath: string;
+  paths: AgentsKbExtraPathRow[];
+};
+
+export type AgentsKbExtraPathsSetResult = {
+  ok: true;
+  agentId: string;
+  before: string[];
+  after: string[];
+  added: string[];
+  removed: string[];
+};
+
+export type AgentsKbSyncAllStartResult = {
+  ok: true;
+  jobId: string;
+  state: "queued" | "running";
+};
+
+export type AgentsKbSyncAllAgentResult = {
+  agentId: string;
+  indexOk: boolean;
+  files?: number;
+  chunks?: number;
+  error?: string;
+};
+
+export type AgentsKbSyncAllStatusResult = {
+  ok: true;
+  jobId: string;
+  state: "queued" | "running" | "done" | "failed";
+  progress: {
+    totalAgents: number;
+    doneAgents: number;
+    currentAgentId: string | null;
+  };
+  kbPath: string;
+  unionPaths: string[];
+  results: AgentsKbSyncAllAgentResult[];
+  error?: string;
+  startedAtMs?: number;
+  finishedAtMs?: number;
+};
+
 export type GatewaySessionRow = {
   key: string;
   kind: "direct" | "group" | "global" | "unknown";

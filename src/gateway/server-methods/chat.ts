@@ -9,6 +9,7 @@ import { resolveAgentTimeoutMs } from "../../agents/timeout.js";
 import { dispatchInboundMessage } from "../../auto-reply/dispatch.js";
 import { createReplyDispatcher } from "../../auto-reply/reply/reply-dispatcher.js";
 import { createReplyPrefixOptions } from "../../channels/reply-prefix.js";
+import { loadConfig } from "../../config/config.js";
 import { resolveSendPolicy } from "../../sessions/send-policy.js";
 import { INTERNAL_MESSAGE_CHANNEL } from "../../utils/message-channel.js";
 import {
@@ -30,6 +31,7 @@ import {
   validateChatSendParams,
 } from "../protocol/index.js";
 import { getMaxChatHistoryMessagesBytes } from "../server-constants.js";
+import { assertSessionKeyInScope } from "../server/agent-scope-guard.js";
 import {
   capArrayByJsonBytes,
   loadSessionEntry,
@@ -200,7 +202,7 @@ function broadcastChatError(params: {
 }
 
 export const chatHandlers: GatewayRequestHandlers = {
-  "chat.history": async ({ params, respond, context }) => {
+  "chat.history": async ({ params, respond, context, client }) => {
     if (!validateChatHistoryParams(params)) {
       respond(
         false,
@@ -216,6 +218,15 @@ export const chatHandlers: GatewayRequestHandlers = {
       sessionKey: string;
       limit?: number;
     };
+    const scopeCheck = assertSessionKeyInScope({
+      client,
+      sessionKey,
+      cfg: loadConfig(),
+    });
+    if (!scopeCheck.ok) {
+      respond(false, undefined, scopeCheck.error);
+      return;
+    }
     const { cfg, storePath, entry } = loadSessionEntry(sessionKey);
     const sessionId = entry?.sessionId;
     const rawMessages =
@@ -253,7 +264,7 @@ export const chatHandlers: GatewayRequestHandlers = {
       verboseLevel,
     });
   },
-  "chat.abort": ({ params, respond, context }) => {
+  "chat.abort": ({ params, respond, context, client }) => {
     if (!validateChatAbortParams(params)) {
       respond(
         false,
@@ -269,6 +280,15 @@ export const chatHandlers: GatewayRequestHandlers = {
       sessionKey: string;
       runId?: string;
     };
+    const scopeCheck = assertSessionKeyInScope({
+      client,
+      sessionKey,
+      cfg: loadConfig(),
+    });
+    if (!scopeCheck.ok) {
+      respond(false, undefined, scopeCheck.error);
+      return;
+    }
 
     const ops = {
       chatAbortControllers: context.chatAbortControllers,
@@ -341,6 +361,15 @@ export const chatHandlers: GatewayRequestHandlers = {
       timeoutMs?: number;
       idempotencyKey: string;
     };
+    const scopeCheck = assertSessionKeyInScope({
+      client,
+      sessionKey: p.sessionKey,
+      cfg: loadConfig(),
+    });
+    if (!scopeCheck.ok) {
+      respond(false, undefined, scopeCheck.error);
+      return;
+    }
     const stopCommand = isChatStopCommandText(p.message);
     const normalizedAttachments =
       p.attachments
@@ -639,7 +668,7 @@ export const chatHandlers: GatewayRequestHandlers = {
       });
     }
   },
-  "chat.inject": async ({ params, respond, context }) => {
+  "chat.inject": async ({ params, respond, context, client }) => {
     if (!validateChatInjectParams(params)) {
       respond(
         false,
@@ -656,6 +685,15 @@ export const chatHandlers: GatewayRequestHandlers = {
       message: string;
       label?: string;
     };
+    const scopeCheck = assertSessionKeyInScope({
+      client,
+      sessionKey: p.sessionKey,
+      cfg: loadConfig(),
+    });
+    if (!scopeCheck.ok) {
+      respond(false, undefined, scopeCheck.error);
+      return;
+    }
 
     // Load session to find transcript file
     const rawSessionKey = p.sessionKey;

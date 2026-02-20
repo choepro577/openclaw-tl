@@ -12,6 +12,8 @@ import type { ResolvedTheme, ThemeMode } from "./theme.ts";
 import type {
   AgentsListResult,
   AgentsFilesListResult,
+  AgentsKbTreeResult,
+  AgentsKbSyncResult,
   AgentIdentityResult,
   ConfigSnapshot,
   ConfigUiHints,
@@ -219,6 +221,25 @@ export class OpenClawApp extends LitElement {
   @state() agentSkillsError: string | null = null;
   @state() agentSkillsReport: SkillStatusReport | null = null;
   @state() agentSkillsAgentId: string | null = null;
+  @state() kbLoading = false;
+  @state() kbError: string | null = null;
+  @state() kbTree: AgentsKbTreeResult | null = null;
+  @state() kbExpandedDirs: Record<string, boolean> = { "": true };
+  @state() kbSelectedPath: string | null = null;
+  @state() kbSelectedType: "dir" | "file" | null = null;
+  @state() kbFileContent = "";
+  @state() kbFileDraft = "";
+  @state() kbSaving = false;
+  @state() kbDeleting = false;
+  @state() kbSyncing = false;
+  @state() kbSyncResult: AgentsKbSyncResult | null = null;
+  @state() kbExtraPathsLoading = false;
+  @state() kbExtraPathsSaving = false;
+  @state() kbExtraPathsRows: import("./types.js").AgentsKbExtraPathRow[] = [];
+  @state() kbExtraPathsKbPath: string | null = null;
+  @state() kbSyncAllStarting = false;
+  @state() kbSyncAllJobId: string | null = null;
+  @state() kbSyncAllStatus: import("./types.js").AgentsKbSyncAllStatusResult | null = null;
 
   @state() sessionsLoading = false;
   @state() sessionsResult: SessionsListResult | null = null;

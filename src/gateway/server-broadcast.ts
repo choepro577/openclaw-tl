@@ -1,4 +1,6 @@
 import type { GatewayWsClient } from "./server/ws-types.js";
+import { resolveSessionAgentId } from "../agents/agent-scope.js";
+import { normalizeAgentId } from "../routing/session-key.js";
 import { MAX_BUFFERED_BYTES } from "./server-constants.js";
 import { logWs, summarizeAgentEventForWsLog } from "./ws-log.js";
 
@@ -31,6 +33,34 @@ function hasEventScope(client: GatewayWsClient, event: string): boolean {
   return required.some((scope) => scopes.includes(scope));
 }
 
+function resolveScopedEventAgentId(event: string, payload: unknown): string | null {
+  if (event !== "chat" && event !== "agent") {
+    return null;
+  }
+  const sessionKey =
+    payload &&
+    typeof payload === "object" &&
+    typeof (payload as { sessionKey?: unknown }).sessionKey === "string"
+      ? (payload as { sessionKey: string }).sessionKey.trim()
+      : "";
+  if (!sessionKey) {
+    return null;
+  }
+  return normalizeAgentId(resolveSessionAgentId({ sessionKey }));
+}
+
+function hasAgentScope(client: GatewayWsClient, eventAgentId: string | null): boolean {
+  if (client.authKind !== "enterprise-token") {
+    return true;
+  }
+  const boundAgentId =
+    typeof client.boundAgentId === "string" ? normalizeAgentId(client.boundAgentId) : "";
+  if (!boundAgentId || !eventAgentId) {
+    return false;
+  }
+  return boundAgentId === eventAgentId;
+}
+
 export function createGatewayBroadcaster(params: { clients: Set<GatewayWsClient> }) {
   let seq = 0;
 
@@ -45,6 +75,7 @@ export function createGatewayBroadcaster(params: { clients: Set<GatewayWsClient>
   ) => {
     const isTargeted = Boolean(targetConnIds);
     const eventSeq = isTargeted ? undefined : ++seq;
+    const eventAgentId = resolveScopedEventAgentId(event, payload);
     const frame = JSON.stringify({
       type: "event",
       event,
@@ -70,6 +101,9 @@ export function createGatewayBroadcaster(params: { clients: Set<GatewayWsClient>
         continue;
       }
       if (!hasEventScope(c, event)) {
+        continue;
+      }
+      if (!hasAgentScope(c, eventAgentId)) {
         continue;
       }
       const slow = c.socket.bufferedAmount > MAX_BUFFERED_BYTES;
