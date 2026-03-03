@@ -119,6 +119,14 @@ function authorizeGatewayMethod(method: string, client: GatewayRequestOptions["c
   if (scopes.includes(ADMIN_SCOPE)) {
     return null;
   }
+  // Keep projects.list on read-level access even when callers are not admin.
+  // This explicit guard avoids falling through to admin-only fallback paths.
+  if (method === "projects.list") {
+    if (scopes.includes(READ_SCOPE) || scopes.includes(WRITE_SCOPE)) {
+      return null;
+    }
+    return errorShape(ErrorCodes.INVALID_REQUEST, "missing scope: operator.read");
+  }
   if (APPROVAL_METHODS.has(method) && !scopes.includes(APPROVALS_SCOPE)) {
     return errorShape(ErrorCodes.INVALID_REQUEST, "missing scope: operator.approvals");
   }
