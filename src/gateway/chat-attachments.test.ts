@@ -210,4 +210,80 @@ describe("parseMessageWithAttachments", () => {
     expect(parsed.images[0]?.data).toBe(PNG_1x1);
     expect(logs.some((l) => /non-image/i.test(l))).toBe(true);
   });
+
+  it("extracts text files into file blocks when file attachments are enabled", async () => {
+    const logs: string[] = [];
+    const text = Buffer.from("hello from file").toString("base64");
+    const parsed = await parseMessageWithAttachments(
+      "x",
+      [
+        {
+          type: "file",
+          mimeType: "text/plain",
+          fileName: "note.txt",
+          content: text,
+        },
+      ],
+      {
+        allowFiles: true,
+        log: { warn: (message) => logs.push(message) },
+      },
+    );
+    expect(parsed.images).toHaveLength(0);
+    expect(parsed.message).toContain('<file name="note.txt"');
+    expect(parsed.message).toContain("hello from file");
+    expect(logs).toHaveLength(0);
+  });
+
+  it("keeps metadata note for unsupported file mimes", async () => {
+    const logs: string[] = [];
+    const zipLike = Buffer.from("PK\x03\x04").toString("base64");
+    const parsed = await parseMessageWithAttachments(
+      "x",
+      [
+        {
+          type: "file",
+          mimeType: "application/zip",
+          fileName: "archive.zip",
+          content: zipLike,
+        },
+      ],
+      {
+        allowFiles: true,
+        log: { warn: (message) => logs.push(message) },
+      },
+    );
+    expect(parsed.images).toHaveLength(0);
+    expect(parsed.message).toContain('<file name="archive.zip"');
+    expect(parsed.message).toContain("unsupported-for-extraction");
+    expect(logs.some((line) => /ws-file-attachments/i.test(line))).toBe(true);
+  });
+
+  it("uses PDF rendered-image placeholder when extractor returns images", async () => {
+    const pdf = Buffer.from("%PDF-1.4\n").toString("base64");
+    const parsed = await parseMessageWithAttachments(
+      "x",
+      [
+        {
+          type: "file",
+          mimeType: "application/pdf",
+          fileName: "scan.pdf",
+          content: pdf,
+        },
+      ],
+      {
+        allowFiles: true,
+        log: { warn: () => {} },
+        extractFileContent: async () => ({
+          filename: "scan.pdf",
+          text: "",
+          images: [{ type: "image", data: "abc", mimeType: "image/png" }],
+        }),
+      },
+    );
+    expect(parsed.images).toHaveLength(0);
+    expect(parsed.message).toContain(
+      "[PDF content rendered to images; images not forwarded to model]",
+    );
+  });
 });

@@ -81,6 +81,14 @@ export const SessionsPatchParamsSchema = Type.Object(
   { additionalProperties: false },
 );
 
+export const SessionsRenameParamsSchema = Type.Object(
+  {
+    key: NonEmptyString,
+    name: Type.Union([NonEmptyString, Type.Null()]),
+  },
+  { additionalProperties: false },
+);
+
 export const SessionsResetParamsSchema = Type.Object(
   { key: NonEmptyString },
   { additionalProperties: false },

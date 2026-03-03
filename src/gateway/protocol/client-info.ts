@@ -44,6 +44,8 @@ export type GatewayClientInfo = {
 
 export const GATEWAY_CLIENT_CAPS = {
   TOOL_EVENTS: "tool-events",
+  FILE_ATTACHMENTS_V1: "file-attachments-v1",
+  ATTACHMENT_PATHS_V1: "attachment-paths-v1",
 } as const;
 
 export type GatewayClientCap = (typeof GATEWAY_CLIENT_CAPS)[keyof typeof GATEWAY_CLIENT_CAPS];

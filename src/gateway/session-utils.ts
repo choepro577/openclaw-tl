@@ -2,8 +2,12 @@ import fs from "node:fs";
 import path from "node:path";
 import type {
   GatewayAgentRow,
+  GatewayProjectRow,
   GatewaySessionRow,
   GatewaySessionsDefaults,
+  ProjectsCreateResult,
+  ProjectsListResult,
+  SessionsCreateResult,
   SessionsListResult,
 } from "./session-utils.types.js";
 import { resolveAgentWorkspaceDir, resolveDefaultAgentId } from "../agents/agent-scope.js";
@@ -47,12 +51,17 @@ export {
 } from "./session-utils.fs.js";
 export type {
   GatewayAgentRow,
+  GatewayProjectRow,
   GatewaySessionRow,
   GatewaySessionsDefaults,
+  ProjectsCreateResult,
+  ProjectsListResult,
+  SessionsCreateResult,
   SessionsListResult,
   SessionsPatchResult,
   SessionsPreviewEntry,
   SessionsPreviewResult,
+  SessionsRenameResult,
 } from "./session-utils.types.js";
 
 const DERIVED_TITLE_MAX_LEN = 60;
@@ -178,6 +187,22 @@ export function deriveSessionTitle(
     return formatSessionIdPrefix(entry.sessionId, entry.updatedAt);
   }
 
+  return undefined;
+}
+
+export function resolveGatewaySessionTitle(params: {
+  name?: string;
+  displayName?: string;
+  label?: string;
+  derivedTitle?: string;
+}): string | undefined {
+  const candidates = [params.name, params.displayName, params.label, params.derivedTitle];
+  for (const candidate of candidates) {
+    const trimmed = candidate?.trim();
+    if (trimmed) {
+      return trimmed;
+    }
+  }
   return undefined;
 }
 
@@ -605,78 +630,12 @@ export function listSessionsFromStore(params: {
       }
       return entry?.label === label;
     })
-    .map(([key, entry]) => {
-      const updatedAt = entry?.updatedAt ?? null;
-      const input = entry?.inputTokens ?? 0;
-      const output = entry?.outputTokens ?? 0;
-      const total = entry?.totalTokens ?? input + output;
-      const parsed = parseGroupKey(key);
-      const channel = entry?.channel ?? parsed?.channel;
-      const subject = entry?.subject;
-      const groupChannel = entry?.groupChannel;
-      const space = entry?.space;
-      const id = parsed?.id;
-      const origin = entry?.origin;
-      const originLabel = origin?.label;
-      const displayName =
-        entry?.displayName ??
-        (channel
-          ? buildGroupDisplayName({
-              provider: channel,
-              subject,
-              groupChannel,
-              space,
-              id,
-              key,
-            })
-          : undefined) ??
-        entry?.label ??
-        originLabel;
-      const deliveryFields = normalizeSessionDeliveryFields(entry);
-      const parsedAgent = parseAgentSessionKey(key);
-      const sessionAgentId = normalizeAgentId(parsedAgent?.agentId ?? resolveDefaultAgentId(cfg));
-      const resolvedModel = resolveSessionModelRef(cfg, entry, sessionAgentId);
-      const modelProvider = resolvedModel.provider ?? DEFAULT_PROVIDER;
-      const model = resolvedModel.model ?? DEFAULT_MODEL;
-      return {
-        key,
-        entry,
-        kind: classifySessionKey(key, entry),
-        label: entry?.label,
-        displayName,
-        channel,
-        subject,
-        groupChannel,
-        space,
-        chatType: entry?.chatType,
-        origin,
-        updatedAt,
-        sessionId: entry?.sessionId,
-        systemSent: entry?.systemSent,
-        abortedLastRun: entry?.abortedLastRun,
-        thinkingLevel: entry?.thinkingLevel,
-        verboseLevel: entry?.verboseLevel,
-        reasoningLevel: entry?.reasoningLevel,
-        elevatedLevel: entry?.elevatedLevel,
-        sendPolicy: entry?.sendPolicy,
-        inputTokens: entry?.inputTokens,
-        outputTokens: entry?.outputTokens,
-        totalTokens: total,
-        responseUsage: entry?.responseUsage,
-        modelProvider,
-        model,
-        contextTokens: entry?.contextTokens,
-        deliveryContext: deliveryFields.deliveryContext,
-        lastChannel: deliveryFields.lastChannel ?? entry?.lastChannel,
-        lastTo: deliveryFields.lastTo ?? entry?.lastTo,
-        lastAccountId: deliveryFields.lastAccountId ?? entry?.lastAccountId,
-      };
-    })
+    .map(([key, entry]) => buildGatewaySessionRow({ cfg, storePath, key, entry }))
     .toSorted((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0));
 
   if (search) {
     sessions = sessions.filter((s) => {
-      const fields = [s.displayName, s.label, s.subject, s.sessionId, s.key];
+      const fields = [s.name, s.title, s.displayName, s.label, s.subject, s.sessionId, s.key];
       return fields.some((f) => typeof f === "string" && f.toLowerCase().includes(search));
     });
   }
@@ -691,32 +650,16 @@ export function listSessionsFromStore(params: {
     sessions = sessions.slice(0, limit);
   }
 
-  const finalSessions: GatewaySessionRow[] = sessions.map((s) => {
-    const { entry, ...rest } = s;
-    let derivedTitle: string | undefined;
-    let lastMessagePreview: string | undefined;
-    if (entry?.sessionId) {
-      if (includeDerivedTitles) {
-        const firstUserMsg = readFirstUserMessageFromTranscript(
-          entry.sessionId,
-          storePath,
-          entry.sessionFile,
-        );
-        derivedTitle = deriveSessionTitle(entry, firstUserMsg);
-      }
-      if (includeLastMessage) {
-        const lastMsg = readLastMessagePreviewFromTranscript(
-          entry.sessionId,
-          storePath,
-          entry.sessionFile,
-        );
-        if (lastMsg) {
-          lastMessagePreview = lastMsg;
-        }
-      }
-    }
-    return { ...rest, derivedTitle, lastMessagePreview } satisfies GatewaySessionRow;
-  });
+  const finalSessions: GatewaySessionRow[] = sessions.map((s) =>
+    buildGatewaySessionRow({
+      cfg,
+      storePath,
+      key: s.key,
+      entry: store[s.key],
+      includeDerivedTitles,
+      includeLastMessage,
+    }),
+  );
 
   return {
     ts: now,
@@ -725,4 +668,115 @@ export function listSessionsFromStore(params: {
     defaults: getSessionDefaults(cfg),
     sessions: finalSessions,
   };
+}
+
+export function buildGatewaySessionRow(params: {
+  cfg: OpenClawConfig;
+  storePath: string;
+  key: string;
+  entry?: SessionEntry;
+  includeDerivedTitles?: boolean;
+  includeLastMessage?: boolean;
+}): GatewaySessionRow {
+  const { cfg, storePath, key, entry } = params;
+  const updatedAt = entry?.updatedAt ?? null;
+  const input = entry?.inputTokens ?? 0;
+  const output = entry?.outputTokens ?? 0;
+  const total = entry?.totalTokens ?? input + output;
+  const parsed = parseGroupKey(key);
+  const channel = entry?.channel ?? parsed?.channel;
+  const subject = entry?.subject;
+  const groupChannel = entry?.groupChannel;
+  const space = entry?.space;
+  const id = parsed?.id;
+  const origin = entry?.origin;
+  const originLabel = origin?.label;
+  const displayName =
+    entry?.displayName ??
+    (channel
+      ? buildGroupDisplayName({
+          provider: channel,
+          subject,
+          groupChannel,
+          space,
+          id,
+          key,
+        })
+      : undefined) ??
+    entry?.label ??
+    originLabel;
+  const deliveryFields = normalizeSessionDeliveryFields(entry);
+  const parsedAgent = parseAgentSessionKey(key);
+  const sessionAgentId = normalizeAgentId(parsedAgent?.agentId ?? resolveDefaultAgentId(cfg));
+  const resolvedModel = resolveSessionModelRef(cfg, entry, sessionAgentId);
+  const modelProvider = resolvedModel.provider ?? DEFAULT_PROVIDER;
+  const model = resolvedModel.model ?? DEFAULT_MODEL;
+
+  let derivedTitle: string | undefined;
+  if (entry?.sessionId && params.includeDerivedTitles) {
+    const firstUserMsg = readFirstUserMessageFromTranscript(
+      entry.sessionId,
+      storePath,
+      entry.sessionFile,
+    );
+    derivedTitle = deriveSessionTitle(entry, firstUserMsg);
+  }
+
+  let lastMessagePreview: string | undefined;
+  if (entry?.sessionId && params.includeLastMessage) {
+    const lastMsg = readLastMessagePreviewFromTranscript(
+      entry.sessionId,
+      storePath,
+      entry.sessionFile,
+    );
+    if (lastMsg) {
+      lastMessagePreview = lastMsg;
+    }
+  }
+
+  const title =
+    resolveGatewaySessionTitle({
+      name: entry?.name,
+      displayName,
+      label: entry?.label,
+      derivedTitle: derivedTitle ?? deriveSessionTitle(entry),
+    }) ?? undefined;
+
+  return {
+    key,
+    kind: classifySessionKey(key, entry),
+    name: entry?.name,
+    projectId: entry?.projectId ?? null,
+    title,
+    label: entry?.label,
+    displayName,
+    derivedTitle,
+    lastMessagePreview,
+    channel,
+    subject,
+    groupChannel,
+    space,
+    chatType: entry?.chatType,
+    origin,
+    updatedAt,
+    sessionId: entry?.sessionId,
+    systemSent: entry?.systemSent,
+    abortedLastRun: entry?.abortedLastRun,
+    thinkingLevel: entry?.thinkingLevel,
+    verboseLevel: entry?.verboseLevel,
+    reasoningLevel: entry?.reasoningLevel,
+    elevatedLevel: entry?.elevatedLevel,
+    sendPolicy: entry?.sendPolicy,
+    inputTokens: entry?.inputTokens,
+    outputTokens: entry?.outputTokens,
+    totalTokens: total,
+    responseUsage: entry?.responseUsage,
+    modelProvider,
+    model,
+    contextTokens: entry?.contextTokens,
+    deliveryContext: deliveryFields.deliveryContext,
+    lastChannel: deliveryFields.lastChannel ?? entry?.lastChannel,
+    lastTo: deliveryFields.lastTo ?? entry?.lastTo,
+    lastAccountId: deliveryFields.lastAccountId ?? entry?.lastAccountId,
+  } satisfies GatewaySessionRow;
 }

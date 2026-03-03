@@ -15,6 +15,7 @@ import { healthHandlers } from "./server-methods/health.js";
 import { logsHandlers } from "./server-methods/logs.js";
 import { modelsHandlers } from "./server-methods/models.js";
 import { nodeHandlers } from "./server-methods/nodes.js";
+import { projectsHandlers } from "./server-methods/projects.js";
 import { sendHandlers } from "./server-methods/send.js";
 import { sessionsHandlers } from "./server-methods/sessions.js";
 import { skillsHandlers } from "./server-methods/skills.js";
@@ -73,6 +74,7 @@ const READ_METHODS = new Set([
   "node.list",
   "node.describe",
   "chat.history",
+  "projects.list",
 ]);
 const WRITE_METHODS = new Set([
   "send",
@@ -89,6 +91,11 @@ const WRITE_METHODS = new Set([
   "chat.send",
   "chat.abort",
   "browser.request",
+  "projects.create",
+  "projects.sessions.create",
+  "sessions.create",
+  "sessions.rename",
+  "sessions.delete",
 ]);
 
 function authorizeGatewayMethod(method: string, client: GatewayRequestOptions["client"]) {
@@ -158,7 +165,6 @@ function authorizeGatewayMethod(method: string, client: GatewayRequestOptions["c
     method === "cron.run" ||
     method === "sessions.patch" ||
     method === "sessions.reset" ||
-    method === "sessions.delete" ||
     method === "sessions.compact"
   ) {
     return errorShape(ErrorCodes.INVALID_REQUEST, "missing scope: operator.admin");
@@ -187,6 +193,7 @@ export const coreGatewayHandlers: GatewayRequestHandlers = {
   ...systemHandlers,
   ...updateHandlers,
   ...nodeHandlers,
+  ...projectsHandlers,
   ...sendHandlers,
   ...usageHandlers,
   ...agentHandlers,

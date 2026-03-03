@@ -56,6 +56,7 @@ import { applyVerboseOverride } from "../sessions/level-overrides.js";
 import { applyModelOverrideToSessionEntry } from "../sessions/model-overrides.js";
 import { resolveSendPolicy } from "../sessions/send-policy.js";
 import { resolveMessageChannel } from "../utils/message-channel.js";
+import { isReasoningTagProvider } from "../utils/provider-utils.js";
 import { deliverAgentCommandResult } from "./agent/delivery.js";
 import { resolveAgentRunContext } from "./agent/run-context.js";
 import { updateSessionStoreAfterAgentRun } from "./agent/session-store.js";
@@ -451,6 +452,7 @@ export async function agentCommand(
             extraSystemPrompt: opts.extraSystemPrompt,
             streamParams: opts.streamParams,
             agentDir,
+            enforceFinalTag: isReasoningTagProvider(providerOverride),
             onAgentEvent: (evt) => {
               // Track lifecycle end for fallback emission below.
               if (

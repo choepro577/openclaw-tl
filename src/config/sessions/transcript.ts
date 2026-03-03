@@ -57,7 +57,7 @@ export function resolveMirroredTranscriptText(params: {
   return trimmed ? trimmed : null;
 }
 
-async function ensureSessionHeader(params: {
+export async function ensureSessionTranscriptHeader(params: {
   sessionFile: string;
   sessionId: string;
 }): Promise<void> {
@@ -106,7 +106,7 @@ export async function appendAssistantMessageToSessionTranscript(params: {
   const sessionFile =
     entry.sessionFile?.trim() || resolveSessionTranscriptPath(entry.sessionId, params.agentId);
 
-  await ensureSessionHeader({ sessionFile, sessionId: entry.sessionId });
+  await ensureSessionTranscriptHeader({ sessionFile, sessionId: entry.sessionId });
 
   const sessionManager = SessionManager.open(sessionFile);
   sessionManager.appendMessage({

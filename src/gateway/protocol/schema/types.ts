@@ -132,11 +132,18 @@ import type {
   NodeRenameParamsSchema,
 } from "./nodes.js";
 import type {
+  ProjectsCreateParamsSchema,
+  ProjectsListParamsSchema,
+  ProjectsSessionsCreateParamsSchema,
+  SessionsCreateParamsSchema,
+} from "./projects.js";
+import type {
   SessionsCompactParamsSchema,
   SessionsDeleteParamsSchema,
   SessionsListParamsSchema,
   SessionsPatchParamsSchema,
   SessionsPreviewParamsSchema,
+  SessionsRenameParamsSchema,
   SessionsResetParamsSchema,
   SessionsResolveParamsSchema,
   SessionsUsageParamsSchema,
@@ -180,10 +187,15 @@ export type NodeDescribeParams = Static<typeof NodeDescribeParamsSchema>;
 export type NodeInvokeParams = Static<typeof NodeInvokeParamsSchema>;
 export type NodeInvokeResultParams = Static<typeof NodeInvokeResultParamsSchema>;
 export type NodeEventParams = Static<typeof NodeEventParamsSchema>;
+export type ProjectsListParams = Static<typeof ProjectsListParamsSchema>;
+export type ProjectsCreateParams = Static<typeof ProjectsCreateParamsSchema>;
+export type ProjectsSessionsCreateParams = Static<typeof ProjectsSessionsCreateParamsSchema>;
+export type SessionsCreateParams = Static<typeof SessionsCreateParamsSchema>;
 export type SessionsListParams = Static<typeof SessionsListParamsSchema>;
 export type SessionsPreviewParams = Static<typeof SessionsPreviewParamsSchema>;
 export type SessionsResolveParams = Static<typeof SessionsResolveParamsSchema>;
 export type SessionsPatchParams = Static<typeof SessionsPatchParamsSchema>;
+export type SessionsRenameParams = Static<typeof SessionsRenameParamsSchema>;
 export type SessionsResetParams = Static<typeof SessionsResetParamsSchema>;
 export type SessionsDeleteParams = Static<typeof SessionsDeleteParamsSchema>;
 export type SessionsCompactParams = Static<typeof SessionsCompactParamsSchema>;

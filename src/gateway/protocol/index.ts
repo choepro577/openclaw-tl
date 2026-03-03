@@ -1,5 +1,5 @@
 import AjvPkg, { type ErrorObject } from "ajv";
-import type { SessionsPatchResult } from "../session-utils.types.js";
+import type { SessionsPatchResult, SessionsRenameResult } from "../session-utils.types.js";
 import {
   type AgentEvent,
   AgentEventSchema,
@@ -194,6 +194,12 @@ import {
   NodePairVerifyParamsSchema,
   type NodeRenameParams,
   NodeRenameParamsSchema,
+  type ProjectsCreateParams,
+  ProjectsCreateParamsSchema,
+  type ProjectsListParams,
+  ProjectsListParamsSchema,
+  type ProjectsSessionsCreateParams,
+  ProjectsSessionsCreateParamsSchema,
   type PollParams,
   PollParamsSchema,
   PROTOCOL_VERSION,
@@ -205,6 +211,8 @@ import {
   type ResponseFrame,
   ResponseFrameSchema,
   SendParamsSchema,
+  type SessionsCreateParams,
+  SessionsCreateParamsSchema,
   type SessionsCompactParams,
   SessionsCompactParamsSchema,
   type SessionsDeleteParams,
@@ -215,6 +223,8 @@ import {
   SessionsPatchParamsSchema,
   type SessionsPreviewParams,
   SessionsPreviewParamsSchema,
+  type SessionsRenameParams,
+  SessionsRenameParamsSchema,
   type SessionsResetParams,
   SessionsResetParamsSchema,
   type SessionsResolveParams,
@@ -342,6 +352,16 @@ export const validateNodeInvokeResultParams = ajv.compile<NodeInvokeResultParams
   NodeInvokeResultParamsSchema,
 );
 export const validateNodeEventParams = ajv.compile<NodeEventParams>(NodeEventParamsSchema);
+export const validateProjectsListParams = ajv.compile<ProjectsListParams>(ProjectsListParamsSchema);
+export const validateProjectsCreateParams = ajv.compile<ProjectsCreateParams>(
+  ProjectsCreateParamsSchema,
+);
+export const validateProjectsSessionsCreateParams = ajv.compile<ProjectsSessionsCreateParams>(
+  ProjectsSessionsCreateParamsSchema,
+);
+export const validateSessionsCreateParams = ajv.compile<SessionsCreateParams>(
+  SessionsCreateParamsSchema,
+);
 export const validateSessionsListParams = ajv.compile<SessionsListParams>(SessionsListParamsSchema);
 export const validateSessionsPreviewParams = ajv.compile<SessionsPreviewParams>(
   SessionsPreviewParamsSchema,
@@ -351,6 +371,9 @@ export const validateSessionsResolveParams = ajv.compile<SessionsResolveParams>(
 );
 export const validateSessionsPatchParams =
   ajv.compile<SessionsPatchParams>(SessionsPatchParamsSchema);
+export const validateSessionsRenameParams = ajv.compile<SessionsRenameParams>(
+  SessionsRenameParamsSchema,
+);
 export const validateSessionsResetParams =
   ajv.compile<SessionsResetParams>(SessionsResetParamsSchema);
 export const validateSessionsDeleteParams = ajv.compile<SessionsDeleteParams>(
@@ -496,6 +519,10 @@ export {
   NodePairVerifyParamsSchema,
   NodeListParamsSchema,
   NodeInvokeParamsSchema,
+  ProjectsListParamsSchema,
+  ProjectsCreateParamsSchema,
+  ProjectsSessionsCreateParamsSchema,
+  SessionsCreateParamsSchema,
   SessionsListParamsSchema,
   SessionsPreviewParamsSchema,
   SessionsPatchParamsSchema,
@@ -686,7 +713,9 @@ export type {
   SessionsPreviewParams,
   SessionsResolveParams,
   SessionsPatchParams,
+  SessionsRenameParams,
   SessionsPatchResult,
+  SessionsRenameResult,
   SessionsResetParams,
   SessionsDeleteParams,
   SessionsCompactParams,

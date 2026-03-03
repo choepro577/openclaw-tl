@@ -78,6 +78,8 @@ export type SessionEntry = {
   memoryFlushCompactionCount?: number;
   cliSessionIds?: Record<string, string>;
   claudeCliSessionId?: string;
+  name?: string;
+  projectId?: string | null;
   label?: string;
   displayName?: string;
   channel?: string;

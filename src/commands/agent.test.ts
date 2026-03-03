@@ -138,6 +138,69 @@ describe("agentCommand", () => {
     });
   });
 
+  it("preserves renamed session name when run metadata is persisted", async () => {
+    await withTempHome(async (home) => {
+      const store = path.join(home, "sessions.json");
+      const sessionKey = "agent:main:openai-user:main:race-rename";
+      fs.mkdirSync(path.dirname(store), { recursive: true });
+      fs.writeFileSync(
+        store,
+        JSON.stringify(
+          {
+            [sessionKey]: {
+              sessionId: "session-race",
+              updatedAt: Date.now() - 1_000,
+              projectId: "project-test",
+            },
+          },
+          null,
+          2,
+        ),
+      );
+      mockConfig(home, store);
+
+      vi.mocked(runEmbeddedPiAgent).mockImplementationOnce(async () => {
+        const saved = JSON.parse(fs.readFileSync(store, "utf-8")) as Record<
+          string,
+          {
+            sessionId?: string;
+            updatedAt?: number;
+            projectId?: string | null;
+            name?: string;
+          }
+        >;
+        const existing = saved[sessionKey] ?? {};
+        saved[sessionKey] = {
+          ...existing,
+          name: "xin chào",
+          updatedAt: Date.now(),
+        };
+        fs.writeFileSync(store, JSON.stringify(saved, null, 2));
+        return {
+          payloads: [{ text: "ok" }],
+          meta: {
+            durationMs: 5,
+            agentMeta: { sessionId: "session-race", provider: "p", model: "m" },
+          },
+        } as never;
+      });
+
+      await agentCommand({ message: "xin chào", sessionKey }, runtime);
+
+      const saved = JSON.parse(fs.readFileSync(store, "utf-8")) as Record<
+        string,
+        {
+          sessionId?: string;
+          projectId?: string | null;
+          name?: string;
+        }
+      >;
+      expect(saved[sessionKey]?.name).toBe("xin chào");
+      expect(saved[sessionKey]?.projectId).toBe("project-test");
+      expect(saved[sessionKey]?.sessionId).toBe("session-race");
+    });
+  });
+
   it("does not duplicate agent events from embedded runs", async () => {
     await withTempHome(async (home) => {
       const store = path.join(home, "sessions.json");
@@ -193,6 +256,25 @@ describe("agentCommand", () => {
       const callArgs = vi.mocked(runEmbeddedPiAgent).mock.calls.at(-1)?.[0];
       expect(callArgs?.provider).toBe("openai");
       expect(callArgs?.model).toBe("gpt-4.1-mini");
+    });
+  });
+
+  it("enforces final-tag parsing for reasoning-tag providers", async () => {
+    await withTempHome(async (home) => {
+      const store = path.join(home, "sessions.json");
+      mockConfig(home, store, {
+        model: { primary: "minimax/m2.1" },
+        models: {
+          "anthropic/claude-opus-4-5": {},
+          "minimax/m2.1": {},
+        },
+      });
+
+      await agentCommand({ message: "hi", to: "+1555" }, runtime);
+
+      const callArgs = vi.mocked(runEmbeddedPiAgent).mock.calls.at(-1)?.[0];
+      expect(callArgs?.provider).toBe("minimax");
+      expect(callArgs?.enforceFinalTag).toBe(true);
     });
   });
 

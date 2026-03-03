@@ -53,6 +53,8 @@ export const AgentParamsSchema = Type.Object(
     thinking: Type.Optional(Type.String()),
     deliver: Type.Optional(Type.Boolean()),
     attachments: Type.Optional(Type.Array(Type.Unknown())),
+    attachment_paths: Type.Optional(Type.Array(Type.String())),
+    attachmentPaths: Type.Optional(Type.Array(Type.String())),
     channel: Type.Optional(Type.String()),
     replyChannel: Type.Optional(Type.String()),
     accountId: Type.Optional(Type.String()),

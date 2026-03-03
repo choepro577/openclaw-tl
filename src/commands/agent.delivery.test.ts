@@ -297,4 +297,69 @@ describe("deliverAgentCommandResult", () => {
     expect(line).toContain("channel=webchat");
     expect(line).toContain("ANNOUNCE_SKIP");
   });
+
+  it("emits a fallback payload when agent output is empty", async () => {
+    const cfg = {} as OpenClawConfig;
+    const deps = {} as CliDeps;
+    const runtime = {
+      log: vi.fn(),
+      error: vi.fn(),
+    } as unknown as RuntimeEnv;
+    const result = {
+      payloads: [],
+      meta: {},
+    };
+
+    const { deliverAgentCommandResult } = await import("./agent/delivery.js");
+    const output = await deliverAgentCommandResult({
+      cfg,
+      deps,
+      runtime,
+      opts: {
+        message: "hello",
+        deliver: false,
+      },
+      sessionEntry: undefined,
+      result,
+      payloads: result.payloads,
+    });
+
+    expect(output.payloads).toEqual([
+      {
+        text: "No response generated. Please try again.",
+        mediaUrl: null,
+      },
+    ]);
+    expect(runtime.log).toHaveBeenCalledWith("No response generated. Please try again.");
+  });
+
+  it("does not emit fallback payload for aborted runs", async () => {
+    const cfg = {} as OpenClawConfig;
+    const deps = {} as CliDeps;
+    const runtime = {
+      log: vi.fn(),
+      error: vi.fn(),
+    } as unknown as RuntimeEnv;
+    const result = {
+      payloads: [],
+      meta: { aborted: true },
+    };
+
+    const { deliverAgentCommandResult } = await import("./agent/delivery.js");
+    const output = await deliverAgentCommandResult({
+      cfg,
+      deps,
+      runtime,
+      opts: {
+        message: "hello",
+        deliver: false,
+      },
+      sessionEntry: undefined,
+      result,
+      payloads: result.payloads,
+    });
+
+    expect(output.payloads).toEqual([]);
+    expect(runtime.log).toHaveBeenCalledWith("No reply from agent.");
+  });
 });

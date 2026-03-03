@@ -11,6 +11,9 @@ export type GatewaySessionsDefaults = {
 export type GatewaySessionRow = {
   key: string;
   kind: "direct" | "group" | "global" | "unknown";
+  name?: string;
+  projectId?: string | null;
+  title?: string;
   label?: string;
   displayName?: string;
   derivedTitle?: string;
@@ -55,6 +58,11 @@ export type GatewayAgentRow = {
   };
 };
 
+export type GatewayProjectRow = {
+  projectId: string;
+  name: string;
+};
+
 export type SessionPreviewItem = {
   role: "user" | "assistant" | "tool" | "system" | "other";
   text: string;
@@ -88,4 +96,38 @@ export type SessionsPatchResult = {
     modelProvider?: string;
     model?: string;
   };
+};
+
+export type SessionsRenameResult = {
+  ok: true;
+  path: string;
+  key: string;
+  entry: SessionEntry;
+  session: GatewaySessionRow;
+};
+
+export type ProjectsListResult = {
+  ts: number;
+  path: string;
+  count: number;
+  projects: GatewayProjectRow[];
+};
+
+export type ProjectsCreateResult = {
+  ok: true;
+  created: boolean;
+  path: string;
+  project: GatewayProjectRow;
+};
+
+export type SessionsCreateResult = {
+  ok: true;
+  created: boolean;
+  path: string;
+  transcriptPath: string;
+  sessionKey: string;
+  sessionId: string;
+  entry: SessionEntry;
+  session: GatewaySessionRow;
+  project?: GatewayProjectRow;
 };

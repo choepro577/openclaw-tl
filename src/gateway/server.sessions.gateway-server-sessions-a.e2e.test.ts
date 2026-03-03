@@ -470,4 +470,236 @@ describe("gateway server sessions", () => {
 
     ws.close();
   });
+
+  test("creates projects and eagerly initializes standalone or project sessions", async () => {
+    const { ws } = await openClient();
+
+    const createdProject = await rpcReq<{
+      ok: true;
+      created: boolean;
+      path: string;
+      project: { projectId: string; name: string };
+    }>(ws, "projects.create", { name: "Recruiting" });
+    expect(createdProject.ok).toBe(true);
+    expect(createdProject.payload?.created).toBe(true);
+    expect(createdProject.payload?.project.name).toBe("Recruiting");
+
+    const projectStoreRaw = await fs.readFile(createdProject.payload!.path, "utf-8");
+    expect(projectStoreRaw).toContain(createdProject.payload!.project.projectId);
+    expect(projectStoreRaw).toContain('"name": "Recruiting"');
+
+    const listedProjects = await rpcReq<{
+      path: string;
+      count: number;
+      projects: Array<{ projectId: string; name: string }>;
+    }>(ws, "projects.list", {});
+    expect(listedProjects.ok).toBe(true);
+    expect(listedProjects.payload?.count).toBe(1);
+    expect(listedProjects.payload?.projects).toEqual([
+      {
+        projectId: createdProject.payload!.project.projectId,
+        name: "Recruiting",
+      },
+    ]);
+
+    const standaloneKey = "agent:main:openai-user:tester:standalone";
+    const standalone = await rpcReq<{
+      ok: true;
+      created: boolean;
+      transcriptPath: string;
+      sessionKey: string;
+      sessionId: string;
+      entry: { sessionId: string; name?: string; projectId?: string | null };
+      session: { key: string; title?: string; name?: string; projectId?: string | null };
+    }>(ws, "sessions.create", {
+      sessionKey: standaloneKey,
+      name: "Standalone",
+    });
+    expect(standalone.ok).toBe(true);
+    expect(standalone.payload?.created).toBe(true);
+    expect(standalone.payload?.sessionKey).toBe(standaloneKey);
+    expect(standalone.payload?.entry.name).toBe("Standalone");
+    expect(standalone.payload?.entry.projectId).toBeNull();
+    expect(standalone.payload?.session.title).toBe("Standalone");
+    const standaloneTranscript = await fs.readFile(standalone.payload!.transcriptPath, "utf-8");
+    expect(standaloneTranscript).toContain('"type":"session"');
+    expect(standaloneTranscript).toContain(standalone.payload!.sessionId);
+
+    const standaloneHistory = await rpcReq<{
+      sessionKey: string;
+      messages: unknown[];
+    }>(ws, "chat.history", { sessionKey: standaloneKey, limit: 50 });
+    expect(standaloneHistory.ok).toBe(true);
+    expect(standaloneHistory.payload?.sessionKey).toBe(standaloneKey);
+    expect(standaloneHistory.payload?.messages).toEqual([]);
+
+    const projectSessionKey = "agent:main:openai-user:tester:project-session";
+    const projectSession = await rpcReq<{
+      ok: true;
+      created: boolean;
+      transcriptPath: string;
+      sessionKey: string;
+      sessionId: string;
+      entry: { sessionId: string; name?: string; projectId?: string | null };
+      session: { key: string; title?: string; name?: string; projectId?: string | null };
+      project?: { projectId: string; name: string };
+    }>(ws, "projects.sessions.create", {
+      sessionKey: projectSessionKey,
+      projectId: createdProject.payload!.project.projectId,
+      name: "Project Session",
+    });
+    expect(projectSession.ok).toBe(true);
+    expect(projectSession.payload?.created).toBe(true);
+    expect(projectSession.payload?.entry.projectId).toBe(createdProject.payload!.project.projectId);
+    expect(projectSession.payload?.project).toEqual(createdProject.payload!.project);
+    const projectTranscript = await fs.readFile(projectSession.payload!.transcriptPath, "utf-8");
+    expect(projectTranscript).toContain(projectSession.payload!.sessionId);
+
+    const list = await rpcReq<{
+      sessions: Array<{
+        key: string;
+        title?: string;
+        name?: string;
+        projectId?: string | null;
+      }>;
+    }>(ws, "sessions.list", {
+      includeGlobal: false,
+      includeUnknown: false,
+    });
+    expect(list.ok).toBe(true);
+    expect(list.payload?.sessions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          key: standaloneKey,
+          name: "Standalone",
+          title: "Standalone",
+          projectId: null,
+        }),
+        expect.objectContaining({
+          key: projectSessionKey,
+          name: "Project Session",
+          title: "Project Session",
+          projectId: createdProject.payload!.project.projectId,
+        }),
+      ]),
+    );
+
+    const standaloneAgain = await rpcReq<{
+      ok: true;
+      created: boolean;
+      sessionId: string;
+      entry: { sessionId: string };
+    }>(ws, "sessions.create", { sessionKey: standaloneKey });
+    expect(standaloneAgain.ok).toBe(true);
+    expect(standaloneAgain.payload?.created).toBe(false);
+    expect(standaloneAgain.payload?.sessionId).toBe(standalone.payload?.sessionId);
+    expect(standaloneAgain.payload?.entry.sessionId).toBe(standalone.payload?.entry.sessionId);
+
+    const missingProject = await rpcReq(ws, "projects.sessions.create", {
+      sessionKey: "agent:main:openai-user:tester:missing-project",
+      projectId: "missing-project-id",
+    });
+    expect(missingProject.ok).toBe(false);
+
+    ws.close();
+  });
+
+  test("renames sessions with operator.write and falls back to derived title when cleared", async () => {
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), "openclaw-sessions-rename-"));
+    const storePath = path.join(dir, "sessions.json");
+    const sessionId = "sess-rename";
+    const sessionKey = "agent:main:openai-user:tester:rename-me";
+    testState.sessionStorePath = storePath;
+
+    await writeSessionStore({
+      storePath,
+      entries: {
+        [sessionKey]: {
+          sessionId,
+          sessionFile: path.join(dir, `${sessionId}.jsonl`),
+          updatedAt: Date.now() - 1_000,
+          name: "Old name",
+          projectId: "project-123",
+        },
+      },
+    });
+    await fs.writeFile(
+      path.join(dir, `${sessionId}.jsonl`),
+      `${JSON.stringify({
+        message: {
+          role: "user",
+          content: "Hello derived title from transcript",
+        },
+      })}\n`,
+      "utf-8",
+    );
+
+    const { ws } = await openClient({ scopes: ["operator.write"] });
+
+    const renamed = await rpcReq<{
+      ok: true;
+      key: string;
+      entry: { name?: string; projectId?: string | null; sessionId: string };
+      session: { title?: string; name?: string; projectId?: string | null };
+    }>(ws, "sessions.rename", {
+      key: sessionKey,
+      name: "Renamed session",
+    });
+    expect(renamed.ok).toBe(true);
+    expect(renamed.payload?.key).toBe(sessionKey);
+    expect(renamed.payload?.entry.name).toBe("Renamed session");
+    expect(renamed.payload?.entry.projectId).toBe("project-123");
+    expect(renamed.payload?.entry.sessionId).toBe(sessionId);
+    expect(renamed.payload?.session.name).toBe("Renamed session");
+    expect(renamed.payload?.session.title).toBe("Renamed session");
+    expect(renamed.payload?.session.projectId).toBe("project-123");
+
+    const renamedStoreRaw = await fs.readFile(storePath, "utf-8");
+    expect(renamedStoreRaw).toContain('"name": "Renamed session"');
+
+    const cleared = await rpcReq<{
+      ok: true;
+      entry: { name?: string; projectId?: string | null; sessionId: string };
+      session: { title?: string; name?: string; derivedTitle?: string; projectId?: string | null };
+    }>(ws, "sessions.rename", {
+      key: sessionKey,
+      name: null,
+    });
+    expect(cleared.ok).toBe(true);
+    expect(cleared.payload?.entry.name).toBeUndefined();
+    expect(cleared.payload?.entry.projectId).toBe("project-123");
+    expect(cleared.payload?.entry.sessionId).toBe(sessionId);
+    expect(cleared.payload?.session.name).toBeUndefined();
+    expect(cleared.payload?.session.title).toContain("Hello derived title");
+    expect(cleared.payload?.session.derivedTitle).toContain("Hello derived title");
+    expect(cleared.payload?.session.projectId).toBe("project-123");
+
+    const listed = await rpcReq<{
+      sessions: Array<{
+        key: string;
+        title?: string;
+        name?: string;
+        projectId?: string | null;
+      }>;
+    }>(ws, "sessions.list", {
+      includeDerivedTitles: true,
+      includeGlobal: false,
+      includeUnknown: false,
+    });
+    expect(listed.ok).toBe(true);
+    const listedSession = listed.payload?.sessions.find((session) => session.key === sessionKey);
+    expect(listedSession).toBeTruthy();
+    expect(listedSession?.name).toBeUndefined();
+    expect(listedSession?.projectId).toBe("project-123");
+    expect(listedSession?.title).toContain("Hello derived title");
+
+    const deleted = await rpcReq<{ ok: true; deleted: boolean }>(ws, "sessions.delete", {
+      key: sessionKey,
+      deleteTranscript: false,
+    });
+    expect(deleted.ok).toBe(true);
+    expect(deleted.payload?.deleted).toBe(true);
+
+    ws.close();
+  });
 });

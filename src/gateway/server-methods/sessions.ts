@@ -19,10 +19,12 @@ import {
   errorShape,
   formatValidationErrors,
   validateSessionsCompactParams,
+  validateSessionsCreateParams,
   validateSessionsDeleteParams,
   validateSessionsListParams,
   validateSessionsPatchParams,
   validateSessionsPreviewParams,
+  validateSessionsRenameParams,
   validateSessionsResetParams,
   validateSessionsResolveParams,
 } from "../protocol/index.js";
@@ -31,8 +33,11 @@ import {
   assertSessionKeyInScope,
   resolveEnterpriseBoundAgentId,
 } from "../server/agent-scope-guard.js";
+import { createGatewaySession } from "../session-create.js";
 import {
   archiveFileOnDisk,
+  buildGatewaySessionRow,
+  type SessionsCreateResult,
   listSessionsFromStore,
   loadCombinedSessionStoreForGateway,
   loadSessionEntry,
@@ -43,6 +48,7 @@ import {
   type SessionsPatchResult,
   type SessionsPreviewEntry,
   type SessionsPreviewResult,
+  type SessionsRenameResult,
 } from "../session-utils.js";
 import { applySessionsPatchToStore } from "../sessions-patch.js";
 import { resolveSessionKeyFromResolveParams } from "../sessions-resolve.js";
@@ -198,6 +204,44 @@ export const sessionsHandlers: GatewayRequestHandlers = {
     }
     respond(true, { ok: true, key: resolved.key }, undefined);
   },
+  "sessions.create": async ({ params, respond, client, isWebchatConnect }) => {
+    if (!validateSessionsCreateParams(params)) {
+      respond(
+        false,
+        undefined,
+        errorShape(
+          ErrorCodes.INVALID_REQUEST,
+          `invalid sessions.create params: ${formatValidationErrors(validateSessionsCreateParams.errors)}`,
+        ),
+      );
+      return;
+    }
+
+    const cfg = loadConfig();
+    const sessionKey = String(params.sessionKey ?? "").trim();
+    const scopeCheck = assertSessionKeyInScope({
+      client,
+      sessionKey,
+      cfg,
+    });
+    if (!scopeCheck.ok) {
+      respond(false, undefined, scopeCheck.error);
+      return;
+    }
+
+    const created = await createGatewaySession({
+      cfg,
+      sessionKey,
+      name: typeof params.name === "string" ? params.name : undefined,
+      projectId: null,
+      isWebchat: isWebchatConnect(client?.connect),
+    });
+    if (!created.ok) {
+      respond(false, undefined, created.error);
+      return;
+    }
+    respond(true, created.result satisfies SessionsCreateResult, undefined);
+  },
   "sessions.patch": async ({ params, respond, context, client }) => {
     if (!validateSessionsPatchParams(params)) {
       respond(
@@ -260,6 +304,95 @@ export const sessionsHandlers: GatewayRequestHandlers = {
         modelProvider: resolved.provider,
         model: resolved.model,
       },
+    };
+    respond(true, result, undefined);
+  },
+  "sessions.rename": async ({ params, respond, client }) => {
+    if (!validateSessionsRenameParams(params)) {
+      respond(
+        false,
+        undefined,
+        errorShape(
+          ErrorCodes.INVALID_REQUEST,
+          `invalid sessions.rename params: ${formatValidationErrors(validateSessionsRenameParams.errors)}`,
+        ),
+      );
+      return;
+    }
+
+    const cfg = loadConfig();
+    const key = String(params.key ?? "").trim();
+    if (!key) {
+      respond(false, undefined, errorShape(ErrorCodes.INVALID_REQUEST, "key required"));
+      return;
+    }
+
+    const scopeCheck = assertSessionKeyInScope({
+      client,
+      sessionKey: key,
+      cfg,
+    });
+    if (!scopeCheck.ok) {
+      respond(false, undefined, scopeCheck.error);
+      return;
+    }
+
+    const normalizedName =
+      params.name === null
+        ? undefined
+        : typeof params.name === "string"
+          ? params.name.trim()
+          : undefined;
+    if (params.name !== null && !normalizedName) {
+      respond(
+        false,
+        undefined,
+        errorShape(ErrorCodes.INVALID_REQUEST, "name cannot be empty; use null to clear"),
+      );
+      return;
+    }
+
+    const target = resolveGatewaySessionStoreTarget({ cfg, key });
+    const storePath = target.storePath;
+    const entry = await updateSessionStore(storePath, (store) => {
+      const primaryKey = target.storeKeys[0] ?? key;
+      const existingKey = target.storeKeys.find((candidate) => store[candidate]);
+      if (existingKey && existingKey !== primaryKey && !store[primaryKey]) {
+        store[primaryKey] = store[existingKey];
+        delete store[existingKey];
+      }
+
+      const existing = store[primaryKey];
+      if (!existing) {
+        return null;
+      }
+
+      const next: SessionEntry = {
+        ...existing,
+        name: normalizedName,
+        updatedAt: Date.now(),
+      };
+      store[primaryKey] = next;
+      return next;
+    });
+    if (!entry) {
+      respond(false, undefined, errorShape(ErrorCodes.INVALID_REQUEST, "session not found"));
+      return;
+    }
+
+    const result: SessionsRenameResult = {
+      ok: true,
+      path: storePath,
+      key: target.canonicalKey,
+      entry,
+      session: buildGatewaySessionRow({
+        cfg,
+        storePath,
+        key: target.canonicalKey,
+        entry,
+        includeDerivedTitles: true,
+        includeLastMessage: true,
+      }),
     };
     respond(true, result, undefined);
   },

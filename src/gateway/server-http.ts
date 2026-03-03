@@ -26,6 +26,7 @@ import {
   type ControlUiRootState,
 } from "./control-ui.js";
 import { handleEnterpriseAgentHttpRequest } from "./enterprise-agent-http.js";
+import { handleEnterpriseMediaUploadHttpRequest } from "./enterprise-media-upload.js";
 import { applyHookMappings } from "./hooks-mapping.js";
 import {
   extractHookToken,
@@ -347,6 +348,14 @@ export function createGatewayHttpServer(opts: {
       }
       if (
         await handleEnterpriseAgentHttpRequest(req, res, {
+          auth: resolvedAuth,
+          trustedProxies,
+        })
+      ) {
+        return;
+      }
+      if (
+        await handleEnterpriseMediaUploadHttpRequest(req, res, {
           auth: resolvedAuth,
           trustedProxies,
         })

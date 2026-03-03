@@ -26,9 +26,17 @@ import {
   normalizeMessageChannel,
 } from "../../utils/message-channel.js";
 import { resolveAssistantIdentity } from "../assistant-identity.js";
+import {
+  normalizeAttachmentPathsInput,
+  parseMessageWithAttachmentPaths,
+} from "../chat-attachment-paths.js";
 import { parseMessageWithAttachments } from "../chat-attachments.js";
 import { resolveAssistantAvatarUrl } from "../control-ui-shared.js";
-import { GATEWAY_CLIENT_CAPS, hasGatewayClientCap } from "../protocol/client-info.js";
+import {
+  GATEWAY_CLIENT_CAPS,
+  GATEWAY_CLIENT_IDS,
+  hasGatewayClientCap,
+} from "../protocol/client-info.js";
 import {
   ErrorCodes,
   errorShape,
@@ -76,6 +84,8 @@ export const agentHandlers: GatewayRequestHandlers = {
         fileName?: string;
         content?: unknown;
       }>;
+      attachment_paths?: unknown;
+      attachmentPaths?: unknown;
       channel?: string;
       replyChannel?: string;
       accountId?: string;
@@ -127,14 +137,49 @@ export const agentHandlers: GatewayRequestHandlers = {
                 : undefined,
         }))
         .filter((a) => a.content) ?? [];
+    const allowFileAttachments =
+      client?.connect?.client?.id === GATEWAY_CLIENT_IDS.WEBCHAT_UI &&
+      hasGatewayClientCap(client?.connect?.caps, GATEWAY_CLIENT_CAPS.FILE_ATTACHMENTS_V1);
+    const allowAttachmentPaths =
+      client?.connect?.client?.id === GATEWAY_CLIENT_IDS.WEBCHAT_UI &&
+      hasGatewayClientCap(client?.connect?.caps, GATEWAY_CLIENT_CAPS.ATTACHMENT_PATHS_V1);
+    const normalizedAttachmentPaths = normalizeAttachmentPathsInput({
+      attachment_paths: request.attachment_paths,
+      attachmentPaths: request.attachmentPaths,
+    });
+    const hasAttachmentPathPayload = allowAttachmentPaths && normalizedAttachmentPaths.length > 0;
 
     let message = request.message.trim();
     let images: Array<{ type: "image"; data: string; mimeType: string }> = [];
-    if (normalizedAttachments.length > 0) {
+    if (normalizedAttachmentPaths.length > 0 && !allowAttachmentPaths) {
+      context.logGateway.warn(
+        "ws-attachment-paths: received attachment_paths while capability is disabled; dropping",
+      );
+    }
+    if (hasAttachmentPathPayload) {
+      try {
+        const parsed = await parseMessageWithAttachmentPaths(message, normalizedAttachmentPaths, {
+          maxPaths: 5,
+          maxBytes: 5_000_000,
+          log: context.logGateway,
+        });
+        message = parsed.message.trim();
+      } catch (err) {
+        respond(false, undefined, errorShape(ErrorCodes.INVALID_REQUEST, String(err)));
+        return;
+      }
+    }
+    if (hasAttachmentPathPayload && normalizedAttachments.length > 0) {
+      context.logGateway.warn(
+        "ws-attachment-paths: both attachment_paths and attachments provided; ignoring attachments",
+      );
+    }
+    if (!hasAttachmentPathPayload && normalizedAttachments.length > 0) {
       try {
         const parsed = await parseMessageWithAttachments(message, normalizedAttachments, {
           maxBytes: 5_000_000,
           log: context.logGateway,
+          allowFiles: allowFileAttachments,
         });
         message = parsed.message.trim();
         images = parsed.images;
@@ -265,29 +310,31 @@ export const agentHandlers: GatewayRequestHandlers = {
       resolvedGroupChannel = resolvedGroupChannel || inheritedGroup?.groupChannel;
       resolvedGroupSpace = resolvedGroupSpace || inheritedGroup?.groupSpace;
       const deliveryFields = normalizeSessionDeliveryFields(entry);
+      const nextChannel = entry?.channel ?? request.channel?.trim();
+      const nextDeliveryContext = deliveryFields.deliveryContext ?? entry?.deliveryContext;
+      const nextLastChannel = deliveryFields.lastChannel ?? entry?.lastChannel;
+      const nextLastTo = deliveryFields.lastTo ?? entry?.lastTo;
+      const nextLastAccountId = deliveryFields.lastAccountId ?? entry?.lastAccountId;
       const nextEntry: SessionEntry = {
+        ...entry,
         sessionId,
         updatedAt: now,
-        thinkingLevel: entry?.thinkingLevel,
-        verboseLevel: entry?.verboseLevel,
-        reasoningLevel: entry?.reasoningLevel,
-        systemSent: entry?.systemSent,
-        sendPolicy: entry?.sendPolicy,
-        skillsSnapshot: entry?.skillsSnapshot,
-        deliveryContext: deliveryFields.deliveryContext,
-        lastChannel: deliveryFields.lastChannel ?? entry?.lastChannel,
-        lastTo: deliveryFields.lastTo ?? entry?.lastTo,
-        lastAccountId: deliveryFields.lastAccountId ?? entry?.lastAccountId,
-        modelOverride: entry?.modelOverride,
-        providerOverride: entry?.providerOverride,
-        label: labelValue,
-        spawnedBy: spawnedByValue,
-        channel: entry?.channel ?? request.channel?.trim(),
-        groupId: resolvedGroupId ?? entry?.groupId,
-        groupChannel: resolvedGroupChannel ?? entry?.groupChannel,
-        space: resolvedGroupSpace ?? entry?.space,
-        cliSessionIds: entry?.cliSessionIds,
-        claudeCliSessionId: entry?.claudeCliSessionId,
+        ...(labelValue ? { label: labelValue } : {}),
+        ...(spawnedByValue ? { spawnedBy: spawnedByValue } : {}),
+        ...(nextChannel ? { channel: nextChannel } : {}),
+        ...((resolvedGroupId ?? entry?.groupId)
+          ? { groupId: resolvedGroupId ?? entry?.groupId }
+          : {}),
+        ...((resolvedGroupChannel ?? entry?.groupChannel)
+          ? { groupChannel: resolvedGroupChannel ?? entry?.groupChannel }
+          : {}),
+        ...((resolvedGroupSpace ?? entry?.space)
+          ? { space: resolvedGroupSpace ?? entry?.space }
+          : {}),
+        ...(nextDeliveryContext ? { deliveryContext: nextDeliveryContext } : {}),
+        ...(nextLastChannel ? { lastChannel: nextLastChannel } : {}),
+        ...(nextLastTo ? { lastTo: nextLastTo } : {}),
+        ...(nextLastAccountId ? { lastAccountId: nextLastAccountId } : {}),
       };
       sessionEntry = nextEntry;
       const sendPolicy = resolveSendPolicy({

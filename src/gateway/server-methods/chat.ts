@@ -18,9 +18,17 @@ import {
   isChatStopCommandText,
   resolveChatRunExpiresAtMs,
 } from "../chat-abort.js";
+import {
+  normalizeAttachmentPathsInput,
+  parseMessageWithAttachmentPaths,
+} from "../chat-attachment-paths.js";
 import { type ChatImageContent, parseMessageWithAttachments } from "../chat-attachments.js";
 import { stripEnvelopeFromMessages } from "../chat-sanitize.js";
-import { GATEWAY_CLIENT_CAPS, hasGatewayClientCap } from "../protocol/client-info.js";
+import {
+  GATEWAY_CLIENT_CAPS,
+  GATEWAY_CLIENT_IDS,
+  hasGatewayClientCap,
+} from "../protocol/client-info.js";
 import {
   ErrorCodes,
   errorShape,
@@ -358,6 +366,8 @@ export const chatHandlers: GatewayRequestHandlers = {
         fileName?: string;
         content?: unknown;
       }>;
+      attachment_paths?: unknown;
+      attachmentPaths?: unknown;
       timeoutMs?: number;
       idempotencyKey: string;
     };
@@ -389,8 +399,19 @@ export const chatHandlers: GatewayRequestHandlers = {
                 : undefined,
         }))
         .filter((a) => a.content) ?? [];
+    const allowFileAttachments =
+      client?.connect?.client?.id === GATEWAY_CLIENT_IDS.WEBCHAT_UI &&
+      hasGatewayClientCap(client?.connect?.caps, GATEWAY_CLIENT_CAPS.FILE_ATTACHMENTS_V1);
+    const allowAttachmentPaths =
+      client?.connect?.client?.id === GATEWAY_CLIENT_IDS.WEBCHAT_UI &&
+      hasGatewayClientCap(client?.connect?.caps, GATEWAY_CLIENT_CAPS.ATTACHMENT_PATHS_V1);
+    const normalizedAttachmentPaths = normalizeAttachmentPathsInput({
+      attachment_paths: p.attachment_paths,
+      attachmentPaths: p.attachmentPaths,
+    });
+    const hasAttachmentPathPayload = allowAttachmentPaths && normalizedAttachmentPaths.length > 0;
     const rawMessage = p.message.trim();
-    if (!rawMessage && normalizedAttachments.length === 0) {
+    if (!rawMessage && normalizedAttachments.length === 0 && !hasAttachmentPathPayload) {
       respond(
         false,
         undefined,
@@ -400,11 +421,35 @@ export const chatHandlers: GatewayRequestHandlers = {
     }
     let parsedMessage = p.message;
     let parsedImages: ChatImageContent[] = [];
-    if (normalizedAttachments.length > 0) {
+    if (normalizedAttachmentPaths.length > 0 && !allowAttachmentPaths) {
+      context.logGateway.warn(
+        "ws-attachment-paths: received attachment_paths while capability is disabled; dropping",
+      );
+    }
+    if (hasAttachmentPathPayload) {
+      try {
+        const parsed = await parseMessageWithAttachmentPaths(p.message, normalizedAttachmentPaths, {
+          maxPaths: 5,
+          maxBytes: 5_000_000,
+          log: context.logGateway,
+        });
+        parsedMessage = parsed.message;
+      } catch (err) {
+        respond(false, undefined, errorShape(ErrorCodes.INVALID_REQUEST, String(err)));
+        return;
+      }
+    }
+    if (hasAttachmentPathPayload && normalizedAttachments.length > 0) {
+      context.logGateway.warn(
+        "ws-attachment-paths: both attachment_paths and attachments provided; ignoring attachments",
+      );
+    }
+    if (!hasAttachmentPathPayload && normalizedAttachments.length > 0) {
       try {
         const parsed = await parseMessageWithAttachments(p.message, normalizedAttachments, {
           maxBytes: 5_000_000,
           log: context.logGateway,
+          allowFiles: allowFileAttachments,
         });
         parsedMessage = parsed.message;
         parsedImages = parsed.images;

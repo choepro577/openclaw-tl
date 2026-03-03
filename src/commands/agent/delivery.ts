@@ -24,6 +24,7 @@ type RunResult = Awaited<
 >;
 
 const NESTED_LOG_PREFIX = "[agent:nested]";
+const EMPTY_RESPONSE_FALLBACK = "No response generated. Please try again.";
 
 function formatNestedLogPrefix(opts: AgentCommandOpts): string {
   const parts = [NESTED_LOG_PREFIX];
@@ -134,7 +135,15 @@ export async function deliverAgentCommandResult(params: {
     }
   }
 
-  const normalizedPayloads = normalizeOutboundPayloadsForJson(payloads ?? []);
+  const hasPayloads = Array.isArray(payloads) && payloads.length > 0;
+  const shouldEmitEmptyResponseFallback =
+    !hasPayloads && !result.meta?.aborted && result.meta?.stopReason !== "tool_calls";
+  const effectivePayloads = hasPayloads
+    ? payloads
+    : shouldEmitEmptyResponseFallback
+      ? [{ text: EMPTY_RESPONSE_FALLBACK }]
+      : [];
+  const normalizedPayloads = normalizeOutboundPayloadsForJson(effectivePayloads);
   if (opts.json) {
     runtime.log(
       JSON.stringify(
@@ -151,12 +160,12 @@ export async function deliverAgentCommandResult(params: {
     }
   }
 
-  if (!payloads || payloads.length === 0) {
+  if (!hasPayloads && !shouldEmitEmptyResponseFallback) {
     runtime.log("No reply from agent.");
     return { payloads: [], meta: result.meta };
   }
 
-  const deliveryPayloads = normalizeOutboundPayloads(payloads);
+  const deliveryPayloads = normalizeOutboundPayloads(effectivePayloads);
   const logPayload = (payload: NormalizedOutboundPayload) => {
     if (opts.json) {
       return;

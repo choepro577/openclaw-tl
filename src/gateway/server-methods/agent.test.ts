@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { GatewayRequestContext } from "./types.js";
+import { GATEWAY_CLIENT_CAPS, GATEWAY_CLIENT_IDS } from "../protocol/client-info.js";
 import { agentHandlers } from "./agent.js";
 
 const mocks = vi.hoisted(() => ({
@@ -31,9 +32,14 @@ vi.mock("../../commands/agent.js", () => ({
   agentCommand: mocks.agentCommand,
 }));
 
-vi.mock("../../config/config.js", () => ({
-  loadConfig: () => mocks.loadConfigReturn,
-}));
+vi.mock("../../config/config.js", async () => {
+  const actual =
+    await vi.importActual<typeof import("../../config/config.js")>("../../config/config.js");
+  return {
+    ...actual,
+    loadConfig: () => mocks.loadConfigReturn,
+  };
+});
 
 vi.mock("../../agents/agent-scope.js", () => ({
   listAgentIds: () => ["main"],
@@ -62,8 +68,25 @@ const makeContext = (): GatewayRequestContext =>
   ({
     dedupe: new Map(),
     addChatRun: vi.fn(),
-    logGateway: { info: vi.fn(), error: vi.fn() },
+    logGateway: { info: vi.fn(), error: vi.fn(), warn: vi.fn() },
   }) as unknown as GatewayRequestContext;
+
+function seedAgentRequestMocks() {
+  mocks.loadSessionEntry.mockReturnValue({
+    cfg: {},
+    storePath: "/tmp/sessions.json",
+    entry: {
+      sessionId: "existing-session-id",
+      updatedAt: Date.now(),
+    },
+    canonicalKey: "agent:main:main",
+  });
+  mocks.updateSessionStore.mockResolvedValue(undefined);
+  mocks.agentCommand.mockResolvedValue({
+    payloads: [{ text: "ok" }],
+    meta: { durationMs: 100 },
+  });
+}
 
 describe("gateway agent handler", () => {
   it("preserves cliSessionIds from existing session entry", async () => {
@@ -212,5 +235,133 @@ describe("gateway agent handler", () => {
     // Should be undefined, not cause an error
     expect(capturedEntry?.cliSessionIds).toBeUndefined();
     expect(capturedEntry?.claudeCliSessionId).toBeUndefined();
+  });
+
+  it("preserves project metadata for eagerly created sessions", async () => {
+    mocks.loadSessionEntry.mockReturnValue({
+      cfg: {},
+      storePath: "/tmp/sessions.json",
+      entry: {
+        sessionId: "existing-session-id",
+        updatedAt: Date.now(),
+        projectId: "project-test",
+        name: "Project Session",
+        sessionFile: "/tmp/existing-session-id.jsonl",
+      },
+      canonicalKey: "agent:main:openai-user:tester:project-session",
+    });
+
+    let capturedEntry: Record<string, unknown> | undefined;
+    mocks.updateSessionStore.mockImplementation(async (_path, updater) => {
+      const store: Record<string, unknown> = {};
+      await updater(store);
+      capturedEntry = store["agent:main:openai-user:tester:project-session"] as
+        | Record<string, unknown>
+        | undefined;
+    });
+
+    mocks.agentCommand.mockResolvedValue({
+      payloads: [{ text: "ok" }],
+      meta: { durationMs: 100 },
+    });
+
+    const respond = vi.fn();
+    await agentHandlers.agent({
+      params: {
+        message: "hi",
+        agentId: "main",
+        sessionKey: "agent:main:openai-user:tester:project-session",
+        idempotencyKey: "test-project-session-preserve",
+      },
+      respond,
+      context: makeContext(),
+      req: { type: "req", id: "preserve-1", method: "agent" },
+      client: null,
+      isWebchatConnect: () => false,
+    });
+
+    expect(mocks.updateSessionStore).toHaveBeenCalled();
+    expect(capturedEntry).toBeDefined();
+    expect(capturedEntry?.projectId).toBe("project-test");
+    expect(capturedEntry?.name).toBe("Project Session");
+    expect(capturedEntry?.sessionFile).toBe("/tmp/existing-session-id.jsonl");
+  });
+
+  it("drops non-image attachments when file attachment cap is missing", async () => {
+    seedAgentRequestMocks();
+    mocks.agentCommand.mockClear();
+
+    await agentHandlers.agent({
+      params: {
+        message: "read this",
+        agentId: "main",
+        sessionKey: "agent:main:main",
+        idempotencyKey: "test-files-cap-off",
+        attachments: [
+          {
+            type: "file",
+            mimeType: "text/plain",
+            fileName: "note.txt",
+            content: Buffer.from("hello from file").toString("base64"),
+          },
+        ],
+      },
+      respond: vi.fn(),
+      context: makeContext(),
+      req: { type: "req", id: "3", method: "agent" },
+      client: {
+        connect: {
+          client: {
+            id: GATEWAY_CLIENT_IDS.WEBCHAT_UI,
+          },
+        },
+      } as unknown as Parameters<typeof agentHandlers.agent>[0]["client"],
+      isWebchatConnect: () => true,
+    });
+
+    await vi.waitFor(() => expect(mocks.agentCommand).toHaveBeenCalledTimes(1));
+    const callArgs = mocks.agentCommand.mock.calls[0]?.[0];
+    expect(callArgs.message).toContain("read this");
+    expect(callArgs.message).not.toContain("<file ");
+  });
+
+  it("appends file block for webchat-ui when file attachment cap is enabled", async () => {
+    seedAgentRequestMocks();
+    mocks.agentCommand.mockClear();
+
+    await agentHandlers.agent({
+      params: {
+        message: "read this",
+        agentId: "main",
+        sessionKey: "agent:main:main",
+        idempotencyKey: "test-files-cap-on",
+        attachments: [
+          {
+            type: "file",
+            mimeType: "text/plain",
+            fileName: "note.txt",
+            content: Buffer.from("hello from file").toString("base64"),
+          },
+        ],
+      },
+      respond: vi.fn(),
+      context: makeContext(),
+      req: { type: "req", id: "4", method: "agent" },
+      client: {
+        connect: {
+          client: {
+            id: GATEWAY_CLIENT_IDS.WEBCHAT_UI,
+          },
+          caps: [GATEWAY_CLIENT_CAPS.FILE_ATTACHMENTS_V1],
+        },
+      } as unknown as Parameters<typeof agentHandlers.agent>[0]["client"],
+      isWebchatConnect: () => true,
+    });
+
+    await vi.waitFor(() => expect(mocks.agentCommand).toHaveBeenCalledTimes(1));
+    const callArgs = mocks.agentCommand.mock.calls[0]?.[0];
+    expect(callArgs.message).toContain("read this");
+    expect(callArgs.message).toContain('<file name="note.txt" mime="text/plain">');
+    expect(callArgs.message).toContain("hello from file");
   });
 });
