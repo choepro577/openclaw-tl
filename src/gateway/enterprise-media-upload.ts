@@ -1,4 +1,5 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
+import path from "node:path";
 import { loadConfig } from "../config/config.js";
 import { createSubsystemLogger } from "../logging/subsystem.js";
 import { saveMediaBuffer } from "../media/store.js";
@@ -97,6 +98,50 @@ function buildHeaders(req: IncomingMessage): Headers {
     }
   }
   return headers;
+}
+
+function firstHeaderValue(raw: string | string[] | undefined): string {
+  if (Array.isArray(raw)) {
+    return String(raw[0] ?? "").trim();
+  }
+  return String(raw ?? "").trim();
+}
+
+function resolveRequestScheme(req: IncomingMessage): string {
+  const forwardedProto = firstHeaderValue(req.headers["x-forwarded-proto"]);
+  if (forwardedProto) {
+    const proto = forwardedProto.split(",")[0]?.trim().toLowerCase();
+    if (proto === "http" || proto === "https") {
+      return proto;
+    }
+  }
+  return (req.socket as { encrypted?: boolean } | undefined)?.encrypted ? "https" : "http";
+}
+
+function resolveRequestHost(req: IncomingMessage): string {
+  const forwardedHost = firstHeaderValue(req.headers["x-forwarded-host"]);
+  if (forwardedHost) {
+    return forwardedHost.split(",")[0]?.trim();
+  }
+  const host = firstHeaderValue(req.headers.host);
+  if (host) {
+    return host;
+  }
+  return "localhost";
+}
+
+function encodePathSegment(value: string): string {
+  return encodeURIComponent(value);
+}
+
+function buildPublicMediaUrl(params: {
+  req: IncomingMessage;
+  ownerCode: string;
+  fileName: string;
+}): string {
+  const scheme = resolveRequestScheme(params.req);
+  const host = resolveRequestHost(params.req);
+  return `${scheme}://${host}/media/${encodePathSegment(params.ownerCode)}/${encodePathSegment(params.fileName)}`;
 }
 
 async function parseMultipartBody(req: IncomingMessage): Promise<FormData> {
@@ -224,9 +269,17 @@ export async function handleEnterpriseMediaUploadHttpRequest(
       MAX_UPLOAD_FILE_BYTES,
       file.name,
     );
+    const mediaPath = path.posix.join(ownerCodeResolved, saved.id);
+    const publicUrl = buildPublicMediaUrl({
+      req,
+      ownerCode: ownerCodeResolved,
+      fileName: saved.id,
+    });
     sendJson(res, 200, {
       ok: true,
       path: saved.path,
+      mediaPath,
+      url: publicUrl,
       mimeType: saved.contentType ?? file.type ?? "application/octet-stream",
       fileName: file.name || "upload",
       sizeBytes: saved.size,

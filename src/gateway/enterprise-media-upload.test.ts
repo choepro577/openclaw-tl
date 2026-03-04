@@ -204,6 +204,8 @@ describe("enterprise media upload http", () => {
     const payload = parseResponseJson<{
       ok: boolean;
       path: string;
+      mediaPath: string;
+      url: string;
       ownerCodeResolved: string;
       sizeBytes: number;
       mimeType: string;
@@ -212,6 +214,8 @@ describe("enterprise media upload http", () => {
     expect(payload.ok).toBe(true);
     expect(payload.ownerCodeResolved).toBe("dynamic");
     expect(payload.path).toBe("/tmp/media/dynamic/sample-id.txt");
+    expect(payload.mediaPath).toBe("dynamic/sample-id");
+    expect(payload.url).toBe("http://127.0.0.1:18789/media/dynamic/sample-id");
     expect(payload.sizeBytes).toBe(5);
     expect(payload.mimeType).toBe("text/plain");
     expect(payload.fileName).toBe("sample.txt");

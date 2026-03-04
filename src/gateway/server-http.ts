@@ -26,6 +26,7 @@ import {
   type ControlUiRootState,
 } from "./control-ui.js";
 import { handleEnterpriseAgentHttpRequest } from "./enterprise-agent-http.js";
+import { handleEnterpriseMediaDownloadHttpRequest } from "./enterprise-media-download.js";
 import { handleEnterpriseMediaUploadHttpRequest } from "./enterprise-media-upload.js";
 import { applyHookMappings } from "./hooks-mapping.js";
 import {
@@ -360,6 +361,9 @@ export function createGatewayHttpServer(opts: {
           trustedProxies,
         })
       ) {
+        return;
+      }
+      if (await handleEnterpriseMediaDownloadHttpRequest(req, res)) {
         return;
       }
       if (await handleSlackHttpRequest(req, res)) {
