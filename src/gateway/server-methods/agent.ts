@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { GatewayRequestHandlers } from "./types.js";
-import { listAgentIds } from "../../agents/agent-scope.js";
+import { listAgentIds, resolveAgentDir } from "../../agents/agent-scope.js";
 import { agentCommand } from "../../commands/agent.js";
 import { loadConfig } from "../../config/config.js";
 import {
@@ -50,7 +50,7 @@ import {
   assertSessionKeyInScope,
   resolveEnterpriseBoundAgentId,
 } from "../server/agent-scope-guard.js";
-import { loadSessionEntry } from "../session-utils.js";
+import { loadSessionEntry, resolveSessionModelRef } from "../session-utils.js";
 import { formatForLog } from "../ws-log.js";
 import { waitForAgentJob } from "./agent-job.js";
 import { injectTimestamp, timestampOptsFromConfig } from "./agent-timestamp.js";
@@ -150,50 +150,13 @@ export const agentHandlers: GatewayRequestHandlers = {
     const hasAttachmentPathPayload = allowAttachmentPaths && normalizedAttachmentPaths.length > 0;
 
     let message = request.message.trim();
+    let mediaNote: string | undefined;
     let images: Array<{ type: "image"; data: string; mimeType: string }> = [];
     if (normalizedAttachmentPaths.length > 0 && !allowAttachmentPaths) {
       context.logGateway.warn(
         "ws-attachment-paths: received attachment_paths while capability is disabled; dropping",
       );
     }
-    if (hasAttachmentPathPayload) {
-      try {
-        const parsed = await parseMessageWithAttachmentPaths(message, normalizedAttachmentPaths, {
-          maxPaths: 5,
-          maxBytes: 5_000_000,
-          log: context.logGateway,
-        });
-        message = parsed.message.trim();
-      } catch (err) {
-        respond(false, undefined, errorShape(ErrorCodes.INVALID_REQUEST, String(err)));
-        return;
-      }
-    }
-    if (hasAttachmentPathPayload && normalizedAttachments.length > 0) {
-      context.logGateway.warn(
-        "ws-attachment-paths: both attachment_paths and attachments provided; ignoring attachments",
-      );
-    }
-    if (!hasAttachmentPathPayload && normalizedAttachments.length > 0) {
-      try {
-        const parsed = await parseMessageWithAttachments(message, normalizedAttachments, {
-          maxBytes: 5_000_000,
-          log: context.logGateway,
-          allowFiles: allowFileAttachments,
-        });
-        message = parsed.message.trim();
-        images = parsed.images;
-      } catch (err) {
-        respond(false, undefined, errorShape(ErrorCodes.INVALID_REQUEST, String(err)));
-        return;
-      }
-    }
-
-    // Inject timestamp into messages that don't already have one.
-    // Channel messages (Discord, Telegram, etc.) get timestamps via envelope
-    // formatting in a separate code path — they never reach this handler.
-    // See: https://github.com/moltbot/moltbot/issues/3658
-    message = injectTimestamp(message, timestampOptsFromConfig(cfg));
 
     const isKnownGatewayChannel = (value: string): boolean => isGatewayMessageChannel(value);
     const channelHints = [request.channel, request.replyChannel]
@@ -370,6 +333,74 @@ export const agentHandlers: GatewayRequestHandlers = {
       }
       registerAgentRunContext(idem, { sessionKey: requestedSessionKey });
     }
+
+    const cfgResolvedForAttachments = cfgForAgent ?? cfg;
+    const attachmentAgentId =
+      agentId ??
+      (requestedSessionKey ? resolveAgentIdFromSessionKey(requestedSessionKey) : undefined);
+    const attachmentAgentDir = attachmentAgentId
+      ? resolveAgentDir(cfgResolvedForAttachments, attachmentAgentId)
+      : undefined;
+    const resolvedModelRef = resolveSessionModelRef(
+      cfgResolvedForAttachments,
+      sessionEntry,
+      attachmentAgentId,
+    );
+    if (hasAttachmentPathPayload) {
+      try {
+        const parsed = await parseMessageWithAttachmentPaths(message, normalizedAttachmentPaths, {
+          maxPaths: 5,
+          maxBytes: 5_000_000,
+          log: context.logGateway,
+          cfg: cfgResolvedForAttachments,
+          sessionKey: requestedSessionKey,
+          surface: INTERNAL_MESSAGE_CHANNEL,
+          chatType: "direct",
+          agentDir: attachmentAgentDir,
+          activeModel:
+            resolvedModelRef.provider && resolvedModelRef.model
+              ? {
+                  provider: resolvedModelRef.provider,
+                  model: resolvedModelRef.model,
+                }
+              : undefined,
+        });
+        message = parsed.message.trim();
+        mediaNote = parsed.mediaNote?.trim() || undefined;
+      } catch (err) {
+        respond(false, undefined, errorShape(ErrorCodes.INVALID_REQUEST, String(err)));
+        return;
+      }
+    }
+    if (hasAttachmentPathPayload && normalizedAttachments.length > 0) {
+      context.logGateway.warn(
+        "ws-attachment-paths: both attachment_paths and attachments provided; ignoring attachments",
+      );
+    }
+    if (!hasAttachmentPathPayload && normalizedAttachments.length > 0) {
+      try {
+        const parsed = await parseMessageWithAttachments(message, normalizedAttachments, {
+          maxBytes: 5_000_000,
+          log: context.logGateway,
+          allowFiles: allowFileAttachments,
+        });
+        message = parsed.message.trim();
+        images = parsed.images;
+      } catch (err) {
+        respond(false, undefined, errorShape(ErrorCodes.INVALID_REQUEST, String(err)));
+        return;
+      }
+    }
+    if (mediaNote) {
+      message = [mediaNote, message].filter(Boolean).join("\n").trim();
+      context.logGateway.info("ws-attachment-paths: prepended media note to agent prompt");
+    }
+
+    // Inject timestamp into messages that don't already have one.
+    // Channel messages (Discord, Telegram, etc.) get timestamps via envelope
+    // formatting in a separate code path — they never reach this handler.
+    // See: https://github.com/moltbot/moltbot/issues/3658
+    message = injectTimestamp(message, timestampOptsFromConfig(cfgResolvedForAttachments));
 
     const runId = idem;
     const connId = typeof client?.connId === "string" ? client.connId : undefined;

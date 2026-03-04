@@ -1,7 +1,10 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import type { MsgContext } from "../auto-reply/templating.js";
+import type { OpenClawConfig } from "../config/config.js";
+import type { ActiveMediaModel } from "../media-understanding/runner.js";
 import { assertSandboxPath } from "../agents/sandbox-paths.js";
+import { buildInboundMediaNote } from "../auto-reply/media-note.js";
 import { loadConfig } from "../config/config.js";
 import { applyMediaUnderstanding } from "../media-understanding/apply.js";
 import { MEDIA_MAX_BYTES, getMediaDir } from "../media/store.js";
@@ -10,12 +13,19 @@ const DEFAULT_MAX_PATHS = 5;
 
 type AttachmentPathLog = {
   warn: (message: string) => void;
+  info?: (message: string) => void;
 };
 
 export type AttachmentPathParseOptions = {
   maxPaths?: number;
   maxBytes?: number;
   log?: AttachmentPathLog;
+  cfg?: OpenClawConfig;
+  sessionKey?: string;
+  surface?: string;
+  chatType?: string;
+  agentDir?: string;
+  activeModel?: ActiveMediaModel;
 };
 
 function normalizeSinglePath(value: unknown): string | null {
@@ -75,8 +85,14 @@ async function validateAttachmentPath(params: {
   return resolved.resolved;
 }
 
-function createAttachmentContext(params: { message: string; paths: string[] }): MsgContext {
-  const { message, paths } = params;
+function createAttachmentContext(params: {
+  message: string;
+  paths: string[];
+  sessionKey?: string;
+  surface?: string;
+  chatType?: string;
+}): MsgContext {
+  const { message, paths, sessionKey, surface, chatType } = params;
   return {
     Body: message,
     BodyForAgent: message,
@@ -85,6 +101,10 @@ function createAttachmentContext(params: { message: string; paths: string[] }): 
     CommandBody: message,
     MediaPath: paths[0],
     MediaPaths: paths,
+    SessionKey: sessionKey,
+    Surface: surface,
+    Provider: surface,
+    ChatType: chatType,
   };
 }
 
@@ -92,7 +112,7 @@ export async function parseMessageWithAttachmentPaths(
   message: string,
   attachmentPaths: string[] | undefined,
   opts?: AttachmentPathParseOptions,
-): Promise<{ message: string; attachmentPaths: string[] }> {
+): Promise<{ message: string; attachmentPaths: string[]; mediaNote?: string }> {
   if (!attachmentPaths || attachmentPaths.length === 0) {
     return {
       message,
@@ -116,27 +136,40 @@ export async function parseMessageWithAttachmentPaths(
     resolvedPaths.push(resolved);
   }
 
-  const cfg = loadConfig();
   const ctx = createAttachmentContext({
     message,
     paths: resolvedPaths,
+    sessionKey: opts?.sessionKey,
+    surface: opts?.surface,
+    chatType: opts?.chatType,
   });
+  const cfg = opts?.cfg ?? loadConfig();
+  let nextMessage = message.trim();
   try {
     await applyMediaUnderstanding({
       ctx,
       cfg,
+      agentDir: opts?.agentDir,
+      activeModel: opts?.activeModel,
     });
   } catch (err) {
     opts?.log?.warn(`ws-attachment-paths: failed to enrich message (${String(err)})`);
-    return {
-      message: message.trim(),
-      attachmentPaths: resolvedPaths,
-    };
   }
-
-  const nextMessage = typeof ctx.Body === "string" ? ctx.Body.trim() : "";
+  const bodyFromContext = typeof ctx.Body === "string" ? ctx.Body.trim() : "";
+  if (bodyFromContext) {
+    nextMessage = bodyFromContext;
+  }
+  const mediaNote = buildInboundMediaNote(ctx);
+  const outputsCount = Array.isArray(ctx.MediaUnderstanding) ? ctx.MediaUnderstanding.length : 0;
+  const decisionsCount = Array.isArray(ctx.MediaUnderstandingDecisions)
+    ? ctx.MediaUnderstandingDecisions.length
+    : 0;
+  opts?.log?.info?.(
+    `ws-attachment-paths: parsed=${resolvedPaths.length} outputs=${outputsCount} decisions=${decisionsCount} mediaNote=${mediaNote ? "yes" : "no"}`,
+  );
   return {
-    message: nextMessage || message.trim(),
+    message: nextMessage,
     attachmentPaths: resolvedPaths,
+    mediaNote: mediaNote || undefined,
   };
 }
