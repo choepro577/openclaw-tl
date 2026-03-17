@@ -8,7 +8,7 @@ Usage:
   hr_call.sh <tool-name> [--args-json JSON | --args-file PATH] [--raw] [--base-url URL]
 
 Examples:
-  hr_call.sh router_tool_search --args-json '{"query":"tim nhan su phong Ke toan","top_k":5,"min_score":0.35,"company-id":1}'
+  hr_call.sh router_tool_search --args-json '{"query":"tim nhan su phong Ke toan","top_k":1,"min_score":0.35,"company-id":1}'
   hr_call.sh get_staff_list --args-json '{"search":"An","page":1}'
   hr_call.sh get_assignment_users_task_summary --args-file /tmp/summary_args.json
 EOF

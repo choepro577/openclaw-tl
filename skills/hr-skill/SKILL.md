@@ -35,7 +35,7 @@ Health check:
 Tool discovery (bat buoc):
 
 ```bash
-{baseDir}/scripts/hr_call.sh router_tool_search --args-json '{"query":"tim danh sach nhan vien phong Ke toan","top_k":5,"min_score":0.35,"company-id":1}'
+{baseDir}/scripts/hr_call.sh router_tool_search --args-json '{"query":"tim danh sach nhan vien phong Ke toan","top_k":1,"min_score":0.35,"company-id":1}'
 ```
 
 Call tool duoc de xuat boi router:
