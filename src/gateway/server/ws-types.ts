@@ -9,4 +9,7 @@ export type GatewayWsClient = {
   clientIp?: string;
   boundAgentId?: string;
   authKind?: "gateway-token" | "enterprise-token";
+  canvasHostUrl?: string;
+  canvasCapability?: string;
+  canvasCapabilityExpiresAtMs?: number;
 };
