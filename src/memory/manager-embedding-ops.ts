@@ -87,7 +87,8 @@ export abstract class MemoryManagerEmbeddingOps extends MemoryManagerSyncOps {
   }
 
   private loadEmbeddingCache(hashes: string[]): Map<string, number[]> {
-    if (!this.cache.enabled || !this.provider) {
+    const providerKey = this.providerKey;
+    if (!this.cache.enabled || !this.provider || !providerKey) {
       return new Map();
     }
     if (hashes.length === 0) {
@@ -110,7 +111,7 @@ export abstract class MemoryManagerEmbeddingOps extends MemoryManagerSyncOps {
     }
 
     const out = new Map<string, number[]>();
-    const baseParams = [this.provider.id, this.provider.model, this.providerKey];
+    const baseParams = [this.provider.id, this.provider.model, providerKey];
     const batchSize = 400;
     for (let start = 0; start < unique.length; start += batchSize) {
       const batch = unique.slice(start, start + batchSize);
@@ -131,7 +132,7 @@ export abstract class MemoryManagerEmbeddingOps extends MemoryManagerSyncOps {
         const sharedHits = this.sharedCacheStore.lookupMany({
           provider: this.provider.id,
           model: this.provider.model,
-          providerKey: this.providerKey,
+          providerKey,
           hashes: missing,
         });
         if (sharedHits.size > 0) {
@@ -154,7 +155,8 @@ export abstract class MemoryManagerEmbeddingOps extends MemoryManagerSyncOps {
     entries: Array<{ hash: string; embedding: number[] }>,
     opts?: { skipSharedStore?: boolean },
   ): void {
-    if (!this.cache.enabled || !this.provider) {
+    const providerKey = this.providerKey;
+    if (!this.cache.enabled || !this.provider || !providerKey) {
       return;
     }
     if (entries.length === 0) {
@@ -174,7 +176,7 @@ export abstract class MemoryManagerEmbeddingOps extends MemoryManagerSyncOps {
       stmt.run(
         this.provider.id,
         this.provider.model,
-        this.providerKey,
+        providerKey,
         entry.hash,
         JSON.stringify(embedding),
         embedding.length,
@@ -186,7 +188,7 @@ export abstract class MemoryManagerEmbeddingOps extends MemoryManagerSyncOps {
         this.sharedCacheStore.upsertMany({
           provider: this.provider.id,
           model: this.provider.model,
-          providerKey: this.providerKey,
+          providerKey,
           entries,
         });
       } catch (err) {
