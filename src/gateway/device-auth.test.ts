@@ -46,14 +46,14 @@ describe("device-auth payload vectors", () => {
       build: () =>
         buildDeviceAuthPayloadV3({
           deviceId: "dev-2",
-          clientId: "openclaw-ios",
+          clientId: "assistant-ios",
           clientMode: "ui",
           role: "operator",
           scopes: ["operator.read"],
           signedAtMs: 1_700_000_000_001,
           nonce: "nonce-def",
         }),
-      expected: "v3|dev-2|openclaw-ios|ui|operator|operator.read|1700000000001||nonce-def||",
+      expected: "v3|dev-2|assistant-ios|ui|operator|operator.read|1700000000001||nonce-def||",
     },
   ])("$name", ({ build, expected }) => {
     expect(build()).toBe(expected);

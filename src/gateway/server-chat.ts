@@ -1,9 +1,11 @@
+import { resolveSessionAgentId } from "../agents/agent-scope.js";
 import { DEFAULT_HEARTBEAT_ACK_MAX_CHARS, stripHeartbeatToken } from "../auto-reply/heartbeat.js";
 import { normalizeVerboseLevel } from "../auto-reply/thinking.js";
 import { isSilentReplyText, SILENT_REPLY_TOKEN } from "../auto-reply/tokens.js";
 import { loadConfig } from "../config/config.js";
 import { type AgentEventPayload, getAgentRunContext } from "../infra/agent-events.js";
 import { resolveHeartbeatVisibility } from "../infra/heartbeat-visibility.js";
+import { sendWebUiNotification } from "../infra/webui-notification.js";
 import { stripInlineDirectiveTagsForDisplay } from "../utils/directive-tags.js";
 import { loadSessionEntry } from "./session-utils.js";
 import { formatForLog } from "./ws-log.js";
@@ -468,6 +470,8 @@ export function createAgentEventHandler({
     chatRunState.buffers.delete(clientRunId);
     chatRunState.deltaSentAt.delete(clientRunId);
     if (jobState === "done") {
+      const cfg = loadConfig();
+      const agentId = resolveSessionAgentId({ sessionKey, config: cfg });
       const payload = {
         runId: clientRunId,
         sessionKey,
@@ -485,6 +489,14 @@ export function createAgentEventHandler({
       };
       broadcast("chat", payload);
       nodeSendToSession(sessionKey, "chat", payload);
+      if (text && !shouldSuppressSilent) {
+        void sendWebUiNotification({
+          cfg,
+          sessionKey,
+          agentId,
+          text,
+        });
+      }
       return;
     }
     const payload = {

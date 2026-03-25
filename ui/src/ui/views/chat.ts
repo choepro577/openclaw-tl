@@ -641,15 +641,17 @@ function renderPinnedSection(
   requestUpdate: () => void,
 ): TemplateResult | typeof nothing {
   const messages = Array.isArray(props.messages) ? props.messages : [];
-  const entries: Array<{ index: number; text: string; role: string }> = [];
+  const entries: Array<{ index: number; text: string; role: string; senderLabel: string | null }> =
+    [];
   for (const idx of pinned.indices) {
     const msg = messages[idx] as Record<string, unknown> | undefined;
     if (!msg) {
       continue;
     }
     const text = getPinnedMessageSummary(msg);
-    const role = typeof msg.role === "string" ? msg.role : "unknown";
-    entries.push({ index: idx, text, role });
+    const normalized = normalizeMessage(msg);
+    const role = normalizeRoleForGrouping(normalized.role);
+    entries.push({ index: idx, text, role, senderLabel: normalized.senderLabel ?? null });
   }
   if (entries.length === 0) {
     return nothing;
@@ -669,9 +671,17 @@ function renderPinnedSection(
           ? html`
             <div class="agent-chat__pinned-list">
               ${entries.map(
-                ({ index, text, role }) => html`
+                ({ index, text, role, senderLabel }) => html`
                 <div class="agent-chat__pinned-item">
-                  <span class="agent-chat__pinned-role">${role === "user" ? "You" : "Assistant"}</span>
+                  <span class="agent-chat__pinned-role">
+                    ${
+                      role === "user"
+                        ? "You"
+                        : role === "inter_session"
+                          ? (senderLabel ?? "Linked agent")
+                          : "Assistant"
+                    }
+                  </span>
                   <span class="agent-chat__pinned-text">${text.slice(0, 100)}${text.length > 100 ? "..." : ""}</span>
                   <button class="btn-ghost" @click=${() => {
                     pinned.unpin(index);
@@ -1346,13 +1356,14 @@ function groupMessages(items: ChatItem[]): Array<ChatItem | MessageGroup> {
 
     const normalized = normalizeMessage(item.message);
     const role = normalizeRoleForGrouping(normalized.role);
-    const senderLabel = role.toLowerCase() === "user" ? (normalized.senderLabel ?? null) : null;
+    const usesSenderLabel = role.toLowerCase() === "user" || role.toLowerCase() === "inter_session";
+    const senderLabel = usesSenderLabel ? (normalized.senderLabel ?? null) : null;
     const timestamp = normalized.timestamp || Date.now();
 
     if (
       !currentGroup ||
       currentGroup.role !== role ||
-      (role.toLowerCase() === "user" && currentGroup.senderLabel !== senderLabel)
+      (usesSenderLabel && currentGroup.senderLabel !== senderLabel)
     ) {
       if (currentGroup) {
         result.push(currentGroup);

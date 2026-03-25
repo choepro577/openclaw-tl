@@ -31,6 +31,11 @@
       "title": "Session Send",
       "detailKeys": ["label", "sessionKey", "agentId", "timeoutSeconds"]
     },
+    "a_to_a_send": {
+      "emoji": "🤝",
+      "title": "Agent Send",
+      "detailKeys": ["agentId", "timeoutSeconds"]
+    },
     "sessions_history": {
       "emoji": "🧾",
       "title": "Session History",

@@ -605,6 +605,35 @@ describe("chat view", () => {
     expect(senderLabels).toContain("Joaquin De Rojas");
   });
 
+  it("renders inter-session messages as linked agent updates instead of You", () => {
+    const container = document.createElement("div");
+    render(
+      renderChat(
+        createProps({
+          messages: [
+            {
+              role: "user",
+              content: "CSKH da phan hoi",
+              provenance: {
+                kind: "inter_session",
+                sourceSessionKey: "agent:cskh-tl00275:main",
+                sourceTool: "sessions_send",
+              },
+              timestamp: 1000,
+            },
+          ],
+        }),
+      ),
+      container,
+    );
+
+    expect(container.querySelectorAll(".chat-group.user")).toHaveLength(0);
+    expect(container.textContent).toContain("Agent cskh-tl00275");
+    expect(container.textContent).toContain("Agent cskh-tl00275 mới phản hồi lại");
+    expect(container.textContent).not.toContain("CSKH da phan hoi");
+    expect(container.textContent).not.toContain("You");
+  });
+
   it("opens delete confirm on the left for user messages", () => {
     try {
       getSafeLocalStorage()?.removeItem("openclaw:skipDeleteConfirm");

@@ -67,8 +67,13 @@ describe("tool mutation helpers", () => {
 
   it("keeps legacy name-only mutating heuristics for payload fallback", () => {
     expect(isLikelyMutatingToolName("sessions_send")).toBe(true);
+    expect(isLikelyMutatingToolName("a_to_a_send")).toBe(true);
     expect(isLikelyMutatingToolName("browser_actions")).toBe(true);
     expect(isLikelyMutatingToolName("message_slack")).toBe(true);
     expect(isLikelyMutatingToolName("browser")).toBe(false);
+  });
+
+  it("treats a_to_a_send as a mutating tool call", () => {
+    expect(isMutatingToolCall("a_to_a_send", { agentId: "worker", message: "ping" })).toBe(true);
   });
 });

@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { loadConfig } from "../config/config.js";
 import { registerAgentRunContext, resetAgentRunContextForTest } from "../infra/agent-events.js";
 import { resolveHeartbeatVisibility } from "../infra/heartbeat-visibility.js";
+import { sendWebUiNotification } from "../infra/webui-notification.js";
 import {
   createAgentEventHandler,
   createChatRunState,
@@ -20,6 +21,10 @@ vi.mock("../infra/heartbeat-visibility.js", () => ({
   })),
 }));
 
+vi.mock("../infra/webui-notification.js", () => ({
+  sendWebUiNotification: vi.fn(async () => true),
+}));
+
 describe("agent event handler", () => {
   beforeEach(() => {
     vi.mocked(loadConfig).mockReturnValue({});
@@ -28,6 +33,7 @@ describe("agent event handler", () => {
       showAlerts: true,
       useIndicator: true,
     });
+    vi.mocked(sendWebUiNotification).mockClear();
     resetAgentRunContextForTest();
   });
 
@@ -263,6 +269,40 @@ describe("agent event handler", () => {
     };
     expect(payload.message?.content?.[0]?.text).toBe("No");
     expect(sessionChatCalls(nodeSendToSession)).toHaveLength(1);
+    nowSpy?.mockRestore();
+  });
+
+  it("sends Web UI notification when an agent run reaches final chat output", async () => {
+    const { chatRunState, handler, nowSpy } = createHarness({
+      now: 2_250,
+    });
+    chatRunState.registry.add("run-notify", {
+      sessionKey: "agent:tl00275:main",
+      clientRunId: "client-notify",
+    });
+    vi.mocked(loadConfig).mockReturnValue({
+      agents: {
+        list: [{ id: "tl00275" }],
+      },
+    });
+
+    handler({
+      runId: "run-notify",
+      seq: 1,
+      stream: "assistant",
+      ts: Date.now(),
+      data: { text: "Alo, tao đây. Cần tao làm gì?" },
+    });
+    emitLifecycleEnd(handler, "run-notify");
+
+    expect(sendWebUiNotification).toHaveBeenCalledTimes(1);
+    expect(sendWebUiNotification).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sessionKey: "agent:tl00275:main",
+        agentId: "tl00275",
+        text: "Alo, tao đây. Cần tao làm gì?",
+      }),
+    );
     nowSpy?.mockRestore();
   });
 

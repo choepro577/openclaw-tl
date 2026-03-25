@@ -13,6 +13,7 @@ import { createReplyPrefixOptions } from "../../channels/reply-prefix.js";
 import { loadConfig } from "../../config/config.js";
 import { resolveSessionFilePath } from "../../config/sessions.js";
 import { jsonUtf8Bytes } from "../../infra/json-utf8-bytes.js";
+import { sendWebUiNotification } from "../../infra/webui-notification.js";
 import { normalizeInputProvenance, type InputProvenance } from "../../sessions/input-provenance.js";
 import { resolveSendPolicy } from "../../sessions/send-policy.js";
 import { parseAgentSessionKey } from "../../sessions/session-key-utils.js";
@@ -1475,6 +1476,7 @@ export const chatHandlers: GatewayRequestHandlers = {
                 sessionKey: rawSessionKey,
               });
             } else {
+              const finalReplies = deliveredReplies.filter((entry) => entry.kind === "final");
               const combinedReply = deliveredReplies
                 .filter((entry) => entry.kind === "final")
                 .map((entry) => entry.payload)
@@ -1519,6 +1521,14 @@ export const chatHandlers: GatewayRequestHandlers = {
                 sessionKey: rawSessionKey,
                 message,
               });
+              if (finalReplies.length > 0) {
+                void sendWebUiNotification({
+                  cfg,
+                  sessionKey: rawSessionKey,
+                  agentId,
+                  text: combinedReply,
+                });
+              }
             }
           }
           setGatewayDedupeEntry({

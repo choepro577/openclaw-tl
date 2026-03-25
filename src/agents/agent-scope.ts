@@ -29,6 +29,7 @@ type ResolvedAgentConfig = {
   name?: string;
   workspace?: string;
   agentDir?: string;
+  notiToWebUI: boolean;
   model?: AgentEntry["model"];
   skills?: AgentEntry["skills"];
   memorySearch?: AgentEntry["memorySearch"];
@@ -115,6 +116,20 @@ function resolveAgentEntry(cfg: OpenClawConfig, agentId: string): AgentEntry | u
   return listAgentEntries(cfg).find((entry) => normalizeAgentId(entry.id) === id);
 }
 
+export function resolveConfiguredAgentId(cfg: OpenClawConfig, agentId: string): string {
+  const entry = resolveAgentEntry(cfg, agentId);
+  const configured = entry?.id?.trim();
+  if (configured) {
+    return configured;
+  }
+  const trimmed = agentId.trim();
+  return trimmed || resolveDefaultAgentId(cfg);
+}
+
+export function resolveAgentNotiToWebUI(cfg: OpenClawConfig, agentId: string): boolean {
+  return resolveAgentEntry(cfg, agentId)?.notiToWebUI ?? true;
+}
+
 export function resolveAgentConfig(
   cfg: OpenClawConfig,
   agentId: string,
@@ -128,6 +143,7 @@ export function resolveAgentConfig(
     name: typeof entry.name === "string" ? entry.name : undefined,
     workspace: typeof entry.workspace === "string" ? entry.workspace : undefined,
     agentDir: typeof entry.agentDir === "string" ? entry.agentDir : undefined,
+    notiToWebUI: resolveAgentNotiToWebUI(cfg, id),
     model:
       typeof entry.model === "string" || (entry.model && typeof entry.model === "object")
         ? entry.model

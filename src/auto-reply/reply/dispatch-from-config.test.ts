@@ -103,6 +103,9 @@ const ttsMocks = vi.hoisted(() => {
     resolveTtsConfig: vi.fn((_cfg: OpenClawConfig) => ({ mode: "final" })),
   };
 });
+const webUiMocks = vi.hoisted(() => ({
+  sendWebUiNotification: vi.fn(async () => true),
+}));
 
 vi.mock("./route-reply.js", () => ({
   isRoutableChannel: (channel: string | undefined) =>
@@ -191,6 +194,9 @@ vi.mock("../../tts/tts.js", () => ({
   maybeApplyTtsToPayload: (params: unknown) => ttsMocks.maybeApplyTtsToPayload(params),
   normalizeTtsAutoMode: (value: unknown) => ttsMocks.normalizeTtsAutoMode(value),
   resolveTtsConfig: (cfg: OpenClawConfig) => ttsMocks.resolveTtsConfig(cfg),
+}));
+vi.mock("../../infra/webui-notification.js", () => ({
+  sendWebUiNotification: webUiMocks.sendWebUiNotification,
 }));
 
 const noAbortResult = { handled: false, aborted: false } as const;
@@ -336,6 +342,7 @@ describe("dispatchReplyFromConfig", () => {
     ttsMocks.resolveTtsConfig.mockReturnValue({
       mode: "final",
     });
+    webUiMocks.sendWebUiNotification.mockClear();
   });
   it("does not route when Provider matches OriginatingChannel (even if Surface is missing)", async () => {
     setNoAbort();
@@ -390,6 +397,39 @@ describe("dispatchReplyFromConfig", () => {
         threadId: 123,
         isGroup: true,
         groupId: "telegram:999",
+      }),
+    );
+  });
+
+  it("sends one Web UI notification for routed multi-part final replies", async () => {
+    setNoAbort();
+    const cfg = {
+      agents: {
+        list: [{ id: "Test123" }],
+      },
+    } as OpenClawConfig;
+    const dispatcher = createDispatcher();
+    const ctx = buildTestCtx({
+      Provider: "slack",
+      SessionKey: "agent:test123:main",
+      OriginatingChannel: "telegram",
+      OriginatingTo: "telegram:999",
+    });
+
+    await dispatchReplyFromConfig({
+      ctx,
+      cfg,
+      dispatcher,
+      replyResolver: async () => [{ text: "first" }, { text: "second" }],
+    });
+
+    expect(webUiMocks.sendWebUiNotification).toHaveBeenCalledTimes(1);
+    expect(webUiMocks.sendWebUiNotification).toHaveBeenCalledWith(
+      expect.objectContaining({
+        cfg,
+        sessionKey: "agent:test123:main",
+        agentId: "test123",
+        text: "first\n\nsecond",
       }),
     );
   });

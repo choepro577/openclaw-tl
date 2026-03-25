@@ -2,6 +2,7 @@ import type { OpenClawConfig } from "../../config/config.js";
 import type { TtsAutoMode } from "../../config/types.tts.js";
 import { logVerbose } from "../../globals.js";
 import { runMessageAction } from "../../infra/outbound/message-action-runner.js";
+import { sendWebUiNotification } from "../../infra/webui-notification.js";
 import { maybeApplyTtsToPayload } from "../../tts/tts.js";
 import type { FinalizedMsgContext } from "../templating.js";
 import type { ReplyPayload } from "../types.js";
@@ -27,6 +28,7 @@ type AcpDispatchDeliveryState = {
   blockCount: number;
   routedCounts: Record<ReplyDispatchKind, number>;
   toolMessageByCallId: Map<string, ToolMessageHandle>;
+  sentFinalNotification: boolean;
 };
 
 export type AcpDispatchDeliveryCoordinator = {
@@ -64,6 +66,7 @@ export function createAcpDispatchDeliveryCoordinator(params: {
       final: 0,
     },
     toolMessageByCallId: new Map(),
+    sentFinalNotification: false,
   };
 
   const startReplyLifecycleOnce = async () => {
@@ -174,6 +177,14 @@ export function createAcpDispatchDeliveryCoordinator(params: {
         });
       }
       state.routedCounts[kind] += 1;
+      if (kind === "final" && !state.sentFinalNotification) {
+        state.sentFinalNotification = true;
+        void sendWebUiNotification({
+          cfg: params.cfg,
+          sessionKey: params.ctx.SessionKey,
+          text: ttsPayload.text,
+        });
+      }
       return true;
     }
 

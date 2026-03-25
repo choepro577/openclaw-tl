@@ -64,6 +64,8 @@ export type AgentConfig = {
   name?: string;
   workspace?: string;
   agentDir?: string;
+  /** Notify the Web UI when this agent sends a final reply (default: true). */
+  notiToWebUI?: boolean;
   model?: AgentModelConfig;
   /** Optional allowlist of skills for this agent (omit = all skills; empty = none). */
   skills?: string[];

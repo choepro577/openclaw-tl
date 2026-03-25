@@ -5,6 +5,31 @@
 import { stripInboundMetadata } from "../../../../src/auto-reply/reply/strip-inbound-meta.js";
 import type { NormalizedMessage, MessageContentItem } from "../types/chat-types.ts";
 
+const INTER_SESSION_FALLBACK_LABEL = "Linked agent";
+
+function normalizeOptionalString(value: unknown): string | null {
+  if (typeof value !== "string") {
+    return null;
+  }
+  const trimmed = value.trim();
+  return trimmed || null;
+}
+
+export function deriveInterSessionSenderLabel(sourceSessionKey: string | null): string {
+  if (!sourceSessionKey) {
+    return INTER_SESSION_FALLBACK_LABEL;
+  }
+  const parts = sourceSessionKey.split(":");
+  if (parts[0] === "agent" && parts[1]) {
+    return `Agent ${parts[1]}`;
+  }
+  return INTER_SESSION_FALLBACK_LABEL;
+}
+
+export function buildInterSessionDisplayText(senderLabel: string | null): string {
+  return `${normalizeOptionalString(senderLabel) ?? INTER_SESSION_FALLBACK_LABEL} mới phản hồi lại`;
+}
+
 /**
  * Normalize a raw message object into a consistent structure.
  */
@@ -50,8 +75,15 @@ export function normalizeMessage(message: unknown): NormalizedMessage {
 
   const timestamp = typeof m.timestamp === "number" ? m.timestamp : Date.now();
   const id = typeof m.id === "string" ? m.id : undefined;
-  const senderLabel =
+  let senderLabel =
     typeof m.senderLabel === "string" && m.senderLabel.trim() ? m.senderLabel.trim() : null;
+  const provenance =
+    m.provenance && typeof m.provenance === "object"
+      ? (m.provenance as Record<string, unknown>)
+      : null;
+  const isInterSession =
+    (role === "user" || role === "User") && provenance?.kind === "inter_session";
+  const sourceSessionKey = normalizeOptionalString(provenance?.sourceSessionKey);
 
   // Strip AI-injected metadata prefix blocks from user messages before display.
   if (role === "user" || role === "User") {
@@ -61,6 +93,12 @@ export function normalizeMessage(message: unknown): NormalizedMessage {
       }
       return item;
     });
+  }
+
+  if (isInterSession) {
+    role = "inter_session";
+    senderLabel = senderLabel ?? deriveInterSessionSenderLabel(sourceSessionKey);
+    content = [{ type: "text", text: buildInterSessionDisplayText(senderLabel) }];
   }
 
   return { role, content, timestamp, id, senderLabel };
@@ -77,6 +115,9 @@ export function normalizeRoleForGrouping(role: string): string {
   }
   if (role === "assistant") {
     return "assistant";
+  }
+  if (lower === "inter_session" || lower === "intersession") {
+    return "inter_session";
   }
   if (role === "system") {
     return "system";

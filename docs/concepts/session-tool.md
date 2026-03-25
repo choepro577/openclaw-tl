@@ -14,6 +14,7 @@ Goal: small, hard-to-misuse tool set so agents can list sessions, fetch history,
 - `sessions_list`
 - `sessions_history`
 - `sessions_send`
+- `a_to_a_send`
 - `sessions_spawn`
 
 ## Key Model
@@ -103,6 +104,30 @@ Behavior:
   - Reply exactly `ANNOUNCE_SKIP` to stay silent.
   - Any other reply is sent to the target channel.
   - Announce step includes the original request + round‑1 reply + latest ping‑pong reply.
+
+## a_to_a_send
+
+Send a message to another agent without manually choosing a session key.
+
+Parameters:
+
+- `agentId` (required; target agent id)
+- `message` (required)
+- `timeoutSeconds?: number` (default `0`; fire-and-forget)
+
+Behavior:
+
+- OpenClaw derives the target pair session as `agent:<targetAgentId>:a2a:from:<requesterAgentId>`.
+- The target pair session is created lazily on first use and reused for later calls from the same requester agent to the same target agent.
+- `timeoutSeconds = 0`: enqueue and return `{ runId, status: "accepted" }`.
+- `timeoutSeconds > 0`: wait up to N seconds for completion, then return `{ runId, status: "ok", reply }`.
+- If that wait times out, the background flow still keeps waiting for the target run.
+- Pair-session sends still use inter-session provenance and the same reply-back loop as `sessions_send`.
+- When the target finishes round 1, OpenClaw always runs a completion callback into the requester's current session so the requester agent can answer the current conversation later.
+- After that callback, optional reply ping-pong alternates between the requester's current session and the target pair session.
+- Reply exactly `REPLY_SKIP` to stop the ping-pong.
+- Max turns is `session.agentToAgent.maxPingPongTurns` (0–5, default 5).
+- Unlike `sessions_send`, there is no target-channel announce step in v1.
 
 ## Channel Field
 

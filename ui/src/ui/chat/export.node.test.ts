@@ -23,4 +23,26 @@ describe("chat export", () => {
     expect(markdown).toContain("Final answer");
     expect(markdown).not.toContain("scratchpad");
   });
+
+  it("labels inter-session messages by their source agent instead of You", () => {
+    const markdown = buildChatMarkdown(
+      [
+        {
+          role: "user",
+          content: "Forwarded update",
+          provenance: {
+            kind: "inter_session",
+            sourceSessionKey: "agent:cskh-tl00275:main",
+          },
+          timestamp: Date.UTC(2026, 2, 19, 12, 0, 0),
+        },
+      ],
+      "Bot",
+    );
+
+    expect(markdown).toContain("## Agent cskh-tl00275 (2026-03-19T12:00:00.000Z)");
+    expect(markdown).toContain("Agent cskh-tl00275 mới phản hồi lại");
+    expect(markdown).not.toContain("Forwarded update");
+    expect(markdown).not.toContain("## You");
+  });
 });

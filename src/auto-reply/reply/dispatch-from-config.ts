@@ -24,6 +24,7 @@ import {
   toPluginMessageReceivedEvent,
 } from "../../hooks/message-hook-mappers.js";
 import { isDiagnosticsEnabled } from "../../infra/diagnostic-events.js";
+import { sendWebUiNotification } from "../../infra/webui-notification.js";
 import {
   logMessageProcessed,
   logMessageQueued,
@@ -639,6 +640,8 @@ export async function dispatchReplyFromConfig(params: {
 
     let queuedFinal = false;
     let routedFinalCount = 0;
+    let shouldNotifyRoutedFinal = false;
+    const routedFinalNotificationTextParts: string[] = [];
     for (const reply of replies) {
       // Suppress reasoning payloads from channel delivery — channels using this
       // generic dispatch path do not have a dedicated reasoning lane.
@@ -674,6 +677,11 @@ export async function dispatchReplyFromConfig(params: {
         queuedFinal = result.ok || queuedFinal;
         if (result.ok) {
           routedFinalCount += 1;
+          shouldNotifyRoutedFinal = true;
+          const text = ttsReply.text?.trim();
+          if (text) {
+            routedFinalNotificationTextParts.push(text);
+          }
         }
       } else {
         queuedFinal = dispatcher.sendFinalReply(ttsReply) || queuedFinal;
@@ -721,6 +729,7 @@ export async function dispatchReplyFromConfig(params: {
             queuedFinal = result.ok || queuedFinal;
             if (result.ok) {
               routedFinalCount += 1;
+              shouldNotifyRoutedFinal = true;
             }
             if (!result.ok) {
               logVerbose(
@@ -741,6 +750,14 @@ export async function dispatchReplyFromConfig(params: {
 
     const counts = dispatcher.getQueuedCounts();
     counts.final += routedFinalCount;
+    if (shouldNotifyRoutedFinal) {
+      void sendWebUiNotification({
+        cfg,
+        sessionKey: ctx.SessionKey,
+        agentId: resolveSessionAgentId({ sessionKey: ctx.SessionKey, config: cfg }),
+        text: routedFinalNotificationTextParts.join("\n\n"),
+      });
+    }
     recordProcessed(
       "completed",
       pluginFallbackReason ? { reason: pluginFallbackReason } : undefined,

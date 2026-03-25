@@ -121,6 +121,26 @@ describe("message-normalizer", () => {
 
       expect(result.senderLabel).toBe("Iris");
     });
+
+    it("normalizes inter-session user messages into a distinct role", () => {
+      const result = normalizeMessage({
+        role: "user",
+        content: "reply from another agent",
+        provenance: {
+          kind: "inter_session",
+          sourceSessionKey: "agent:cskh-tl00275:main",
+          sourceTool: "sessions_send",
+        },
+      });
+
+      expect(result).toEqual({
+        role: "inter_session",
+        content: [{ type: "text", text: "Agent cskh-tl00275 mới phản hồi lại" }],
+        timestamp: Date.now(),
+        id: undefined,
+        senderLabel: "Agent cskh-tl00275",
+      });
+    });
   });
 
   describe("normalizeRoleForGrouping", () => {
@@ -152,6 +172,11 @@ describe("message-normalizer", () => {
 
     it("preserves assistant role", () => {
       expect(normalizeRoleForGrouping("assistant")).toBe("assistant");
+    });
+
+    it("preserves inter-session role", () => {
+      expect(normalizeRoleForGrouping("inter_session")).toBe("inter_session");
+      expect(normalizeRoleForGrouping("INTER_SESSION")).toBe("inter_session");
     });
 
     it("preserves system role", () => {

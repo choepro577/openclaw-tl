@@ -1,4 +1,7 @@
+import { resolveSessionAgentId } from "../agents/agent-scope.js";
 import type { OpenClawConfig } from "../config/config.js";
+import { sendWebUiNotification, shouldNotifyWebUi } from "../infra/webui-notification.js";
+import { isInternalMessageChannel } from "../utils/message-channel.js";
 import type { DispatchFromConfigResult } from "./reply/dispatch-from-config.js";
 import { dispatchReplyFromConfig } from "./reply/dispatch-from-config.js";
 import { finalizeInboundContext } from "./reply/inbound-context.js";
@@ -40,16 +43,54 @@ export async function dispatchInboundMessage(params: {
   replyResolver?: typeof import("./reply.js").getReplyFromConfig;
 }): Promise<DispatchInboundResult> {
   const finalized = finalizeInboundContext(params.ctx);
+  const sessionKey = finalized.SessionKey;
+  const agentId = resolveSessionAgentId({ sessionKey, config: params.cfg });
+  const shouldSendWebUiNotification =
+    !isInternalMessageChannel(finalized.Surface ?? finalized.Provider) &&
+    shouldNotifyWebUi({
+      cfg: params.cfg,
+      sessionKey,
+      agentId,
+    });
+  let sawQueuedFinal = false;
+  const finalNotificationTextParts: string[] = [];
+  const dispatcher = shouldSendWebUiNotification
+    ? ({
+        ...params.dispatcher,
+        sendFinalReply: (payload) => {
+          const queued = params.dispatcher.sendFinalReply(payload);
+          if (queued) {
+            sawQueuedFinal = true;
+            const text = payload.text?.trim();
+            if (text) {
+              finalNotificationTextParts.push(text);
+            }
+          }
+          return queued;
+        },
+      } satisfies ReplyDispatcher)
+    : params.dispatcher;
   return await withReplyDispatcher({
-    dispatcher: params.dispatcher,
+    dispatcher,
     run: () =>
       dispatchReplyFromConfig({
         ctx: finalized,
         cfg: params.cfg,
-        dispatcher: params.dispatcher,
+        dispatcher,
         replyOptions: params.replyOptions,
         replyResolver: params.replyResolver,
       }),
+    onSettled: () => {
+      if (!shouldSendWebUiNotification || !sawQueuedFinal) {
+        return;
+      }
+      void sendWebUiNotification({
+        cfg: params.cfg,
+        sessionKey,
+        agentId,
+        text: finalNotificationTextParts.join("\n\n"),
+      });
+    },
   });
 }
 

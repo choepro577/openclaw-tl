@@ -77,6 +77,10 @@ describe("buildEmbeddedRunPayloads tool-error warnings", () => {
         mutatingAction: true,
       },
     },
+    {
+      name: "pair-session relay failure",
+      lastToolError: { toolName: "a_to_a_send", error: "delivery timeout" },
+    },
   ])("suppresses sessions_send errors for $name", ({ lastToolError }) => {
     expectNoPayloads({
       lastToolError,

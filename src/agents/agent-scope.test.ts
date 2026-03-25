@@ -8,7 +8,9 @@ import {
   resolveAgentConfig,
   resolveAgentDir,
   resolveAgentEffectiveModelPrimary,
+  resolveAgentNotiToWebUI,
   resolveAgentExplicitModelPrimary,
+  resolveConfiguredAgentId,
   resolveFallbackAgentId,
   resolveEffectiveModelFallbacks,
   resolveAgentModelFallbacksOverride,
@@ -59,6 +61,7 @@ describe("resolveAgentConfig", () => {
       name: "Main Agent",
       workspace: "~/openclaw",
       agentDir: "~/.openclaw/agents/main",
+      notiToWebUI: true,
       model: "anthropic/claude-opus-4",
       identity: undefined,
       groupChat: undefined,
@@ -66,6 +69,38 @@ describe("resolveAgentConfig", () => {
       sandbox: undefined,
       tools: undefined,
     });
+  });
+
+  it("defaults agent web UI notifications to true", () => {
+    const cfg: OpenClawConfig = {
+      agents: {
+        list: [{ id: "main" }],
+      },
+    };
+
+    expect(resolveAgentNotiToWebUI(cfg, "main")).toBe(true);
+    expect(resolveAgentConfig(cfg, "main")?.notiToWebUI).toBe(true);
+  });
+
+  it("respects explicit agent web UI notification overrides", () => {
+    const cfg: OpenClawConfig = {
+      agents: {
+        list: [{ id: "main", notiToWebUI: false }],
+      },
+    };
+
+    expect(resolveAgentNotiToWebUI(cfg, "main")).toBe(false);
+    expect(resolveAgentConfig(cfg, "main")?.notiToWebUI).toBe(false);
+  });
+
+  it("preserves configured agent id casing for downstream integrations", () => {
+    const cfg: OpenClawConfig = {
+      agents: {
+        list: [{ id: "Test123" }],
+      },
+    };
+
+    expect(resolveConfiguredAgentId(cfg, "test123")).toBe("Test123");
   });
 
   it("resolves explicit and effective model primary separately", () => {

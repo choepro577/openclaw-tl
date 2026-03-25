@@ -1,4 +1,5 @@
 import { extractTextCached } from "./message-extract.ts";
+import { normalizeMessage } from "./message-normalizer.ts";
 
 /**
  * Export chat history as markdown file.
@@ -24,10 +25,28 @@ export function buildChatMarkdown(messages: unknown[], assistantName: string): s
   }
   const lines: string[] = [`# Chat with ${assistantName}`, ""];
   for (const msg of history) {
-    const m = msg as Record<string, unknown>;
-    const role = m.role === "user" ? "You" : m.role === "assistant" ? assistantName : "Tool";
-    const content = extractTextCached(msg) ?? "";
-    const ts = typeof m.timestamp === "number" ? new Date(m.timestamp).toISOString() : "";
+    const normalized = normalizeMessage(msg);
+    const role =
+      normalized.role === "user"
+        ? "You"
+        : normalized.role === "inter_session"
+          ? (normalized.senderLabel ?? "Linked agent")
+          : normalized.role === "assistant"
+            ? assistantName
+            : "Tool";
+    const content =
+      normalized.role === "inter_session"
+        ? normalized.content
+            .map((item) =>
+              item.type === "text" && typeof item.text === "string" ? item.text : null,
+            )
+            .filter(
+              (value): value is string => typeof value === "string" && value.trim().length > 0,
+            )
+            .join("\n")
+        : (extractTextCached(msg) ?? "");
+    const ts =
+      typeof normalized.timestamp === "number" ? new Date(normalized.timestamp).toISOString() : "";
     lines.push(`## ${role}${ts ? ` (${ts})` : ""}`, "", content, "");
   }
   return lines.join("\n");

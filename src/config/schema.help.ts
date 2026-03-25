@@ -206,8 +206,12 @@ export const FIELD_HELP: Record<string, string> = {
     "Optional operator install/setup command shown by `/acp install` and `/acp doctor` when ACP backend wiring is missing.",
   "agents.list.*.skills":
     "Optional allowlist of skills for this agent (omit = all skills; empty = no skills).",
+  "agents.list.*.notiToWebUI":
+    "When true (default), send a Web UI notification after this agent's final replies. Set false to disable Web UI notifications for this agent.",
   "agents.list[].skills":
     "Optional allowlist of skills for this agent (omit = all skills; empty = no skills).",
+  "agents.list[].notiToWebUI":
+    "When true (default), send a Web UI notification after this agent's final replies. Set false to disable Web UI notifications for this agent.",
   agents:
     "Agent runtime configuration root covering defaults and explicit agent entries used for routing and execution context. Keep this section explicit so model/tool behavior stays predictable across multi-agent workflows.",
   "agents.defaults":

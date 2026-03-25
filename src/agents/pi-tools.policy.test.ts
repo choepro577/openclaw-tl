@@ -51,10 +51,11 @@ describe("resolveSubagentToolPolicy depth awareness", () => {
   it("applies subagent tools.alsoAllow to re-enable default-denied tools", () => {
     const cfg = {
       agents: { defaults: { subagents: { maxSpawnDepth: 2 } } },
-      tools: { subagents: { tools: { alsoAllow: ["sessions_send"] } } },
+      tools: { subagents: { tools: { alsoAllow: ["sessions_send", "a_to_a_send"] } } },
     } as unknown as OpenClawConfig;
     const policy = resolveSubagentToolPolicy(cfg, 1);
     expect(isToolAllowedByPolicyName("sessions_send", policy)).toBe(true);
+    expect(isToolAllowedByPolicyName("a_to_a_send", policy)).toBe(true);
     expect(isToolAllowedByPolicyName("cron", policy)).toBe(false);
   });
 

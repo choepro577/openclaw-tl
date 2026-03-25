@@ -14,7 +14,11 @@ import {
   extractThinkingCached,
   formatReasoningMarkdown,
 } from "./message-extract.ts";
-import { isToolResultMessage, normalizeRoleForGrouping } from "./message-normalizer.ts";
+import {
+  isToolResultMessage,
+  normalizeMessage,
+  normalizeRoleForGrouping,
+} from "./message-normalizer.ts";
 import { isTtsSupported, speakText, stopTts, isTtsSpeaking } from "./speech.ts";
 import { extractToolCards, renderToolCardSidebar } from "./tool-cards.ts";
 
@@ -129,11 +133,13 @@ export function renderMessageGroup(
   const who =
     normalizedRole === "user"
       ? (userLabel ?? "You")
-      : normalizedRole === "assistant"
-        ? assistantName
-        : normalizedRole === "tool"
-          ? "Tool"
-          : normalizedRole;
+      : normalizedRole === "inter_session"
+        ? (userLabel ?? "Linked agent")
+        : normalizedRole === "assistant"
+          ? assistantName
+          : normalizedRole === "tool"
+            ? "Tool"
+            : normalizedRole;
   const roleClass =
     normalizedRole === "user"
       ? "user"
@@ -456,29 +462,40 @@ function renderAvatar(
               <path d="M12 2l2.4 7.2H22l-6 4.8 2.4 7.2L12 16l-6.4 5.2L8 14 2 9.2h7.6z" />
             </svg>
           `
-        : normalized === "tool"
+        : normalized === "inter_session"
           ? html`
-              <svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18">
+              <svg viewBox="0 0 24 24" fill="none" width="18" height="18" stroke="currentColor">
                 <path
-                  d="M12 15.5A3.5 3.5 0 0 1 8.5 12 3.5 3.5 0 0 1 12 8.5a3.5 3.5 0 0 1 3.5 3.5 3.5 3.5 0 0 1-3.5 3.5m7.43-2.53a7.76 7.76 0 0 0 .07-1 7.76 7.76 0 0 0-.07-.97l2.11-1.63a.5.5 0 0 0 .12-.64l-2-3.46a.5.5 0 0 0-.61-.22l-2.49 1a7.15 7.15 0 0 0-1.69-.98l-.38-2.65A.49.49 0 0 0 14 2h-4a.49.49 0 0 0-.49.42l-.38 2.65a7.15 7.15 0 0 0-1.69.98l-2.49-1a.5.5 0 0 0-.61.22l-2 3.46a.49.49 0 0 0 .12.64L4.57 11a7.9 7.9 0 0 0 0 1.94l-2.11 1.69a.49.49 0 0 0-.12.64l2 3.46a.5.5 0 0 0 .61.22l2.49-1c.52.4 1.08.72 1.69.98l.38 2.65c.05.24.26.42.49.42h4c.23 0 .44-.18.49-.42l.38-2.65a7.15 7.15 0 0 0 1.69-.98l2.49 1a.5.5 0 0 0 .61-.22l2-3.46a.49.49 0 0 0-.12-.64z"
+                  d="M8 7h8M8 17h8M14 4l3 3-3 3M10 14l-3 3 3 3"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="1.8"
                 />
               </svg>
             `
-          : html`
-              <svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18">
-                <circle cx="12" cy="12" r="10" />
-                <text
-                  x="12"
-                  y="16.5"
-                  text-anchor="middle"
-                  font-size="14"
-                  font-weight="600"
-                  fill="var(--bg, #fff)"
-                >
-                  ?
-                </text>
-              </svg>
-            `;
+          : normalized === "tool"
+            ? html`
+                <svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18">
+                  <path
+                    d="M12 15.5A3.5 3.5 0 0 1 8.5 12 3.5 3.5 0 0 1 12 8.5a3.5 3.5 0 0 1 3.5 3.5 3.5 3.5 0 0 1-3.5 3.5m7.43-2.53a7.76 7.76 0 0 0 .07-1 7.76 7.76 0 0 0-.07-.97l2.11-1.63a.5.5 0 0 0 .12-.64l-2-3.46a.5.5 0 0 0-.61-.22l-2.49 1a7.15 7.15 0 0 0-1.69-.98l-.38-2.65A.49.49 0 0 0 14 2h-4a.49.49 0 0 0-.49.42l-.38 2.65a7.15 7.15 0 0 0-1.69.98l-2.49-1a.5.5 0 0 0-.61.22l-2 3.46a.49.49 0 0 0 .12.64L4.57 11a7.9 7.9 0 0 0 0 1.94l-2.11 1.69a.49.49 0 0 0-.12.64l2 3.46a.5.5 0 0 0 .61.22l2.49-1c.52.4 1.08.72 1.69.98l.38 2.65c.05.24.26.42.49.42h4c.23 0 .44-.18.49-.42l.38-2.65a7.15 7.15 0 0 0 1.69-.98l2.49 1a.5.5 0 0 0 .61-.22l2-3.46a.49.49 0 0 0-.12-.64z"
+                  />
+                </svg>
+              `
+            : html`
+                <svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18">
+                  <circle cx="12" cy="12" r="10" />
+                  <text
+                    x="12"
+                    y="16.5"
+                    text-anchor="middle"
+                    font-size="14"
+                    font-weight="600"
+                    fill="var(--bg, #fff)"
+                  >
+                    ?
+                  </text>
+                </svg>
+              `;
   const className =
     normalized === "user"
       ? "user"
@@ -626,7 +643,8 @@ function renderGroupedMessage(
   onOpenSidebar?: (content: string) => void,
 ) {
   const m = message as Record<string, unknown>;
-  const role = typeof m.role === "string" ? m.role : "unknown";
+  const normalizedMessage = normalizeMessage(message);
+  const role = normalizedMessage.role;
   const normalizedRole = normalizeRoleForGrouping(role);
   const isToolResult =
     isToolResultMessage(message) ||
@@ -635,12 +653,21 @@ function renderGroupedMessage(
     typeof m.toolCallId === "string" ||
     typeof m.tool_call_id === "string";
 
-  const toolCards = (opts.showToolCalls ?? true) ? extractToolCards(message) : [];
+  const toolCards =
+    normalizedRole === "inter_session" || !(opts.showToolCalls ?? true)
+      ? []
+      : extractToolCards(message);
   const hasToolCards = toolCards.length > 0;
-  const images = extractImages(message);
+  const images = normalizedRole === "inter_session" ? [] : extractImages(message);
   const hasImages = images.length > 0;
 
-  const extractedText = extractTextCached(message);
+  const extractedText =
+    normalizedRole === "inter_session"
+      ? normalizedMessage.content
+          .map((item) => (item.type === "text" && typeof item.text === "string" ? item.text : null))
+          .filter((value): value is string => typeof value === "string" && value.trim().length > 0)
+          .join("\n")
+      : extractTextCached(message);
   const extractedThinking =
     opts.showReasoning && role === "assistant" ? extractThinkingCached(message) : null;
   const markdownBase = extractedText?.trim() ? extractedText : null;

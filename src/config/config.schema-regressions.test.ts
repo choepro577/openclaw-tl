@@ -116,6 +116,22 @@ describe("config schema regressions", () => {
     expect(res.ok).toBe(true);
   });
 
+  it("accepts agents.list[].notiToWebUI booleans", () => {
+    const enabled = validateConfigObject({
+      agents: {
+        list: [{ id: "Test123", notiToWebUI: true }],
+      },
+    });
+    const disabled = validateConfigObject({
+      agents: {
+        list: [{ id: "Test123", notiToWebUI: false }],
+      },
+    });
+
+    expect(enabled.ok).toBe(true);
+    expect(disabled.ok).toBe(true);
+  });
+
   it("accepts pdf default model and limits", () => {
     const res = validateConfigObject({
       agents: {

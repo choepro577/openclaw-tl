@@ -5,8 +5,8 @@ export const GATEWAY_CLIENT_IDS = {
   CLI: "cli",
   GATEWAY_CLIENT: "gateway-client",
   MACOS_APP: "openclaw-macos",
-  IOS_APP: "openclaw-ios",
-  ANDROID_APP: "openclaw-android",
+  IOS_APP: "assistant-ios",
+  ANDROID_APP: "assistant-android",
   NODE_HOST: "node-host",
   TEST: "test",
   FINGERPRINT: "fingerprint",
@@ -14,6 +14,16 @@ export const GATEWAY_CLIENT_IDS = {
 } as const;
 
 export type GatewayClientId = (typeof GATEWAY_CLIENT_IDS)[keyof typeof GATEWAY_CLIENT_IDS];
+
+export const GATEWAY_CLIENT_ID_ALIASES: Readonly<Record<string, GatewayClientId>> = {
+  "openclaw-ios": GATEWAY_CLIENT_IDS.IOS_APP,
+  "openclaw-android": GATEWAY_CLIENT_IDS.ANDROID_APP,
+};
+
+export const GATEWAY_ACCEPTED_CLIENT_IDS = [
+  ...Object.values(GATEWAY_CLIENT_IDS),
+  ...Object.keys(GATEWAY_CLIENT_ID_ALIASES),
+];
 
 // Back-compat naming (internal): these values are IDs, not display names.
 export const GATEWAY_CLIENT_NAMES = GATEWAY_CLIENT_IDS;
@@ -58,9 +68,8 @@ export function normalizeGatewayClientId(raw?: string | null): GatewayClientId |
   if (!normalized) {
     return undefined;
   }
-  return GATEWAY_CLIENT_ID_SET.has(normalized as GatewayClientId)
-    ? (normalized as GatewayClientId)
-    : undefined;
+  const canonical = GATEWAY_CLIENT_ID_ALIASES[normalized] ?? normalized;
+  return GATEWAY_CLIENT_ID_SET.has(canonical) ? canonical : undefined;
 }
 
 export function normalizeGatewayClientName(raw?: string | null): GatewayClientName | undefined {
