@@ -106,6 +106,11 @@ export type GatewayControlUiConfig = {
   /** Allowed browser origins for Control UI/WebChat websocket connections. */
   allowedOrigins?: string[];
   /**
+   * Optional trusted browser client IDs that may mutate the session store even
+   * when they connect as WebChat clients. Keep this allowlist narrow.
+   */
+  allowSessionMutationClientIds?: string[];
+  /**
    * DANGEROUS: Keep Host-header origin fallback behavior.
    * Supported long-term for deployments that intentionally rely on this policy.
    */

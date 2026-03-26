@@ -80,8 +80,24 @@ function resolveGatewaySessionTargetFromKey(key: string) {
   return { cfg, target, storePath: target.storePath };
 }
 
+function isWebchatSessionMutationAllowedByConfig(params: {
+  cfg: ReturnType<typeof loadConfig>;
+  clientId: string | undefined;
+}): boolean {
+  const normalizedClientId = params.clientId?.trim().toLowerCase();
+  if (!normalizedClientId) {
+    return false;
+  }
+  const configuredIds = params.cfg.gateway?.controlUi?.allowSessionMutationClientIds;
+  if (!Array.isArray(configuredIds)) {
+    return false;
+  }
+  return configuredIds.some((value) => value.trim().toLowerCase() === normalizedClientId);
+}
+
 function rejectWebchatSessionMutation(params: {
   action: "patch" | "delete";
+  cfg: ReturnType<typeof loadConfig>;
   client: GatewayClient | null;
   isWebchatConnect: (params: GatewayClient["connect"] | null | undefined) => boolean;
   respond: RespondFn;
@@ -89,7 +105,11 @@ function rejectWebchatSessionMutation(params: {
   if (!params.client?.connect || !params.isWebchatConnect(params.client.connect)) {
     return false;
   }
-  if (params.client.connect.client.id === GATEWAY_CLIENT_IDS.CONTROL_UI) {
+  const clientId = params.client.connect.client.id?.trim().toLowerCase();
+  if (clientId === GATEWAY_CLIENT_IDS.CONTROL_UI) {
+    return false;
+  }
+  if (isWebchatSessionMutationAllowedByConfig({ cfg: params.cfg, clientId })) {
     return false;
   }
   params.respond(
@@ -273,11 +293,10 @@ export const sessionsHandlers: GatewayRequestHandlers = {
     if (!key) {
       return;
     }
-    if (rejectWebchatSessionMutation({ action: "patch", client, isWebchatConnect, respond })) {
+    const { cfg, target, storePath } = resolveGatewaySessionTargetFromKey(key);
+    if (rejectWebchatSessionMutation({ action: "patch", cfg, client, isWebchatConnect, respond })) {
       return;
     }
-
-    const { cfg, target, storePath } = resolveGatewaySessionTargetFromKey(key);
     const scopeCheck = assertSessionKeyInScope({
       client,
       sessionKey: key,
@@ -425,11 +444,12 @@ export const sessionsHandlers: GatewayRequestHandlers = {
     if (!key) {
       return;
     }
-    if (rejectWebchatSessionMutation({ action: "delete", client, isWebchatConnect, respond })) {
+    const { cfg, target, storePath } = resolveGatewaySessionTargetFromKey(key);
+    if (
+      rejectWebchatSessionMutation({ action: "delete", cfg, client, isWebchatConnect, respond })
+    ) {
       return;
     }
-
-    const { cfg, target, storePath } = resolveGatewaySessionTargetFromKey(key);
     const scopeCheck = assertSessionKeyInScope({
       client,
       sessionKey: key,
