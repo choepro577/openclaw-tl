@@ -169,6 +169,21 @@ function buildVoiceSection(params: { isMinimal: boolean; ttsHint?: string }) {
   return ["## Voice (TTS)", hint, ""];
 }
 
+function buildSchedulingSection(params: { hasCron: boolean }) {
+  if (!params.hasCron) {
+    return [];
+  }
+  return [
+    "## Scheduling & Reminders",
+    "- For reminders, scheduled follow-ups, or recurring tasks, use `cron`; do not rely on memory, heartbeats, or a promise to remember later.",
+    '- If the job should resume this conversation, create an `agentTurn` cron job with `sessionTarget: "current"`.',
+    '- If the user explicitly wants another session, bind the job to that exact session with `sessionTarget: "session:<sessionKey>"` once you know the key.',
+    '- Use `sessionTarget: "main"` with `systemEvent` only when the user explicitly wants main-session/heartbeat handling instead of a session-bound follow-up.',
+    '- Use announce/webhook delivery only when the user explicitly wants out-of-session delivery; channel announce delivery is only supported for `sessionTarget: "isolated"`.',
+    "",
+  ];
+}
+
 function buildDocsSection(params: { docsPath?: string; isMinimal: boolean; readToolName: string }) {
   const docsPath = params.docsPath?.trim();
   if (!docsPath || params.isMinimal) {
@@ -344,6 +359,7 @@ export function buildAgentSystemPrompt(params: {
   }
 
   const hasGateway = availableTools.has("gateway");
+  const hasCron = availableTools.has("cron") || canonicalToolNames.length === 0;
   const readToolName = resolveToolName("read");
   const execToolName = resolveToolName("exec");
   const processToolName = resolveToolName("process");
@@ -474,6 +490,7 @@ export function buildAgentSystemPrompt(params: {
     "Treat allow-once as single-command only: if another elevated command needs approval, request a fresh /approve and do not claim prior approval covered it.",
     "When approvals are required, preserve and show the full command/script exactly as provided (including chained operators like &&, ||, |, ;, or multiline shells) so the user can approve what will actually run.",
     "",
+    ...buildSchedulingSection({ hasCron }),
     ...safetySection,
     "## OpenClaw CLI Quick Reference",
     "OpenClaw is controlled via subcommands. Do not invent commands.",

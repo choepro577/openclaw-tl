@@ -129,6 +129,66 @@ describe("enterprise agent http", () => {
     expect(body.error.message).toContain("employeeCode is required");
   });
 
+  it("accepts /api/openclaw/bootstrap and falls back to x-openclaw-agent-id", async () => {
+    vi.mocked(ensureAgentProvisioned).mockResolvedValue({
+      status: "existing",
+      agentId: "nv12001",
+      workspace: "/tmp/workspace-nv12001",
+      config: {},
+    });
+    vi.mocked(ensureEnterpriseWorkspaceScaffold).mockResolvedValue({
+      profile: "enterprise-employee-v1",
+      createdFiles: [],
+      existingFiles: ["AGENTS.md"],
+    });
+    vi.mocked(issueEnterpriseSocketToken).mockReturnValue({
+      token: "ent_token_bootstrap",
+      expiresAtMs: 1760000000600,
+    });
+
+    const req = makeRequest({
+      method: "POST",
+      url: "/api/openclaw/bootstrap",
+      headers: {
+        authorization: "Bearer service-token",
+        "x-openclaw-agent-id": "NV12001",
+        "x-openclaw-display-name": "Nhan Vien 12001",
+      },
+      body: {
+        forceRefreshSocketToken: false,
+      },
+    });
+    const res = makeResponse();
+
+    const handled = await handleEnterpriseAgentHttpRequest(req, res, {
+      auth: { mode: "token", token: "service-token", allowTailscale: false },
+    });
+
+    expect(handled).toBe(true);
+    expect(res.statusCode).toBe(200);
+    const body = parseResponseJson<{
+      ok: boolean;
+      agentId: string;
+      socketToken: string;
+      workspaceScaffold: { existingFiles: string[] };
+    }>(res);
+    expect(body.ok).toBe(true);
+    expect(body.agentId).toBe("nv12001");
+    expect(body.socketToken).toBe("ent_token_bootstrap");
+    expect(body.workspaceScaffold.existingFiles).toEqual(["AGENTS.md"]);
+
+    expect(vi.mocked(ensureAgentProvisioned)).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agentId: "nv12001",
+        name: "Nhan Vien 12001",
+      }),
+    );
+    expect(vi.mocked(issueEnterpriseSocketToken)).toHaveBeenCalledWith({
+      agentId: "nv12001",
+      forceRefresh: false,
+    });
+  });
+
   it("returns scaffold metadata for created agent", async () => {
     vi.mocked(ensureAgentProvisioned).mockResolvedValue({
       status: "created",

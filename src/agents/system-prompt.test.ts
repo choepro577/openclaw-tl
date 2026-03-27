@@ -228,6 +228,31 @@ describe("buildAgentSystemPrompt", () => {
     );
   });
 
+  it("guides scheduling and reminders toward cron session binding", () => {
+    const prompt = buildAgentSystemPrompt({
+      workspaceDir: "/tmp/openclaw",
+      toolNames: ["cron"],
+    });
+
+    expect(prompt).toContain("## Scheduling & Reminders");
+    expect(prompt).toContain("For reminders, scheduled follow-ups, or recurring tasks, use `cron`");
+    expect(prompt).toContain('`sessionTarget: "current"`');
+    expect(prompt).toContain('`sessionTarget: "session:<sessionKey>"`');
+    expect(prompt).toContain('`sessionTarget: "main"`');
+    expect(prompt).toContain('`sessionTarget: "isolated"`');
+  });
+
+  it("keeps scheduling guidance in minimal prompts when cron is available", () => {
+    const prompt = buildAgentSystemPrompt({
+      workspaceDir: "/tmp/openclaw",
+      promptMode: "minimal",
+      toolNames: ["cron"],
+    });
+
+    expect(prompt).toContain("## Scheduling & Reminders");
+    expect(prompt).toContain('`sessionTarget: "current"`');
+  });
+
   it("lists available tools when provided", () => {
     const prompt = buildAgentSystemPrompt({
       workspaceDir: "/tmp/openclaw",

@@ -1,5 +1,5 @@
-import type { IncomingMessage, ServerResponse } from "node:http";
 import { randomUUID } from "node:crypto";
+import type { IncomingMessage, ServerResponse } from "node:http";
 import { loadConfig } from "../config/config.js";
 import { createSubsystemLogger } from "../logging/subsystem.js";
 import { normalizeAgentId } from "../routing/session-key.js";
@@ -17,15 +17,20 @@ import {
   sendMethodNotAllowed,
   sendUnauthorized,
 } from "./http-common.js";
-import { getBearerToken } from "./http-utils.js";
+import { getBearerToken, getHeader, resolveAgentIdFromHeader } from "./http-utils.js";
 
-const ENTERPRISE_ENSURE_PATH = "/v1/enterprise/agents/ensure";
+const ENTERPRISE_ENSURE_PATHS = new Set([
+  "/v1/enterprise/agents/ensure",
+  "/api/openclaw/bootstrap",
+]);
 const DEFAULT_BODY_BYTES = 256 * 1024;
 const logEnterprise = createSubsystemLogger("gateway/enterprise");
 
 type EnsureAgentBody = {
   employeeCode?: unknown;
+  agentId?: unknown;
   displayName?: unknown;
+  name?: unknown;
   forceRefreshSocketToken?: unknown;
 };
 
@@ -43,6 +48,34 @@ function resolveDisplayName(raw: unknown): string | undefined {
   return raw.trim();
 }
 
+function resolveBootstrapEmployeeCode(req: IncomingMessage, body: EnsureAgentBody): string | null {
+  const fromBody = resolveEmployeeCode(body.employeeCode) ?? resolveEmployeeCode(body.agentId);
+  if (fromBody) {
+    return fromBody;
+  }
+
+  const fromEmployeeHeader =
+    resolveEmployeeCode(getHeader(req, "x-openclaw-employee-code")) ??
+    resolveEmployeeCode(getHeader(req, "employee-code"));
+  if (fromEmployeeHeader) {
+    return fromEmployeeHeader;
+  }
+
+  return resolveAgentIdFromHeader(req) ?? null;
+}
+
+function resolveBootstrapDisplayName(
+  req: IncomingMessage,
+  body: EnsureAgentBody,
+): string | undefined {
+  return (
+    resolveDisplayName(body.displayName) ??
+    resolveDisplayName(body.name) ??
+    resolveDisplayName(getHeader(req, "x-openclaw-display-name")) ??
+    resolveDisplayName(getHeader(req, "display-name"))
+  );
+}
+
 function sanitizeLogValue(value: string): string {
   return value.replace(/\s+/g, " ").trim();
 }
@@ -53,7 +86,7 @@ export async function handleEnterpriseAgentHttpRequest(
   opts: { auth: ResolvedGatewayAuth; trustedProxies?: string[] },
 ): Promise<boolean> {
   const url = new URL(req.url ?? "/", `http://${req.headers.host ?? "localhost"}`);
-  if (url.pathname !== ENTERPRISE_ENSURE_PATH) {
+  if (!ENTERPRISE_ENSURE_PATHS.has(url.pathname)) {
     return false;
   }
 
@@ -80,13 +113,16 @@ export async function handleEnterpriseAgentHttpRequest(
     return true;
   }
   const body = (bodyUnknown ?? {}) as EnsureAgentBody;
-  const employeeCode = resolveEmployeeCode(body.employeeCode);
+  const employeeCode = resolveBootstrapEmployeeCode(req, body);
   if (!employeeCode) {
-    sendInvalidRequest(res, "employeeCode is required");
+    sendInvalidRequest(
+      res,
+      "employeeCode is required (or provide x-openclaw-agent-id / x-openclaw-employee-code)",
+    );
     return true;
   }
   const forceRefreshSocketToken = body.forceRefreshSocketToken === true;
-  const displayName = resolveDisplayName(body.displayName) ?? employeeCode;
+  const displayName = resolveBootstrapDisplayName(req, body) ?? employeeCode;
   const traceId = randomUUID();
 
   try {
