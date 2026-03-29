@@ -1,0 +1,4 @@
+interface:
+  display_name: "F&B Accounting VN Global"
+  short_description: "Vietnam-first F&B accounting workflows"
+  default_prompt: "Use $fnb-accounting-vn-global to review F&B accounting files, reconcile balances, and prepare Vietnam and IFRS-ready guidance."

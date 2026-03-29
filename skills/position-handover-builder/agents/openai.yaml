@@ -1,0 +1,4 @@
+interface:
+  display_name: "Position Handover Builder"
+  short_description: "Create structured role handover packs"
+  default_prompt: "Use $position-handover-builder to create a standardized handover pack for this position or agent workspace."
