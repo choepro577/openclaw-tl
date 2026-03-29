@@ -235,11 +235,16 @@ describe("buildAgentSystemPrompt", () => {
     });
 
     expect(prompt).toContain("## Scheduling & Reminders");
-    expect(prompt).toContain("For reminders, scheduled follow-ups, or recurring tasks, use `cron`");
+    expect(prompt).toContain(
+      "For reminders, scheduled follow-ups, or recurring tasks, use `cron`. This is the only supported scheduling path.",
+    );
+    expect(prompt).toContain("Do not invent cron actions.");
+    expect(prompt).toContain("`openclaw cron ...`");
     expect(prompt).toContain('`sessionTarget: "current"`');
     expect(prompt).toContain('`sessionTarget: "session:<sessionKey>"`');
     expect(prompt).toContain('`sessionTarget: "main"`');
     expect(prompt).toContain('`sessionTarget: "isolated"`');
+    expect(prompt).toContain('Canonical current-session example: `{ "action": "add"');
   });
 
   it("keeps scheduling guidance in minimal prompts for all agents", () => {
@@ -253,15 +258,16 @@ describe("buildAgentSystemPrompt", () => {
     expect(prompt).toContain('`sessionTarget: "current"`');
   });
 
-  it("keeps scheduling guidance even when cron is not listed in the current tool set", () => {
+  it("marks scheduling unavailable when cron is not listed in the current tool set", () => {
     const prompt = buildAgentSystemPrompt({
       workspaceDir: "/tmp/openclaw",
       toolNames: ["exec", "sessions_list"],
     });
 
     expect(prompt).toContain("## Scheduling & Reminders");
-    expect(prompt).toContain("use `cron`");
-    expect(prompt).toContain('`sessionTarget: "current"`');
+    expect(prompt).toContain("Scheduling is unavailable in this session");
+    expect(prompt).toContain("Do not improvise with `exec`, `openclaw cron ...`");
+    expect(prompt).not.toContain('`sessionTarget: "current"`');
   });
 
   it("lists available tools when provided", () => {

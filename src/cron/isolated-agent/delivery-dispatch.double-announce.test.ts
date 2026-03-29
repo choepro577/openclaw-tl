@@ -387,6 +387,83 @@ describe("dispatchCronDelivery — double-announce guard", () => {
     );
   });
 
+  it("prefers internal session delivery when the cron source session is webchat", async () => {
+    vi.mocked(countActiveDescendantRuns).mockReturnValue(0);
+    vi.mocked(isLikelyInterimCronMessage).mockReturnValue(false);
+    const internalFallback = vi.fn().mockResolvedValue({
+      handled: true,
+      delivered: true,
+      sessionKey: "agent:main:openai-user:session-a",
+    });
+
+    const params = makeBaseParams({ synthesizedText: "Return to the UI session." }) as Record<
+      string,
+      unknown
+    >;
+    params.preferInternalSessionDelivery = true;
+    params.deliverToInternalSession = internalFallback;
+
+    const state = await dispatchCronDelivery(params as ReturnType<typeof makeBaseParams>);
+
+    expect(internalFallback).toHaveBeenCalledTimes(1);
+    expect(deliverOutboundPayloads).not.toHaveBeenCalled();
+    expect(state.delivered).toBe(true);
+    expect(state.deliveryAttempted).toBe(true);
+  });
+
+  it("falls back to internal session delivery when implicit external routing cannot be resolved", async () => {
+    vi.mocked(countActiveDescendantRuns).mockReturnValue(0);
+    vi.mocked(isLikelyInterimCronMessage).mockReturnValue(false);
+    const internalFallback = vi.fn().mockResolvedValue({
+      handled: true,
+      delivered: true,
+      sessionKey: "agent:main:openai-user:latest",
+    });
+
+    const params = makeBaseParams({ synthesizedText: "Use internal fallback." }) as Record<
+      string,
+      unknown
+    >;
+    params.resolvedDelivery = {
+      ok: false,
+      mode: "implicit",
+      error: new Error("Channel is required when delivery.channel=last has no previous channel."),
+    };
+    params.allowInternalSessionFallbackOnUnresolved = true;
+    params.deliverToInternalSession = internalFallback;
+
+    const state = await dispatchCronDelivery(params as ReturnType<typeof makeBaseParams>);
+
+    expect(internalFallback).toHaveBeenCalledTimes(1);
+    expect(deliverOutboundPayloads).not.toHaveBeenCalled();
+    expect(state.delivered).toBe(true);
+    expect(state.deliveryAttempted).toBe(true);
+  });
+
+  it("keeps explicit direct delivery on the external path", async () => {
+    vi.mocked(countActiveDescendantRuns).mockReturnValue(0);
+    vi.mocked(isLikelyInterimCronMessage).mockReturnValue(false);
+    vi.mocked(deliverOutboundPayloads).mockResolvedValue([{ ok: true } as never]);
+    const internalFallback = vi.fn().mockResolvedValue({
+      handled: true,
+      delivered: true,
+      sessionKey: "agent:main:openai-user:latest",
+    });
+
+    const params = makeBaseParams({ synthesizedText: "Respect explicit route." }) as Record<
+      string,
+      unknown
+    >;
+    params.deliverToInternalSession = internalFallback;
+
+    const state = await dispatchCronDelivery(params as ReturnType<typeof makeBaseParams>);
+
+    expect(internalFallback).not.toHaveBeenCalled();
+    expect(deliverOutboundPayloads).toHaveBeenCalledTimes(1);
+    expect(state.delivered).toBe(true);
+    expect(state.deliveryAttempted).toBe(true);
+  });
+
   it("transient retry delivers exactly once with skipQueue on both attempts", async () => {
     vi.mocked(countActiveDescendantRuns).mockReturnValue(0);
     vi.mocked(isLikelyInterimCronMessage).mockReturnValue(false);

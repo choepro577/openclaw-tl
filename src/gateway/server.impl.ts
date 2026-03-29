@@ -706,6 +706,7 @@ export async function startGatewayServer(
     cfg: cfgAtStart,
     deps,
     broadcast,
+    nodeSendToSession,
   });
   let { cron, storePath: cronStorePath } = cronState;
 
@@ -1025,6 +1026,7 @@ export async function startGatewayServer(
         const { applyHotReload, requestGatewayRestart } = createGatewayReloadHandlers({
           deps,
           broadcast,
+          nodeSendToSession,
           getState: () => ({
             hooksConfig,
             hookClientIpConfig,

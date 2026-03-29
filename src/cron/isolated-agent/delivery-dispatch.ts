@@ -72,6 +72,28 @@ export function resolveCronDeliveryBestEffort(job: CronJob): boolean {
 
 export type SuccessfulDeliveryTarget = Extract<DeliveryTargetResolution, { ok: true }>;
 
+export type InternalCronSessionFallbackRequest = {
+  job: CronJob;
+  agentId: string;
+  runSessionId: string;
+  summary?: string;
+  outputText?: string;
+  synthesizedText?: string;
+  deliveryPayloads: ReplyPayload[];
+};
+
+export type InternalCronSessionFallbackResult =
+  | {
+      handled: true;
+      delivered: boolean;
+      error?: string;
+      sessionKey?: string;
+    }
+  | {
+      handled: false;
+      error?: string;
+    };
+
 type DispatchCronDeliveryParams = {
   cfg: OpenClawConfig;
   cfgWithAgentDefaults: OpenClawConfig;
@@ -87,6 +109,11 @@ type DispatchCronDeliveryParams = {
   deliveryRequested: boolean;
   skipHeartbeatDelivery: boolean;
   skipMessagingToolDelivery?: boolean;
+  preferInternalSessionDelivery?: boolean;
+  allowInternalSessionFallbackOnUnresolved?: boolean;
+  deliverToInternalSession?: (
+    request: InternalCronSessionFallbackRequest,
+  ) => Promise<InternalCronSessionFallbackResult>;
   deliveryBestEffort: boolean;
   deliveryPayloadHasStructuredContent: boolean;
   deliveryPayloads: ReplyPayload[];
@@ -390,28 +417,26 @@ export async function dispatchCronDelivery(
     }
   };
 
-  const finalizeTextDelivery = async (
-    delivery: SuccessfulDeliveryTarget,
-  ): Promise<RunCronAgentTurnResult | null> => {
-    const cleanupDirectCronSessionIfNeeded = async (): Promise<void> => {
-      if (!params.job.deleteAfterRun) {
-        return;
-      }
-      try {
-        await callGateway({
-          method: "sessions.delete",
-          params: {
-            key: params.agentSessionKey,
-            deleteTranscript: true,
-            emitLifecycleHooks: false,
-          },
-          timeoutMs: 10_000,
-        });
-      } catch {
-        // Best-effort; direct delivery result should still be returned.
-      }
-    };
+  const cleanupDirectCronSessionIfNeeded = async (): Promise<void> => {
+    if (!params.job.deleteAfterRun) {
+      return;
+    }
+    try {
+      await callGateway({
+        method: "sessions.delete",
+        params: {
+          key: params.agentSessionKey,
+          deleteTranscript: true,
+          emitLifecycleHooks: false,
+        },
+        timeoutMs: 10_000,
+      });
+    } catch {
+      // Best-effort; direct delivery result should still be returned.
+    }
+  };
 
+  const prepareTextDelivery = async (): Promise<RunCronAgentTurnResult | null> => {
     if (!synthesizedText) {
       return null;
     }
@@ -508,6 +533,114 @@ export async function dispatchCronDelivery(
         ...params.telemetry,
       });
     }
+    return null;
+  };
+
+  const deliverViaInternalSession = async (options?: {
+    required?: boolean;
+  }): Promise<RunCronAgentTurnResult | null> => {
+    const prepared = await prepareTextDelivery();
+    if (prepared) {
+      return prepared;
+    }
+    if (!params.deliverToInternalSession) {
+      if (!options?.required) {
+        return null;
+      }
+      if (!params.deliveryBestEffort) {
+        return params.withRunSession({
+          status: "error",
+          summary,
+          outputText,
+          error: "internal session delivery handler is not configured",
+          deliveryAttempted: true,
+          ...params.telemetry,
+        });
+      }
+      deliveryAttempted = true;
+      return null;
+    }
+    const textForInternalDelivery =
+      synthesizedText?.trim() || outputText?.trim() || summary?.trim() || undefined;
+    if (!textForInternalDelivery) {
+      if (!options?.required) {
+        return null;
+      }
+      if (!params.deliveryBestEffort) {
+        return params.withRunSession({
+          status: "error",
+          summary,
+          outputText,
+          error: "cron internal session delivery requires text output",
+          deliveryAttempted: true,
+          ...params.telemetry,
+        });
+      }
+      deliveryAttempted = true;
+      return null;
+    }
+    deliveryAttempted = true;
+    try {
+      const internalDelivery = await params.deliverToInternalSession({
+        job: params.job,
+        agentId: params.agentId,
+        runSessionId: params.runSessionId,
+        summary,
+        outputText,
+        synthesizedText: textForInternalDelivery,
+        deliveryPayloads,
+      });
+      if (!internalDelivery.handled) {
+        if (!options?.required) {
+          return null;
+        }
+        if (!params.deliveryBestEffort) {
+          return params.withRunSession({
+            status: "error",
+            summary,
+            outputText,
+            error:
+              internalDelivery.error ?? "internal session delivery handler did not handle request",
+            deliveryAttempted,
+            ...params.telemetry,
+          });
+        }
+        return null;
+      }
+      delivered = internalDelivery.delivered;
+      if (!internalDelivery.delivered && !params.deliveryBestEffort) {
+        return params.withRunSession({
+          status: "error",
+          summary,
+          outputText,
+          error: internalDelivery.error ?? "internal session delivery failed",
+          deliveryAttempted,
+          ...params.telemetry,
+        });
+      }
+      return null;
+    } catch (err) {
+      if (!params.deliveryBestEffort) {
+        return params.withRunSession({
+          status: "error",
+          summary,
+          outputText,
+          error: String(err),
+          deliveryAttempted,
+          ...params.telemetry,
+        });
+      }
+      return null;
+    }
+  };
+
+  const finalizeTextDelivery = async (
+    delivery: SuccessfulDeliveryTarget,
+  ): Promise<RunCronAgentTurnResult | null> => {
+    const prepared = await prepareTextDelivery();
+    if (prepared) {
+      return prepared;
+    }
     try {
       return await deliverViaDirect(delivery, { retryTransient: true });
     } finally {
@@ -516,7 +649,54 @@ export async function dispatchCronDelivery(
   };
 
   if (params.deliveryRequested && !params.skipHeartbeatDelivery && !skipMessagingToolDelivery) {
+    if (params.preferInternalSessionDelivery) {
+      const internalResult = await deliverViaInternalSession({ required: true });
+      if (internalResult) {
+        return {
+          result: internalResult,
+          delivered,
+          deliveryAttempted,
+          summary,
+          outputText,
+          synthesizedText,
+          deliveryPayloads,
+        };
+      }
+      return {
+        delivered,
+        deliveryAttempted,
+        summary,
+        outputText,
+        synthesizedText,
+        deliveryPayloads,
+      };
+    }
+
     if (!params.resolvedDelivery.ok) {
+      if (params.allowInternalSessionFallbackOnUnresolved) {
+        const internalResult = await deliverViaInternalSession();
+        if (internalResult) {
+          return {
+            result: internalResult,
+            delivered,
+            deliveryAttempted,
+            summary,
+            outputText,
+            synthesizedText,
+            deliveryPayloads,
+          };
+        }
+        if (delivered || deliveryAttempted) {
+          return {
+            delivered,
+            deliveryAttempted,
+            summary,
+            outputText,
+            synthesizedText,
+            deliveryPayloads,
+          };
+        }
+      }
       if (!params.deliveryBestEffort) {
         return {
           result: failDeliveryTarget(params.resolvedDelivery.error.message),

@@ -82,6 +82,7 @@ describe("buildGatewayCronService", () => {
       cfg,
       deps: {} as CliDeps,
       broadcast: () => {},
+      nodeSendToSession: () => {},
     });
     try {
       const job = await state.cron.add({
@@ -123,6 +124,7 @@ describe("buildGatewayCronService", () => {
       cfg,
       deps: {} as CliDeps,
       broadcast: () => {},
+      nodeSendToSession: () => {},
     });
     try {
       const job = await state.cron.add({
@@ -173,6 +175,7 @@ describe("buildGatewayCronService", () => {
       cfg,
       deps: {} as CliDeps,
       broadcast: () => {},
+      nodeSendToSession: () => {},
     });
     try {
       const job = await state.cron.add({
@@ -190,6 +193,7 @@ describe("buildGatewayCronService", () => {
         expect.objectContaining({
           job: expect.objectContaining({ id: job.id }),
           sessionKey: "project-alpha-monitor",
+          internalSessionFallback: expect.any(Function),
         }),
       );
     } finally {

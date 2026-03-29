@@ -29,6 +29,7 @@ import { enqueueSystemEvent } from "../infra/system-events.js";
 import { getChildLogger } from "../logging.js";
 import { normalizeAgentId, toAgentStoreSessionKey } from "../routing/session-key.js";
 import { defaultRuntime } from "../runtime.js";
+import { deliverCronResultToInternalSession } from "./cron-internal-session-delivery.js";
 
 export type GatewayCronState = {
   cron: CronService;
@@ -145,6 +146,7 @@ export function buildGatewayCronService(params: {
   cfg: ReturnType<typeof loadConfig>;
   deps: CliDeps;
   broadcast: (event: string, payload: unknown, opts?: { dropIfSlow?: boolean }) => void;
+  nodeSendToSession: (sessionKey: string, event: string, payload: unknown) => void;
 }): GatewayCronState {
   const cronLogger = getChildLogger({ module: "cron" });
   const storePath = resolveCronStorePath(params.cfg.cron?.store);
@@ -300,6 +302,44 @@ export function buildGatewayCronService(params: {
         agentId,
         sessionKey,
         lane: "cron",
+        internalSessionFallback: async (request) => {
+          const messageText =
+            request.synthesizedText?.trim() ||
+            request.outputText?.trim() ||
+            request.summary?.trim() ||
+            "";
+          if (!messageText) {
+            return {
+              handled: true as const,
+              delivered: false,
+              error: "cron internal session fallback requires text output",
+            };
+          }
+          const delivered = await deliverCronResultToInternalSession({
+            cfg: runtimeConfig,
+            agentId,
+            jobSessionKey: job.sessionKey,
+            message: messageText,
+            idempotencyKey: `cron-internal-delivery:v1:${request.runSessionId}`,
+            runId: `cron-internal-delivery:${request.runSessionId}`,
+            context: {
+              broadcast: params.broadcast,
+              nodeSendToSession: params.nodeSendToSession,
+            },
+          });
+          if (!delivered.ok) {
+            return {
+              handled: true as const,
+              delivered: false,
+              error: delivered.error,
+            };
+          }
+          return {
+            handled: true as const,
+            delivered: true,
+            sessionKey: delivered.sessionKey,
+          };
+        },
       });
     },
     sendCronFailureAlert: async ({ job, text, channel, to, mode, accountId }) => {

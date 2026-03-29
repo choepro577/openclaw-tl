@@ -41,10 +41,12 @@ import {
 import type { CliDeps } from "../../cli/outbound-send-deps.js";
 import type { OpenClawConfig } from "../../config/config.js";
 import {
+  loadSessionStore,
   resolveSessionTranscriptPath,
   setSessionRuntimeModel,
   updateSessionStore,
 } from "../../config/sessions.js";
+import { resolveStorePath } from "../../config/sessions/paths.js";
 import type { AgentDefaultsConfig } from "../../config/types.js";
 import { registerAgentRunContext } from "../../infra/agent-events.js";
 import { logWarn } from "../../logger.js";
@@ -55,10 +57,14 @@ import {
   getHookType,
   isExternalHookSession,
 } from "../../security/external-content.js";
+import { deliveryContextFromSession } from "../../utils/delivery-context.js";
+import { isInternalMessageChannel } from "../../utils/message-channel.js";
 import { resolveCronDeliveryPlan } from "../delivery.js";
 import type { CronJob, CronRunOutcome, CronRunTelemetry } from "../types.js";
 import {
   dispatchCronDelivery,
+  type InternalCronSessionFallbackRequest,
+  type InternalCronSessionFallbackResult,
   matchesMessagingToolDeliveryTarget,
   resolveCronDeliveryBestEffort,
 } from "./delivery-dispatch.js";
@@ -220,6 +226,34 @@ function appendCronDeliveryInstruction(params: {
   return `${params.commandBody}\n\nReturn your summary as plain text; it will be delivered automatically. If the task explicitly calls for messaging a specific external recipient, note who/where it should go instead of sending it yourself.`.trim();
 }
 
+function shouldAllowInternalSessionFallback(params: {
+  deliveryPlan: Awaited<ReturnType<typeof resolveCronDeliveryContext>>["deliveryPlan"];
+}): boolean {
+  return params.deliveryPlan.channel === "last" || !params.deliveryPlan.to;
+}
+
+function prefersInternalSessionDelivery(params: {
+  cfg: OpenClawConfig;
+  agentId: string;
+  sessionKey?: string;
+  allowInternalSessionFallback: boolean;
+}): boolean {
+  if (!params.allowInternalSessionFallback) {
+    return false;
+  }
+  const sessionKey = params.sessionKey?.trim();
+  if (!sessionKey) {
+    return false;
+  }
+  const storePath = resolveStorePath(params.cfg.session?.store, {
+    agentId: normalizeAgentId(params.agentId),
+  });
+  const store = loadSessionStore(storePath);
+  const entry = store[sessionKey];
+  const routeChannel = deliveryContextFromSession(entry)?.channel ?? entry?.lastChannel;
+  return isInternalMessageChannel(routeChannel);
+}
+
 export async function runCronIsolatedAgentTurn(params: {
   cfg: OpenClawConfig;
   deps: CliDeps;
@@ -231,6 +265,9 @@ export async function runCronIsolatedAgentTurn(params: {
   agentId?: string;
   lane?: string;
   deliveryContract?: IsolatedDeliveryContract;
+  internalSessionFallback?: (
+    request: InternalCronSessionFallbackRequest,
+  ) => Promise<InternalCronSessionFallbackResult>;
 }): Promise<RunCronAgentTurnResult> {
   const abortSignal = params.abortSignal ?? params.signal;
   const isAborted = () => abortSignal?.aborted === true;
@@ -453,12 +490,23 @@ export async function runCronIsolatedAgentTurn(params: {
   });
 
   const agentPayload = params.job.payload.kind === "agentTurn" ? params.job.payload : null;
-  const { deliveryRequested, resolvedDelivery, toolPolicy } = await resolveCronDeliveryContext({
-    cfg: cfgWithAgentDefaults,
-    job: params.job,
-    agentId,
-    deliveryContract,
-  });
+  const { deliveryPlan, deliveryRequested, resolvedDelivery, toolPolicy } =
+    await resolveCronDeliveryContext({
+      cfg: cfgWithAgentDefaults,
+      job: params.job,
+      agentId,
+      deliveryContract,
+    });
+  const allowInternalSessionFallbackOnUnresolved =
+    deliveryRequested && shouldAllowInternalSessionFallback({ deliveryPlan });
+  const preferInternalSessionDelivery =
+    deliveryRequested &&
+    prefersInternalSessionDelivery({
+      cfg: cfgWithAgentDefaults,
+      agentId,
+      sessionKey: params.job.sessionKey,
+      allowInternalSessionFallback: allowInternalSessionFallbackOnUnresolved,
+    });
 
   const { formattedTime, timeLine } = resolveCronStyleNow(params.cfg, now);
   const base = `[cron:${params.job.id} ${params.job.name}] ${params.message}`.trim();
@@ -875,6 +923,9 @@ export async function runCronIsolatedAgentTurn(params: {
     deliveryRequested,
     skipHeartbeatDelivery,
     skipMessagingToolDelivery,
+    preferInternalSessionDelivery,
+    allowInternalSessionFallbackOnUnresolved,
+    deliverToInternalSession: params.internalSessionFallback,
     deliveryBestEffort,
     deliveryPayloadHasStructuredContent,
     deliveryPayloads,

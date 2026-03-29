@@ -169,14 +169,31 @@ function buildVoiceSection(params: { isMinimal: boolean; ttsHint?: string }) {
   return ["## Voice (TTS)", hint, ""];
 }
 
-function buildSchedulingSection() {
+function buildSchedulingSection(params: {
+  hasCron: boolean;
+  cronToolName: string;
+  execToolName: string;
+}) {
+  if (!params.hasCron) {
+    return [
+      "## Scheduling & Reminders",
+      `- Scheduling is unavailable in this session because \`${params.cronToolName}\` is not in the current tool set.`,
+      `- Do not improvise with \`${params.execToolName}\`, \`openclaw cron ...\`, OS \`cron\`/\`crontab\`, \`at\`, \`sleep\`, heartbeats, memory, or a promise to remember later.`,
+      `- If the user asks for a reminder anyway, explain that this session cannot create one until \`${params.cronToolName}\` is enabled.`,
+      "",
+    ];
+  }
   return [
     "## Scheduling & Reminders",
-    "- For reminders, scheduled follow-ups, or recurring tasks, use `cron`; do not rely on memory, heartbeats, or a promise to remember later.",
+    `- For reminders, scheduled follow-ups, or recurring tasks, use \`${params.cronToolName}\`. This is the only supported scheduling path.`,
+    `- Use the first-class \`${params.cronToolName}\` tool directly; never substitute \`${params.execToolName}\`, \`openclaw cron ...\`, OS \`cron\`/\`crontab\`, \`at\`, \`sleep\`, heartbeats, memory, or a promise to remember later.`,
+    "- Do not invent cron actions. Valid actions are `status`, `list`, `add`, `update`, `remove`, `run`, `runs`, and `wake`.",
     '- If the job should resume this conversation, create an `agentTurn` cron job with `sessionTarget: "current"`.',
     '- If the user explicitly wants another session, bind the job to that exact session with `sessionTarget: "session:<sessionKey>"` once you know the key.',
     '- Use `sessionTarget: "main"` with `systemEvent` only when the user explicitly wants main-session/heartbeat handling instead of a session-bound follow-up.',
     '- Use announce/webhook delivery only when the user explicitly wants out-of-session delivery; channel announce delivery is only supported for `sessionTarget: "isolated"`.',
+    '- Canonical current-session example: `{ "action": "add", "job": { "schedule": { "kind": "at", "at": "<ISO-8601>" }, "sessionTarget": "current", "payload": { "kind": "agentTurn", "message": "<reminder text>" } } }`',
+    '- Canonical main-session example: `{ "action": "add", "job": { "schedule": { "kind": "at", "at": "<ISO-8601>" }, "sessionTarget": "main", "payload": { "kind": "systemEvent", "text": "<reminder text>" } } }`',
     "",
   ];
 }
@@ -482,14 +499,20 @@ export function buildAgentSystemPrompt(params: {
     "Keep narration brief and value-dense; avoid repeating obvious steps.",
     "Use plain human language for narration unless in a technical context.",
     "When a first-class tool exists for an action, use the tool directly instead of asking the user to run equivalent CLI or slash commands.",
+    "Scheduling/reminders are a special case: if `cron` is available, never fall back to `exec`, `openclaw cron ...`, or OS schedulers.",
     "When exec returns approval-pending, include the concrete /approve command from tool output (with allow-once|allow-always|deny) and do not ask for a different or rotated code.",
     "Treat allow-once as single-command only: if another elevated command needs approval, request a fresh /approve and do not claim prior approval covered it.",
     "When approvals are required, preserve and show the full command/script exactly as provided (including chained operators like &&, ||, |, ;, or multiline shells) so the user can approve what will actually run.",
     "",
-    ...buildSchedulingSection(),
+    ...buildSchedulingSection({
+      hasCron: availableTools.has("cron"),
+      cronToolName: resolveToolName("cron"),
+      execToolName,
+    }),
     ...safetySection,
     "## OpenClaw CLI Quick Reference",
     "OpenClaw is controlled via subcommands. Do not invent commands.",
+    "This CLI section is operator reference only. If a first-class tool exists for the task, use the tool instead of running these commands via exec.",
     "To manage the Gateway daemon service (start/stop/restart):",
     "- openclaw gateway status",
     "- openclaw gateway start",
