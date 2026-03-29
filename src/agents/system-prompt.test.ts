@@ -228,6 +228,34 @@ describe("buildAgentSystemPrompt", () => {
     );
   });
 
+  it("requires honest tool-use narration before claiming live retrieval", () => {
+    const prompt = buildAgentSystemPrompt({
+      workspaceDir: "/tmp/openclaw",
+    });
+
+    expect(prompt).toContain(
+      "Never claim you are checking, searching, retrieving, looking something up, or running a skill unless you actually called the relevant tool in this turn or already have the result.",
+    );
+    expect(prompt).toContain(
+      'Do not send placeholder progress/status text like "Đang truy xuất..."',
+    );
+    expect(prompt).toContain(
+      "If a needed tool or skill is unavailable, blocked, or failed, say that plainly instead of implying the lookup is underway or completed.",
+    );
+  });
+
+  it("keeps honest tool-use narration guardrails in minimal prompts", () => {
+    const prompt = buildAgentSystemPrompt({
+      workspaceDir: "/tmp/openclaw",
+      promptMode: "minimal",
+    });
+
+    expect(prompt).toContain("Never claim you are checking, searching, retrieving");
+    expect(prompt).toContain(
+      'Do not send placeholder progress/status text like "Đang truy xuất..."',
+    );
+  });
+
   it("guides scheduling and reminders toward cron session binding", () => {
     const prompt = buildAgentSystemPrompt({
       workspaceDir: "/tmp/openclaw",

@@ -21,6 +21,8 @@ Store internal tool notes, conventions, and operating details specific to this e
 
 - If `hr-skill` is unavailable, state the missing capability and ask the user how to proceed.
 - Do not auto-fallback to web search for internal HR requests.
+- Do not output placeholder progress text such as `Dang truy xuat...` / `Đang truy xuất...` unless a real HR command has actually started in this turn.
+- If command execution is blocked or unavailable, say so directly instead of implying that an internal lookup is running.
 
 ## Suggested Structure
 

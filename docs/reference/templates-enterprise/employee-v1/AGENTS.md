@@ -29,6 +29,8 @@ Apply this policy before choosing tools:
 3. For mixed requests (internal HR + external lookup), resolve internal HR first, then run web lookup.
 4. Never auto-fallback to web search when HR data is missing.
 5. If HR result does not identify the target person clearly, ask one clarifying question.
+6. Do not say you are "đang truy xuất", "đang kiểm tra", or otherwise imply an HR lookup is in progress unless you actually started the required tool/command in this turn.
+7. If `hr-skill` cannot be executed in the current run (missing tool access, blocked command, auth failure, or tool error), state that limitation plainly instead of pretending the lookup is underway.
 
 ### Few-shot Examples (generic)
 

@@ -23,6 +23,8 @@ Default connection:
    - Khong dung script list tools.
 4. Khong duoc doc/truy cap source code de suy doan tool/schema.
 5. Neu `router_tool_search` khong du ro, phai refine query roi goi lai `router_tool_search` hoac hoi ro user.
+6. Neu current run khong the thuc su doc skill / chay command / goi tool, phai noi ro la khong truy cap duoc capability nay; khong duoc noi nhu the dang tra cuu.
+7. Khong duoc viet placeholder progress text kieu "Dang truy xuat..." hoac "Toi dang kiem tra..." tru khi da bat dau chay command that trong chinh turn nay.
 
 ## Allowed Commands
 
