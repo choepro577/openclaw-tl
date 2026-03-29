@@ -184,6 +184,53 @@ describe("cron tool", () => {
     });
   });
 
+  it("accepts cron.add payloads wrapped under input", async () => {
+    const localCallGateway = vi.fn().mockResolvedValue({ ok: true });
+    const tool = createCronTool(undefined, {
+      callGatewayTool: localCallGateway as unknown as Parameters<
+        typeof createCronTool
+      >[1]["callGatewayTool"],
+    });
+    await tool.execute("call2b", {
+      action: "add",
+      input: {
+        name: "wrapped-input",
+        schedule: { at: new Date(123).toISOString() },
+        payload: { kind: "systemEvent", text: "hello" },
+      },
+    });
+
+    expect(localCallGateway).toHaveBeenCalledTimes(1);
+    const params =
+      (localCallGateway.mock.calls[0]?.[2] as Record<string, unknown> | undefined) ?? {};
+    expect(params).toEqual({
+      name: "wrapped-input",
+      enabled: true,
+      deleteAfterRun: true,
+      schedule: { kind: "at", at: new Date(123).toISOString() },
+      sessionTarget: "main",
+      wakeMode: "now",
+      payload: { kind: "systemEvent", text: "hello" },
+    });
+  });
+
+  it("throws a guided error when cron.add is missing the required job shape", async () => {
+    const localCallGateway = vi.fn().mockResolvedValue({ ok: true });
+    const tool = createCronTool(undefined, {
+      callGatewayTool: localCallGateway as unknown as Parameters<
+        typeof createCronTool
+      >[1]["callGatewayTool"],
+    });
+
+    await expect(
+      tool.execute("call-invalid", {
+        action: "add",
+        text: "nhac toi 2 phut nua",
+      }),
+    ).rejects.toThrow("cron.add requires a complete job payload.");
+    expect(localCallGateway).not.toHaveBeenCalled();
+  });
+
   it("does not default agentId when job.agentId is null", async () => {
     const tool = createCronTool({ agentSessionKey: "main" });
     await tool.execute("call-null", {

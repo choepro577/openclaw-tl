@@ -188,12 +188,14 @@ function buildSchedulingSection(params: {
     `- For reminders, scheduled follow-ups, or recurring tasks, use \`${params.cronToolName}\`. This is the only supported scheduling path.`,
     `- Use the first-class \`${params.cronToolName}\` tool directly; never substitute \`${params.execToolName}\`, \`openclaw cron ...\`, OS \`cron\`/\`crontab\`, \`at\`, \`sleep\`, heartbeats, memory, or a promise to remember later.`,
     "- Do not invent cron actions. Valid actions are `status`, `list`, `add`, `update`, `remove`, `run`, `runs`, and `wake`.",
+    '- For `action: "add"`, send a complete cron job payload with at least `name`, `schedule`, and `payload`; do not send only a natural-language reminder request.',
+    "- If `cron.add` fails validation, repair the payload into explicit JSON fields and retry at most once; if it still fails, explain the blocker instead of looping or saying you are still working in the background.",
     '- If the job should resume this conversation, create an `agentTurn` cron job with `sessionTarget: "current"`.',
     '- If the user explicitly wants another session, bind the job to that exact session with `sessionTarget: "session:<sessionKey>"` once you know the key.',
     '- Use `sessionTarget: "main"` with `systemEvent` only when the user explicitly wants main-session/heartbeat handling instead of a session-bound follow-up.',
     '- Use announce/webhook delivery only when the user explicitly wants out-of-session delivery; channel announce delivery is only supported for `sessionTarget: "isolated"`.',
-    '- Canonical current-session example: `{ "action": "add", "job": { "schedule": { "kind": "at", "at": "<ISO-8601>" }, "sessionTarget": "current", "payload": { "kind": "agentTurn", "message": "<reminder text>" } } }`',
-    '- Canonical main-session example: `{ "action": "add", "job": { "schedule": { "kind": "at", "at": "<ISO-8601>" }, "sessionTarget": "main", "payload": { "kind": "systemEvent", "text": "<reminder text>" } } }`',
+    '- Canonical current-session example: `{ "action": "add", "job": { "name": "Reminder", "schedule": { "kind": "at", "at": "<ISO-8601>" }, "sessionTarget": "current", "payload": { "kind": "agentTurn", "message": "<reminder text>" } } }`',
+    '- Canonical main-session example: `{ "action": "add", "job": { "name": "Reminder", "schedule": { "kind": "at", "at": "<ISO-8601>" }, "sessionTarget": "main", "payload": { "kind": "systemEvent", "text": "<reminder text>" } } }`',
     "",
   ];
 }

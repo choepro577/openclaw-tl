@@ -267,11 +267,14 @@ describe("buildAgentSystemPrompt", () => {
       "For reminders, scheduled follow-ups, or recurring tasks, use `cron`. This is the only supported scheduling path.",
     );
     expect(prompt).toContain("Do not invent cron actions.");
+    expect(prompt).toContain('For `action: "add"`, send a complete cron job payload');
+    expect(prompt).toContain("retry at most once");
     expect(prompt).toContain("`openclaw cron ...`");
     expect(prompt).toContain('`sessionTarget: "current"`');
     expect(prompt).toContain('`sessionTarget: "session:<sessionKey>"`');
     expect(prompt).toContain('`sessionTarget: "main"`');
     expect(prompt).toContain('`sessionTarget: "isolated"`');
+    expect(prompt).toContain('"name": "Reminder"');
     expect(prompt).toContain('Canonical current-session example: `{ "action": "add"');
   });
 
