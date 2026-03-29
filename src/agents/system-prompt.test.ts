@@ -242,7 +242,7 @@ describe("buildAgentSystemPrompt", () => {
     expect(prompt).toContain('`sessionTarget: "isolated"`');
   });
 
-  it("keeps scheduling guidance in minimal prompts when cron is available", () => {
+  it("keeps scheduling guidance in minimal prompts for all agents", () => {
     const prompt = buildAgentSystemPrompt({
       workspaceDir: "/tmp/openclaw",
       promptMode: "minimal",
@@ -250,6 +250,17 @@ describe("buildAgentSystemPrompt", () => {
     });
 
     expect(prompt).toContain("## Scheduling & Reminders");
+    expect(prompt).toContain('`sessionTarget: "current"`');
+  });
+
+  it("keeps scheduling guidance even when cron is not listed in the current tool set", () => {
+    const prompt = buildAgentSystemPrompt({
+      workspaceDir: "/tmp/openclaw",
+      toolNames: ["exec", "sessions_list"],
+    });
+
+    expect(prompt).toContain("## Scheduling & Reminders");
+    expect(prompt).toContain("use `cron`");
     expect(prompt).toContain('`sessionTarget: "current"`');
   });
 

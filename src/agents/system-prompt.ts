@@ -169,10 +169,7 @@ function buildVoiceSection(params: { isMinimal: boolean; ttsHint?: string }) {
   return ["## Voice (TTS)", hint, ""];
 }
 
-function buildSchedulingSection(params: { hasCron: boolean }) {
-  if (!params.hasCron) {
-    return [];
-  }
+function buildSchedulingSection() {
   return [
     "## Scheduling & Reminders",
     "- For reminders, scheduled follow-ups, or recurring tasks, use `cron`; do not rely on memory, heartbeats, or a promise to remember later.",
@@ -359,7 +356,6 @@ export function buildAgentSystemPrompt(params: {
   }
 
   const hasGateway = availableTools.has("gateway");
-  const hasCron = availableTools.has("cron") || canonicalToolNames.length === 0;
   const readToolName = resolveToolName("read");
   const execToolName = resolveToolName("exec");
   const processToolName = resolveToolName("process");
@@ -490,7 +486,7 @@ export function buildAgentSystemPrompt(params: {
     "Treat allow-once as single-command only: if another elevated command needs approval, request a fresh /approve and do not claim prior approval covered it.",
     "When approvals are required, preserve and show the full command/script exactly as provided (including chained operators like &&, ||, |, ;, or multiline shells) so the user can approve what will actually run.",
     "",
-    ...buildSchedulingSection({ hasCron }),
+    ...buildSchedulingSection(),
     ...safetySection,
     "## OpenClaw CLI Quick Reference",
     "OpenClaw is controlled via subcommands. Do not invent commands.",
