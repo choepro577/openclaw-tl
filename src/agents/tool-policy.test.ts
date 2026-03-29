@@ -22,7 +22,6 @@ function createOwnerPolicyTools() {
     },
     {
       name: "cron",
-      ownerOnly: true,
       // oxlint-disable-next-line typescript/no-explicit-any
       execute: async () => ({ content: [], details: {} }) as any,
     },
@@ -54,6 +53,10 @@ describe("tool-policy", () => {
   });
 
   it("resolves known profiles and ignores unknown ones", () => {
+    const minimal = resolveToolProfilePolicy("minimal");
+    expect(minimal?.allow).toContain("cron");
+    const messaging = resolveToolProfilePolicy("messaging");
+    expect(messaging?.allow).toContain("cron");
     const coding = resolveToolProfilePolicy("coding");
     expect(coding?.allow).toContain("read");
     expect(coding?.allow).toContain("cron");
@@ -78,7 +81,7 @@ describe("tool-policy", () => {
 
   it("identifies owner-only tools", () => {
     expect(isOwnerOnlyToolName("whatsapp_login")).toBe(true);
-    expect(isOwnerOnlyToolName("cron")).toBe(true);
+    expect(isOwnerOnlyToolName("cron")).toBe(false);
     expect(isOwnerOnlyToolName("gateway")).toBe(true);
     expect(isOwnerOnlyToolName("nodes")).toBe(true);
     expect(isOwnerOnlyToolName("read")).toBe(false);
@@ -87,7 +90,7 @@ describe("tool-policy", () => {
   it("strips owner-only tools for non-owner senders", async () => {
     const tools = createOwnerPolicyTools();
     const filtered = applyOwnerOnlyToolPolicy(tools, false);
-    expect(filtered.map((t) => t.name)).toEqual(["read"]);
+    expect(filtered.map((t) => t.name)).toEqual(["read", "cron"]);
   });
 
   it("keeps owner-only tools for the owner sender", async () => {

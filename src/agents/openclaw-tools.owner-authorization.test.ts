@@ -9,9 +9,14 @@ function readToolByName() {
 describe("createOpenClawTools owner authorization", () => {
   it("marks owner-only core tools in raw registration", () => {
     const tools = readToolByName();
-    expect(tools.get("cron")?.ownerOnly).toBe(true);
     expect(tools.get("gateway")?.ownerOnly).toBe(true);
     expect(tools.get("nodes")?.ownerOnly).toBe(true);
+  });
+
+  it("keeps cron available without owner-only gating", () => {
+    const tools = readToolByName();
+    expect(tools.get("cron")).toBeDefined();
+    expect(tools.get("cron")?.ownerOnly).not.toBe(true);
   });
 
   it("keeps canvas non-owner-only in raw registration", () => {

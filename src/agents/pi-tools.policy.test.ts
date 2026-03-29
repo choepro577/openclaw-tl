@@ -56,7 +56,7 @@ describe("resolveSubagentToolPolicy depth awareness", () => {
     const policy = resolveSubagentToolPolicy(cfg, 1);
     expect(isToolAllowedByPolicyName("sessions_send", policy)).toBe(true);
     expect(isToolAllowedByPolicyName("a_to_a_send", policy)).toBe(true);
-    expect(isToolAllowedByPolicyName("cron", policy)).toBe(false);
+    expect(isToolAllowedByPolicyName("cron", policy)).toBe(true);
   });
 
   it("applies subagent tools.allow to re-enable default-denied tools", () => {
@@ -126,10 +126,10 @@ describe("resolveSubagentToolPolicy depth awareness", () => {
     expect(isToolAllowedByPolicyName("sessions_history", policy)).toBe(true);
   });
 
-  it("depth-1 orchestrator still denies gateway, cron, memory", () => {
+  it("depth-1 orchestrator still denies gateway and memory, but allows cron", () => {
     const policy = resolveSubagentToolPolicy(baseCfg, 1);
     expect(isToolAllowedByPolicyName("gateway", policy)).toBe(false);
-    expect(isToolAllowedByPolicyName("cron", policy)).toBe(false);
+    expect(isToolAllowedByPolicyName("cron", policy)).toBe(true);
     expect(isToolAllowedByPolicyName("memory_search", policy)).toBe(false);
     expect(isToolAllowedByPolicyName("memory_get", policy)).toBe(false);
   });
