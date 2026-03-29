@@ -254,6 +254,22 @@ function prefersInternalSessionDelivery(params: {
   return isInternalMessageChannel(routeChannel);
 }
 
+function resolveCronJobSourceSessionKey(params: {
+  job: CronJob;
+  agentId: string;
+  mainKey?: string;
+}): string | undefined {
+  const rawSessionKey = params.job.sessionKey?.trim();
+  if (!rawSessionKey) {
+    return undefined;
+  }
+  return resolveCronAgentSessionKey({
+    sessionKey: rawSessionKey,
+    agentId: params.agentId,
+    mainKey: params.mainKey,
+  });
+}
+
 export async function runCronIsolatedAgentTurn(params: {
   cfg: OpenClawConfig;
   deps: CliDeps;
@@ -305,6 +321,14 @@ export async function runCronIsolatedAgentTurn(params: {
 
   const baseSessionKey = (params.sessionKey?.trim() || `cron:${params.job.id}`).trim();
   const agentSessionKey = resolveCronAgentSessionKey({ sessionKey: baseSessionKey, agentId });
+  const sourceSessionKey = resolveCronJobSourceSessionKey({
+    job: params.job,
+    agentId,
+    mainKey: params.cfg.session?.mainKey,
+  });
+  const executionSessionAlreadyVisible =
+    typeof sourceSessionKey === "string" &&
+    sourceSessionKey.trim().toLowerCase() === agentSessionKey.trim().toLowerCase();
 
   const workspaceDirRaw = resolveAgentWorkspaceDir(params.cfg, agentId);
   const agentDir = resolveAgentDir(params.cfg, agentId);
@@ -925,6 +949,7 @@ export async function runCronIsolatedAgentTurn(params: {
     skipMessagingToolDelivery,
     preferInternalSessionDelivery,
     allowInternalSessionFallbackOnUnresolved,
+    executionSessionAlreadyVisible,
     deliverToInternalSession: params.internalSessionFallback,
     deliveryBestEffort,
     deliveryPayloadHasStructuredContent,

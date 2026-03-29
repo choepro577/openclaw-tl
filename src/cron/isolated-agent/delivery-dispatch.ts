@@ -111,6 +111,7 @@ type DispatchCronDeliveryParams = {
   skipMessagingToolDelivery?: boolean;
   preferInternalSessionDelivery?: boolean;
   allowInternalSessionFallbackOnUnresolved?: boolean;
+  executionSessionAlreadyVisible?: boolean;
   deliverToInternalSession?: (
     request: InternalCronSessionFallbackRequest,
   ) => Promise<InternalCronSessionFallbackResult>;
@@ -542,6 +543,11 @@ export async function dispatchCronDelivery(
     const prepared = await prepareTextDelivery();
     if (prepared) {
       return prepared;
+    }
+    if (params.executionSessionAlreadyVisible) {
+      deliveryAttempted = true;
+      delivered = true;
+      return null;
     }
     if (!params.deliverToInternalSession) {
       if (!options?.required) {

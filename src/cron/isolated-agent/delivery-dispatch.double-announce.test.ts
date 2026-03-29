@@ -411,6 +411,31 @@ describe("dispatchCronDelivery — double-announce guard", () => {
     expect(state.deliveryAttempted).toBe(true);
   });
 
+  it("does not inject a second message when cron already ran on the same visible session", async () => {
+    vi.mocked(countActiveDescendantRuns).mockReturnValue(0);
+    vi.mocked(isLikelyInterimCronMessage).mockReturnValue(false);
+    const internalFallback = vi.fn().mockResolvedValue({
+      handled: true,
+      delivered: true,
+      sessionKey: "agent:main:openai-user:session-a",
+    });
+
+    const params = makeBaseParams({ synthesizedText: "Already in this session." }) as Record<
+      string,
+      unknown
+    >;
+    params.preferInternalSessionDelivery = true;
+    params.executionSessionAlreadyVisible = true;
+    params.deliverToInternalSession = internalFallback;
+
+    const state = await dispatchCronDelivery(params as ReturnType<typeof makeBaseParams>);
+
+    expect(internalFallback).not.toHaveBeenCalled();
+    expect(deliverOutboundPayloads).not.toHaveBeenCalled();
+    expect(state.delivered).toBe(true);
+    expect(state.deliveryAttempted).toBe(true);
+  });
+
   it("falls back to internal session delivery when implicit external routing cannot be resolved", async () => {
     vi.mocked(countActiveDescendantRuns).mockReturnValue(0);
     vi.mocked(isLikelyInterimCronMessage).mockReturnValue(false);
