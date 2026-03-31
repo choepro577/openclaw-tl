@@ -248,6 +248,59 @@ describe("normalizeCronJobCreate", () => {
     expect(delivery.accountId).toBe("coordinator");
   });
 
+  it("defaults active-user agentTurn jobs to announce delivery", () => {
+    const normalized = normalizeCronJobCreate({
+      name: "active-user-reminder",
+      enabled: true,
+      schedule: { kind: "at", at: "2026-01-12T18:00:00Z" },
+      sessionTarget: "active-user",
+      wakeMode: "now",
+      payload: {
+        kind: "agentTurn",
+        message: "Nhac hop gap",
+      },
+    }) as unknown as Record<string, unknown>;
+
+    expect(normalized.sessionTarget).toBe("active-user");
+    expect(normalized.delivery).toEqual({ mode: "announce" });
+  });
+
+  it("preserves cross-agent relay metadata on agentTurn payloads", () => {
+    const normalized = normalizeCronJobCreate({
+      name: "relay reminder",
+      enabled: true,
+      schedule: { kind: "at", at: "2026-01-12T18:00:00Z" },
+      sessionTarget: "active-user",
+      wakeMode: "now",
+      payload: {
+        kind: "agentTurn",
+        message: "Chieu nay hop luc 14:00.",
+        relay: {
+          kind: " cross-agent-user-delivery ",
+          deliveryKind: " schedule ",
+          sourceAgentId: " tl00275 ",
+          sourceAgentName: " Nguyen Duc Hieu Assistant ",
+          targetAgentId: " tl01578 ",
+          targetAgentName: " Nguyen Tester Assistant ",
+          attribution: " always ",
+        },
+      },
+    }) as unknown as Record<string, unknown>;
+
+    const payload = normalized.payload as {
+      relay?: Record<string, unknown>;
+    };
+    expect(payload.relay).toEqual({
+      kind: "cross-agent-user-delivery",
+      deliveryKind: "schedule",
+      sourceAgentId: "tl00275",
+      sourceAgentName: "Nguyen Duc Hieu Assistant",
+      targetAgentId: "tl01578",
+      targetAgentName: "Nguyen Tester Assistant",
+      attribution: "always",
+    });
+  });
+
   it("strips empty accountId from delivery", () => {
     const normalized = normalizeIsolatedAgentTurnCreateJob({
       name: "empty account",

@@ -32,6 +32,7 @@ import {
 } from "../../agents/subagent-registry.js";
 import { resolveAgentTimeoutMs } from "../../agents/timeout.js";
 import { deriveSessionTotalTokens, hasNonzeroUsage } from "../../agents/usage.js";
+import { buildCrossAgentScheduledRelayPrompt } from "../../agents/user-delivery-relay.js";
 import { ensureAgentWorkspace } from "../../agents/workspace.js";
 import {
   normalizeThinkLevel,
@@ -48,6 +49,7 @@ import {
 } from "../../config/sessions.js";
 import { resolveStorePath } from "../../config/sessions/paths.js";
 import type { AgentDefaultsConfig } from "../../config/types.js";
+import { resolveActiveUserSessionTarget } from "../../gateway/active-user-session-target.js";
 import { registerAgentRunContext } from "../../infra/agent-events.js";
 import { logWarn } from "../../logger.js";
 import { normalizeAgentId } from "../../routing/session-key.js";
@@ -175,6 +177,7 @@ async function resolveCronDeliveryContext(params: {
   job: CronJob;
   agentId: string;
   deliveryContract: IsolatedDeliveryContract;
+  deliverySessionKey?: string;
 }) {
   const deliveryPlan = resolveCronDeliveryPlan(params.job);
   if (!deliveryPlan.requested) {
@@ -202,7 +205,7 @@ async function resolveCronDeliveryContext(params: {
     channel: deliveryPlan.channel ?? "last",
     to: deliveryPlan.to,
     accountId: deliveryPlan.accountId,
-    sessionKey: params.job.sessionKey,
+    sessionKey: params.deliverySessionKey ?? params.job.sessionKey,
   });
   return {
     deliveryPlan,
@@ -236,10 +239,19 @@ function prefersInternalSessionDelivery(params: {
   cfg: OpenClawConfig;
   agentId: string;
   sessionKey?: string;
+  sessionEntry?: {
+    lastChannel?: string | null;
+    deliveryContext?: { channel?: string | null } | null;
+  };
   allowInternalSessionFallback: boolean;
 }): boolean {
   if (!params.allowInternalSessionFallback) {
     return false;
+  }
+  const routeChannelFromEntry =
+    deliveryContextFromSession(params.sessionEntry)?.channel ?? params.sessionEntry?.lastChannel;
+  if (routeChannelFromEntry) {
+    return isInternalMessageChannel(routeChannelFromEntry);
   }
   const sessionKey = params.sessionKey?.trim();
   if (!sessionKey) {
@@ -425,7 +437,7 @@ export async function runCronIsolatedAgentTurn(params: {
     agentId,
     nowMs: now,
     // Isolated cron runs must not carry prior turn context across executions.
-    forceNew: params.job.sessionTarget === "isolated",
+    forceNew: params.job.sessionTarget === "isolated" || params.job.sessionTarget === "active-user",
   });
   const runSessionId = cronSession.sessionEntry.sessionId;
   const runSessionKey = baseSessionKey.startsWith("cron:")
@@ -514,12 +526,27 @@ export async function runCronIsolatedAgentTurn(params: {
   });
 
   const agentPayload = params.job.payload.kind === "agentTurn" ? params.job.payload : null;
+  const activeUserTarget =
+    params.job.sessionTarget === "active-user"
+      ? await resolveActiveUserSessionTarget({
+          cfg: cfgWithAgentDefaults,
+          agentId,
+        })
+      : undefined;
+  if (activeUserTarget && !activeUserTarget.ok) {
+    return withRunSession({
+      status: "error",
+      error: activeUserTarget.error,
+    });
+  }
   const { deliveryPlan, deliveryRequested, resolvedDelivery, toolPolicy } =
     await resolveCronDeliveryContext({
       cfg: cfgWithAgentDefaults,
       job: params.job,
       agentId,
       deliveryContract,
+      deliverySessionKey:
+        activeUserTarget && activeUserTarget.ok ? activeUserTarget.sessionKey : undefined,
     });
   const allowInternalSessionFallbackOnUnresolved =
     deliveryRequested && shouldAllowInternalSessionFallback({ deliveryPlan });
@@ -528,12 +555,24 @@ export async function runCronIsolatedAgentTurn(params: {
     prefersInternalSessionDelivery({
       cfg: cfgWithAgentDefaults,
       agentId,
-      sessionKey: params.job.sessionKey,
+      sessionKey:
+        activeUserTarget && activeUserTarget.ok
+          ? activeUserTarget.sessionKey
+          : params.job.sessionKey,
+      sessionEntry: activeUserTarget && activeUserTarget.ok ? activeUserTarget.entry : undefined,
       allowInternalSessionFallback: allowInternalSessionFallbackOnUnresolved,
     });
 
   const { formattedTime, timeLine } = resolveCronStyleNow(params.cfg, now);
-  const base = `[cron:${params.job.id} ${params.job.name}] ${params.message}`.trim();
+  const relayPrompt =
+    agentPayload?.relay?.kind === "cross-agent-user-delivery"
+      ? buildCrossAgentScheduledRelayPrompt({
+          relay: agentPayload.relay,
+          message: params.message,
+          timeLine,
+        })
+      : undefined;
+  const base = relayPrompt ?? `[cron:${params.job.id} ${params.job.name}] ${params.message}`.trim();
 
   // SECURITY: Wrap external hook content with security boundaries to prevent prompt injection
   // unless explicitly allowed via a dangerous config override.
@@ -569,7 +608,7 @@ export async function runCronIsolatedAgentTurn(params: {
     commandBody = `${safeContent}\n\n${timeLine}`.trim();
   } else {
     // Internal/trusted source - use original format
-    commandBody = `${base}\n${timeLine}`.trim();
+    commandBody = relayPrompt ? base : `${base}\n${timeLine}`.trim();
   }
   commandBody = appendCronDeliveryInstruction({ commandBody, deliveryRequested });
 

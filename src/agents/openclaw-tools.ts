@@ -26,6 +26,8 @@ import { createSessionsSpawnTool } from "./tools/sessions-spawn-tool.js";
 import { createSessionsYieldTool } from "./tools/sessions-yield-tool.js";
 import { createSubagentsTool } from "./tools/subagents-tool.js";
 import { createTtsTool } from "./tools/tts-tool.js";
+import { createUserNotifyTool } from "./tools/user-notify-tool.js";
+import { createUserScheduleTool } from "./tools/user-schedule-tool.js";
 import { createWebFetchTool, createWebSearchTool } from "./tools/web-tools.js";
 import { resolveWorkspaceRoot } from "./workspace-dir.js";
 
@@ -181,6 +183,7 @@ export function createOpenClawTools(
     createAgentsListTool({
       agentSessionKey: options?.agentSessionKey,
       requesterAgentIdOverride: options?.requesterAgentIdOverride,
+      config: options?.config,
     }),
     createSessionsListTool({
       agentSessionKey: options?.agentSessionKey,
@@ -195,6 +198,17 @@ export function createOpenClawTools(
     createSessionsSendTool({
       agentSessionKey: options?.agentSessionKey,
       agentChannel: options?.agentChannel,
+      sandboxed: options?.sandboxed,
+      config: options?.config,
+    }),
+    createUserNotifyTool({
+      agentSessionKey: options?.agentSessionKey,
+      agentChannel: options?.agentChannel,
+      sandboxed: options?.sandboxed,
+      config: options?.config,
+    }),
+    createUserScheduleTool({
+      agentSessionKey: options?.agentSessionKey,
       sandboxed: options?.sandboxed,
       config: options?.config,
     }),

@@ -5,7 +5,10 @@ import { describe, expect, it, vi } from "vitest";
 import type { OpenClawConfig } from "../config/config.js";
 import { loadSessionStore } from "../config/sessions.js";
 import { toAgentStoreSessionKey } from "../routing/session-key.js";
-import { deliverCronResultToInternalSession } from "./cron-internal-session-delivery.js";
+import {
+  deliverCronResultToActiveUserSession,
+  deliverCronResultToInternalSession,
+} from "./cron-internal-session-delivery.js";
 import { readSessionMessages, resolveGatewaySessionStoreTarget } from "./session-utils.js";
 
 function makeCfg(storePath: string): OpenClawConfig {
@@ -246,5 +249,62 @@ describe("deliverCronResultToInternalSession", () => {
 
     expect(nodeSendToSession).toHaveBeenCalledTimes(1);
     expect(readAssistantTexts(cfg, sessionKey)).toEqual(["Only once"]);
+  });
+
+  it("delivers active-user cron results into the newest internal user session", async () => {
+    const storePath = await createStorePath("cron-active-user-internal");
+    const cfg = makeCfg(storePath);
+    const now = Date.now();
+    const olderUiKey = toAgentStoreSessionKey({
+      agentId: "target",
+      requestKey: "openai-user:older",
+      mainKey: "main",
+    });
+    const latestUiKey = toAgentStoreSessionKey({
+      agentId: "target",
+      requestKey: "openai-user:latest",
+      mainKey: "main",
+    });
+    await writeStore(storePath, {
+      [olderUiKey]: {
+        sessionId: "sess-ui-old",
+        updatedAt: now - 10 * 60 * 1000,
+        deliveryContext: { channel: "webchat" },
+        lastChannel: "webchat",
+      },
+      [latestUiKey]: {
+        sessionId: "sess-ui-latest",
+        updatedAt: now - 2 * 60 * 1000,
+        deliveryContext: { channel: "webchat" },
+        lastChannel: "webchat",
+      },
+      "agent:target:a2a:from:main": {
+        sessionId: "sess-a2a",
+        updatedAt: now,
+        deliveryContext: { channel: "webchat" },
+        lastChannel: "webchat",
+      },
+    });
+    const broadcast = vi.fn();
+    const nodeSendToSession = vi.fn();
+
+    const result = await deliverCronResultToActiveUserSession({
+      cfg,
+      agentId: "target",
+      message: "Nhac anh Cuong xuong hop gap ngay.",
+      idempotencyKey: "idem-active-1",
+      runId: "run-active-1",
+      context: { broadcast, nodeSendToSession },
+    });
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        ok: true,
+        delivered: true,
+        sessionKey: latestUiKey,
+        reason: "active",
+      }),
+    );
+    expect(readAssistantTexts(cfg, latestUiKey)).toContain("Nhac anh Cuong xuong hop gap ngay.");
   });
 });

@@ -13,7 +13,12 @@ export type CronSchedule =
       staggerMs?: number;
     };
 
-export type CronSessionTarget = "main" | "isolated" | "current" | `session:${string}`;
+export type CronSessionTarget =
+  | "main"
+  | "isolated"
+  | "current"
+  | "active-user"
+  | `session:${string}`;
 export type CronWakeMode = "next-heartbeat" | "now";
 
 export type CronMessageChannel = ChannelId | "last";
@@ -82,6 +87,20 @@ export type CronPayload = { kind: "systemEvent"; text: string } | CronAgentTurnP
 
 export type CronPayloadPatch = { kind: "systemEvent"; text?: string } | CronAgentTurnPayloadPatch;
 
+export type CronCrossAgentRelayDeliveryKind = "notify" | "schedule";
+
+export type CronCrossAgentRelayAttribution = "always";
+
+export type CronCrossAgentUserDeliveryRelay = {
+  kind: "cross-agent-user-delivery";
+  deliveryKind: CronCrossAgentRelayDeliveryKind;
+  sourceAgentId: string;
+  sourceAgentName: string;
+  targetAgentId: string;
+  targetAgentName: string;
+  attribution: CronCrossAgentRelayAttribution;
+};
+
 type CronAgentTurnPayloadFields = {
   message: string;
   /** Optional model override (provider/model or alias). */
@@ -97,6 +116,7 @@ type CronAgentTurnPayloadFields = {
   channel?: CronMessageChannel;
   to?: string;
   bestEffortDeliver?: boolean;
+  relay?: CronCrossAgentUserDeliveryRelay;
 };
 
 type CronAgentTurnPayload = {

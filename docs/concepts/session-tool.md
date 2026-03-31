@@ -14,7 +14,9 @@ Goal: small, hard-to-misuse tool set so agents can list sessions, fetch history,
 - `sessions_list`
 - `sessions_history`
 - `sessions_send`
+- `user_notify`
 - `a_to_a_send`
+- `user_schedule`
 - `sessions_spawn`
 
 ## Key Model
@@ -119,6 +121,9 @@ Behavior:
 
 - OpenClaw derives the target pair session as `agent:<targetAgentId>:a2a:from:<requesterAgentId>`.
 - The target pair session is created lazily on first use and reused for later calls from the same requester agent to the same target agent.
+- The pair session is coordination-only. It is not the target agent's user-facing session.
+- Use `user_notify` for notify-now tasks that should reach the target agent's user.
+- Use `user_schedule` for future reminders/follow-ups that should reach the target agent's user later.
 - `timeoutSeconds = 0`: enqueue and return `{ runId, status: "accepted" }`.
 - `timeoutSeconds > 0`: wait up to N seconds for completion, then return `{ runId, status: "ok", reply }`.
 - If that wait times out, the background flow still keeps waiting for the target run.
@@ -128,6 +133,42 @@ Behavior:
 - Reply exactly `REPLY_SKIP` to stop the ping-pong.
 - Max turns is `session.agentToAgent.maxPingPongTurns` (0–5, default 5).
 - Unlike `sessions_send`, there is no target-channel announce step in v1.
+
+## user_notify
+
+Notify another agent's user immediately without exposing session resolution details to the model.
+
+Parameters:
+
+- `agentId` (required; target agent id)
+- `message` (required)
+
+Behavior:
+
+- OpenClaw resolves the target agent's latest active user-facing session (24h freshness window).
+- Technical sessions are ignored for this lookup (`a2a`, `cron`, `hook`, `node`, `subagent`, `acp`).
+- The requester/target pair session key is also excluded.
+- If no active user-facing session exists, OpenClaw falls back to the target agent's `main` session.
+- The request is sent into that resolved session as an inter-session nested agent run.
+
+## user_schedule
+
+Schedule a reminder or follow-up for another agent's user.
+
+Parameters:
+
+- `agentId` (required; target agent id)
+- `name` (required)
+- `schedule` (required; same cron schedule object shape as `cron.add`)
+- `message` (required)
+- `description?`
+
+Behavior:
+
+- Creates a cron job owned by the target agent.
+- Uses `sessionTarget: "active-user"` with `payload.kind: "agentTurn"`.
+- When the job fires, OpenClaw resolves the target agent's latest active user-facing session again at fire time.
+- If no active user-facing session exists at fire time, OpenClaw falls back to the target agent's `main` session.
 
 ## Channel Field
 

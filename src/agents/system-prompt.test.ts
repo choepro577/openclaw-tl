@@ -278,6 +278,28 @@ describe("buildAgentSystemPrompt", () => {
     expect(prompt).toContain('Canonical current-session example: `{ "action": "add"');
   });
 
+  it("teaches cross-agent user delivery via user_notify and user_schedule", () => {
+    const prompt = buildAgentSystemPrompt({
+      workspaceDir: "/tmp/openclaw",
+      toolNames: ["cron", "agents_list", "user_notify", "user_schedule", "a_to_a_send"],
+    });
+
+    expect(prompt).toContain("Notify another agent's user right now");
+    expect(prompt).toContain("use `user_notify`");
+    expect(prompt).toContain("use `user_schedule`");
+    expect(prompt).toContain(
+      "runtime adds cross-agent source attribution when the reminder fires in that agent's active user session",
+    );
+    expect(prompt).toContain("do not schedule into the pair session");
+    expect(prompt).toContain("Pass only the core content to convey");
+    expect(prompt).toContain("runtime will relay it naturally and mention the source assistant");
+    expect(prompt).toContain("call `agents_list` and read `crossAgentTargets`");
+    expect(prompt).toContain(
+      "Do not use `agents` or `allowAny` there to decide cross-agent delivery",
+    );
+    expect(prompt).toContain('`sessionTarget: "active-user"`');
+  });
+
   it("keeps scheduling guidance in minimal prompts for all agents", () => {
     const prompt = buildAgentSystemPrompt({
       workspaceDir: "/tmp/openclaw",
@@ -359,7 +381,9 @@ describe("buildAgentSystemPrompt", () => {
     expect(prompt).not.toContain('runtime="acp" requires `agentId`');
     expect(prompt).not.toContain("not ACP harness ids");
     expect(prompt).toContain("- sessions_spawn: Spawn an isolated sub-agent session");
-    expect(prompt).toContain("- agents_list: List OpenClaw agent ids allowed for sessions_spawn");
+    expect(prompt).toContain(
+      "- agents_list: List agent ids for two purposes: `agents` for sessions_spawn and `crossAgentTargets` for a_to_a_send/user_notify/user_schedule discovery",
+    );
   });
 
   it("omits ACP harness spawn guidance for sandboxed sessions and shows ACP block note", () => {

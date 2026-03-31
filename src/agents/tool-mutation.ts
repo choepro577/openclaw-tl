@@ -7,6 +7,8 @@ const MUTATING_TOOL_NAMES = new Set([
   "process",
   "message",
   "sessions_send",
+  "user_notify",
+  "user_schedule",
   "a_to_a_send",
   "cron",
   "gateway",
@@ -108,6 +110,8 @@ export function isMutatingToolCall(toolName: string, args: unknown): boolean {
     case "exec":
     case "bash":
     case "sessions_send":
+    case "user_notify":
+    case "user_schedule":
     case "a_to_a_send":
       return true;
     case "process":
@@ -161,6 +165,7 @@ export function buildToolActionFingerprint(
     "newPath",
     "to",
     "target",
+    "agentId",
     "messageId",
     "sessionKey",
     "jobId",

@@ -23,6 +23,12 @@ function buildAgentSessionLines(params: {
     `Agent 2 (target) id: ${params.targetAgentId}.`,
     `Agent 2 (target) pair session: ${params.targetSessionKey}.`,
     "Agent 2 pair session is dedicated to Agent 1 for this relationship.",
+    "This pair session is coordination-only, not a user-facing session.",
+    "Do not treat the pair session as the target agent's active user conversation.",
+    "If the task is to notify the target agent's user right now, use user_notify(agentId, message) and pass only the core content to convey.",
+    "If the task is to schedule a future reminder or follow-up for the target agent's user, use user_schedule(...) and pass only the core reminder content.",
+    "For cross-agent user delivery, the runtime will relay the message naturally and mention the source assistant automatically.",
+    'Do not call raw cron.add with sessionTarget="current" in this pair session.',
   ].filter((line): line is string => Boolean(line));
 }
 

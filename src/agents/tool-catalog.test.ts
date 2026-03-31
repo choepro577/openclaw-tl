@@ -9,5 +9,7 @@ describe("tool-catalog", () => {
     expect(policy!.allow).toContain("web_fetch");
     expect(policy!.allow).toContain("image_generate");
     expect(policy!.allow).toContain("a_to_a_send");
+    expect(policy!.allow).toContain("user_notify");
+    expect(policy!.allow).toContain("user_schedule");
   });
 });

@@ -11,6 +11,16 @@ function expectCronStaggerMs(job: CronJob, expected: number): void {
   }
 }
 
+const CROSS_AGENT_RELAY = {
+  kind: "cross-agent-user-delivery" as const,
+  deliveryKind: "schedule" as const,
+  sourceAgentId: "tl00275",
+  sourceAgentName: "Nguyen Duc Hieu Assistant",
+  targetAgentId: "tl01578",
+  targetAgentName: "Nguyen Tester Assistant",
+  attribution: "always" as const,
+};
+
 describe("applyJobPatch", () => {
   const createIsolatedAgentTurnJob = (
     id: string,
@@ -211,6 +221,52 @@ describe("applyJobPatch", () => {
     expect(payload.kind).toBe("agentTurn");
     if (payload.kind === "agentTurn") {
       expect(payload.lightContext).toBe(true);
+    }
+  });
+
+  it("preserves existing relay metadata when patching other agentTurn fields", () => {
+    const job = createIsolatedAgentTurnJob("job-relay-preserve", {
+      mode: "announce",
+      channel: "telegram",
+    });
+    job.payload = {
+      kind: "agentTurn",
+      message: "Nhac hop gap",
+      relay: CROSS_AGENT_RELAY,
+    };
+
+    applyJobPatch(job, {
+      payload: {
+        kind: "agentTurn",
+        message: "Nhac hop luc 14:00",
+      },
+    });
+
+    expect(job.payload.kind).toBe("agentTurn");
+    if (job.payload.kind === "agentTurn") {
+      expect(job.payload.message).toBe("Nhac hop luc 14:00");
+      expect(job.payload.relay).toEqual(CROSS_AGENT_RELAY);
+    }
+  });
+
+  it("applies relay metadata when switching payload kind to agentTurn", () => {
+    const job = createIsolatedAgentTurnJob("job-relay-replace", {
+      mode: "announce",
+      channel: "telegram",
+    });
+    job.payload = { kind: "systemEvent", text: "ping" };
+
+    applyJobPatch(job, {
+      payload: {
+        kind: "agentTurn",
+        message: "Nhac hop luc 14:00",
+        relay: CROSS_AGENT_RELAY,
+      },
+    });
+
+    expect(job.payload.kind).toBe("agentTurn");
+    if (job.payload.kind === "agentTurn") {
+      expect(job.payload.relay).toEqual(CROSS_AGENT_RELAY);
     }
   });
 
@@ -457,7 +513,9 @@ describe("createJob rejects sessionTarget main for non-default agents", () => {
           },
         },
       }),
-    ).toThrow('cron channel delivery config is only supported for sessionTarget="isolated"');
+    ).toThrow(
+      'cron channel delivery config is only supported for sessionTarget="isolated" or "active-user"',
+    );
   });
 });
 

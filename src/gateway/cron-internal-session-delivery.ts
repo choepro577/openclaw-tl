@@ -8,6 +8,7 @@ import { normalizeAgentId, parseAgentSessionKey } from "../routing/session-key.j
 import { isCronRunSessionKey } from "../sessions/session-key-utils.js";
 import { deliveryContextFromSession } from "../utils/delivery-context.js";
 import { isInternalMessageChannel } from "../utils/message-channel.js";
+import { resolveActiveUserSessionTarget } from "./active-user-session-target.js";
 import type { GatewayRequestContext } from "./server-methods/types.js";
 import { appendAndBroadcastAssistantChatMessage } from "./session-chat-inject.js";
 import { createGatewaySession } from "./session-create.js";
@@ -223,4 +224,94 @@ export async function deliverCronResultToInternalSession(params: {
     reason: target.reason,
     duplicate: appended.duplicate === true,
   };
+}
+
+async function appendCronMessageToResolvedTarget(params: {
+  target: {
+    sessionKey: string;
+    storePath: string;
+    entry: SessionEntry;
+    reason: "active" | "main";
+  };
+  agentId: string;
+  message: string;
+  idempotencyKey: string;
+  runId: string;
+  context: Pick<GatewayRequestContext, "broadcast" | "nodeSendToSession">;
+}): Promise<
+  | {
+      ok: true;
+      delivered: true;
+      sessionKey: string;
+      reason: "active" | "main";
+      duplicate: boolean;
+    }
+  | { ok: false; error: string }
+> {
+  const appended = appendAndBroadcastAssistantChatMessage({
+    context: params.context,
+    sessionKey: params.target.sessionKey,
+    message: params.message,
+    sessionId: params.target.entry.sessionId,
+    storePath: params.target.storePath,
+    sessionFile: params.target.entry.sessionFile,
+    agentId: normalizeAgentId(params.agentId),
+    createIfMissing: true,
+    idempotencyKey: params.idempotencyKey,
+    runId: params.runId,
+  });
+  if (!appended.ok) {
+    return {
+      ok: false,
+      error: appended.error ?? "failed to append internal fallback message",
+    };
+  }
+  return {
+    ok: true,
+    delivered: true,
+    sessionKey: params.target.sessionKey,
+    reason: params.target.reason,
+    duplicate: appended.duplicate === true,
+  };
+}
+
+export async function deliverCronResultToActiveUserSession(params: {
+  cfg: OpenClawConfig;
+  agentId: string;
+  message: string;
+  idempotencyKey: string;
+  runId: string;
+  context: Pick<GatewayRequestContext, "broadcast" | "nodeSendToSession">;
+}): Promise<
+  | {
+      ok: true;
+      delivered: true;
+      sessionKey: string;
+      reason: "active" | "main";
+      duplicate: boolean;
+    }
+  | { ok: false; error: string }
+> {
+  const target = await resolveActiveUserSessionTarget({
+    cfg: params.cfg,
+    agentId: params.agentId,
+  });
+  if (!target.ok) {
+    return target;
+  }
+  const channel = deliveryContextFromSession(target.entry)?.channel ?? target.entry.lastChannel;
+  if (!isInternalMessageChannel(channel)) {
+    return {
+      ok: false,
+      error: `resolved active-user session is not internal: ${target.sessionKey}`,
+    };
+  }
+  return await appendCronMessageToResolvedTarget({
+    target,
+    agentId: params.agentId,
+    message: params.message,
+    idempotencyKey: params.idempotencyKey,
+    runId: params.runId,
+    context: params.context,
+  });
 }

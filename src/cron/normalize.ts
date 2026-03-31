@@ -160,6 +160,38 @@ function coercePayload(payload: UnknownRecord) {
   ) {
     delete next.allowUnsafeExternalContent;
   }
+  if ("relay" in next) {
+    const relay = isRecord(next.relay) ? { ...next.relay } : null;
+    if (!relay) {
+      delete next.relay;
+    } else {
+      const fields = [
+        "kind",
+        "deliveryKind",
+        "sourceAgentId",
+        "sourceAgentName",
+        "targetAgentId",
+        "targetAgentName",
+        "attribution",
+      ] as const;
+      for (const field of fields) {
+        const raw = relay[field];
+        if (typeof raw === "string") {
+          const trimmed = raw.trim();
+          if (trimmed) {
+            relay[field] = trimmed;
+            continue;
+          }
+        }
+        delete relay[field];
+      }
+      if (Object.keys(relay).length > 0) {
+        next.relay = relay;
+      } else {
+        delete next.relay;
+      }
+    }
+  }
   return next;
 }
 
@@ -222,7 +254,7 @@ function normalizeSessionTarget(raw: unknown) {
   }
   const trimmed = raw.trim();
   const lower = trimmed.toLowerCase();
-  if (lower === "main" || lower === "isolated" || lower === "current") {
+  if (lower === "main" || lower === "isolated" || lower === "current" || lower === "active-user") {
     return lower;
   }
   // Support custom session IDs with "session:" prefix
@@ -499,10 +531,12 @@ export function normalizeCronJobInput(
     const payload = isRecord(next.payload) ? next.payload : null;
     const payloadKind = payload && typeof payload.kind === "string" ? payload.kind : "";
     const sessionTarget = typeof next.sessionTarget === "string" ? next.sessionTarget : "";
-    // Support "isolated", custom session IDs (session:xxx), and resolved "current" as isolated-like targets
+    // Support isolated-style cron execution targets, including active-user
+    // delivery that resolves the target session at fire time.
     const isIsolatedAgentTurn =
       sessionTarget === "isolated" ||
       sessionTarget === "current" ||
+      sessionTarget === "active-user" ||
       sessionTarget.startsWith("session:") ||
       (sessionTarget === "" && payloadKind === "agentTurn");
     const hasDelivery = "delivery" in next && next.delivery !== undefined;

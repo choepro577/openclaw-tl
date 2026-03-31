@@ -124,6 +124,7 @@ function buildMessagingSection(params: {
   inlineButtonsEnabled: boolean;
   runtimeChannel?: string;
   messageToolHints?: string[];
+  userNotifyToolName: string;
 }) {
   if (params.isMinimal) {
     return [];
@@ -133,6 +134,15 @@ function buildMessagingSection(params: {
     "- Reply in current session → automatically routes to the source channel (Signal, Telegram, etc.)",
     "- Cross-session messaging → use sessions_send(sessionKey, message)",
     "- Cross-agent pair messaging → use a_to_a_send(agentId, message)",
+    params.availableTools.has("user_notify")
+      ? `- Notify another agent's user right now → use \`${params.userNotifyToolName}\``
+      : undefined,
+    params.availableTools.has("agents_list") &&
+    (params.availableTools.has("a_to_a_send") ||
+      params.availableTools.has("user_notify") ||
+      params.availableTools.has("user_schedule"))
+      ? "- If you need another assistant's configured `agentId`, call `agents_list` and read `crossAgentTargets`. Do not use `agents` or `allowAny` there to decide cross-agent delivery."
+      : undefined,
     "- Sub-agent orchestration → use subagents(action=list|steer|kill)",
     `- Runtime-generated completion events may ask for a user update. Rewrite those in your normal assistant voice and send the update (do not forward raw internal metadata or default to ${SILENT_REPLY_TOKEN}).`,
     "- Never use exec/curl for provider messaging; OpenClaw handles all routing internally.",
@@ -155,7 +165,7 @@ function buildMessagingSection(params: {
           .join("\n")
       : "",
     "",
-  ];
+  ].filter(Boolean);
 }
 
 function buildVoiceSection(params: { isMinimal: boolean; ttsHint?: string }) {
@@ -173,8 +183,12 @@ function buildSchedulingSection(params: {
   hasCron: boolean;
   cronToolName: string;
   execToolName: string;
+  hasUserNotify: boolean;
+  userNotifyToolName: string;
+  hasUserSchedule: boolean;
+  userScheduleToolName: string;
 }) {
-  if (!params.hasCron) {
+  if (!params.hasCron && !params.hasUserSchedule) {
     return [
       "## Scheduling & Reminders",
       `- Scheduling is unavailable in this session because \`${params.cronToolName}\` is not in the current tool set.`,
@@ -185,19 +199,47 @@ function buildSchedulingSection(params: {
   }
   return [
     "## Scheduling & Reminders",
-    `- For reminders, scheduled follow-ups, or recurring tasks, use \`${params.cronToolName}\`. This is the only supported scheduling path.`,
-    `- Use the first-class \`${params.cronToolName}\` tool directly; never substitute \`${params.execToolName}\`, \`openclaw cron ...\`, OS \`cron\`/\`crontab\`, \`at\`, \`sleep\`, heartbeats, memory, or a promise to remember later.`,
+    params.hasCron
+      ? `- For reminders, scheduled follow-ups, or recurring tasks, use \`${params.cronToolName}\`. ${params.hasUserSchedule ? "This is the primary scheduling path." : "This is the only supported scheduling path."}`
+      : undefined,
+    params.hasCron
+      ? `- Use the first-class \`${params.cronToolName}\` tool directly; never substitute \`${params.execToolName}\`, \`openclaw cron ...\`, OS \`cron\`/\`crontab\`, \`at\`, \`sleep\`, heartbeats, memory, or a promise to remember later.`
+      : undefined,
+    params.hasUserNotify
+      ? `- To notify another agent's user immediately, use \`${params.userNotifyToolName}\`. Pass only the core content to convey; runtime adds cross-agent source attribution and natural final phrasing.`
+      : undefined,
+    params.hasUserSchedule
+      ? `- To schedule a reminder for another agent's user, use \`${params.userScheduleToolName}\`. Pass only the core reminder content; runtime adds cross-agent source attribution when the reminder fires in that agent's active user session.`
+      : undefined,
+    !params.hasCron && params.hasUserSchedule
+      ? `- Local/session-bound reminders are unavailable here because \`${params.cronToolName}\` is not in the current tool set.`
+      : undefined,
     "- Do not invent cron actions. Valid actions are `status`, `list`, `add`, `update`, `remove`, `run`, `runs`, and `wake`.",
     '- For `action: "add"`, send a complete cron job payload with at least `name`, `schedule`, and `payload`; do not send only a natural-language reminder request.',
     "- If `cron.add` fails validation, repair the payload into explicit JSON fields and retry at most once; if it still fails, explain the blocker instead of looping or saying you are still working in the background.",
-    '- If the job should resume this conversation, create an `agentTurn` cron job with `sessionTarget: "current"`.',
-    '- If the user explicitly wants another session, bind the job to that exact session with `sessionTarget: "session:<sessionKey>"` once you know the key.',
+    params.hasCron
+      ? '- If the job should resume this conversation, create an `agentTurn` cron job with `sessionTarget: "current"`.'
+      : undefined,
+    params.hasCron
+      ? '- If the user explicitly wants another session, bind the job to that exact session with `sessionTarget: "session:<sessionKey>"` once you know the key.'
+      : undefined,
+    params.hasUserNotify || params.hasUserSchedule
+      ? "- In an `a_to_a_send` pair session, do not schedule into the pair session. Use `user_notify` for notify-now tasks and `user_schedule` for future reminders to another agent's user. For both tools, send only the core content; runtime will relay it naturally and mention the source assistant."
+      : undefined,
     '- Use `sessionTarget: "main"` with `systemEvent` only when the user explicitly wants main-session/heartbeat handling instead of a session-bound follow-up.',
-    '- Use announce/webhook delivery only when the user explicitly wants out-of-session delivery; channel announce delivery is only supported for `sessionTarget: "isolated"`.',
-    '- Canonical current-session example: `{ "action": "add", "job": { "name": "Reminder", "schedule": { "kind": "at", "at": "<ISO-8601>" }, "sessionTarget": "current", "payload": { "kind": "agentTurn", "message": "<reminder text>" } } }`',
+    params.hasUserSchedule
+      ? '- Use `sessionTarget: "active-user"` for cron jobs that should resolve the owning agent\'s active user-facing session when they fire.'
+      : undefined,
+    '- Use announce/webhook delivery only when the user explicitly wants out-of-session delivery; channel announce delivery is only supported for `sessionTarget: "isolated"` or `sessionTarget: "active-user"`.',
+    params.hasCron
+      ? '- Canonical current-session example: `{ "action": "add", "job": { "name": "Reminder", "schedule": { "kind": "at", "at": "<ISO-8601>" }, "sessionTarget": "current", "payload": { "kind": "agentTurn", "message": "<reminder text>" } } }`'
+      : undefined,
     '- Canonical main-session example: `{ "action": "add", "job": { "name": "Reminder", "schedule": { "kind": "at", "at": "<ISO-8601>" }, "sessionTarget": "main", "payload": { "kind": "systemEvent", "text": "<reminder text>" } } }`',
+    params.hasUserSchedule
+      ? '- Canonical active-user example: `{ "action": "add", "job": { "name": "Reminder", "schedule": { "kind": "at", "at": "<ISO-8601>" }, "sessionTarget": "active-user", "payload": { "kind": "agentTurn", "message": "<reminder text>" } } }`'
+      : undefined,
     "",
-  ];
+  ].filter(Boolean);
 }
 
 function buildDocsSection(params: { docsPath?: string; isMinimal: boolean; readToolName: string }) {
@@ -288,13 +330,17 @@ export function buildAgentSystemPrompt(params: {
     message: "Send messages and channel actions",
     gateway: "Restart, apply config, or run updates on the running OpenClaw process",
     agents_list: acpSpawnRuntimeEnabled
-      ? 'List OpenClaw agent ids allowed for sessions_spawn when runtime="subagent" (not ACP harness ids)'
-      : "List OpenClaw agent ids allowed for sessions_spawn",
+      ? 'List agent ids for two purposes: `agents` for sessions_spawn when runtime="subagent" (not ACP harness ids), and `crossAgentTargets` for a_to_a_send/user_notify/user_schedule discovery'
+      : "List agent ids for two purposes: `agents` for sessions_spawn and `crossAgentTargets` for a_to_a_send/user_notify/user_schedule discovery",
     sessions_list: "List other sessions (incl. sub-agents) with filters/last",
     sessions_history: "Fetch history for another session/sub-agent",
     sessions_send: "Send a message to another session/sub-agent",
+    user_notify:
+      "Notify another agent's user immediately via that agent's active user session; pass core content only and runtime will relay it with source attribution",
     a_to_a_send:
-      "Send a message to another agent's dedicated pair session for the current requester",
+      "Send a message to another agent's dedicated coordination-only pair session for the current requester",
+    user_schedule:
+      "Schedule a reminder or follow-up for another agent's user; pass core content only and runtime will relay it with source attribution when the job fires",
     sessions_spawn: acpSpawnRuntimeEnabled
       ? 'Spawn an isolated sub-agent or ACP coding session (runtime="acp" requires `agentId` unless `acp.defaultAgent` is configured; ACP harness ids follow acp.allowedAgents, not agents_list)'
       : "Spawn an isolated sub-agent session",
@@ -327,7 +373,9 @@ export function buildAgentSystemPrompt(params: {
     "sessions_list",
     "sessions_history",
     "sessions_send",
+    "user_notify",
     "a_to_a_send",
+    "user_schedule",
     "subagents",
     "session_status",
     "image",
@@ -478,7 +526,9 @@ export function buildAgentSystemPrompt(params: {
           "- sessions_list: list sessions",
           "- sessions_history: fetch session history",
           "- sessions_send: send to another session",
-          "- a_to_a_send: send to another agent via its pair session",
+          "- user_notify: notify another agent's user immediately",
+          "- a_to_a_send: send to another agent via its coordination-only pair session",
+          "- user_schedule: schedule a reminder for another agent's user",
           "- subagents: list/steer/kill sub-agent runs",
           '- session_status: show usage/time/model state and answer "what model are we using?"',
         ].join("\n"),
@@ -514,6 +564,10 @@ export function buildAgentSystemPrompt(params: {
       hasCron: availableTools.has("cron"),
       cronToolName: resolveToolName("cron"),
       execToolName,
+      hasUserNotify: availableTools.has("user_notify"),
+      userNotifyToolName: resolveToolName("user_notify"),
+      hasUserSchedule: availableTools.has("user_schedule"),
+      userScheduleToolName: resolveToolName("user_schedule"),
     }),
     ...safetySection,
     "## OpenClaw CLI Quick Reference",
@@ -624,6 +678,7 @@ export function buildAgentSystemPrompt(params: {
       inlineButtonsEnabled,
       runtimeChannel,
       messageToolHints: params.messageToolHints,
+      userNotifyToolName: resolveToolName("user_notify"),
     }),
     ...buildVoiceSection({ isMinimal, ttsHint: params.ttsHint }),
   ];

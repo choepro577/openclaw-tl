@@ -32,6 +32,7 @@ describe("agents_list", () => {
   function requireAgentsListTool() {
     const tool = createOpenClawTools({
       agentSessionKey: "main",
+      config: configOverride,
     }).find((candidate) => candidate.name === "agents_list");
     if (!tool) {
       throw new Error("missing agents_list tool");
@@ -42,6 +43,14 @@ describe("agents_list", () => {
   function readAgentList(result: unknown) {
     return (result as { details?: { agents?: Array<{ id: string; configured?: boolean }> } })
       .details?.agents;
+  }
+
+  function readCrossAgentTargets(result: unknown) {
+    return (
+      result as {
+        details?: { crossAgentTargets?: Array<{ id: string; configured?: boolean }> };
+      }
+    ).details?.crossAgentTargets;
   }
 
   beforeEach(() => {
@@ -125,5 +134,69 @@ describe("agents_list", () => {
     expect(agents?.map((agent) => agent.id)).toEqual(["main", "research"]);
     const research = agents?.find((agent) => agent.id === "research");
     expect(research?.configured).toBe(false);
+  });
+
+  it("returns configured cross-agent delivery targets separately from subagent targets", async () => {
+    configOverride = {
+      session: createPerSenderSessionConfig(),
+      tools: {
+        agentToAgent: { enabled: true },
+      },
+      agents: {
+        list: [
+          {
+            id: "main",
+            name: "Main",
+          },
+          {
+            id: "research",
+            name: "Research",
+          },
+          {
+            id: "tester",
+            name: "Tester",
+          },
+        ],
+      },
+    };
+
+    const tool = requireAgentsListTool();
+    const result = await tool.execute("call-cross-agent", {});
+    expect(result.details).toMatchObject({
+      requester: "main",
+      allowAny: false,
+      crossAgentEnabled: true,
+    });
+    expect(readAgentList(result)?.map((agent) => agent.id)).toEqual(["main"]);
+    expect(readCrossAgentTargets(result)?.map((agent) => agent.id)).toEqual(["research", "tester"]);
+  });
+
+  it("filters cross-agent delivery targets through tools.agentToAgent.allow", async () => {
+    configOverride = {
+      session: createPerSenderSessionConfig(),
+      tools: {
+        agentToAgent: { enabled: true, allow: ["main", "tester"] },
+      },
+      agents: {
+        list: [
+          {
+            id: "main",
+            name: "Main",
+          },
+          {
+            id: "research",
+            name: "Research",
+          },
+          {
+            id: "tester",
+            name: "Tester",
+          },
+        ],
+      },
+    };
+
+    const tool = requireAgentsListTool();
+    const result = await tool.execute("call-cross-agent-allow", {});
+    expect(readCrossAgentTargets(result)?.map((agent) => agent.id)).toEqual(["tester"]);
   });
 });

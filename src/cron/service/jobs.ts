@@ -135,12 +135,15 @@ export function assertSupportedJobSpec(job: Pick<CronJob, "sessionTarget" | "pay
   const isIsolatedLike =
     job.sessionTarget === "isolated" ||
     job.sessionTarget === "current" ||
+    job.sessionTarget === "active-user" ||
     job.sessionTarget.startsWith("session:");
   if (job.sessionTarget === "main" && job.payload.kind !== "systemEvent") {
     throw new Error('main cron jobs require payload.kind="systemEvent"');
   }
   if (isIsolatedLike && job.payload.kind !== "agentTurn") {
-    throw new Error('isolated/current/session cron jobs require payload.kind="agentTurn"');
+    throw new Error(
+      'isolated/current/active-user/session cron jobs require payload.kind="agentTurn"',
+    );
   }
 }
 
@@ -197,9 +200,12 @@ function assertDeliverySupport(job: Pick<CronJob, "sessionTarget" | "delivery">)
   const isIsolatedLike =
     job.sessionTarget === "isolated" ||
     job.sessionTarget === "current" ||
+    job.sessionTarget === "active-user" ||
     job.sessionTarget.startsWith("session:");
   if (!isIsolatedLike) {
-    throw new Error('cron channel delivery config is only supported for sessionTarget="isolated"');
+    throw new Error(
+      'cron channel delivery config is only supported for sessionTarget="isolated" or "active-user"',
+    );
   }
   if (job.delivery.channel === "telegram") {
     const telegramError = validateTelegramDeliveryTarget(job.delivery.to);
@@ -618,6 +624,7 @@ export function applyJobPatch(
     const isIsolatedLike =
       job.sessionTarget === "isolated" ||
       job.sessionTarget === "current" ||
+      job.sessionTarget === "active-user" ||
       job.sessionTarget.startsWith("session:");
     if (legacyDeliveryPatch && isIsolatedLike && job.payload.kind === "agentTurn") {
       job.delivery = mergeCronDelivery(job.delivery, legacyDeliveryPatch);
@@ -704,6 +711,9 @@ function mergeCronPayload(existing: CronPayload, patch: CronPayloadPatch): CronP
   if (typeof patch.bestEffortDeliver === "boolean") {
     next.bestEffortDeliver = patch.bestEffortDeliver;
   }
+  if ("relay" in patch) {
+    next.relay = patch.relay;
+  }
   return next;
 }
 
@@ -772,6 +782,7 @@ function buildPayloadFromPatch(patch: CronPayloadPatch): CronPayload {
     channel: patch.channel,
     to: patch.to,
     bestEffortDeliver: patch.bestEffortDeliver,
+    relay: patch.relay,
   };
 }
 

@@ -1,5 +1,10 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import "./test-helpers/fast-core-tools.js";
+
+vi.mock("../gateway/call.js", () => ({
+  callGateway: vi.fn(),
+}));
+
 import { createOpenClawTools } from "./openclaw-tools.js";
 
 describe("createOpenClawTools a_to_a_send registration", () => {

@@ -69,6 +69,7 @@ const BASE_METHODS = [
   "sessions.create",
   "sessions.list",
   "sessions.preview",
+  "sessions.resolve_active_user",
   "sessions.patch",
   "sessions.rename",
   "sessions.reset",

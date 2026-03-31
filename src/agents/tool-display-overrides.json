@@ -31,6 +31,11 @@
       "title": "Session Send",
       "detailKeys": ["label", "sessionKey", "agentId", "timeoutSeconds"]
     },
+    "user_notify": {
+      "emoji": "📣",
+      "title": "User Notify",
+      "detailKeys": ["agentId"]
+    },
     "a_to_a_send": {
       "emoji": "🤝",
       "title": "Agent Send",
@@ -76,6 +81,11 @@
       "emoji": "🧭",
       "title": "Agents",
       "detailKeys": []
+    },
+    "user_schedule": {
+      "emoji": "⏰",
+      "title": "User Schedule",
+      "detailKeys": ["agentId", "name"]
     },
     "memory_search": {
       "emoji": "🧠",

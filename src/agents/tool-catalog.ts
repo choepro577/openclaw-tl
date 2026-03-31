@@ -138,6 +138,14 @@ const CORE_TOOL_DEFINITIONS: CoreToolDefinition[] = [
     includeInOpenClawGroup: true,
   },
   {
+    id: "user_notify",
+    label: "user_notify",
+    description: "Notify another agent's user now",
+    sectionId: "sessions",
+    profiles: ["coding", "messaging"],
+    includeInOpenClawGroup: true,
+  },
+  {
     id: "a_to_a_send",
     label: "a_to_a_send",
     description: "Send to agent pair session",
@@ -210,6 +218,14 @@ const CORE_TOOL_DEFINITIONS: CoreToolDefinition[] = [
     includeInOpenClawGroup: true,
   },
   {
+    id: "user_schedule",
+    label: "user_schedule",
+    description: "Schedule a reminder for another agent's user",
+    sectionId: "automation",
+    profiles: ["coding", "messaging"],
+    includeInOpenClawGroup: true,
+  },
+  {
     id: "gateway",
     label: "gateway",
     description: "Gateway control",
@@ -228,7 +244,7 @@ const CORE_TOOL_DEFINITIONS: CoreToolDefinition[] = [
   {
     id: "agents_list",
     label: "agents_list",
-    description: "List agents",
+    description: "List subagent spawn targets and cross-agent delivery targets",
     sectionId: "agents",
     profiles: [],
     includeInOpenClawGroup: true,

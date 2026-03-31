@@ -47,6 +47,15 @@ export const SessionsResolveParamsSchema = Type.Object(
   { additionalProperties: false },
 );
 
+export const SessionsResolveActiveUserParamsSchema = Type.Object(
+  {
+    agentId: NonEmptyString,
+    excludeKeys: Type.Optional(Type.Array(NonEmptyString)),
+    activeWithinMinutes: Type.Optional(Type.Integer({ minimum: 0 })),
+  },
+  { additionalProperties: false },
+);
+
 export const SessionsPatchParamsSchema = Type.Object(
   {
     key: NonEmptyString,

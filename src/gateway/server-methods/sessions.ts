@@ -8,6 +8,7 @@ import {
   updateSessionStore,
 } from "../../config/sessions.js";
 import { normalizeAgentId, parseAgentSessionKey } from "../../routing/session-key.js";
+import { resolveActiveUserSessionTarget } from "../active-user-session-target.js";
 import { GATEWAY_CLIENT_IDS } from "../protocol/client-info.js";
 import {
   ErrorCodes,
@@ -18,6 +19,7 @@ import {
   validateSessionsListParams,
   validateSessionsPatchParams,
   validateSessionsPreviewParams,
+  validateSessionsResolveActiveUserParams,
   validateSessionsRenameParams,
   validateSessionsResetParams,
   validateSessionsResolveParams,
@@ -212,6 +214,70 @@ export const sessionsHandlers: GatewayRequestHandlers = {
     }
 
     respond(true, { ts: Date.now(), previews } satisfies SessionsPreviewResult, undefined);
+  },
+  "sessions.resolve_active_user": async ({ params, respond, client }) => {
+    if (
+      !assertValidParams(
+        params,
+        validateSessionsResolveActiveUserParams,
+        "sessions.resolve_active_user",
+        respond,
+      )
+    ) {
+      return;
+    }
+    const p = { ...params };
+    const cfg = loadConfig();
+    const boundAgentId = resolveEnterpriseBoundAgentId(client);
+    if (boundAgentId) {
+      const requestedAgentId = typeof p.agentId === "string" ? p.agentId : undefined;
+      const agentScope = assertAgentIdInScope({
+        client,
+        agentId: requestedAgentId,
+      });
+      if (!agentScope.ok) {
+        respond(false, undefined, agentScope.error);
+        return;
+      }
+      p.agentId = boundAgentId;
+    }
+
+    const agentId = typeof p.agentId === "string" ? p.agentId.trim() : "";
+    if (!agentId) {
+      respond(false, undefined, errorShape(ErrorCodes.INVALID_REQUEST, "agentId required"));
+      return;
+    }
+
+    const excludeKeys = Array.isArray(p.excludeKeys)
+      ? p.excludeKeys
+          .map((value) => (typeof value === "string" ? value.trim() : ""))
+          .filter(Boolean)
+      : undefined;
+    const activeWithinMinutes =
+      typeof p.activeWithinMinutes === "number" && Number.isFinite(p.activeWithinMinutes)
+        ? Math.max(0, Math.floor(p.activeWithinMinutes))
+        : undefined;
+
+    const resolved = await resolveActiveUserSessionTarget({
+      cfg,
+      agentId,
+      excludeKeys,
+      activeWithinMinutes,
+    });
+    if (!resolved.ok) {
+      respond(false, undefined, errorShape(ErrorCodes.INVALID_REQUEST, resolved.error));
+      return;
+    }
+
+    respond(
+      true,
+      {
+        ok: true,
+        key: resolved.sessionKey,
+        reason: resolved.reason,
+      },
+      undefined,
+    );
   },
   "sessions.resolve": async ({ params, respond, client }) => {
     if (!assertValidParams(params, validateSessionsResolveParams, "sessions.resolve", respond)) {

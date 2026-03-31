@@ -44,6 +44,7 @@ export type ProjectsSessionsCreateParams = SchemaType<"ProjectsSessionsCreatePar
 export type SessionsCreateParams = SchemaType<"SessionsCreateParams">;
 export type SessionsListParams = SchemaType<"SessionsListParams">;
 export type SessionsPreviewParams = SchemaType<"SessionsPreviewParams">;
+export type SessionsResolveActiveUserParams = SchemaType<"SessionsResolveActiveUserParams">;
 export type SessionsResolveParams = SchemaType<"SessionsResolveParams">;
 export type SessionsPatchParams = SchemaType<"SessionsPatchParams">;
 export type SessionsRenameParams = SchemaType<"SessionsRenameParams">;

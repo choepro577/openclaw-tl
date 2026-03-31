@@ -34,6 +34,8 @@ const SUBAGENT_TOOL_DENY_ALWAYS = [
   "memory_get",
   // Direct session sends - subagents communicate through announce chain
   "sessions_send",
+  "user_notify",
+  "user_schedule",
   "a_to_a_send",
 ];
 

@@ -12,7 +12,22 @@ vi.mock("../agent-scope.js", () => ({
   resolveSessionAgentId: () => "agent-123",
 }));
 
-import { createCronTool } from "./cron-tool.js";
+import { createCronTool as createCronToolBase } from "./cron-tool.js";
+
+function createCronTool(
+  opts?: Parameters<typeof createCronToolBase>[0],
+  deps?: Parameters<typeof createCronToolBase>[1],
+) {
+  return createCronToolBase(
+    opts,
+    deps ?? {
+      callGatewayTool: ((method: string, _opts: unknown, params?: unknown) =>
+        callGatewayMock({ method, params })) as NonNullable<
+        Parameters<typeof createCronToolBase>[1]
+      >["callGatewayTool"],
+    },
+  );
+}
 
 describe("cron tool", () => {
   function readGatewayCall(index = 0): { method?: string; params?: Record<string, unknown> } {
@@ -239,6 +254,7 @@ describe("cron tool", () => {
         name: "wake-up",
         schedule: { at: new Date(123).toISOString() },
         agentId: null,
+        payload: { kind: "systemEvent", text: "hello" },
       },
     });
 
@@ -257,6 +273,46 @@ describe("cron tool", () => {
       agentSessionKey: callerSessionKey,
     });
     expect(sessionKey).toBe(callerSessionKey);
+  });
+
+  it("accepts active-user as a cron session target", async () => {
+    const tool = createCronTool({ agentSessionKey: "agent:main:discord:group:req" });
+    await tool.execute("call-active-user", {
+      action: "add",
+      job: {
+        name: "user-reminder",
+        schedule: { at: new Date(123).toISOString() },
+        sessionTarget: "active-user",
+        payload: { kind: "agentTurn", message: "Nhac hop gap" },
+      },
+    });
+
+    const call = readGatewayCall();
+    expect(call.method).toBe("cron.add");
+    expect(call.params).toMatchObject({
+      sessionTarget: "active-user",
+      payload: { kind: "agentTurn", message: "Nhac hop gap" },
+      delivery: { mode: "announce" },
+    });
+  });
+
+  it("rejects cron.add current-session binding inside an A2A pair session", async () => {
+    const tool = createCronTool({
+      agentSessionKey: "agent:target:a2a:from:main",
+    });
+
+    await expect(
+      tool.execute("call-a2a-guard", {
+        action: "add",
+        job: {
+          name: "bad-reminder",
+          schedule: { at: new Date(123).toISOString() },
+          sessionTarget: "current",
+          payload: { kind: "agentTurn", message: "Nhac xuong hop gap" },
+        },
+      }),
+    ).rejects.toThrow("user_notify");
+    expect(callGatewayMock).not.toHaveBeenCalled();
   });
 
   it("preserves explicit job.sessionKey on add", async () => {
@@ -473,7 +529,7 @@ describe("cron tool", () => {
         name: "orphan-name",
         enabled: true,
       }),
-    ).rejects.toThrow("job required");
+    ).rejects.toThrow("cron.add requires a complete job payload.");
   });
 
   it("prefers existing non-empty job over flat params", async () => {

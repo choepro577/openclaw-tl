@@ -34,6 +34,7 @@ const CronToolSessionTargetSchema = Type.Union([
   Type.Literal("main"),
   Type.Literal("isolated"),
   Type.Literal("current"),
+  Type.Literal("active-user"),
   Type.String({ pattern: "^session:.+" }),
 ]);
 
@@ -259,6 +260,45 @@ function stripThreadSuffixFromSessionKey(sessionKey: string): string {
   return parent ? parent : sessionKey;
 }
 
+function isAToAPairSessionKey(sessionKey?: string): boolean {
+  const trimmed = sessionKey?.trim();
+  if (!trimmed) {
+    return false;
+  }
+  const parsed = parseAgentSessionKey(trimmed);
+  const rest = (parsed?.rest ?? trimmed).trim().toLowerCase();
+  return rest.startsWith("a2a:");
+}
+
+function assertA2ASafeCronAdd(params: {
+  agentSessionKey?: string;
+  rawJob: Record<string, unknown>;
+  normalizedJob: Record<string, unknown>;
+}) {
+  if (!isAToAPairSessionKey(params.agentSessionKey)) {
+    return;
+  }
+  const rawSessionTarget =
+    typeof params.rawJob.sessionTarget === "string"
+      ? params.rawJob.sessionTarget.trim().toLowerCase()
+      : undefined;
+  const normalizedSessionTarget =
+    typeof params.normalizedJob.sessionTarget === "string"
+      ? params.normalizedJob.sessionTarget.trim().toLowerCase()
+      : undefined;
+  const currentPairSessionTarget = params.agentSessionKey?.trim().toLowerCase();
+  const bindsBackToPairSession =
+    rawSessionTarget === "current" ||
+    normalizedSessionTarget === "current" ||
+    normalizedSessionTarget === `session:${currentPairSessionTarget}`;
+  if (!bindsBackToPairSession) {
+    return;
+  }
+  throw new Error(
+    "In an agent-to-agent pair session, do not schedule into the pair session. Use `user_notify` for notify-now tasks or `user_schedule` for scheduled reminders for the target agent's user.",
+  );
+}
+
 function inferDeliveryFromSessionKey(agentSessionKey?: string): CronDelivery | null {
   const rawSessionKey = agentSessionKey?.trim();
   if (!rawSessionKey) {
@@ -343,6 +383,7 @@ export function createCronTool(opts?: CronToolOptions, deps?: CronToolDeps): Any
   return {
     label: "Cron",
     name: "cron",
+    ownerOnly: true,
     description: `Manage Gateway cron jobs (status/list/add/update/remove/run/runs) and send wake events.
 
 ACTIONS:
@@ -360,8 +401,8 @@ JOB SCHEMA (for add action):
   "name": "string",
   "schedule": { ... },      // Required: when to run
   "payload": { ... },       // Required: what to execute
-  "delivery": { ... },      // Optional: announce summary (isolated/current/session:xxx only) or webhook POST
-  "sessionTarget": "main" | "isolated" | "current" | "session:<custom-id>",  // Optional, defaults based on context
+  "delivery": { ... },      // Optional: announce summary (isolated/current/active-user/session:xxx only) or webhook POST
+  "sessionTarget": "main" | "isolated" | "current" | "active-user" | "session:<custom-id>",  // Optional, defaults based on context
   "enabled": true | false   // Optional, default true
 }
 
@@ -369,6 +410,7 @@ SESSION TARGET OPTIONS:
 - "main": Run in the main session (requires payload.kind="systemEvent")
 - "isolated": Run in an ephemeral isolated session (requires payload.kind="agentTurn")
 - "current": Bind to the current session where the cron is created (resolved at creation time)
+- "active-user": Resolve the owning agent's latest active user-facing session when the job fires; fall back to main if none is active
 - "session:<custom-id>": Run in a persistent named session (e.g., "session:project-alpha-daily")
 
 DEFAULT BEHAVIOR (unchanged for backward compatibility):
@@ -401,10 +443,11 @@ DELIVERY (top-level):
 
 CRITICAL CONSTRAINTS:
 - sessionTarget="main" REQUIRES payload.kind="systemEvent"
-- sessionTarget="isolated" | "current" | "session:xxx" REQUIRES payload.kind="agentTurn"
+- sessionTarget="isolated" | "current" | "active-user" | "session:xxx" REQUIRES payload.kind="agentTurn"
 - For action="add", include a full job payload with at least name + schedule + payload. Do not pass only free-text instructions.
 - If cron.add validation fails, repair the payload into explicit JSON fields and retry at most once. Do not loop the same malformed call or claim you are still processing while idle.
 - For webhook callbacks, use delivery.mode="webhook" with delivery.to set to a URL.
+- In an a_to_a_send pair session, do not use raw cron.add with sessionTarget="current"; use user_notify or user_schedule instead.
 Default: prefer isolated agentTurn jobs unless the user explicitly wants current-session binding.
 
 CANONICAL EXAMPLES:
@@ -504,6 +547,7 @@ Use jobId as the canonical identifier; id is accepted for compatibility. Use con
           if (!params.job || typeof params.job !== "object") {
             throw new Error(buildCronAddValidationError());
           }
+          const rawJob = params.job as Record<string, unknown>;
           const job =
             normalizeCronJobCreate(params.job, {
               sessionContext: { sessionKey: opts?.agentSessionKey },
@@ -517,6 +561,11 @@ Use jobId as the canonical identifier; id is accepted for compatibility. Use con
           ) {
             throw new Error(buildCronAddValidationError());
           }
+          assertA2ASafeCronAdd({
+            agentSessionKey: opts?.agentSessionKey,
+            rawJob,
+            normalizedJob: job,
+          });
           if (job && typeof job === "object") {
             const cfg = loadConfig();
             const { mainKey, alias } = resolveMainSessionAlias(cfg);

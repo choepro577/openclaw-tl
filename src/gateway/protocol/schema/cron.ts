@@ -1,6 +1,19 @@
 import { Type, type TSchema } from "@sinclair/typebox";
 import { NonEmptyString } from "./primitives.js";
 
+const CronCrossAgentUserDeliveryRelaySchema = Type.Object(
+  {
+    kind: Type.Literal("cross-agent-user-delivery"),
+    deliveryKind: Type.Union([Type.Literal("notify"), Type.Literal("schedule")]),
+    sourceAgentId: NonEmptyString,
+    sourceAgentName: NonEmptyString,
+    targetAgentId: NonEmptyString,
+    targetAgentName: NonEmptyString,
+    attribution: Type.Literal("always"),
+  },
+  { additionalProperties: false },
+);
+
 function cronAgentTurnPayloadSchema(params: { message: TSchema }) {
   return Type.Object(
     {
@@ -16,6 +29,7 @@ function cronAgentTurnPayloadSchema(params: { message: TSchema }) {
       channel: Type.Optional(Type.String()),
       to: Type.Optional(Type.String()),
       bestEffortDeliver: Type.Optional(Type.Boolean()),
+      relay: Type.Optional(CronCrossAgentUserDeliveryRelaySchema),
     },
     { additionalProperties: false },
   );
@@ -25,6 +39,7 @@ const CronSessionTargetSchema = Type.Union([
   Type.Literal("main"),
   Type.Literal("isolated"),
   Type.Literal("current"),
+  Type.Literal("active-user"),
   Type.String({ pattern: "^session:.+" }),
 ]);
 const CronWakeModeSchema = Type.Union([Type.Literal("next-heartbeat"), Type.Literal("now")]);

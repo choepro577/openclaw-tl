@@ -28,7 +28,10 @@ export function resolveInitialCronDelivery(input: CronJobCreate): CronDelivery |
   if (input.delivery) {
     return input.delivery;
   }
-  if (input.sessionTarget === "isolated" && input.payload.kind === "agentTurn") {
+  if (
+    (input.sessionTarget === "isolated" || input.sessionTarget === "active-user") &&
+    input.payload.kind === "agentTurn"
+  ) {
     return { mode: "announce" };
   }
   return undefined;

@@ -285,6 +285,43 @@ describe("runCronIsolatedAgentTurn", () => {
     });
   });
 
+  it("builds a relay prompt for cross-agent reminders instead of echoing the raw cron header", async () => {
+    await withTempHome(async (home) => {
+      await runCronTurn(home, {
+        jobPayload: {
+          kind: "agentTurn",
+          message: "Chieu nay ban co lich hop luc 14:00.",
+          deliver: false,
+          relay: {
+            kind: "cross-agent-user-delivery",
+            deliveryKind: "schedule",
+            sourceAgentId: "tl00275",
+            sourceAgentName: "Nguyen Duc Hieu Assistant",
+            targetAgentId: "main",
+            targetAgentName: "Nguyen Tester Assistant",
+            attribution: "always",
+          },
+        },
+        message: "Chieu nay ban co lich hop luc 14:00.",
+      });
+
+      const call = vi.mocked(runEmbeddedPiAgent).mock.calls.at(-1)?.[0] as {
+        prompt?: string;
+      };
+      expect(call?.prompt).toContain("Cross-agent user delivery:");
+      expect(call?.prompt).toContain("Source assistant: Nguyen Duc Hieu Assistant (tl00275).");
+      expect(call?.prompt).toContain(
+        "Always mention the source assistant naturally in the final reply.",
+      );
+      expect(call?.prompt).toContain(
+        "Do not thank, greet, acknowledge, or apologize to the source assistant.",
+      );
+      expect(call?.prompt).toContain("Output exactly one short user-facing reminder sentence.");
+      expect(call?.prompt).toContain("Core reminder content: Chieu nay ban co lich hop luc 14:00.");
+      expect(call?.prompt).not.toContain("[cron:job-1");
+    });
+  });
+
   it("uses agentId for workspace, session key, and store paths", async () => {
     await withTempHome(async (home) => {
       const deps = makeDeps();

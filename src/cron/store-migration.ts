@@ -453,7 +453,11 @@ export function normalizeStoredCronJobs(
       payloadRecord && typeof payloadRecord.kind === "string" ? payloadRecord.kind : "";
     const rawSessionTarget = typeof raw.sessionTarget === "string" ? raw.sessionTarget.trim() : "";
     const loweredSessionTarget = rawSessionTarget.toLowerCase();
-    if (loweredSessionTarget === "main" || loweredSessionTarget === "isolated") {
+    if (
+      loweredSessionTarget === "main" ||
+      loweredSessionTarget === "isolated" ||
+      loweredSessionTarget === "active-user"
+    ) {
       if (raw.sessionTarget !== loweredSessionTarget) {
         raw.sessionTarget = loweredSessionTarget;
         mutated = true;
@@ -485,6 +489,7 @@ export function normalizeStoredCronJobs(
     const isIsolatedAgentTurn =
       sessionTarget === "isolated" ||
       sessionTarget === "current" ||
+      sessionTarget === "active-user" ||
       sessionTarget.startsWith("session:") ||
       (sessionTarget === "" && payloadKind === "agentTurn");
     const hasDelivery = delivery && typeof delivery === "object" && !Array.isArray(delivery);

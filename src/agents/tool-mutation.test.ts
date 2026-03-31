@@ -67,6 +67,8 @@ describe("tool mutation helpers", () => {
 
   it("keeps legacy name-only mutating heuristics for payload fallback", () => {
     expect(isLikelyMutatingToolName("sessions_send")).toBe(true);
+    expect(isLikelyMutatingToolName("user_notify")).toBe(true);
+    expect(isLikelyMutatingToolName("user_schedule")).toBe(true);
     expect(isLikelyMutatingToolName("a_to_a_send")).toBe(true);
     expect(isLikelyMutatingToolName("browser_actions")).toBe(true);
     expect(isLikelyMutatingToolName("message_slack")).toBe(true);
@@ -75,5 +77,17 @@ describe("tool mutation helpers", () => {
 
   it("treats a_to_a_send as a mutating tool call", () => {
     expect(isMutatingToolCall("a_to_a_send", { agentId: "worker", message: "ping" })).toBe(true);
+  });
+
+  it("treats user_notify and user_schedule as mutating tool calls", () => {
+    expect(isMutatingToolCall("user_notify", { agentId: "worker", message: "ping" })).toBe(true);
+    expect(
+      isMutatingToolCall("user_schedule", {
+        agentId: "worker",
+        name: "Reminder",
+        schedule: { kind: "at", at: "2026-03-31T03:40:00.000Z" },
+        message: "ping",
+      }),
+    ).toBe(true);
   });
 });

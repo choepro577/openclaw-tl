@@ -29,7 +29,10 @@ import { enqueueSystemEvent } from "../infra/system-events.js";
 import { getChildLogger } from "../logging.js";
 import { normalizeAgentId, toAgentStoreSessionKey } from "../routing/session-key.js";
 import { defaultRuntime } from "../runtime.js";
-import { deliverCronResultToInternalSession } from "./cron-internal-session-delivery.js";
+import {
+  deliverCronResultToActiveUserSession,
+  deliverCronResultToInternalSession,
+} from "./cron-internal-session-delivery.js";
 
 export type GatewayCronState = {
   cron: CronService;
@@ -315,18 +318,29 @@ export function buildGatewayCronService(params: {
               error: "cron internal session fallback requires text output",
             };
           }
-          const delivered = await deliverCronResultToInternalSession({
-            cfg: runtimeConfig,
-            agentId,
-            jobSessionKey: job.sessionKey,
-            message: messageText,
-            idempotencyKey: `cron-internal-delivery:v1:${request.runSessionId}`,
-            runId: `cron-internal-delivery:${request.runSessionId}`,
-            context: {
-              broadcast: params.broadcast,
-              nodeSendToSession: params.nodeSendToSession,
-            },
-          });
+          const deliveryContext = {
+            broadcast: params.broadcast,
+            nodeSendToSession: params.nodeSendToSession,
+          };
+          const delivered =
+            job.sessionTarget === "active-user"
+              ? await deliverCronResultToActiveUserSession({
+                  cfg: runtimeConfig,
+                  agentId,
+                  message: messageText,
+                  idempotencyKey: `cron-internal-delivery:v1:${request.runSessionId}`,
+                  runId: `cron-internal-delivery:${request.runSessionId}`,
+                  context: deliveryContext,
+                })
+              : await deliverCronResultToInternalSession({
+                  cfg: runtimeConfig,
+                  agentId,
+                  jobSessionKey: job.sessionKey,
+                  message: messageText,
+                  idempotencyKey: `cron-internal-delivery:v1:${request.runSessionId}`,
+                  runId: `cron-internal-delivery:${request.runSessionId}`,
+                  context: deliveryContext,
+                });
           if (!delivered.ok) {
             return {
               handled: true as const,
