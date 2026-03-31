@@ -35,6 +35,7 @@ export type NormalizedMessage = {
   timestamp: number;
   id?: string;
   senderLabel?: string | null;
+  interSessionNotice?: string | null;
 };
 
 /** Tool card representation for tool calls and results */

@@ -15,6 +15,7 @@ import {
   formatReasoningMarkdown,
 } from "./message-extract.ts";
 import {
+  extractNormalizedTextContent,
   isToolResultMessage,
   normalizeMessage,
   normalizeRoleForGrouping,
@@ -663,13 +664,14 @@ function renderGroupedMessage(
 
   const extractedText =
     normalizedRole === "inter_session"
-      ? normalizedMessage.content
-          .map((item) => (item.type === "text" && typeof item.text === "string" ? item.text : null))
-          .filter((value): value is string => typeof value === "string" && value.trim().length > 0)
-          .join("\n")
+      ? extractNormalizedTextContent(normalizedMessage.content)
       : extractTextCached(message);
   const extractedThinking =
     opts.showReasoning && role === "assistant" ? extractThinkingCached(message) : null;
+  const interSessionNotice =
+    normalizedRole === "inter_session"
+      ? normalizedMessage.interSessionNotice?.trim() || null
+      : null;
   const markdownBase = extractedText?.trim() ? extractedText : null;
   const reasoningMarkdown = extractedThinking ? formatReasoningMarkdown(extractedThinking) : null;
   const markdown = markdownBase;
@@ -688,7 +690,7 @@ function renderGroupedMessage(
 
   // Suppress empty bubbles when tool cards are the only content and toggle is off
   const visibleToolCards = hasToolCards && (opts.showToolCalls ?? true);
-  if (!markdown && !visibleToolCards && !hasImages) {
+  if (!markdown && !visibleToolCards && !hasImages && !interSessionNotice) {
     return nothing;
   }
 
@@ -746,6 +748,11 @@ function renderGroupedMessage(
             </details>
           `
           : html`
+            ${
+              interSessionNotice
+                ? html`<div class="chat-inter-session-notice">${interSessionNotice}</div>`
+                : nothing
+            }
             ${renderMessageImages(images)}
             ${
               reasoningMarkdown

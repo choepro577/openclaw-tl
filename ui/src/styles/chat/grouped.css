@@ -304,6 +304,18 @@ img.chat-avatar {
   background: var(--bg-hover);
 }
 
+.chat-inter-session-notice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
 /* User bubbles have different styling */
 .chat-group.user .chat-bubble {
   background: var(--accent-subtle);

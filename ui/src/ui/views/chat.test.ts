@@ -605,7 +605,7 @@ describe("chat view", () => {
     expect(senderLabels).toContain("Joaquin De Rojas");
   });
 
-  it("renders inter-session messages as linked agent updates instead of You", () => {
+  it("renders inter-session messages with the linked agent notice and original message", () => {
     const container = document.createElement("div");
     render(
       renderChat(
@@ -630,7 +630,7 @@ describe("chat view", () => {
     expect(container.querySelectorAll(".chat-group.user")).toHaveLength(0);
     expect(container.textContent).toContain("Agent cskh-tl00275");
     expect(container.textContent).toContain("Agent cskh-tl00275 mới phản hồi lại");
-    expect(container.textContent).not.toContain("CSKH da phan hoi");
+    expect(container.textContent).toContain("CSKH da phan hoi");
     expect(container.textContent).not.toContain("You");
   });
 

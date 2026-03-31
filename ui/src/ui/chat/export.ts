@@ -1,5 +1,5 @@
 import { extractTextCached } from "./message-extract.ts";
-import { normalizeMessage } from "./message-normalizer.ts";
+import { extractNormalizedTextContent, normalizeMessage } from "./message-normalizer.ts";
 
 /**
  * Export chat history as markdown file.
@@ -36,14 +36,11 @@ export function buildChatMarkdown(messages: unknown[], assistantName: string): s
             : "Tool";
     const content =
       normalized.role === "inter_session"
-        ? normalized.content
-            .map((item) =>
-              item.type === "text" && typeof item.text === "string" ? item.text : null,
-            )
+        ? [normalized.interSessionNotice, extractNormalizedTextContent(normalized.content)]
             .filter(
               (value): value is string => typeof value === "string" && value.trim().length > 0,
             )
-            .join("\n")
+            .join("\n\n")
         : (extractTextCached(msg) ?? "");
     const ts =
       typeof normalized.timestamp === "number" ? new Date(normalized.timestamp).toISOString() : "";

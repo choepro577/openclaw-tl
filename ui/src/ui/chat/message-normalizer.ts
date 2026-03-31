@@ -30,6 +30,13 @@ export function buildInterSessionDisplayText(senderLabel: string | null): string
   return `${normalizeOptionalString(senderLabel) ?? INTER_SESSION_FALLBACK_LABEL} mới phản hồi lại`;
 }
 
+export function extractNormalizedTextContent(content: MessageContentItem[]): string {
+  return content
+    .map((item) => (item.type === "text" && typeof item.text === "string" ? item.text : null))
+    .filter((value): value is string => typeof value === "string" && value.trim().length > 0)
+    .join("\n");
+}
+
 /**
  * Normalize a raw message object into a consistent structure.
  */
@@ -77,6 +84,7 @@ export function normalizeMessage(message: unknown): NormalizedMessage {
   const id = typeof m.id === "string" ? m.id : undefined;
   let senderLabel =
     typeof m.senderLabel === "string" && m.senderLabel.trim() ? m.senderLabel.trim() : null;
+  let interSessionNotice: string | null | undefined;
   const provenance =
     m.provenance && typeof m.provenance === "object"
       ? (m.provenance as Record<string, unknown>)
@@ -98,10 +106,10 @@ export function normalizeMessage(message: unknown): NormalizedMessage {
   if (isInterSession) {
     role = "inter_session";
     senderLabel = senderLabel ?? deriveInterSessionSenderLabel(sourceSessionKey);
-    content = [{ type: "text", text: buildInterSessionDisplayText(senderLabel) }];
+    interSessionNotice = buildInterSessionDisplayText(senderLabel);
   }
 
-  return { role, content, timestamp, id, senderLabel };
+  return { role, content, timestamp, id, senderLabel, interSessionNotice };
 }
 
 /**

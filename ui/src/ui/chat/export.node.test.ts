@@ -24,7 +24,7 @@ describe("chat export", () => {
     expect(markdown).not.toContain("scratchpad");
   });
 
-  it("labels inter-session messages by their source agent instead of You", () => {
+  it("exports inter-session messages with the source agent label and original message", () => {
     const markdown = buildChatMarkdown(
       [
         {
@@ -42,7 +42,7 @@ describe("chat export", () => {
 
     expect(markdown).toContain("## Agent cskh-tl00275 (2026-03-19T12:00:00.000Z)");
     expect(markdown).toContain("Agent cskh-tl00275 mới phản hồi lại");
-    expect(markdown).not.toContain("Forwarded update");
+    expect(markdown).toContain("Forwarded update");
     expect(markdown).not.toContain("## You");
   });
 });

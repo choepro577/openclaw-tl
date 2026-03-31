@@ -135,10 +135,11 @@ describe("message-normalizer", () => {
 
       expect(result).toEqual({
         role: "inter_session",
-        content: [{ type: "text", text: "Agent cskh-tl00275 mới phản hồi lại" }],
+        content: [{ type: "text", text: "reply from another agent" }],
         timestamp: Date.now(),
         id: undefined,
         senderLabel: "Agent cskh-tl00275",
+        interSessionNotice: "Agent cskh-tl00275 mới phản hồi lại",
       });
     });
   });
