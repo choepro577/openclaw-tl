@@ -38,6 +38,7 @@ export function createSlackActions(
       capabilities: Array.from(capabilities),
       schema: actions.includes("send")
         ? {
+            actions: ["send"],
             properties: {
               blocks: createSlackMessageToolBlocksSchema(),
             },

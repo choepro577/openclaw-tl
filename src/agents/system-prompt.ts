@@ -200,7 +200,7 @@ function buildSchedulingSection(params: {
   return [
     "## Scheduling & Reminders",
     params.hasCron
-      ? `- For reminders, scheduled follow-ups, or recurring tasks, use \`${params.cronToolName}\`. ${params.hasUserSchedule ? "This is the primary scheduling path." : "This is the only supported scheduling path."}`
+      ? `- For reminders, scheduled follow-ups, recurring tasks, or deferred work that must run later, use \`${params.cronToolName}\`. ${params.hasUserSchedule ? "This is the primary scheduling path." : "This is the only supported scheduling path."}`
       : undefined,
     params.hasCron
       ? `- Use the first-class \`${params.cronToolName}\` tool directly; never substitute \`${params.execToolName}\`, \`openclaw cron ...\`, OS \`cron\`/\`crontab\`, \`at\`, \`sleep\`, heartbeats, memory, or a promise to remember later.`
@@ -217,6 +217,9 @@ function buildSchedulingSection(params: {
     "- Do not invent cron actions. Valid actions are `status`, `list`, `add`, `update`, `remove`, `run`, `runs`, and `wake`.",
     '- For `action: "add"`, send a complete cron job payload with at least `name`, `schedule`, and `payload`; do not send only a natural-language reminder request.',
     "- If `cron.add` fails validation, repair the payload into explicit JSON fields and retry at most once; if it still fails, explain the blocker instead of looping or saying you are still working in the background.",
+    "- Choose the payload by intent: use `systemEvent` when the job should fire as reminder text, and use `agentTurn` when the job should do work at that time.",
+    "- For reminder jobs, write the payload as what should be said when the reminder fires.",
+    '- For deferred-work jobs, write `payload.message` as the task to perform when the job fires. Do not repeat the scheduled time there and do not phrase it like "remind me" / "nhac toi".',
     params.hasCron
       ? '- If the job should resume this conversation, create an `agentTurn` cron job with `sessionTarget: "current"`.'
       : undefined,
@@ -232,11 +235,14 @@ function buildSchedulingSection(params: {
       : undefined,
     '- Use announce/webhook delivery only when the user explicitly wants out-of-session delivery; channel announce delivery is only supported for `sessionTarget: "isolated"` or `sessionTarget: "active-user"`.',
     params.hasCron
-      ? '- Canonical current-session example: `{ "action": "add", "job": { "name": "Reminder", "schedule": { "kind": "at", "at": "<ISO-8601>" }, "sessionTarget": "current", "payload": { "kind": "agentTurn", "message": "<reminder text>" } } }`'
+      ? '- Canonical current-session reminder: `{ "action": "add", "job": { "name": "Reminder", "schedule": { "kind": "at", "at": "<ISO-8601>" }, "sessionTarget": "current", "payload": { "kind": "agentTurn", "message": "Send the agreed reminder to the user." } } }`'
       : undefined,
-    '- Canonical main-session example: `{ "action": "add", "job": { "name": "Reminder", "schedule": { "kind": "at", "at": "<ISO-8601>" }, "sessionTarget": "main", "payload": { "kind": "systemEvent", "text": "<reminder text>" } } }`',
+    '- Canonical main-session reminder: `{ "action": "add", "job": { "name": "Reminder", "schedule": { "kind": "at", "at": "<ISO-8601>" }, "sessionTarget": "main", "payload": { "kind": "systemEvent", "text": "Reminder: follow up with the user about the agreement." } } }`',
+    params.hasCron
+      ? '- Canonical deferred-work example: `{ "action": "add", "job": { "name": "Research summary", "schedule": { "kind": "at", "at": "<ISO-8601>" }, "sessionTarget": "isolated", "payload": { "kind": "agentTurn", "message": "Summarize the research discussed earlier and send the final report." } } }`'
+      : undefined,
     params.hasUserSchedule
-      ? '- Canonical active-user example: `{ "action": "add", "job": { "name": "Reminder", "schedule": { "kind": "at", "at": "<ISO-8601>" }, "sessionTarget": "active-user", "payload": { "kind": "agentTurn", "message": "<reminder text>" } } }`'
+      ? '- Canonical active-user reminder: `{ "action": "add", "job": { "name": "Reminder", "schedule": { "kind": "at", "at": "<ISO-8601>" }, "sessionTarget": "active-user", "payload": { "kind": "agentTurn", "message": "Send the agreed reminder to the user." } } }`'
       : undefined,
     "",
   ].filter(Boolean);
@@ -326,7 +332,7 @@ export function buildAgentSystemPrompt(params: {
     browser: "Control web browser",
     canvas: "Present/eval/snapshot the Canvas",
     nodes: "List/describe/notify/camera/screen on paired nodes",
-    cron: "Manage cron jobs and wake events (use for reminders; when scheduling a reminder, write the systemEvent text as something that will read like a reminder when it fires, and mention that it is a reminder depending on the time gap between setting and firing; include recent context in reminder text if appropriate)",
+    cron: "Manage cron jobs and wake events for reminders and deferred execution; use systemEvent for reminder text and agentTurn for work the agent should perform later",
     message: "Send messages and channel actions",
     gateway: "Restart, apply config, or run updates on the running OpenClaw process",
     agents_list: acpSpawnRuntimeEnabled
@@ -522,7 +528,7 @@ export function buildAgentSystemPrompt(params: {
           "- browser: control OpenClaw's dedicated browser",
           "- canvas: present/eval/snapshot the Canvas",
           "- nodes: list/describe/notify/camera/screen on paired nodes",
-          "- cron: manage cron jobs and wake events (use for reminders; when scheduling a reminder, write the systemEvent text as something that will read like a reminder when it fires, and mention that it is a reminder depending on the time gap between setting and firing; include recent context in reminder text if appropriate)",
+          "- cron: manage cron jobs and wake events for reminders and deferred execution; use systemEvent for reminder text and agentTurn for work the agent should perform later",
           "- sessions_list: list sessions",
           "- sessions_history: fetch session history",
           "- sessions_send: send to another session",

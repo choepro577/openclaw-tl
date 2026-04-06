@@ -264,7 +264,7 @@ describe("buildAgentSystemPrompt", () => {
 
     expect(prompt).toContain("## Scheduling & Reminders");
     expect(prompt).toContain(
-      "For reminders, scheduled follow-ups, or recurring tasks, use `cron`. This is the only supported scheduling path.",
+      "For reminders, scheduled follow-ups, recurring tasks, or deferred work that must run later, use `cron`. This is the only supported scheduling path.",
     );
     expect(prompt).toContain("Do not invent cron actions.");
     expect(prompt).toContain('For `action: "add"`, send a complete cron job payload');
@@ -274,8 +274,13 @@ describe("buildAgentSystemPrompt", () => {
     expect(prompt).toContain('`sessionTarget: "session:<sessionKey>"`');
     expect(prompt).toContain('`sessionTarget: "main"`');
     expect(prompt).toContain('`sessionTarget: "isolated"`');
+    expect(prompt).toContain("Choose the payload by intent");
+    expect(prompt).toContain(
+      'Do not repeat the scheduled time there and do not phrase it like "remind me" / "nhac toi"',
+    );
     expect(prompt).toContain('"name": "Reminder"');
-    expect(prompt).toContain('Canonical current-session example: `{ "action": "add"');
+    expect(prompt).toContain('Canonical current-session reminder: `{ "action": "add"');
+    expect(prompt).toContain('Canonical deferred-work example: `{ "action": "add"');
   });
 
   it("teaches cross-agent user delivery via user_notify and user_schedule", () => {

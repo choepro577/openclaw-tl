@@ -29,6 +29,23 @@ const REMINDER_CONTEXT_MESSAGES_MAX = 10;
 const REMINDER_CONTEXT_PER_MESSAGE_MAX = 220;
 const REMINDER_CONTEXT_TOTAL_MAX = 700;
 const REMINDER_CONTEXT_MARKER = "\n\nRecent context:\n";
+const AGENT_TURN_REMINDER_PATTERNS = [
+  /\bremind me\b/i,
+  /\bping me\b/i,
+  /\bfollow up(?: with me)?\b/i,
+  /\b(?:nhắc tôi|nhac toi)\b/i,
+  /\b(?:nhắc lại|nhac lai)\b/i,
+] as const;
+const AGENT_TURN_TIME_PATTERNS = [
+  /\b(?:at|around|by)\s+\d{1,2}(?::\d{2})?\s*(?:am|pm)?\b/i,
+  /\b\d{1,2}(?::\d{2})\s*(?:am|pm)\b/i,
+  /\b(?:tomorrow(?: morning| afternoon| evening)?|this (?:morning|afternoon|evening)|tonight|next week)\b/i,
+  /\b(?:lúc|luc|vào|vao)\s*\d{1,2}(?:(?::\d{2})|h\d{0,2})?\b/i,
+  /\b(?:sáng|sang|chiều|chieu|tối|toi)\s+(?:nay|mai)\b/i,
+  /\b(?:ngày mai|ngay mai)\b/i,
+  /\b\d{1,2}\s*(?:phút|phut|giờ|gio)\s+nữa\b/i,
+  /\b\d{4}-\d{2}-\d{2}t\d{2}:\d{2}/i,
+] as const;
 
 const CronToolSessionTargetSchema = Type.Union([
   Type.Literal("main"),
@@ -95,22 +112,12 @@ const CronToolJobSchema = Type.Object(
     wakeMode: optionalStringEnum(CRON_WAKE_MODES),
     payload: Type.Optional(CronToolPayloadSchema),
     delivery: Type.Optional(CronToolDeliverySchema),
-    message: Type.Optional(Type.String()),
-    text: Type.Optional(Type.String()),
-    model: Type.Optional(Type.String()),
-    thinking: Type.Optional(Type.String()),
-    timeoutSeconds: Type.Optional(Type.Number()),
-    allowUnsafeExternalContent: Type.Optional(Type.Boolean()),
-    channel: Type.Optional(Type.String()),
-    to: Type.Optional(Type.String()),
-    deliver: Type.Optional(Type.Boolean()),
-    bestEffortDeliver: Type.Optional(Type.Boolean()),
   },
   { additionalProperties: true },
 );
 
-// Flattened schema: runtime still validates per-action requirements, but we
-// expose common cron.add fields directly so models can see the expected shape.
+// Canonical tool schema: prefer the nested `job` shape. Runtime still accepts
+// flat legacy params and repairs them for compatibility with weaker providers.
 const CronToolSchema = Type.Object(
   {
     action: stringEnum(CRON_ACTIONS),
@@ -119,32 +126,12 @@ const CronToolSchema = Type.Object(
     timeoutMs: Type.Optional(Type.Number()),
     includeDisabled: Type.Optional(Type.Boolean()),
     job: Type.Optional(CronToolJobSchema),
-    name: Type.Optional(Type.String()),
-    description: Type.Optional(Type.String()),
-    agentId: Type.Optional(Type.Union([Type.String(), Type.Null()])),
-    sessionKey: Type.Optional(Type.Union([Type.String(), Type.Null()])),
-    enabled: Type.Optional(Type.Boolean()),
-    deleteAfterRun: Type.Optional(Type.Boolean()),
-    schedule: Type.Optional(CronToolScheduleSchema),
-    sessionTarget: Type.Optional(CronToolSessionTargetSchema),
-    wakeMode: optionalStringEnum(CRON_WAKE_MODES),
-    payload: Type.Optional(CronToolPayloadSchema),
-    delivery: Type.Optional(CronToolDeliverySchema),
-    message: Type.Optional(Type.String()),
-    text: Type.Optional(Type.String()),
-    model: Type.Optional(Type.String()),
-    thinking: Type.Optional(Type.String()),
-    timeoutSeconds: Type.Optional(Type.Number()),
-    allowUnsafeExternalContent: Type.Optional(Type.Boolean()),
-    channel: Type.Optional(Type.String()),
-    to: Type.Optional(Type.String()),
-    deliver: Type.Optional(Type.Boolean()),
-    bestEffortDeliver: Type.Optional(Type.Boolean()),
     jobId: Type.Optional(Type.String()),
     id: Type.Optional(Type.String()),
     patch: Type.Optional(Type.Object({}, { additionalProperties: true })),
     mode: optionalStringEnum(CRON_WAKE_MODES),
     runMode: optionalStringEnum(CRON_RUN_MODES),
+    text: Type.Optional(Type.String()),
     contextMessages: Type.Optional(
       Type.Number({ minimum: 0, maximum: REMINDER_CONTEXT_MESSAGES_MAX }),
     ),
@@ -176,6 +163,50 @@ function stripExistingContext(text: string) {
     return text;
   }
   return text.slice(0, index).trim();
+}
+
+function readAgentTurnWorkText(payload: Record<string, unknown>): string {
+  const message =
+    typeof payload.message === "string"
+      ? payload.message.trim()
+      : typeof payload.text === "string"
+        ? payload.text.trim()
+        : "";
+  return message;
+}
+
+function detectPattern(text: string, patterns: readonly RegExp[]) {
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
+    if (match?.[0]) {
+      return match[0];
+    }
+  }
+  return null;
+}
+
+function validateAgentTurnPayloadText(job: Record<string, unknown>) {
+  const payload = isRecord(job.payload) ? job.payload : null;
+  if (!payload) {
+    return null;
+  }
+  const kind = typeof payload.kind === "string" ? payload.kind.trim() : "";
+  if (kind !== "agentTurn") {
+    return null;
+  }
+  const workText = readAgentTurnWorkText(payload);
+  if (!workText) {
+    return null;
+  }
+  const reminderMatch = detectPattern(workText, AGENT_TURN_REMINDER_PATTERNS);
+  if (reminderMatch) {
+    return `Detected reminder phrasing in payload.message: "${reminderMatch}".`;
+  }
+  const timeMatch = detectPattern(workText, AGENT_TURN_TIME_PATTERNS);
+  if (timeMatch) {
+    return `Detected repeated schedule wording in payload.message: "${timeMatch}".`;
+  }
+  return null;
 }
 
 function truncateText(input: string, maxLen: number) {
@@ -369,13 +400,24 @@ function buildCronAddValidationError(validationMessage?: string) {
   const lines = [
     "cron.add requires a complete job payload.",
     "Minimum fields: `name`, `schedule`, and `payload`.",
-    'Example: `{ "action": "add", "job": { "name": "Reminder", "schedule": { "kind": "at", "at": "2026-03-30T17:00:00Z" }, "sessionTarget": "current", "payload": { "kind": "agentTurn", "message": "Nhac toi..." } } }`',
-    "For one-shot reminders, convert the requested time to an ISO-8601 timestamp yourself.",
+    'Reminder example: `{ "action": "add", "job": { "name": "Reminder", "schedule": { "kind": "at", "at": "2026-03-30T17:00:00Z" }, "sessionTarget": "current", "payload": { "kind": "agentTurn", "message": "Send the agreed reminder to the user." } } }`',
+    'Deferred-work example: `{ "action": "add", "job": { "name": "Research summary", "schedule": { "kind": "at", "at": "2026-03-30T20:00:00Z" }, "sessionTarget": "isolated", "payload": { "kind": "agentTurn", "message": "Summarize the research discussed earlier and send the final report." } } }`',
+    "For one-shot schedules, convert the requested time to an ISO-8601 timestamp yourself.",
   ];
   if (validationMessage) {
     lines.push(`Validation failed: ${validationMessage}`);
   }
   return lines.join("\n");
+}
+
+function buildCronAgentTurnPayloadValidationError(validationMessage: string) {
+  return [
+    "cron.add payload.kind=`agentTurn` must describe only the work to perform when the job fires.",
+    "Do not write a reminder sentence and do not repeat the scheduled time inside payload.message.",
+    'Good: `"Summarize the research discussed earlier and send the final report."`',
+    'Bad: `"Nhac toi luc 8h tong hop cac van de nay."`',
+    `Validation failed: ${validationMessage}`,
+  ].join("\n");
 }
 
 export function createCronTool(opts?: CronToolOptions, deps?: CronToolDeps): AnyAgentTool {
@@ -384,81 +426,28 @@ export function createCronTool(opts?: CronToolOptions, deps?: CronToolDeps): Any
     label: "Cron",
     name: "cron",
     ownerOnly: true,
-    description: `Manage Gateway cron jobs (status/list/add/update/remove/run/runs) and send wake events.
+    description: `Manage Gateway cron jobs (status/list/add/update/remove/run/runs) and wake events.
 
-ACTIONS:
-- status: Check cron scheduler status
-- list: List jobs (use includeDisabled:true to include disabled)
-- add: Create job (requires a complete job object with name + schedule + payload, see schema below)
-- update: Modify job (requires jobId + patch object)
-- remove: Delete job (requires jobId)
-- run: Trigger job immediately (requires jobId)
-- runs: Get job run history (requires jobId)
-- wake: Send wake event (requires text, optional mode)
+Use \`action: "add"\` for two distinct cases:
+- Reminder/follow-up text: use \`payload.kind="systemEvent"\` for \`sessionTarget="main"\`, or \`payload.kind="agentTurn"\` for \`sessionTarget="current"\` / \`"active-user"\`.
+- Deferred work at a future time: use \`payload.kind="agentTurn"\` and write \`payload.message\` as the work to perform when the job fires.
 
-JOB SCHEMA (for add action):
-{
-  "name": "string",
-  "schedule": { ... },      // Required: when to run
-  "payload": { ... },       // Required: what to execute
-  "delivery": { ... },      // Optional: announce summary (isolated/current/active-user/session:xxx only) or webhook POST
-  "sessionTarget": "main" | "isolated" | "current" | "active-user" | "session:<custom-id>",  // Optional, defaults based on context
-  "enabled": true | false   // Optional, default true
-}
+Canonical add shape:
+{ "action": "add", "job": { "name": "<job name>", "schedule": { ... }, "payload": { ... }, "sessionTarget": "<optional>" } }
 
-SESSION TARGET OPTIONS:
-- "main": Run in the main session (requires payload.kind="systemEvent")
-- "isolated": Run in an ephemeral isolated session (requires payload.kind="agentTurn")
-- "current": Bind to the current session where the cron is created (resolved at creation time)
-- "active-user": Resolve the owning agent's latest active user-facing session when the job fires; fall back to main if none is active
-- "session:<custom-id>": Run in a persistent named session (e.g., "session:project-alpha-daily")
+Key rules:
+- \`sessionTarget="main"\` requires \`payload.kind="systemEvent"\`.
+- \`sessionTarget="isolated"\` / \`"current"\` / \`"active-user"\` / \`"session:..."\` require \`payload.kind="agentTurn"\`.
+- For deferred work, \`payload.message\` must describe the task to execute at fire time. Do not repeat the time or write a reminder sentence there.
+- Use announce/webhook delivery only when the user explicitly wants out-of-session delivery.
+- If \`cron.add\` validation fails, repair the JSON payload and retry at most once.
 
-DEFAULT BEHAVIOR (unchanged for backward compatibility):
-- payload.kind="systemEvent" → defaults to "main"
-- payload.kind="agentTurn" → defaults to "isolated"
-To use current session binding, explicitly set sessionTarget="current".
+Canonical examples:
+- Current-session reminder: { "action": "add", "job": { "name": "Reminder", "schedule": { "kind": "at", "at": "<ISO-8601>" }, "sessionTarget": "current", "payload": { "kind": "agentTurn", "message": "Send the agreed reminder to the user." } } }
+- Main-session reminder: { "action": "add", "job": { "name": "Reminder", "schedule": { "kind": "at", "at": "<ISO-8601>" }, "sessionTarget": "main", "payload": { "kind": "systemEvent", "text": "Reminder: follow up with the user about the agreement." } } }
+- Deferred work: { "action": "add", "job": { "name": "Research summary", "schedule": { "kind": "at", "at": "<ISO-8601>" }, "sessionTarget": "isolated", "payload": { "kind": "agentTurn", "message": "Summarize the research discussed earlier and send the final report." } } }
 
-SCHEDULE TYPES (schedule.kind):
-- "at": One-shot at absolute time
-  { "kind": "at", "at": "<ISO-8601 timestamp>" }
-- "every": Recurring interval
-  { "kind": "every", "everyMs": <interval-ms>, "anchorMs": <optional-start-ms> }
-- "cron": Cron expression
-  { "kind": "cron", "expr": "<cron-expression>", "tz": "<optional-timezone>" }
-
-ISO timestamps without an explicit timezone are treated as UTC.
-
-PAYLOAD TYPES (payload.kind):
-- "systemEvent": Injects text as system event into session
-  { "kind": "systemEvent", "text": "<message>" }
-- "agentTurn": Runs agent with message (isolated sessions only)
-  { "kind": "agentTurn", "message": "<prompt>", "model": "<optional>", "thinking": "<optional>", "timeoutSeconds": <optional, 0 means no timeout> }
-
-DELIVERY (top-level):
-  { "mode": "none|announce|webhook", "channel": "<optional>", "to": "<optional>", "bestEffort": <optional-bool> }
-  - Default for isolated agentTurn jobs (when delivery omitted): "announce"
-  - announce: send to chat channel (optional channel/to target)
-  - webhook: send finished-run event as HTTP POST to delivery.to (URL required)
-  - If the task needs to send to a specific chat/recipient, set announce delivery.channel/to; do not call messaging tools inside the run.
-
-CRITICAL CONSTRAINTS:
-- sessionTarget="main" REQUIRES payload.kind="systemEvent"
-- sessionTarget="isolated" | "current" | "active-user" | "session:xxx" REQUIRES payload.kind="agentTurn"
-- For action="add", include a full job payload with at least name + schedule + payload. Do not pass only free-text instructions.
-- If cron.add validation fails, repair the payload into explicit JSON fields and retry at most once. Do not loop the same malformed call or claim you are still processing while idle.
-- For webhook callbacks, use delivery.mode="webhook" with delivery.to set to a URL.
-- In an a_to_a_send pair session, do not use raw cron.add with sessionTarget="current"; use user_notify or user_schedule instead.
-Default: prefer isolated agentTurn jobs unless the user explicitly wants current-session binding.
-
-CANONICAL EXAMPLES:
-- Current-session reminder: { "action": "add", "job": { "name": "Reminder", "schedule": { "kind": "at", "at": "<ISO-8601>" }, "sessionTarget": "current", "payload": { "kind": "agentTurn", "message": "<reminder text>" } } }
-- Main-session reminder: { "action": "add", "job": { "name": "Reminder", "schedule": { "kind": "at", "at": "<ISO-8601>" }, "sessionTarget": "main", "payload": { "kind": "systemEvent", "text": "<reminder text>" } } }
-
-WAKE MODES (for wake action):
-- "next-heartbeat" (default): Wake on next heartbeat
-- "now": Wake immediately
-
-Use jobId as the canonical identifier; id is accepted for compatibility. Use contextMessages (0-10) to add previous messages as context to the job text.`,
+Use jobId as the canonical identifier; id is accepted for compatibility. \`contextMessages\` only augments reminder-style \`systemEvent\` text.`,
     parameters: CronToolSchema,
     execute: async (_toolCallId, args) => {
       const params = args as Record<string, unknown>;
@@ -566,6 +555,12 @@ Use jobId as the canonical identifier; id is accepted for compatibility. Use con
             rawJob,
             normalizedJob: job,
           });
+          const agentTurnPayloadValidationMessage = validateAgentTurnPayloadText(job);
+          if (agentTurnPayloadValidationMessage) {
+            throw new Error(
+              buildCronAgentTurnPayloadValidationError(agentTurnPayloadValidationMessage),
+            );
+          }
           if (job && typeof job === "object") {
             const cfg = loadConfig();
             const { mainKey, alias } = resolveMainSessionAlias(cfg);

@@ -306,9 +306,24 @@ function mergeToolSchemaProperties(
   }
 }
 
+function shouldIncludeToolSchemaContribution(
+  contribution: ChannelMessageToolSchemaContribution,
+  allowedActions?: ReadonlySet<ChannelMessageActionName>,
+) {
+  if (!allowedActions || allowedActions.size === 0) {
+    return true;
+  }
+  const scopedActions = contribution.actions?.filter(Boolean);
+  if (!scopedActions || scopedActions.length === 0) {
+    return true;
+  }
+  return scopedActions.some((action) => allowedActions.has(action));
+}
+
 export function resolveChannelMessageToolSchemaProperties(params: {
   cfg: OpenClawConfig;
   channel?: string;
+  actions?: readonly ChannelMessageActionName[];
   currentChannelId?: string | null;
   currentThreadTs?: string | null;
   currentMessageId?: string | number | null;
@@ -321,6 +336,8 @@ export function resolveChannelMessageToolSchemaProperties(params: {
   const properties: Record<string, TSchema> = {};
   const currentChannel = resolveMessageActionDiscoveryChannelId(params.channel);
   const discoveryBase = createMessageActionDiscoveryContext(params);
+  const allowedActions =
+    params.actions && params.actions.length > 0 ? new Set(params.actions) : undefined;
 
   for (const plugin of listChannelPlugins()) {
     if (!plugin.actions) {
@@ -332,6 +349,9 @@ export function resolveChannelMessageToolSchemaProperties(params: {
       context: discoveryBase,
       includeSchema: true,
     }).schemaContributions) {
+      if (!shouldIncludeToolSchemaContribution(contribution, allowedActions)) {
+        continue;
+      }
       const visibility = contribution.visibility ?? "current-channel";
       if (currentChannel) {
         if (visibility === "all-configured" || plugin.id === currentChannel) {

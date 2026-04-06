@@ -50,6 +50,7 @@ export type ChannelMessageActionDiscoveryContext = {
 export type ChannelMessageToolSchemaContribution = {
   properties: Record<string, TSchema>;
   visibility?: "current-channel" | "all-configured";
+  actions?: readonly ChannelMessageActionNameFromList[];
 };
 
 export type ChannelMessageToolDiscovery = {

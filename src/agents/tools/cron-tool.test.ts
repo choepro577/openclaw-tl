@@ -64,6 +64,17 @@ describe("cron tool", () => {
     };
   }
 
+  function buildDeferredWorkAgentTurnJob(overrides: Record<string, unknown> = {}) {
+    return buildReminderAgentTurnJob({
+      name: "research-summary",
+      payload: {
+        kind: "agentTurn",
+        message: "Summarize the research discussed earlier and send the final report.",
+      },
+      ...overrides,
+    });
+  }
+
   async function executeAddAndReadDelivery(params: {
     callId: string;
     agentSessionKey: string;
@@ -296,6 +307,56 @@ describe("cron tool", () => {
     });
   });
 
+  it("accepts deferred work agentTurn payloads that describe work at fire time", async () => {
+    const tool = createCronTool({ agentSessionKey: "main" });
+    await tool.execute("call-deferred-work", {
+      action: "add",
+      job: buildDeferredWorkAgentTurnJob(),
+    });
+
+    const call = readGatewayCall();
+    expect(call.method).toBe("cron.add");
+    expect(call.params).toMatchObject({
+      name: "research-summary",
+      sessionTarget: "isolated",
+      payload: {
+        kind: "agentTurn",
+        message: "Summarize the research discussed earlier and send the final report.",
+      },
+    });
+  });
+
+  it("rejects reminder phrasing inside deferred agentTurn payloads", async () => {
+    const tool = createCronTool({ agentSessionKey: "main" });
+
+    await expect(
+      tool.execute("call-agentturn-reminder-phrase", {
+        action: "add",
+        job: buildDeferredWorkAgentTurnJob({
+          payload: { kind: "agentTurn", message: "Nhac toi tong hop cac van de nay." },
+        }),
+      }),
+    ).rejects.toThrow("must describe only the work to perform when the job fires");
+    expect(callGatewayMock).not.toHaveBeenCalled();
+  });
+
+  it("rejects repeated schedule wording inside deferred agentTurn payloads", async () => {
+    const tool = createCronTool({ agentSessionKey: "main" });
+
+    await expect(
+      tool.execute("call-agentturn-time-phrase", {
+        action: "add",
+        job: buildDeferredWorkAgentTurnJob({
+          payload: {
+            kind: "agentTurn",
+            message: "Summarize the research discussed earlier at 8pm and send the report.",
+          },
+        }),
+      }),
+    ).rejects.toThrow("Do not write a reminder sentence and do not repeat the scheduled time");
+    expect(callGatewayMock).not.toHaveBeenCalled();
+  });
+
   it("rejects cron.add current-session binding inside an A2A pair session", async () => {
     const tool = createCronTool({
       agentSessionKey: "agent:target:a2a:from:main",
@@ -396,6 +457,21 @@ describe("cron tool", () => {
     expect(cronCall.method).toBe("cron.add");
     const text = readCronPayloadText(0);
     expect(text).not.toContain("Recent context:");
+  });
+
+  it("does not fetch or append recent context for deferred agentTurn jobs", async () => {
+    callGatewayMock.mockResolvedValueOnce({ ok: true });
+
+    const tool = createCronTool({ agentSessionKey: "main" });
+    await tool.execute("call-agentturn-no-context", {
+      action: "add",
+      contextMessages: 3,
+      job: buildDeferredWorkAgentTurnJob(),
+    });
+
+    expect(callGatewayMock).toHaveBeenCalledTimes(1);
+    const cronCall = readGatewayCall(0);
+    expect(cronCall.method).toBe("cron.add");
   });
 
   it("preserves explicit agentId null on add", async () => {
@@ -648,5 +724,13 @@ describe("cron tool", () => {
     expect(params?.id).toBe("job-2");
     expect(params?.patch?.sessionTarget).toBe("main");
     expect(params?.patch?.failureAlert).toEqual({ after: 3, cooldownMs: 60_000 });
+  });
+
+  it("keeps the advertised cron schema and description lean", () => {
+    const tool = createCronTool();
+    const schemaChars = JSON.stringify(tool.parameters).length;
+
+    expect(schemaChars).toBeLessThan(3200);
+    expect(tool.description.length).toBeLessThan(2600);
   });
 });

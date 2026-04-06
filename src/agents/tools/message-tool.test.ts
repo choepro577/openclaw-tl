@@ -239,11 +239,13 @@ describe("message tool schema scoping", () => {
     capabilities: ["interactive", "buttons"],
     toolSchema: () => [
       {
+        actions: ["send"],
         properties: {
           buttons: createMessageToolButtonsSchema(),
         },
       },
       {
+        actions: ["poll", "poll-vote"],
         properties: createTelegramPollExtraToolSchemas(),
         visibility: "all-configured",
       },
@@ -258,6 +260,7 @@ describe("message tool schema scoping", () => {
     actions: ["send", "poll", "poll-vote"],
     capabilities: ["interactive", "components"],
     toolSchema: () => ({
+      actions: ["send"],
       properties: {
         components: createDiscordMessageToolComponentsSchema(),
       },
@@ -272,6 +275,7 @@ describe("message tool schema scoping", () => {
     actions: ["send", "react"],
     capabilities: ["interactive", "blocks"],
     toolSchema: () => ({
+      actions: ["send"],
       properties: {
         blocks: createSlackMessageToolBlocksSchema(),
       },
@@ -409,6 +413,7 @@ describe("message tool schema scoping", () => {
           .channels?.telegram;
         return [
           {
+            actions: ["send"],
             properties: {
               buttons: createMessageToolButtonsSchema(),
             },
@@ -417,6 +422,7 @@ describe("message tool schema scoping", () => {
             ? []
             : [
                 {
+                  actions: ["poll", "poll-vote"],
                   properties: createTelegramPollExtraToolSchemas(),
                   visibility: "all-configured" as const,
                 },
@@ -484,6 +490,53 @@ describe("message tool schema scoping", () => {
 
     expect(getToolProperties(scopedTool).interactive).toBeDefined();
     expect(getToolProperties(unscopedTool).interactive).toBeUndefined();
+  });
+
+  it("prunes unrelated schema groups when only send and broadcast are available", () => {
+    const leanPlugin = createChannelPlugin({
+      id: "signal",
+      label: "Signal",
+      docsPath: "/channels/signal",
+      blurb: "Signal lean plugin.",
+      actions: ["send", "broadcast"],
+      toolSchema: () => [
+        {
+          actions: ["send", "broadcast"],
+          properties: {
+            blocks: createSlackMessageToolBlocksSchema(),
+          },
+        },
+        {
+          actions: ["react"],
+          properties: {
+            emojiPicker: createMessageToolButtonsSchema(),
+          },
+        },
+      ],
+    });
+
+    setActivePluginRegistry(
+      createTestRegistry([{ pluginId: "signal", source: "test", plugin: leanPlugin }]),
+    );
+
+    const tool = createMessageTool({
+      config: {} as never,
+      currentChannelProvider: "signal",
+    });
+    const properties = getToolProperties(tool);
+    const serialized = JSON.stringify(tool.parameters);
+
+    expect(getActionEnum(properties)).toEqual(["send", "broadcast"]);
+    expect(properties.message).toBeDefined();
+    expect(properties.blocks).toBeDefined();
+    expect(properties.emojiPicker).toBeUndefined();
+    expect(properties.pollId).toBeUndefined();
+    expect(properties.emoji).toBeUndefined();
+    expect(properties.eventName).toBeUndefined();
+    expect(properties.activityType).toBeUndefined();
+    expect(properties.deleteDays).toBeUndefined();
+    expect(properties.threadName).toBeUndefined();
+    expect(serialized.length).toBeLessThan(3500);
   });
 
   it("uses discovery account scope for other configured channel actions", () => {

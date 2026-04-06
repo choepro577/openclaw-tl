@@ -38,10 +38,103 @@ const EXPLICIT_TARGET_ACTIONS = new Set<ChannelMessageActionName>([
   "thread-reply",
   "broadcast",
 ]);
+const SEND_SCHEMA_ACTIONS = new Set<ChannelMessageActionName>([
+  "send",
+  "broadcast",
+  "sendWithEffect",
+  "sendAttachment",
+  "reply",
+  "thread-reply",
+  "edit",
+]);
+const MESSAGE_REFERENCE_SCHEMA_ACTIONS = new Set<ChannelMessageActionName>([
+  "react",
+  "reactions",
+  "read",
+  "edit",
+  "unsend",
+  "reply",
+  "thread-reply",
+  "delete",
+  "pin",
+  "unpin",
+  "download-file",
+]);
+const REACTION_SCHEMA_ACTIONS = new Set<ChannelMessageActionName>(["react", "reactions"]);
+const FETCH_SCHEMA_ACTIONS = new Set<ChannelMessageActionName>([
+  "read",
+  "search",
+  "list-pins",
+  "download-file",
+]);
+const POLL_SCHEMA_ACTIONS = new Set<ChannelMessageActionName>(["poll", "poll-vote"]);
+const CHANNEL_TARGET_SCHEMA_ACTIONS = new Set<ChannelMessageActionName>([
+  "search",
+  "member-info",
+  "role-info",
+  "channel-info",
+  "channel-list",
+  "permissions",
+  "thread-list",
+  "role-add",
+  "role-remove",
+  "voice-status",
+  "event-list",
+  "event-create",
+  "channel-create",
+  "channel-edit",
+  "channel-delete",
+  "channel-move",
+  "category-create",
+  "category-edit",
+  "category-delete",
+  "topic-create",
+  "topic-edit",
+]);
+const STICKER_SCHEMA_ACTIONS = new Set<ChannelMessageActionName>([
+  "sticker",
+  "sticker-search",
+  "emoji-list",
+  "emoji-upload",
+  "sticker-upload",
+]);
+const THREAD_SCHEMA_ACTIONS = new Set<ChannelMessageActionName>(["thread-create"]);
+const EVENT_SCHEMA_ACTIONS = new Set<ChannelMessageActionName>(["event-list", "event-create"]);
+const MODERATION_SCHEMA_ACTIONS = new Set<ChannelMessageActionName>(["timeout", "kick", "ban"]);
+const CHANNEL_MANAGEMENT_SCHEMA_ACTIONS = new Set<ChannelMessageActionName>([
+  "renameGroup",
+  "setGroupIcon",
+  "addParticipant",
+  "removeParticipant",
+  "leaveGroup",
+  "channel-create",
+  "channel-edit",
+  "channel-delete",
+  "channel-move",
+  "category-create",
+  "category-edit",
+  "category-delete",
+  "topic-create",
+  "topic-edit",
+]);
+const PRESENCE_SCHEMA_ACTIONS = new Set<ChannelMessageActionName>(["set-presence"]);
 
 function actionNeedsExplicitTarget(action: ChannelMessageActionName): boolean {
   return EXPLICIT_TARGET_ACTIONS.has(action);
 }
+
+function hasSchemaAction(
+  actions: ReadonlySet<ChannelMessageActionName>,
+  candidates: ReadonlySet<ChannelMessageActionName>,
+) {
+  for (const action of candidates) {
+    if (actions.has(action)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 function buildRoutingSchema() {
   return {
     channel: Type.Optional(Type.String()),
@@ -130,21 +223,23 @@ function buildSendSchema(options: { includeInteractive: boolean }) {
   return props;
 }
 
-function buildReactionSchema() {
+function buildMessageReferenceSchema() {
   return {
     messageId: Type.Optional(
       Type.String({
-        description:
-          "Target message id for reaction. If omitted, defaults to the current inbound message id when available.",
+        description: "Target message id when an action needs to reference an existing message.",
       }),
     ),
     message_id: Type.Optional(
       Type.String({
-        // Intentional duplicate alias for tool-schema discoverability in LLMs.
-        description:
-          "snake_case alias of messageId. If omitted, defaults to the current inbound message id when available.",
+        description: "snake_case alias of messageId for channels that prefer that shape.",
       }),
     ),
+  };
+}
+
+function buildReactionSchema() {
+  return {
     emoji: Type.Optional(Type.String()),
     remove: Type.Optional(Type.Boolean()),
     targetAuthor: Type.Optional(Type.String()),
@@ -345,35 +440,48 @@ function buildChannelManagementSchema() {
 }
 
 function buildMessageToolSchemaProps(options: {
+  actions: readonly ChannelMessageActionName[];
   includeInteractive: boolean;
   extraProperties?: Record<string, TSchema>;
 }) {
+  const actions = new Set(options.actions);
   return {
     ...buildRoutingSchema(),
-    ...buildSendSchema(options),
-    ...buildReactionSchema(),
-    ...buildFetchSchema(),
-    ...buildPollSchema(),
-    ...buildChannelTargetSchema(),
-    ...buildStickerSchema(),
-    ...buildThreadSchema(),
-    ...buildEventSchema(),
-    ...buildModerationSchema(),
+    ...(hasSchemaAction(actions, SEND_SCHEMA_ACTIONS)
+      ? buildSendSchema({ includeInteractive: options.includeInteractive })
+      : {}),
+    ...(hasSchemaAction(actions, MESSAGE_REFERENCE_SCHEMA_ACTIONS)
+      ? buildMessageReferenceSchema()
+      : {}),
+    ...(hasSchemaAction(actions, REACTION_SCHEMA_ACTIONS) ? buildReactionSchema() : {}),
+    ...(hasSchemaAction(actions, FETCH_SCHEMA_ACTIONS) ? buildFetchSchema() : {}),
+    ...(hasSchemaAction(actions, POLL_SCHEMA_ACTIONS) ? buildPollSchema() : {}),
+    ...(hasSchemaAction(actions, CHANNEL_TARGET_SCHEMA_ACTIONS) ? buildChannelTargetSchema() : {}),
+    ...(hasSchemaAction(actions, STICKER_SCHEMA_ACTIONS) ? buildStickerSchema() : {}),
+    ...(hasSchemaAction(actions, THREAD_SCHEMA_ACTIONS) ? buildThreadSchema() : {}),
+    ...(hasSchemaAction(actions, EVENT_SCHEMA_ACTIONS) ? buildEventSchema() : {}),
+    ...(hasSchemaAction(actions, MODERATION_SCHEMA_ACTIONS) ? buildModerationSchema() : {}),
     ...buildGatewaySchema(),
-    ...buildChannelManagementSchema(),
-    ...buildPresenceSchema(),
+    ...(hasSchemaAction(actions, CHANNEL_MANAGEMENT_SCHEMA_ACTIONS)
+      ? buildChannelManagementSchema()
+      : {}),
+    ...(hasSchemaAction(actions, PRESENCE_SCHEMA_ACTIONS) ? buildPresenceSchema() : {}),
     ...options.extraProperties,
   };
 }
 
 function buildMessageToolSchemaFromActions(
-  actions: readonly string[],
+  actions: readonly ChannelMessageActionName[],
   options: {
     includeInteractive: boolean;
     extraProperties?: Record<string, TSchema>;
   },
 ) {
-  const props = buildMessageToolSchemaProps(options);
+  const props = buildMessageToolSchemaProps({
+    actions,
+    includeInteractive: options.includeInteractive,
+    extraProperties: options.extraProperties,
+  });
   return Type.Object({
     action: stringEnum(actions),
     ...props,
@@ -411,7 +519,7 @@ function resolveMessageToolSchemaActions(params: {
   sessionId?: string;
   agentId?: string;
   requesterSenderId?: string;
-}): string[] {
+}): ChannelMessageActionName[] {
   const currentChannel = normalizeMessageChannel(params.currentChannelProvider);
   if (currentChannel) {
     const scopedActions = listChannelSupportedActions({
@@ -426,7 +534,7 @@ function resolveMessageToolSchemaActions(params: {
       agentId: params.agentId,
       requesterSenderId: params.requesterSenderId,
     });
-    const allActions = new Set<string>(["send", ...scopedActions]);
+    const allActions = new Set<ChannelMessageActionName>(["send", ...scopedActions]);
     // Include actions from other configured channels so isolated/cron agents
     // can invoke cross-channel actions without validation errors.
     for (const plugin of listChannelPlugins()) {
@@ -522,6 +630,7 @@ function buildMessageToolSchema(params: {
   const extraProperties = resolveChannelMessageToolSchemaProperties({
     cfg: params.cfg,
     channel: normalizeMessageChannel(params.currentChannelProvider),
+    actions,
     currentChannelId: params.currentChannelId,
     currentThreadTs: params.currentThreadTs,
     currentMessageId: params.currentMessageId,
