@@ -2,13 +2,17 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { resolveSessionFilePath } from "../../config/sessions.js";
 import {
   clearFastTestEnv,
   loadRunCronIsolatedAgentTurn,
   makeCronSession,
   makeCronSessionEntry,
+  mockRunCronFallbackPassthrough,
   resolveCronSessionMock,
   resetRunCronIsolatedAgentTurnHarness,
+  runEmbeddedPiAgentMock,
+  updateSessionStoreMock,
   restoreFastTestEnv,
 } from "./run.test-harness.js";
 
@@ -164,5 +168,70 @@ describe("runCronIsolatedAgentTurn session rollover recovery", () => {
     } finally {
       await fs.rm(tmpDir, { recursive: true, force: true });
     }
+  });
+
+  it("reuses the persisted sessionFile when a bound UI session already points at a branched transcript", async () => {
+    const customSessionFile = resolveSessionFilePath(
+      "visible-session-id",
+      { sessionFile: "webchat-branched-session.jsonl" },
+      { agentId: "default" },
+    );
+    const cronSession = makeCronSession({
+      sessionEntry: makeCronSessionEntry({
+        sessionId: "visible-session-id",
+        sessionFile: customSessionFile,
+      }),
+      isNewSession: false,
+    });
+    resolveCronSessionMock.mockReturnValue(cronSession);
+    mockRunCronFallbackPassthrough();
+
+    await runCronIsolatedAgentTurn(makeParams());
+
+    expect(runEmbeddedPiAgentMock).toHaveBeenCalledTimes(1);
+    expect(runEmbeddedPiAgentMock.mock.calls[0]?.[0]).toMatchObject({
+      sessionId: "visible-session-id",
+      sessionFile: customSessionFile,
+    });
+  });
+
+  it("persists the actual embedded run sessionId when the transcript behind the session has already rolled over", async () => {
+    const customSessionFile = resolveSessionFilePath(
+      "store-session-old",
+      { sessionFile: "webchat-branched-session.jsonl" },
+      { agentId: "default" },
+    );
+    const cronSession = makeCronSession({
+      sessionEntry: makeCronSessionEntry({
+        sessionId: "store-session-old",
+        sessionFile: customSessionFile,
+      }),
+      isNewSession: false,
+    });
+    resolveCronSessionMock.mockReturnValue(cronSession);
+    mockRunCronFallbackPassthrough();
+    runEmbeddedPiAgentMock.mockResolvedValueOnce({
+      payloads: [{ text: "test output" }],
+      meta: {
+        agentMeta: {
+          sessionId: "transcript-session-new",
+          usage: { input: 10, output: 20 },
+        },
+      },
+    });
+    updateSessionStoreMock.mockImplementation(async (_storePath, update) => {
+      update({});
+    });
+
+    const result = await runCronIsolatedAgentTurn(makeParams());
+
+    expect(result.status).toBe("ok");
+    expect(result.sessionId).toBe("transcript-session-new");
+    expect(cronSession.sessionEntry.sessionId).toBe("transcript-session-new");
+    expect(cronSession.sessionEntry.sessionFile).toBe(customSessionFile);
+    expect(cronSession.store["agent:default:webchat:session-a"]).toMatchObject({
+      sessionId: "transcript-session-new",
+      sessionFile: customSessionFile,
+    });
   });
 });

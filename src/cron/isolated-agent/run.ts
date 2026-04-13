@@ -1,3 +1,4 @@
+import path from "node:path";
 import {
   resolveAgentConfig,
   resolveAgentDir,
@@ -43,7 +44,7 @@ import type { CliDeps } from "../../cli/outbound-send-deps.js";
 import type { OpenClawConfig } from "../../config/config.js";
 import {
   loadSessionStore,
-  resolveSessionTranscriptPath,
+  resolveSessionFilePath,
   setSessionRuntimeModel,
   updateSessionStore,
 } from "../../config/sessions.js";
@@ -485,14 +486,14 @@ export async function runCronIsolatedAgentTurn(params: {
     // Isolated cron runs must not carry prior turn context across executions.
     forceNew: params.job.sessionTarget === "isolated" || params.job.sessionTarget === "active-user",
   });
-  const runSessionId = cronSession.sessionEntry.sessionId;
-  const runSessionKey = baseSessionKey.startsWith("cron:")
-    ? `${agentSessionKey}:run:${runSessionId}`
-    : agentSessionKey;
+  let runSessionId = cronSession.sessionEntry.sessionId;
+  const resolveRunSessionKey = () =>
+    baseSessionKey.startsWith("cron:") ? `${agentSessionKey}:run:${runSessionId}` : agentSessionKey;
   const persistSessionEntry = async () => {
     if (isFastTestEnv) {
       return;
     }
+    const runSessionKey = resolveRunSessionKey();
     cronSession.store[agentSessionKey] = cronSession.sessionEntry;
     if (runSessionKey !== agentSessionKey) {
       cronSession.store[runSessionKey] = cronSession.sessionEntry;
@@ -509,7 +510,7 @@ export async function runCronIsolatedAgentTurn(params: {
   ): RunCronAgentTurnResult => ({
     ...result,
     sessionId: runSessionId,
-    sessionKey: runSessionKey,
+    sessionKey: resolveRunSessionKey(),
   });
   if (!cronSession.sessionEntry.label?.trim() && baseSessionKey.startsWith("cron:")) {
     const labelSuffix =
@@ -726,8 +727,15 @@ export async function runCronIsolatedAgentTurn(params: {
   let fallbackModel = model;
   const runStartedAt = Date.now();
   let runEndedAt = runStartedAt;
+  const sessionFile = resolveSessionFilePath(
+    cronSession.sessionEntry.sessionId,
+    cronSession.sessionEntry,
+    {
+      agentId,
+      sessionsDir: path.dirname(cronSession.storePath),
+    },
+  );
   try {
-    const sessionFile = resolveSessionTranscriptPath(cronSession.sessionEntry.sessionId, agentId);
     const resolvedVerboseLevel =
       normalizeVerboseLevel(cronSession.sessionEntry.verboseLevel) ??
       normalizeVerboseLevel(agentCfg?.verboseDefault) ??
@@ -903,6 +911,12 @@ export async function runCronIsolatedAgentTurn(params: {
     return withRunSession({ status: "error", error: "cron isolated run returned no result" });
   }
   const finalRunResult = runResult;
+  const actualRunSessionId = finalRunResult.meta?.agentMeta?.sessionId?.trim();
+  if (actualRunSessionId && actualRunSessionId !== runSessionId) {
+    runSessionId = actualRunSessionId;
+    cronSession.sessionEntry.sessionId = actualRunSessionId;
+    cronSession.sessionEntry.sessionFile = sessionFile;
+  }
   const payloads = finalRunResult.payloads ?? [];
 
   // Update token+model fields in the session store.
