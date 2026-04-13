@@ -282,6 +282,55 @@ function resolveCronJobSourceSessionKey(params: {
   });
 }
 
+function findSessionEntryByKeyIgnoreCase(
+  store: Record<string, ReturnType<typeof loadSessionStore>[string]>,
+  sessionKey: string,
+) {
+  if (store[sessionKey]) {
+    return store[sessionKey];
+  }
+  const lowered = sessionKey.trim().toLowerCase();
+  if (!lowered) {
+    return undefined;
+  }
+  for (const [key, entry] of Object.entries(store)) {
+    if (key.trim().toLowerCase() === lowered) {
+      return entry;
+    }
+  }
+  return undefined;
+}
+
+function hasInternalSourceSessionRolledOver(params: {
+  cfg: OpenClawConfig;
+  agentId: string;
+  storePath: string;
+  sourceSessionKey?: string;
+  agentSessionKey: string;
+  runSessionId: string;
+}): boolean {
+  const sourceSessionKey = params.sourceSessionKey?.trim();
+  if (!sourceSessionKey) {
+    return false;
+  }
+  if (sourceSessionKey.toLowerCase() !== params.agentSessionKey.trim().toLowerCase()) {
+    return false;
+  }
+  const store = loadSessionStore(params.storePath);
+  const entry = findSessionEntryByKeyIgnoreCase(store, sourceSessionKey);
+  const currentSessionId = typeof entry?.sessionId === "string" ? entry.sessionId.trim() : "";
+  if (!currentSessionId || currentSessionId === params.runSessionId.trim()) {
+    return false;
+  }
+  return prefersInternalSessionDelivery({
+    cfg: params.cfg,
+    agentId: params.agentId,
+    sessionKey: sourceSessionKey,
+    sessionEntry: entry,
+    allowInternalSessionFallback: true,
+  });
+}
+
 export async function runCronIsolatedAgentTurn(params: {
   cfg: OpenClawConfig;
   deps: CliDeps;
@@ -338,9 +387,6 @@ export async function runCronIsolatedAgentTurn(params: {
     agentId,
     mainKey: params.cfg.session?.mainKey,
   });
-  const executionSessionAlreadyVisible =
-    typeof sourceSessionKey === "string" &&
-    sourceSessionKey.trim().toLowerCase() === agentSessionKey.trim().toLowerCase();
 
   const workspaceDirRaw = resolveAgentWorkspaceDir(params.cfg, agentId);
   const agentDir = resolveAgentDir(params.cfg, agentId);
@@ -562,6 +608,24 @@ export async function runCronIsolatedAgentTurn(params: {
       sessionEntry: activeUserTarget && activeUserTarget.ok ? activeUserTarget.entry : undefined,
       allowInternalSessionFallback: allowInternalSessionFallbackOnUnresolved,
     });
+  const sourceSessionRolledOver =
+    !deliveryRequested &&
+    typeof params.internalSessionFallback === "function" &&
+    hasInternalSourceSessionRolledOver({
+      cfg: cfgWithAgentDefaults,
+      agentId,
+      storePath: cronSession.storePath,
+      sourceSessionKey,
+      agentSessionKey,
+      runSessionId,
+    });
+  const executionSessionAlreadyVisible =
+    !sourceSessionRolledOver &&
+    typeof sourceSessionKey === "string" &&
+    sourceSessionKey.trim().toLowerCase() === agentSessionKey.trim().toLowerCase();
+  const effectiveDeliveryRequested = deliveryRequested || sourceSessionRolledOver;
+  const effectivePreferInternalSessionDelivery =
+    preferInternalSessionDelivery || sourceSessionRolledOver;
 
   const { formattedTime, timeLine } = resolveCronStyleNow(params.cfg, now);
   const relayPrompt =
@@ -983,10 +1047,10 @@ export async function runCronIsolatedAgentTurn(params: {
     runEndedAt,
     timeoutMs,
     resolvedDelivery,
-    deliveryRequested,
+    deliveryRequested: effectiveDeliveryRequested,
     skipHeartbeatDelivery,
     skipMessagingToolDelivery,
-    preferInternalSessionDelivery,
+    preferInternalSessionDelivery: effectivePreferInternalSessionDelivery,
     allowInternalSessionFallbackOnUnresolved,
     executionSessionAlreadyVisible,
     deliverToInternalSession: params.internalSessionFallback,

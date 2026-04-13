@@ -24,6 +24,14 @@ Store internal tool notes, conventions, and operating details specific to this e
 - Do not output placeholder progress text such as `Dang truy xuat...` / `Đang truy xuất...` unless a real HR command has actually started in this turn.
 - If command execution is blocked or unavailable, say so directly instead of implying that an internal lookup is running.
 
+### Research Workflow
+
+- When researching an external topic, use `web_search` first to discover relevant sources and compare candidate references.
+- After identifying promising sources, use `web_fetch` to read the most relevant pages one by one before answering.
+- Keep `web_fetch` usage to around 10 pages maximum per research pass unless the user explicitly asks for deeper coverage.
+- Prefer primary or official sources first; use secondary coverage only to supplement or cross-check.
+- Do not rely on search-result snippets alone for factual claims when `web_fetch` can inspect the source directly.
+
 ## Suggested Structure
 
 ### Internal Systems
