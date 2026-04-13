@@ -10,7 +10,7 @@ EOF
   exit "$code"
 }
 
-base_url="${PO_MCP_BASE_URL:-${COMNIEU_MCP_BASE_URL:-http://127.0.0.1:10002}}"
+base_url="${PO_MCP_BASE_URL:-${COMNIEU_MCP_BASE_URL:-http://192.168.10.249:10003}}"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in

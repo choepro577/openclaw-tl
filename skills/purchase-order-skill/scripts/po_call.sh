@@ -22,7 +22,7 @@ fi
 tool_name="${1:-}"
 shift || true
 
-base_url="${PO_MCP_BASE_URL:-${COMNIEU_MCP_BASE_URL:-http://127.0.0.1:10002}}"
+base_url="${PO_MCP_BASE_URL:-${COMNIEU_MCP_BASE_URL:-http://192.168.10.249:10003}}"
 args_json="{}"
 raw_mode=false
 

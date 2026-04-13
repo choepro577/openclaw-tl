@@ -10,7 +10,7 @@ Use this skill to tra cuu va thao tac nghiep vu mua hang / purchase order qua `p
 
 Default connection:
 
-- Base URL: `http://127.0.0.1:10002`
+- Base URL: `http://192.168.10.249:10003`
 - Override with: `PO_MCP_BASE_URL` (hoac `COMNIEU_MCP_BASE_URL`)
 - Health endpoint: `GET /health`
 - User memory: uu tien `USER.md` trong `$CODEX_HOME`, neu khong co thi dung `~/.codex/USER.md`
