@@ -22,7 +22,7 @@ fi
 tool_name="${1:-}"
 shift || true
 
-base_url="${ANALYTIC_MCP_BASE_URL:-${COMNIEU_MCP_BASE_URL:-http://192.168.10.249:10000}}"
+base_url="${ANALYTIC_MCP_BASE_URL:-${COMNIEU_MCP_BASE_URL:-http://192.168.10.249:10004}}"
 args_json="{}"
 raw_mode=false
 

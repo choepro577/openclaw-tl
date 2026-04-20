@@ -50,7 +50,7 @@ Scope nghiep vu hien tai gom 2 nhom bao cao:
 
 Default connection:
 
-- Base URL: `http://192.168.10.249:10000`
+- Base URL: `http://192.168.10.249:10004`
 - Override with: `ANALYTIC_MCP_BASE_URL` (hoac `COMNIEU_MCP_BASE_URL`)
 - Health endpoint: `GET /health`
 - Auth policy: khong yeu cau login/USER.md; auth upstream duoc uu tien cau hinh qua `AI_CONTROLLER_AUTHORIZATION` tren analytic-hos-mcp-server.
