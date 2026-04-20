@@ -1,6 +1,6 @@
 ---
 name: analytic-skill
-description: Dung cho cac yeu cau xem bao cao phan tich kinh doanh, bao cao doanh thu, KPI van hanh, dashboard CEO, va bao cao nhap mua PI. Tu dong map intent sang 2 nhom bao cao Analytic HOS: (1) CEO Dashboard, (2) PI nhap mua; bat buoc goi router_tool_search truoc moi tool, chi duoc goi tool duoc de xuat, va chi hoi nguoi dung cac truong required dang thieu.
+description: "Dung cho cac yeu cau xem bao cao phan tich kinh doanh, bao cao doanh thu, KPI van hanh, dashboard CEO, va bao cao nhap mua PI. Tu dong map intent sang 2 nhom bao cao Analytic HOS: (1) CEO Dashboard, (2) PI nhap mua; bat buoc goi router_tool_search truoc moi tool, chi duoc goi tool duoc de xuat, va chi hoi nguoi dung cac truong required dang thieu."
 metadata: { "openclaw": { "emoji": "📈", "requires": { "bins": ["curl"] } } }
 ---
 
