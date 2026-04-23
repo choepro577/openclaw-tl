@@ -98,7 +98,7 @@ import { isUnauthorizedRoleError, UnauthorizedFloodGuard } from "./unauthorized-
 type SubsystemLogger = ReturnType<typeof createSubsystemLogger>;
 
 const DEVICE_SIGNATURE_SKEW_MS = 2 * 60 * 1000;
-const ENTERPRISE_ALLOWED_SCOPES = ["operator.read", "operator.write"] as const;
+const ENTERPRISE_ALLOWED_SCOPES = ["operator.read", "operator.write", "operator.admin"] as const;
 
 export type WsOriginCheckMetrics = {
   hostHeaderFallbackAccepted: number;
