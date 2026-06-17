@@ -25,10 +25,11 @@ Thi mac dinh vao `ASSIGNMENT_TASK_DIGEST_MODE` (khong can user chon loai task tr
 
 ### ASSIGNMENT_TASK_DIGEST_MODE
 
-1. Suy luan khoang thoi gian:
-   - "hom qua" = 00:00:00 den 23:59:59 cua ngay hom qua (theo mui gio he thong).
-   - Neu user noi ngay cu the, dung dung ngay do.
-   - Truyen `from` va `to` dong thoi neu tool ho tro loc theo deadline (`from`/`to` tren cot `to`).
+1. Suy luan moc thoi gian loc:
+   - "hom qua" = `from` = 00:00:00 cua ngay hom qua (theo mui gio he thong).
+   - Neu user noi ngay cu the, dat `from` = 00:00:00 cua ngay do.
+   - **Chi truyen `from`, khong truyen `to`.** Task giao viec co the keo dai nhieu ngay, khong gioi han trong mot ngay; dung `to` se bo sot task con dang lam hoac deadline sau ngay loc.
+   - Ap dung quy tac nay cho moi tool tim task trong `ASSIGNMENT_TASK_DIGEST_MODE` (ca 4 nhom pham vi).
 
 2. Voi moi nhom pham vi ben duoi, **bat buoc** goi `router_tool_search` rieng (khong doan ten tool), chon tool tu `results`, chay prerequisite (neu co), roi goi tool chinh:
    - **Task tu tao**: query goi y `"danh sach task toi tu tao tren giao viec"`.
