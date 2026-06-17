@@ -13,6 +13,53 @@ Default connection:
 - Base URL: `http://192.168.10.249:10000`
 - Override with: `HR_MCP_BASE_URL` (hoac `COMNIEU_MCP_BASE_URL`)
 
+## Trigger: Danh sach task giao viec (hom qua / theo ngay)
+
+Khi user hoi cac cau tu nhien nhu:
+
+- "Gui Danh sach cac task tren giao viec hom qua cho toi"
+- "Hom qua tren giao viec co nhung task gi cua toi"
+- "Tong hop task giao viec cua toi hom qua"
+
+Thi mac dinh vao `ASSIGNMENT_TASK_DIGEST_MODE` (khong can user chon loai task truoc).
+
+### ASSIGNMENT_TASK_DIGEST_MODE
+
+1. Suy luan khoang thoi gian:
+   - "hom qua" = 00:00:00 den 23:59:59 cua ngay hom qua (theo mui gio he thong).
+   - Neu user noi ngay cu the, dung dung ngay do.
+   - Truyen `from` va `to` dong thoi neu tool ho tro loc theo deadline (`from`/`to` tren cot `to`).
+
+2. Voi moi nhom pham vi ben duoi, **bat buoc** goi `router_tool_search` rieng (khong doan ten tool), chon tool tu `results`, chay prerequisite (neu co), roi goi tool chinh:
+   - **Task tu tao**: query goi y `"danh sach task toi tu tao tren giao viec"`.
+   - **Duoc giao lam**: query goi y `"danh sach task duoc giao cho toi tren giao viec"`.
+   - **Quan ly**: query goi y `"danh sach task toi quan ly vai tro approver tren giao viec"`.
+   - **Duoc xem**: query goi y `"danh sach task toi duoc xem vai tro viewer tren giao viec"`.
+
+3. Neu tool can `user_id` ma chua co, uu tien lay tu prerequisite do router de xuat (vi du `employee_get_info`); khong tu doan ID.
+
+4. Tong hop ket qua thanh **mot danh sach de doc**, chia 4 nhom co tieu de ro rang:
+
+```text
+## Task tu tao (hom qua)
+- ...
+
+## Duoc giao lam (hom qua)
+- ...
+
+## Quan ly (hom qua)
+- ...
+
+## Duoc xem (hom qua)
+- ...
+```
+
+5. Moi dong task uu tien hien: ten task, deadline (`from`/`to` neu co), trang thai/loai neu API tra ve. Neu nhom rong, ghi ro `Khong co task`.
+
+6. Neu mot nhom con nhieu ban ghi (`pagination.has_more` hoac tuong duong), lap trang tiep theo cho dung nhom do truoc khi chuyen sang nhom khac.
+
+7. Khong hoi lai user muon xem nhom nao; chi hoi khi thieu truong `required` ma khong the tu dien.
+
 ## Mandatory Rules
 
 1. Luon goi `router_tool_search` truoc de tim tool.
@@ -48,11 +95,12 @@ Call tool duoc de xuat boi router:
 
 ## Execution Loop (Strict)
 
-1. Chuyen yeu cau user thanh query routing.
-2. Goi `router_tool_search`.
-3. Doc `results` va `prerequisites`.
-4. Chay prerequisite tools truoc (neu co), sau do chay tool chinh.
-5. Tong hop ket qua cho user.
-6. Neu ket qua khong dat, quay lai buoc 1 voi query cu the hon.
+1. Neu request thuoc `ASSIGNMENT_TASK_DIGEST_MODE`, chuyen sang luong tong hop 4 nhom task (tu tao / duoc giao / quan ly / duoc xem) theo muc "Trigger: Danh sach task giao viec".
+2. Chuyen yeu cau user thanh query routing.
+3. Goi `router_tool_search`.
+4. Doc `results` va `prerequisites`.
+5. Chay prerequisite tools truoc (neu co), sau do chay tool chinh.
+6. Tong hop ket qua cho user.
+7. Neu ket qua khong dat, quay lai buoc 2 voi query cu the hon.
 
 Read `references/tool-catalog.md` chi de biet quy tac routing. Khong duoc dung file nay de thay the `router_tool_search`.
