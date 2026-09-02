@@ -134,6 +134,59 @@ describe("gateway method authorization", () => {
     expect(respond).toHaveBeenCalledWith(true, { projects: [] });
   });
 
+  it("grants Enterprise user portals the narrow automation mutation capability", async () => {
+    const handler = vi.fn<GatewayRequestHandler>(({ respond }) => respond(true, { ok: true }));
+    const dispatch = async (enterprise: boolean) => {
+      const respond = vi.fn();
+      await handleGatewayRequest({
+        req: { type: "req", id: "req-cron-add", method: "cron.add", params: {} },
+        respond,
+        client: {
+          connId: enterprise ? "enterprise-cron" : "ordinary-cron",
+          connect: {
+            role: "operator",
+            scopes: ["operator.read", "operator.write"],
+            client: { id: "test", version: "1", platform: "test", mode: "test" },
+            minProtocol: 1,
+            maxProtocol: 1,
+          },
+          ...(enterprise
+            ? {
+                authenticatedUserProfile: {
+                  profileId: "profile-enterprise",
+                  displayName: "Enterprise",
+                  avatarRevision: "1",
+                  hasAvatar: false,
+                  updatedAt: 1,
+                },
+                internal: {
+                  enterpriseSession: {
+                    sessionId: "session-enterprise",
+                    audience: "user",
+                    accountId: "account-enterprise",
+                    accountRole: "employee",
+                  },
+                },
+              }
+            : {}),
+        } as Parameters<typeof handleGatewayRequest>[0]["client"],
+        isWebchatConnect: () => false,
+        context: { logGateway: { warn: vi.fn() } } as unknown as Parameters<
+          typeof handleGatewayRequest
+        >[0]["context"],
+        extraHandlers: { "cron.add": handler },
+      });
+      return respond;
+    };
+
+    expect(await dispatch(true)).toHaveBeenCalledWith(true, { ok: true });
+    expect(await dispatch(false)).toHaveBeenCalledWith(
+      false,
+      undefined,
+      expect.objectContaining({ code: "FORBIDDEN" }),
+    );
+  });
+
   it("rejects every node RPC when its connection no longer owns the pairing generation", async () => {
     const handler = vi.fn<GatewayRequestHandler>(({ respond }) => respond(true, { ok: true }));
     const respond = vi.fn();

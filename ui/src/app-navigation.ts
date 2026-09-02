@@ -27,6 +27,7 @@ export const SIDEBAR_NAV_ROUTES = [
   "plugins",
   "apps",
   "portals",
+  "enterprise",
 ] as const satisfies readonly NavigationRouteId[];
 
 // `route:workboard` shipped in browser and synced preferences before Workboard
@@ -266,6 +267,8 @@ const NAVIGATION_ICONS: NavigationItem = {
   activity: "activity",
   apps: "layoutGrid",
   portals: "monitor",
+  enterprise: "users",
+  knowledge: "book",
   approvals: "badgeCheck",
   workboard: "kanban",
   worktrees: "folder",
@@ -376,6 +379,8 @@ const NAVIGATION_COPY: Record<NavigationRouteId, { titleKey: string; subtitleKey
   activity: { titleKey: "tabs.activity", subtitleKey: "subtitles.activity" },
   apps: { titleKey: "tabs.apps", subtitleKey: "subtitles.apps" },
   portals: { titleKey: "tabs.portals", subtitleKey: "subtitles.portals" },
+  enterprise: { titleKey: "tabs.enterprise", subtitleKey: "subtitles.enterprise" },
+  knowledge: { titleKey: "tabs.knowledge", subtitleKey: "subtitles.knowledge" },
   approvals: { titleKey: "tabs.approvals", subtitleKey: "subtitles.approvals" },
   workboard: { titleKey: "tabs.workboard", subtitleKey: "subtitles.workboard" },
   worktrees: { titleKey: "tabs.worktrees", subtitleKey: "subtitles.worktrees" },

@@ -23,6 +23,7 @@ import {
 import { readSessionMethodAccess } from "../lib/session-method-access.ts";
 import { normalizeAgentId } from "../lib/sessions/session-key.ts";
 import { isTerminalAvailable } from "../lib/terminal-availability.ts";
+import { isEnterpriseUiActive } from "../pages/enterprise/state/enterprise-ui-access.ts";
 import type { NewSessionTarget } from "../pages/new-session/location.ts";
 import { pluginTabKey, pluginTabRefFromSearch } from "../pages/plugin/route.ts";
 import type { ShellRouteState } from "./app-host-route-state.ts";
@@ -53,6 +54,19 @@ import {
 import { createUpdateProgressWatcher } from "./update-overlay-helpers.ts";
 
 const EMPTY_SESSION_HAS_DRAFT = () => false;
+
+async function logoutEnterpriseUser(): Promise<void> {
+  try {
+    const { logoutEnterprisePortal } =
+      await import("../pages/enterprise/services/enterprise-api.ts");
+    await logoutEnterprisePortal("user");
+  } catch (error) {
+    console.warn("[openclaw] enterprise logout failed", error);
+  } finally {
+    globalThis.location.reload();
+  }
+}
+
 const SCOPE_UPGRADE_SURFACE_ELEMENT = {
   tagName: "openclaw-device-scope-upgrade-banner",
   label: t("connection.scopeUpgrade.status"),
@@ -371,6 +385,7 @@ export function renderApplicationShell(host: ShellViewHost) {
       watchUpdateProgress,
       onOpenApprovals: () => host.openApprovals(),
       onRetryConnect: () => context.gateway.connect(),
+      onLogout: isEnterpriseUiActive() ? () => void logoutEnterpriseUser() : undefined,
       onOpenNewSession: openNewSession,
       onUpdateSidebarEntries: (entries: string[]) =>
         context.navigation.update({ sidebarEntries: entries }),

@@ -89,6 +89,24 @@ function client(params: {
   };
 }
 
+function enterprisePortalClient(params: {
+  profileId: string;
+  accountId: string;
+  accountRole: "administrator" | "employee";
+}): GatewayClient {
+  return {
+    ...client({ user: params.profileId, scopes: ["operator.admin"] }),
+    internal: {
+      enterpriseSession: {
+        sessionId: `enterprise-session-${params.accountId}`,
+        audience: "user",
+        accountId: params.accountId,
+        accountRole: params.accountRole,
+      },
+    },
+  } as GatewayClient;
+}
+
 function target(createdActor?: { type: "human"; id: string; label?: string }): SharingTarget {
   return {
     agentId: "main",
@@ -500,6 +518,131 @@ describe("session sharing policy", () => {
     const draft = target({ type: "human", id: "profile-owner" });
 
     expect(resolveSessionSharingRole({ client: pending, target: draft })).toBe("viewer");
+  });
+
+  it("keeps Enterprise user-portal administrators inside their profile boundary except Home", async () => {
+    await withOpenClawTestState({ scenario: "minimal" }, async () => {
+      const cfg = { session: { mainKey: "main" } } satisfies OpenClawConfig;
+      const currentProfileId = "profile-administrator";
+      const foreignProfileId = "profile-hieu2";
+      const portalAdmin = enterprisePortalClient({
+        profileId: currentProfileId,
+        accountId: "account-administrator",
+        accountRole: "administrator",
+      });
+      const ownKey = "agent:main:owned-by-administrator";
+      const foreignKey = "agent:main:owned-by-hieu2";
+      const unownedKey = "agent:main:legacy-unowned";
+      const homeKey = "agent:main:main";
+      for (const [sessionKey, createdActor] of [
+        [ownKey, { type: "human" as const, id: currentProfileId }],
+        [foreignKey, { type: "human" as const, id: foreignProfileId }],
+        [unownedKey, undefined],
+        [homeKey, { type: "human" as const, id: foreignProfileId }],
+      ] as const) {
+        await upsertSessionEntryCore(
+          { agentId: "main", sessionKey },
+          {
+            sessionId: `session-${sessionKey}`,
+            updatedAt: 1,
+            visibility: "shared",
+            ...(createdActor ? { createdActor } : {}),
+          },
+        );
+      }
+
+      const filter = createSessionListEntryFilter({ cfg, client: portalAdmin });
+      expect(filter).toBeTypeOf("function");
+      const load = (sessionKey: string) => resolveSessionSharingTarget({ cfg, sessionKey })!.entry;
+      expect(filter?.(ownKey, load(ownKey))).toBe(true);
+      expect(filter?.(foreignKey, load(foreignKey))).toBe(false);
+      expect(filter?.(unownedKey, load(unownedKey))).toBe(false);
+      expect(filter?.(homeKey, load(homeKey))).toBe(true);
+
+      expect(
+        canReceiveSessionEvent({
+          cfg,
+          client: portalAdmin as never,
+          sessionKeys: [foreignKey],
+        }),
+      ).toBe(false);
+      expect(
+        canReceiveSessionEvent({ cfg, client: portalAdmin as never, sessionKeys: [homeKey] }),
+      ).toBe(true);
+
+      const context = { getRuntimeConfig: () => cfg } as GatewayRequestContext;
+      expect(
+        resolveSessionMutationAuthorization({
+          client: portalAdmin,
+          method: "chat.history",
+          requestParams: { sessionKey: foreignKey },
+          context,
+        }).error,
+      ).toMatchObject({
+        code: "INVALID_REQUEST",
+        message: `Session "${foreignKey}" was not found.`,
+      });
+      expect(
+        resolveSessionMutationAuthorization({
+          client: portalAdmin,
+          method: "sessions.patch",
+          requestParams: { key: foreignKey, label: "forbidden" },
+          context,
+        }).error,
+      ).toMatchObject({ code: "INVALID_REQUEST" });
+      expect(
+        resolveSessionMutationAuthorization({
+          client: portalAdmin,
+          method: "chat.history",
+          requestParams: { sessionKey: homeKey },
+          context,
+        }).error,
+      ).toBeNull();
+    });
+  });
+
+  it("denies the global Home session to Enterprise employees", async () => {
+    await withOpenClawTestState({ scenario: "minimal" }, async () => {
+      const cfg = { session: { mainKey: "main" } } satisfies OpenClawConfig;
+      const homeKey = "agent:main:main";
+      await upsertSessionEntryCore(
+        { agentId: "main", sessionKey: homeKey },
+        {
+          sessionId: "session-home",
+          updatedAt: 1,
+          visibility: "shared",
+          createdActor: { type: "human", id: "profile-employee" },
+        },
+      );
+      const employee = enterprisePortalClient({
+        profileId: "profile-employee",
+        accountId: "account-employee",
+        accountRole: "employee",
+      });
+      const filter = createSessionListEntryFilter({ cfg, client: employee });
+      expect(
+        filter?.(homeKey, resolveSessionSharingTarget({ cfg, sessionKey: homeKey })!.entry),
+      ).toBe(false);
+      expect(
+        canReceiveSessionEvent({ cfg, client: employee as never, sessionKeys: [homeKey] }),
+      ).toBe(false);
+      expect(
+        resolveSessionMutationAuthorization({
+          client: employee,
+          method: "chat.history",
+          requestParams: { sessionKey: homeKey },
+          context: { getRuntimeConfig: () => cfg } as GatewayRequestContext,
+        }).error,
+      ).toMatchObject({ code: "INVALID_REQUEST", message: expect.stringContaining("not found") });
+      expect(
+        resolveSessionMutationAuthorization({
+          client: employee,
+          method: "chat.send",
+          requestParams: { sessionKey: "agent:research:main", message: "forbidden" },
+          context: { getRuntimeConfig: () => cfg } as GatewayRequestContext,
+        }).error,
+      ).toMatchObject({ code: "INVALID_REQUEST", message: expect.stringContaining("not found") });
+    });
   });
 
   it("returns retryable unavailability from direct session guards while profile sync is pending", () => {

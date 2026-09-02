@@ -18,8 +18,10 @@ import { isTerminalAvailable } from "../lib/terminal-availability.ts";
 import { OpenClawLightDomElement } from "../lit/openclaw-element.ts";
 import { SubscriptionsController } from "../lit/subscriptions-controller.ts";
 import type { ChatRouteData } from "../pages/chat/route-loader.ts";
+import type { EnterpriseUserAuthAccount } from "../pages/enterprise-user/services/user-enterprise-api.ts";
+import { shouldRedirectEnterpriseHome } from "../pages/enterprise/state/enterprise-auth-navigation.ts";
 import { isDesktopPanelAvailable } from "./app-shell-chrome.ts";
-import { bootstrapApplication, type ApplicationRuntime } from "./bootstrap.ts";
+import type { ApplicationRuntime } from "./bootstrap.ts";
 import { applicationContext, type ApplicationContext } from "./context.ts";
 import {
   APPROVAL_PAGE_ELEMENT,
@@ -31,6 +33,9 @@ import {
   TERMINAL_PANEL_ELEMENT,
 } from "./lazy-custom-element.ts";
 import { resolveOnboardingMode } from "./onboarding-mode.ts";
+import { resolvePortal } from "./portal/portal-resolution.ts";
+import { probeEnterprisePortalStatus } from "./portal/portal-root.ts";
+import type { ApplicationRoutingProfile } from "./routing/routing-profile.ts";
 
 type FocusDashboardRouteState =
   | { kind: "loading" }
@@ -73,6 +78,11 @@ export class OpenClawApp extends OpenClawLightDomElement {
   @state() private pendingGatewayUrl: string | null = null;
   @state() private onboarding = resolveOnboardingMode(globalThis.location?.search ?? "");
   @state() private focusDashboardRoute: FocusDashboardRouteState = { kind: "loading" };
+  @state() private enterpriseStartupReady = false;
+  @state() private enterpriseGateEnabled = false;
+  @state() private enterprisePortal: "admin" | "user" | null = null;
+  @state() private enterpriseAccount?: EnterpriseUserAuthAccount;
+  private renderedEventSent = false;
 
   private runtime: ApplicationRuntime | undefined;
   private readonly contextProvider = new ContextProvider(this, {
@@ -126,7 +136,10 @@ export class OpenClawApp extends OpenClawLightDomElement {
     super.connectedCallback();
     void import("../components/session-progress-hovercard-registration.ts");
     this.resetLoginSensitivePresentation();
-    this.runtime = bootstrapApplication();
+    void this.initializeEnterpriseStartup();
+  }
+
+  private requestInitialLazyDocuments(): void {
     const focusTarget = this.focusTarget;
     if (focusTarget?.kind === "terminal") {
       this.requestLazyDocument(TERMINAL_PANEL_ELEMENT);
@@ -137,24 +150,68 @@ export class OpenClawApp extends OpenClawLightDomElement {
     if (focusTarget?.kind === "dashboard") {
       this.requestLazyDocument(DASHBOARD_DOCUMENT_ELEMENT);
     }
-    if (this.runtime.documentMode?.kind === "approval") {
+    if (this.runtime?.documentMode?.kind === "approval") {
       this.requestLazyDocument(APPROVAL_PAGE_ELEMENT);
     }
-    const context = this.runtime.context;
-    this.pendingGatewayUrl = this.runtime.pendingGatewayConnection?.gatewayUrl ?? null;
+  }
+
+  private installRuntime(runtime: ApplicationRuntime): void {
+    if (this.runtime && this.runtime !== runtime) {
+      this.runtime.stop();
+    }
+    this.runtime = runtime;
+    this.pendingGatewayUrl = runtime.pendingGatewayConnection?.gatewayUrl ?? null;
     // Context identity changes only across a full app-tree connection epoch;
     // descendants reconnect and rebuild their controller-owned state afterward.
-    this.contextProvider.setValue(context);
-    this.syncLoginConnection();
+    this.contextProvider.setValue(runtime.context);
+    this.syncLoginConnection(runtime.context.gateway);
     // The runtime is created after controller hostConnected hooks run. Ensure
     // their lazy source getters bind on both the initial mount and reconnect.
     this.requestUpdate();
-    void this.runtime
-      .start()
-      .then(() => this.resolveFocusDashboard())
-      .catch((error: unknown) => {
-        console.error("[openclaw] application start failed", error);
-      });
+    this.notifyControlUiRendered();
+  }
+
+  private notifyControlUiRendered(): void {
+    if (this.renderedEventSent) {
+      return;
+    }
+    this.renderedEventSent = true;
+    void this.updateComplete.then(() => {
+      globalThis.dispatchEvent(new Event("openclaw-control-ui-rendered"));
+    });
+  }
+
+  private async installControlRuntime(): Promise<void> {
+    const [{ bootstrapApplication }, { controlRoutingProfile }] = await Promise.all([
+      import("./bootstrap.ts"),
+      import("./routing/control-routing-profile.ts"),
+    ]);
+    const pathname = globalThis.location?.pathname ?? "/";
+    const appIndex = pathname.indexOf("/app");
+    const appBasePath = appIndex >= 0 ? `${pathname.slice(0, appIndex)}/app` : undefined;
+    this.installRuntime(
+      bootstrapApplication({
+        ...(appBasePath ? { basePathOverride: appBasePath } : {}),
+        routingProfile: controlRoutingProfile,
+      }),
+    );
+    this.requestInitialLazyDocuments();
+  }
+
+  private async installEnterpriseUserRuntime(
+    routingProfile: ApplicationRoutingProfile,
+  ): Promise<void> {
+    const { bootstrapApplication } = await import("./bootstrap.ts");
+    const pathname = globalThis.location?.pathname ?? "/";
+    const appIndex = pathname.indexOf("/app");
+    const appBasePath = appIndex >= 0 ? `${pathname.slice(0, appIndex)}/app` : undefined;
+    this.installRuntime(
+      bootstrapApplication({
+        ...(appBasePath ? { basePathOverride: appBasePath } : {}),
+        routingProfile,
+      }),
+    );
+    this.requestInitialLazyDocuments();
   }
 
   override disconnectedCallback() {
@@ -168,13 +225,18 @@ export class OpenClawApp extends OpenClawLightDomElement {
     this.loginGatewaySource = null;
     this.loginConnectionClient = null;
     this.pendingGatewayUrl = null;
+    this.enterpriseStartupReady = false;
+    this.enterpriseGateEnabled = false;
+    this.enterprisePortal = null;
+    this.enterpriseAccount = undefined;
+    this.renderedEventSent = false;
     this.resetLoginSensitivePresentation();
     super.disconnectedCallback();
   }
 
   protected override firstUpdated(): void {
     if (this.runtime) {
-      globalThis.dispatchEvent(new Event("openclaw-control-ui-rendered"));
+      this.notifyControlUiRendered();
     }
   }
 
@@ -212,6 +274,83 @@ export class OpenClawApp extends OpenClawLightDomElement {
   private resetLoginSensitivePresentation() {
     this.loginShowGatewayToken = false;
     this.loginShowGatewayPassword = false;
+  }
+
+  private handleEnterpriseAuthReady(
+    event?: CustomEvent<{ account?: EnterpriseUserAuthAccount; openEnterprise?: boolean }>,
+  ): void {
+    if (this.enterpriseStartupReady || !this.runtime) {
+      return;
+    }
+    const pathname = globalThis.location?.pathname ?? "";
+    const account = event?.detail.account;
+    this.enterpriseAccount = account;
+    if (
+      event?.detail.openEnterprise ||
+      pathname.endsWith("/app/login") ||
+      pathname.endsWith("/app/change-password") ||
+      (account &&
+        shouldRedirectEnterpriseHome({
+          role: account.role,
+          pathname,
+          basePath: this.context?.basePath ?? "",
+        }))
+    ) {
+      this.context?.replace("enterprise");
+    }
+    this.enterpriseStartupReady = true;
+    this.requestUpdate();
+    void this.runtime
+      .start()
+      .then(() => this.resolveFocusDashboard())
+      .catch((error: unknown) => {
+        console.error("[openclaw] application start failed", error);
+      });
+  }
+
+  private async initializeEnterpriseStartup(): Promise<void> {
+    try {
+      const pathname = globalThis.location?.pathname ?? "/";
+      const resolution = resolvePortal(pathname, await probeEnterprisePortalStatus(pathname));
+      if (resolution.kind === "redirect") {
+        globalThis.location.replace(resolution.href);
+        return;
+      }
+      if (resolution.kind === "admin") {
+        await import("../pages/enterprise-admin/admin-root.ts");
+        this.enterprisePortal = "admin";
+        this.requestUpdate();
+        this.notifyControlUiRendered();
+        return;
+      }
+      if (resolution.kind === "user-legacy") {
+        await Promise.all([
+          import("../pages/enterprise-user/auth/user-auth-gate.ts"),
+          this.installControlRuntime(),
+        ]);
+        this.enterpriseGateEnabled = true;
+        this.requestUpdate();
+        return;
+      }
+      if (resolution.kind === "user-v2") {
+        const [{ enterpriseUserRoutingProfile }] = await Promise.all([
+          import("../pages/enterprise-user/user-runtime-profile.ts"),
+          import("../pages/enterprise-user/enterprise-user-root.ts"),
+          import("../pages/enterprise-user/auth/user-auth-gate.ts"),
+        ]);
+        await this.installEnterpriseUserRuntime(enterpriseUserRoutingProfile);
+        this.enterprisePortal = "user";
+        this.enterpriseGateEnabled = true;
+        this.requestUpdate();
+        return;
+      }
+    } catch (error) {
+      // Accounts auth still rejects the WebSocket if Enterprise is enabled, so
+      // treating an unavailable optional probe as disabled cannot bypass auth.
+      console.warn("[openclaw] enterprise status probe unavailable", error);
+    }
+    await this.installControlRuntime();
+    this.handleEnterpriseAuthReady();
   }
 
   private closeDocument(basePath: string): void {
@@ -404,10 +543,27 @@ export class OpenClawApp extends OpenClawLightDomElement {
   }
 
   override render() {
+    if (this.enterprisePortal === "admin") {
+      return html`<openclaw-enterprise-admin-root></openclaw-enterprise-admin-root>`;
+    }
     const context = this.context;
     const runtime = this.runtime;
     if (!context || !runtime) {
       return html`<main class="app-shell app-shell--booting" aria-busy="true"></main>`;
+    }
+    if (!this.enterpriseStartupReady) {
+      return this.enterpriseGateEnabled
+        ? html`
+            <openclaw-enterprise-user-auth-gate
+              @enterprise-auth-ready=${(
+                event: CustomEvent<{
+                  account?: EnterpriseUserAuthAccount;
+                  openEnterprise?: boolean;
+                }>,
+              ) => this.handleEnterpriseAuthReady(event)}
+            ></openclaw-enterprise-user-auth-gate>
+          `
+        : html`<main class="app-shell app-shell--booting" aria-busy="true"></main>`;
     }
     const gatewaySnapshot = context.gateway.snapshot;
     const gatewayConnected = gatewaySnapshot.phase === "connected";
@@ -586,10 +742,15 @@ export class OpenClawApp extends OpenClawLightDomElement {
             .gateway=${context.gateway}
           >
             ${gatewayUrlConfirmation}
-            <openclaw-app-shell
-              .runtime=${runtime}
-              .onboarding=${this.onboarding}
-            ></openclaw-app-shell>
+            ${this.enterprisePortal === "user"
+              ? html`<openclaw-enterprise-user-root
+                  .runtime=${runtime}
+                  .account=${this.enterpriseAccount}
+                ></openclaw-enterprise-user-root>`
+              : html`<openclaw-app-shell
+                  .runtime=${runtime}
+                  .onboarding=${this.onboarding}
+                ></openclaw-app-shell>`}
           </openclaw-session-progress-hovercard-provider>
         </openclaw-github-link-hovercard-provider>
       </openclaw-tooltip-provider>

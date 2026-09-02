@@ -43,6 +43,7 @@ import { getGatewayProcessInstanceId } from "../process-instance.js";
 import { broadcastPresenceSnapshot } from "../server/presence-events.js";
 import { resolveRequestedSessionAgentId } from "../session-request-agent.js";
 import { loadGatewaySessionRow } from "../session-utils.js";
+import { projectSystemPresenceForClient } from "./gateway-client-identity.js";
 import type { GatewayRequestContext, GatewayRequestHandlers } from "./types.js";
 import { assertValidParams } from "./validation.js";
 
@@ -141,8 +142,8 @@ export const systemHandlers: GatewayRequestHandlers = {
     setHeartbeatsEnabled(enabled);
     respond(true, { ok: true, enabled }, undefined);
   },
-  "system-presence": ({ respond }) => {
-    const presence = listSystemPresence();
+  "system-presence": ({ respond, client }) => {
+    const presence = projectSystemPresenceForClient(listSystemPresence(), client);
     respond(true, presence, undefined);
   },
   "system.info": async ({ params, respond, context }) => {

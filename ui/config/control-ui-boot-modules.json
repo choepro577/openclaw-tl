@@ -1931,6 +1931,8 @@
  "ui/src/pages/debug/debug-overlay-contract.ts",
  "ui/src/pages/debug/route.ts",
  "ui/src/pages/devices/route.ts",
+ "ui/src/pages/enterprise/route.ts",
+ "ui/src/pages/enterprise/state/enterprise-ui-access.ts",
  "ui/src/pages/labs/route.ts",
  "ui/src/pages/lobsterdex/route.ts",
  "ui/src/pages/logs/route.ts",

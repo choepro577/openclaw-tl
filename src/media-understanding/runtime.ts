@@ -308,6 +308,7 @@ export async function describePreparedImageWithModel(params: DescribePreparedIma
     prompt: params.prompt,
     maxTokens: params.maxTokens,
     timeoutMs,
+    ...(params.signal ? { signal: params.signal } : {}),
     cfg: params.cfg,
     ...(params.agentId ? { agentId: params.agentId } : {}),
     agentDir,

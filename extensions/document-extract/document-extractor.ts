@@ -6,6 +6,11 @@ import type {
   DocumentExtractionResult,
   DocumentExtractorPlugin,
 } from "openclaw/plugin-sdk/document-extractor";
+export {
+  createDocxDocumentExtractor,
+  createPptxDocumentExtractor,
+  createXlsxDocumentExtractor,
+} from "./office-document-extractor.js";
 
 const MAX_EXTRACTED_TEXT_CHARS = 200_000;
 const MAX_RENDER_DIMENSION = 10_000;
@@ -26,11 +31,12 @@ async function loadPdfEngine(): Promise<PdfEngine> {
   return pdfEnginePromise;
 }
 
-function toDocumentImage(image: PdfImage): DocumentExtractedImage {
+function toDocumentImage(image: PdfImage, pageNumber: number): DocumentExtractedImage {
   return {
     type: "image",
     data: Buffer.from(image.bytes).toString("base64"),
     mimeType: image.mimeType,
+    pageNumber,
   };
 }
 
@@ -83,7 +89,12 @@ async function extractPdfContent(
     const text = textResult.text;
 
     if (text.trim().length >= request.minTextChars) {
-      return { text, images: [] };
+      return {
+        text,
+        images: [],
+        pageCount: pdf.pageCount,
+        parserProvenance: { extractor: "clawpdf", mode: "text" },
+      };
     }
 
     // clawpdf's image render budget (maxPixels) is shared across every page in one
@@ -112,17 +123,27 @@ async function extractPdfContent(
           },
         });
         for (const image of imageResult.images) {
-          images.push(toDocumentImage(image));
+          images.push(toDocumentImage(image, pageNumber));
           remainingPixels -= image.width * image.height;
         }
       }
-      return { text, images };
+      return {
+        text,
+        images,
+        pageCount: pdf.pageCount,
+        parserProvenance: { extractor: "clawpdf", mode: "mixed" },
+      };
     } catch (err) {
       request.onImageExtractionError?.(err);
       if (!text.trim()) {
         throw new Error("PDF image extraction failed with no extractable text.", { cause: err });
       }
-      return { text, images: [] };
+      return {
+        text,
+        images: [],
+        pageCount: pdf.pageCount,
+        parserProvenance: { extractor: "clawpdf", mode: "text", imageFallbackFailed: true },
+      };
     }
   } finally {
     pdf.destroy();

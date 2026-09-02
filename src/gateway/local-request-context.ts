@@ -77,16 +77,20 @@ function createLocalGatewayRequestContext(
     loadParams,
   ) => loadGatewayModelCatalogSnapshot({ ...loadParams, getConfig: params.getRuntimeConfig });
   registerGatewayModelCatalogPrivateAccess(loadCatalogSnapshot, {
-    loadDeferred: (loadParams) =>
-      loadPreparedGatewayModelCatalogSnapshot({
-        ...loadParams,
-        getConfig: params.getRuntimeConfig,
-      }),
-    readPrepared: (loadParams) =>
-      readPreparedGatewayModelCatalogOwnerSnapshot({
-        ...loadParams,
-        getConfig: params.getRuntimeConfig,
-      }),
+    loadDeferred: (loadParams = {}) => {
+      const { config, ...requestParams } = loadParams;
+      return loadPreparedGatewayModelCatalogSnapshot({
+        ...requestParams,
+        getConfig: config ? () => config : params.getRuntimeConfig,
+      });
+    },
+    readPrepared: (loadParams = {}) => {
+      const { config, ...requestParams } = loadParams;
+      return readPreparedGatewayModelCatalogOwnerSnapshot({
+        ...requestParams,
+        getConfig: config ? () => config : params.getRuntimeConfig,
+      });
+    },
   });
   return {
     deps: params.deps,

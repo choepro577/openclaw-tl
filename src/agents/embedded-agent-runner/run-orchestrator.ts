@@ -6,6 +6,7 @@ import { SILENT_REPLY_TOKEN } from "../../auto-reply/tokens.js";
 import { getRuntimeConfigSnapshot } from "../../config/config.js";
 import type { OpenClawConfig } from "../../config/types.openclaw.js";
 import { revokeMessageActionTurnCapability } from "../../gateway/message-action-turn-capability.js";
+import { isGatewayRequestScopedRuntimeConfig } from "../../gateway/request-runtime-config.js";
 import {
   captureAgentRunLifecycleGeneration,
   getAgentEventLifecycleGeneration,
@@ -277,6 +278,7 @@ async function runEmbeddedAgentInternal(
       );
       const preparedInput = {
         config,
+        ...(isGatewayRequestScopedRuntimeConfig(config) ? { preserveConfigOnRefresh: true } : {}),
         agentId: requestedWorkspaceResolution.agentId,
         agentDir: requestedAgentDir,
         // Shared credential inheritance stays anchored to its compatibility owner;

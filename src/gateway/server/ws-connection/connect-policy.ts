@@ -43,9 +43,9 @@ export function isTrustedProxyControlUiOperatorAuth(params: {
   return (
     params.isControlUi &&
     params.role === "operator" &&
-    params.authMode === "trusted-proxy" &&
     params.authOk &&
-    params.authMethod === "trusted-proxy"
+    ((params.authMode === "trusted-proxy" && params.authMethod === "trusted-proxy") ||
+      (params.authMode === "accounts" && params.authMethod === "accounts"))
   );
 }
 
@@ -63,7 +63,8 @@ export function shouldClearUnboundScopesForMissingDeviceIdentity(params: {
     params.decision.kind !== "allow" ||
     params.authMethod === "token" ||
     params.authMethod === "password" ||
-    params.authMethod === "trusted-proxy"
+    params.authMethod === "trusted-proxy" ||
+    params.authMethod === "accounts"
   );
 }
 

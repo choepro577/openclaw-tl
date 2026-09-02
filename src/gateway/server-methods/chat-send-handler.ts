@@ -24,6 +24,7 @@ import {
   shouldIncludeChatSendAckServerTiming,
 } from "./chat-server-timing.js";
 import { createGatewayChatUserTurnController } from "./chat-user-turn-recorder.js";
+import { enterpriseUserPortalIdentity } from "./gateway-client-identity.js";
 import type { GatewayRequestHandlerOptions } from "./types.js";
 
 type ChatSendInternalOptions = {
@@ -316,7 +317,15 @@ export async function handleChatSend(
   onAdmissionOwned?: () => Promise<boolean>,
   externalAuthorityAdmission?: ChatSendExternalAuthorityAdmission,
 ): Promise<void> {
-  await handleChatSendWithOptions(options, onAdmissionOwned, externalAuthorityAdmission);
+  // Enterprise admission has already reduced the request to its positive allowlist and stamped
+  // suppressCommandInterpretation server-side. Trust only that server-attested audience so the
+  // public normalizer accepts the suppression without granting provenance fields to other users.
+  await handleChatSendWithOptions(
+    options,
+    onAdmissionOwned,
+    externalAuthorityAdmission,
+    enterpriseUserPortalIdentity(options.client) ? { trustedSystemInput: true } : undefined,
+  );
 }
 
 /** Dispatches an internally delegated turn within its caller-owned tool boundary. */

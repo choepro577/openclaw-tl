@@ -206,6 +206,7 @@ type SidebarIdentityMenuParams = {
   onTabAway: () => void;
   onClose: (restoreFocus?: boolean) => void;
   onNavigate: (routeId: NavigationRouteId, options?: ApplicationNavigationOptions) => void;
+  onLogout?: () => void;
   onPairMobile: () => void;
   onRetryConnect?: () => void;
 };
@@ -468,6 +469,9 @@ export function renderSidebarIdentityMenu(params: SidebarIdentityMenuParams) {
           case `${COMMAND_VALUE_PREFIX}debug-overlay`:
             requestDebugOverlayToggle();
             break;
+          case `${COMMAND_VALUE_PREFIX}logout`:
+            params.onLogout?.();
+            break;
           case `${COMMAND_VALUE_PREFIX}retry-connect`:
             params.onRetryConnect?.();
             break;
@@ -553,6 +557,18 @@ export function renderSidebarIdentityMenu(params: SidebarIdentityMenuParams) {
         <span class="sidebar-customize-menu__text">${t("agentChip.help")}</span>
         ${renderIdentityMenuHelpSubmenu()}
       </wa-dropdown-item>
+      ${params.onLogout
+        ? html`
+            <div class="sidebar-customize-menu__separator" role="separator"></div>
+            <wa-dropdown-item
+              class="sidebar-customize-menu__item sidebar-identity-menu__logout"
+              value="command:logout"
+            >
+              <span slot="icon" class="nav-item__icon" aria-hidden="true">${icons.x}</span>
+              <span class="sidebar-customize-menu__text">${t("common.logout")}</span>
+            </wa-dropdown-item>
+          `
+        : nothing}
       ${params.offline
         ? html`<div class="sidebar-customize-menu__separator" role="separator"></div>
             <wa-dropdown-item

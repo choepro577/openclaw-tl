@@ -9,7 +9,11 @@ import {
 import { AgentSelectionRequiredError } from "../agents/agent-scope.js";
 import { isSessionMember, type SessionEntry } from "../config/sessions.js";
 import type { OpenClawConfig } from "../config/types.openclaw.js";
-import { isIncognitoSessionKey } from "../routing/session-key.js";
+import {
+  isIncognitoSessionKey,
+  normalizeMainKey,
+  parseAgentSessionKey,
+} from "../routing/session-key.js";
 import {
   authorizeGatewaySessionCreation,
   operatorSessionCap,
@@ -17,6 +21,7 @@ import {
 } from "./operator-role-policy.js";
 import {
   authenticatedProfileUnavailableError,
+  enterpriseUserPortalIdentity,
   gatewayClientSessionCreator,
   isGatewayClientProfilePending,
 } from "./server-methods/gateway-client-identity.js";
@@ -105,6 +110,55 @@ export function isGatewayAdmin(client: Pick<GatewayClient, "connect"> | null): b
   return client?.connect?.scopes?.includes("operator.admin") === true;
 }
 
+function isSessionSharingAdmin(client: GatewayClient | null): boolean {
+  return isGatewayAdmin(client) && !enterpriseUserPortalIdentity(client);
+}
+
+function isEnterpriseHomeSession(params: { cfg?: OpenClawConfig; sessionKey: string }): boolean {
+  const parsed = parseAgentSessionKey(params.sessionKey);
+  return parsed?.rest === normalizeMainKey(params.cfg?.session?.mainKey);
+}
+
+function isEnterpriseAdministratorHome(params: {
+  cfg?: OpenClawConfig;
+  client: GatewayClient | null;
+  sessionKey: string;
+}): boolean {
+  return (
+    enterpriseUserPortalIdentity(params.client)?.accountRole === "administrator" &&
+    isEnterpriseHomeSession(params)
+  );
+}
+
+function enterprisePortalHomeIsDenied(params: {
+  cfg?: OpenClawConfig;
+  client: GatewayClient | null;
+  sessionKey: string;
+}): boolean {
+  return (
+    enterpriseUserPortalIdentity(params.client)?.accountRole === "employee" &&
+    isEnterpriseHomeSession(params)
+  );
+}
+
+function enterprisePortalCanAccessSession(params: {
+  cfg?: OpenClawConfig;
+  client: GatewayClient | null;
+  sessionKey: string;
+  entry: Pick<SessionEntry, "createdActor">;
+}): boolean | undefined {
+  const identity = enterpriseUserPortalIdentity(params.client);
+  if (!identity) {
+    return undefined;
+  }
+  if (isEnterpriseHomeSession(params)) {
+    return identity.accountRole === "administrator";
+  }
+  return (
+    params.entry.createdActor?.id === identity.profileId || isEnterpriseAdministratorHome(params)
+  );
+}
+
 export function allowedSessionVisibilities(cfg: OpenClawConfig): SessionVisibility[] {
   const policy = cfg.session?.sharing;
   return [
@@ -168,7 +222,25 @@ function resolveSharingRole(
   params: SessionSharingRoleParams,
   preparedCap?: { value: ReturnType<typeof operatorSessionCap> },
 ): SessionSharingRole {
-  if (isGatewayAdmin(params.client)) {
+  const enterpriseAccess = enterprisePortalCanAccessSession({
+    cfg: params.cfg,
+    client: params.client,
+    sessionKey: params.target.canonicalKey,
+    entry: params.target.entry,
+  });
+  if (enterpriseAccess !== undefined) {
+    if (
+      isEnterpriseAdministratorHome({
+        cfg: params.cfg,
+        client: params.client,
+        sessionKey: params.target.canonicalKey,
+      })
+    ) {
+      return "admin";
+    }
+    return enterpriseAccess ? "owner" : "viewer";
+  }
+  if (isSessionSharingAdmin(params.client)) {
     return "admin";
   }
   const operatorActor = resolveGatewayOperatorRoleActor(params.client);
@@ -252,7 +324,7 @@ export function authorizeIncognitoSessionTarget(params: {
   if (!isIncognitoSessionTarget(params)) {
     return null;
   }
-  if (isGatewayAdmin(params.client)) {
+  if (isSessionSharingAdmin(params.client)) {
     return null;
   }
   if (isGatewayClientProfilePending(params.client)) {
@@ -271,7 +343,7 @@ export function canAccessIncognitoSession(params: {
   sessionKey: string;
   agentId?: string;
 }): boolean {
-  if (isGatewayAdmin(params.client)) {
+  if (isSessionSharingAdmin(params.client)) {
     return true;
   }
   return (
@@ -289,11 +361,14 @@ export function authorizeResolvedSessionMutation(params: {
   sessionKey: string;
   agentId?: string;
 }): ErrorShape | null {
-  if (isGatewayAdmin(params.client) && !params.cfg.gateway?.roles) {
+  if (isSessionSharingAdmin(params.client) && !params.cfg.gateway?.roles) {
     return null;
   }
   if (isGatewayClientProfilePending(params.client)) {
     return authenticatedProfileUnavailableError();
+  }
+  if (enterprisePortalHomeIsDenied(params)) {
+    return hiddenSessionNotFound(params.sessionKey);
   }
   const target = resolveSessionSharingTarget(params);
   if (target) {
@@ -306,7 +381,7 @@ export function authorizeResolvedSessionMutation(params: {
       return agentError;
     }
   }
-  if (isGatewayAdmin(params.client)) {
+  if (isSessionSharingAdmin(params.client)) {
     return null;
   }
   const incognitoError = authorizeIncognitoSessionTarget({
@@ -336,6 +411,16 @@ export function authorizeSessionSharingTarget(params: {
   client: GatewayClient | null;
   target: SessionSharingTarget;
 }): ErrorShape | null {
+  if (
+    enterprisePortalCanAccessSession({
+      cfg: params.cfg,
+      client: params.client,
+      sessionKey: params.target.canonicalKey,
+      entry: params.target.entry,
+    }) === false
+  ) {
+    return hiddenSessionNotFound(params.target.canonicalKey);
+  }
   const visibility = resolveSessionVisibility(params.target.entry);
   const sessionCap = params.cfg && operatorSessionCap(params.client, params.cfg);
   const role = resolveSharingRole(params, { value: sessionCap });
@@ -375,7 +460,7 @@ export function resolveSessionMutationAuthorization(params: {
   context: GatewayRequestContext;
 }): { authorization?: SessionMutationAuthorization; error: ErrorShape | null } {
   const authorizesAgentRun = AGENT_RUN_START_METHODS.has(params.method);
-  if (isGatewayAdmin(params.client) && !authorizesAgentRun) {
+  if (isSessionSharingAdmin(params.client) && !authorizesAgentRun) {
     return { error: null };
   }
   if (
@@ -422,12 +507,22 @@ export function resolveSessionMutationAuthorization(params: {
   const hidesForeignSessions =
     directTargets.length > 0 &&
     gatewayClientSessionCreator(params.client) &&
-    operatorSessionCap(params.client, getCfg()) === "none";
+    (enterpriseUserPortalIdentity(params.client) !== undefined ||
+      operatorSessionCap(params.client, getCfg()) === "none");
   // Incognito and role-hidden direct reads share the same non-disclosing access boundary.
   const protectedTargets = hidesForeignSessions
     ? directTargets
     : resolveDirectIncognitoTargets(params.method, params.requestParams);
   for (const targetRef of protectedTargets) {
+    if (
+      enterprisePortalHomeIsDenied({
+        cfg: getCfg(),
+        client: params.client,
+        sessionKey: targetRef.sessionKey,
+      })
+    ) {
+      return { error: hiddenSessionNotFound(targetRef.sessionKey) };
+    }
     const resolved = resolveAuthorizedTarget(targetRef);
     if ("error" in resolved) {
       return { error: resolved.error };
@@ -444,6 +539,19 @@ export function resolveSessionMutationAuthorization(params: {
     if (
       hidesForeignSessions &&
       target &&
+      enterprisePortalCanAccessSession({
+        cfg: getCfg(),
+        client: params.client,
+        sessionKey: target.canonicalKey,
+        entry: target.entry,
+      }) === false
+    ) {
+      return { error: hiddenSessionNotFound(targetRef.sessionKey) };
+    }
+    if (
+      hidesForeignSessions &&
+      target &&
+      enterpriseUserPortalIdentity(params.client) === undefined &&
       target.entry.createdActor?.id !== params.client?.authenticatedUserProfile?.profileId
     ) {
       return { error: hiddenSessionNotFound(targetRef.sessionKey) };
@@ -632,7 +740,21 @@ export function canReceiveSessionEvent(params: {
   event?: string;
   payload?: unknown;
 }): boolean {
-  if (isGatewayAdmin(params.client)) {
+  const enterpriseIdentity = enterpriseUserPortalIdentity(params.client);
+  if (enterpriseIdentity) {
+    return params.sessionKeys.every((sessionKey) => {
+      const snapshot = loadSharingSnapshot(params.cfg, sessionKey, params.agentId);
+      if (isEnterpriseHomeSession({ cfg: params.cfg, sessionKey })) {
+        return isEnterpriseAdministratorHome({
+          cfg: params.cfg,
+          client: params.client,
+          sessionKey,
+        });
+      }
+      return snapshot.creatorId === enterpriseIdentity.profileId;
+    });
+  }
+  if (isSessionSharingAdmin(params.client)) {
     return true;
   }
   const operatorActor = resolveGatewayOperatorRoleActor(params.client);
@@ -699,13 +821,25 @@ export function createSessionListEntryFilter(params: {
   cfg?: OpenClawConfig;
   client: GatewayClient | null;
 }): ((sessionKey: string, entry: SessionEntry) => boolean) | undefined {
+  const enterpriseIdentity = enterpriseUserPortalIdentity(params.client);
+  if (enterpriseIdentity) {
+    return (sessionKey, entry) =>
+      entry.incognito !== true &&
+      !isIncognitoSessionKey(sessionKey) &&
+      enterprisePortalCanAccessSession({
+        cfg: params.cfg,
+        client: params.client,
+        sessionKey,
+        entry,
+      }) === true;
+  }
   const operatorActor = resolveGatewayOperatorRoleActor(params.client);
   const identity =
     gatewayClientSessionCreator(params.client) ??
     (operatorActor?.kind === "operator"
       ? { type: "human" as const, id: operatorActor.profileId }
       : undefined);
-  if (isGatewayAdmin(params.client) || (!identity && operatorActor?.kind === "system")) {
+  if (isSessionSharingAdmin(params.client) || (!identity && operatorActor?.kind === "system")) {
     return undefined;
   }
   if (!identity) {

@@ -27,9 +27,19 @@ import {
 import {
   SIDEBAR_NARROW_BREAKPOINT_PX,
   isSidebarSlotVisible,
+  retainSidebarSlots,
   type SidebarLayout,
   type SidebarSlotId,
 } from "./sidebar-layout.ts";
+
+const ENTERPRISE_USER_SIDEBAR_SLOTS = [
+  "detail",
+  "workspace",
+  "browser",
+] as const satisfies readonly SidebarSlotId[];
+const ENTERPRISE_USER_SIDEBAR_SLOT_SET: ReadonlySet<SidebarSlotId> = new Set(
+  ENTERPRISE_USER_SIDEBAR_SLOTS,
+);
 
 type ChatPaneLayoutRenderParams = {
   state: ChatPageHost;
@@ -72,6 +82,10 @@ export abstract class ChatPaneLayoutRender extends ChatPaneBrowserAnnotationRend
       openPanelSlot,
       closePanelSlot,
     } = params;
+    const enterpriseUserPresentation = this.context.presentation === "enterprise-user";
+    const renderedSidebarLayout = enterpriseUserPresentation
+      ? retainSidebarSlots(sidebarLayout, ENTERPRISE_USER_SIDEBAR_SLOTS)
+      : sidebarLayout;
     const header = this.renderPaneHeader(
       sessionWorkspace,
       backgroundTasks,
@@ -79,7 +93,7 @@ export abstract class ChatPaneLayoutRender extends ChatPaneBrowserAnnotationRend
       catalog,
       agentWorkspace,
       workspaceGit,
-      sidebarLayout,
+      renderedSidebarLayout,
     );
     const chat = renderChat({
       ...chatProps,
@@ -90,15 +104,17 @@ export abstract class ChatPaneLayoutRender extends ChatPaneBrowserAnnotationRend
     const primary = html`<div class="chat-pane-primary-column">
       ${board.face === "dashboard" ? header : nothing}${this.renderBoardPrimary(board, chat)}
     </div>`;
-    const discussion = this.buildSessionDiscussionPanel(state, state.sessionKey.trim());
+    const discussion = enterpriseUserPresentation
+      ? null
+      : this.buildSessionDiscussionPanel(state, state.sessionKey.trim());
     const desktopAvailable = isDesktopPanelAvailable(this.context.gateway.snapshot);
     const companionThread = this.sessionCompanionThreads.view(state.sessionKey, currentAgentId);
     const browserPresented =
-      this.active && this.presented && isSidebarSlotVisible(sidebarLayout, "browser");
+      this.active && this.presented && isSidebarSlotVisible(renderedSidebarLayout, "browser");
     const desktopPresented =
-      this.active && this.presented && isSidebarSlotVisible(sidebarLayout, "desktop");
+      this.active && this.presented && isSidebarSlotVisible(renderedSidebarLayout, "desktop");
     const desktopRefreshOnPresentation = !this.pendingPanelToggleRequests.has("desktop");
-    const panelDefinitions = sidebarPanelDefinitions({
+    const unrestrictedPanelDefinitions = sidebarPanelDefinitions({
       state,
       themeMode: this.context.theme.resolvedMode,
       agentId: currentAgentId,
@@ -110,14 +126,17 @@ export abstract class ChatPaneLayoutRender extends ChatPaneBrowserAnnotationRend
       chat,
       workspace: renderSessionWorkspaceRail(sessionWorkspace, { embedded: true }),
       tasks: renderBackgroundTasksRail(backgroundTasks, { embedded: true }),
-      detailOpen: this.presented && sidebarLayout.open === true && detailSlotOpen(sidebarLayout),
+      detailOpen:
+        this.presented &&
+        renderedSidebarLayout.open === true &&
+        detailSlotOpen(renderedSidebarLayout),
       renderDetail: (content) =>
         renderChatDetailSlot({
           backgroundTasks,
           chat: chatProps,
           content,
           host: state,
-          layout: sidebarLayout,
+          layout: renderedSidebarLayout,
           transcript: this.taskSidebarTranscript,
         }),
       digest: observerDigest,
@@ -139,6 +158,11 @@ export abstract class ChatPaneLayoutRender extends ChatPaneBrowserAnnotationRend
       discussionOpenUrl: discussion?.openUrl ?? null,
       discussionSourceGeneration: this.connectionGeneration,
     });
+    const panelDefinitions = enterpriseUserPresentation
+      ? unrestrictedPanelDefinitions.filter((definition) =>
+          ENTERPRISE_USER_SIDEBAR_SLOT_SET.has(definition.slot),
+        )
+      : unrestrictedPanelDefinitions;
     const availableSlots = availableSidebarSlots(panelDefinitions);
     const panelTemplates = sidebarPanelTemplates(panelDefinitions);
     const panelActions = sidebarPanelActions(panelDefinitions);
@@ -152,10 +176,10 @@ export abstract class ChatPaneLayoutRender extends ChatPaneBrowserAnnotationRend
         hideBoard: () => this.handleBoardDockChange("hidden"),
         forgetDiscussionUrl: () => this.sessionDiscussionOpenUrls.delete(state.sessionKey.trim()),
         resizePanel: (columnId, size) =>
-          this.commitSidebarPanelResize(sidebarLayout, columnId, size),
-        setPanelOpen: (open) => this.setChatSidePanelOpen(open, sidebarLayout),
+          this.commitSidebarPanelResize(renderedSidebarLayout, columnId, size),
+        setPanelOpen: (open) => this.setChatSidePanelOpen(open, renderedSidebarLayout),
       }),
-      layout: sidebarLayout,
+      layout: renderedSidebarLayout,
       panelDefinitions,
       panelActions,
       narrow: this.paneWidth < SIDEBAR_NARROW_BREAKPOINT_PX,

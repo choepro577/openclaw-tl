@@ -123,11 +123,49 @@ describe("sessions.files RPC handlers", () => {
     );
 
     expect(payload.root).toBe(workspaceRoot);
-    expect(hoisted.loadSessionEntry).toHaveBeenCalledWith("global", { agentId: "ops" });
+    expect(hoisted.loadSessionEntry).toHaveBeenCalledWith("global", { agentId: "ops", cfg });
     expect(hoisted.readSessionTranscriptVisibleMessageDeltaCore).toHaveBeenCalledWith(
       expect.objectContaining({ agentId: "ops", sessionKey: "global" }),
       expect.any(Object),
     );
+  });
+
+  it("uses the request-scoped config to resolve the session workspace", async () => {
+    const projectedWorkspace = path.join(workspaceRoot, "projected-account-workspace");
+    fs.mkdirSync(projectedWorkspace, { recursive: true });
+    writeWorkspaceFile(projectedWorkspace, "IDENTITY.md", "# Projected identity\n");
+    const projectedCfg = {
+      agents: {
+        list: [{ id: "main", default: true, workspace: projectedWorkspace }],
+      },
+    } as const;
+    hoisted.loadSessionEntry.mockImplementation((_sessionKey, opts) => ({
+      agentId: "main",
+      canonicalKey: "agent:main:main",
+      cfg: opts?.cfg ?? {},
+      storePath: path.join(workspaceRoot, ".sessions.json"),
+      entry: { sessionId: "sess-main" },
+    }));
+    hoisted.resolveAgentWorkspaceDir.mockImplementation((cfg: unknown) =>
+      cfg === projectedCfg ? projectedWorkspace : path.join(workspaceRoot, "global-workspace"),
+    );
+
+    const payload = expectOkPayload(
+      await invokeSessionFilesHandler(
+        "sessions.files.list",
+        { sessionKey: "agent:main:main" },
+        { getRuntimeConfig: () => projectedCfg },
+      ),
+    );
+
+    expect(payload.root).toBe(projectedWorkspace);
+    expect(payload.browser?.entries).toEqual(
+      expect.arrayContaining([expect.objectContaining({ path: "IDENTITY.md" })]),
+    );
+    expect(hoisted.loadSessionEntry).toHaveBeenCalledWith("agent:main:main", {
+      agentId: "main",
+      cfg: projectedCfg,
+    });
   });
 
   it("rejects a foreign agent before a bare fixed-store workspace write", async () => {

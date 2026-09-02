@@ -252,6 +252,9 @@ describe("prepareChatSendUserTurn", () => {
       },
       attachments: createAttachments({
         imageOrder: ["offloaded"],
+        mediaPathOffloadPaths: ["media/inbound/image-1.png"],
+        mediaPathOffloadTypes: ["image/png"],
+        mediaPathOffloadWorkspaceDir: "/sandbox/session-1",
         offloadedRefs: [
           {
             mediaRef,
@@ -274,9 +277,10 @@ describe("prepareChatSendUserTurn", () => {
     expect(prepared.ctx.Body).toBe(`inspect\n[media attached: ${mediaRef}]`);
     expect(prepared.replyOptionMedia).toEqual([
       {
-        path: "/media/inbound/image-1.png",
-        url: mediaRef,
+        path: "media/inbound/image-1.png",
+        url: "media/inbound/image-1.png",
         contentType: "image/png",
+        workspaceDir: "/sandbox/session-1",
       },
     ]);
     await expect(readInput()).resolves.toMatchObject({

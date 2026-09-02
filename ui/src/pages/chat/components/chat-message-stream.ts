@@ -32,6 +32,7 @@ type StreamMessageOptions = Pick<
   | "localMediaPreviewRoots"
   | "assistantAttachmentAuthToken"
   | "resolveArtifactDownload"
+  | "onOpenArtifact"
   | "onAssistantAttachmentLoaded"
   | "onRequestOpenImage"
   | "onOpenImage"
@@ -94,6 +95,7 @@ export function renderStreamGroupParts(
               localMediaPreviewRoots: opts.localMediaPreviewRoots,
               assistantAttachmentAuthToken: opts.assistantAttachmentAuthToken,
               resolveArtifactDownload: opts.resolveArtifactDownload,
+              onOpenArtifact: opts.onOpenArtifact,
               onAssistantAttachmentLoaded: opts.onAssistantAttachmentLoaded,
               onRequestOpenImage: opts.onRequestOpenImage,
               onOpenImage: opts.onOpenImage,

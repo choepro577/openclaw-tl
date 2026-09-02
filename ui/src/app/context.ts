@@ -84,6 +84,7 @@ export type ApplicationChatAttachmentHandoff = {
 };
 
 export type ApplicationContext<TRouteId extends string = string> = {
+  readonly presentation?: "control" | "enterprise-user";
   readonly basePath: string;
   readonly resourceBasePath: string;
   readonly gateway: ApplicationGateway;

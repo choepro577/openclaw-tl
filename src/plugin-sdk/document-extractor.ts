@@ -6,4 +6,5 @@ export type {
   DocumentExtractionRequest,
   DocumentExtractionResult,
   DocumentExtractorPlugin,
+  DocumentTextSegment,
 } from "../plugins/document-extractor-types.js";

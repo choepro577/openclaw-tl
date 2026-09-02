@@ -7,7 +7,6 @@ import type { BrowserInspectedNode, BrowserPanelTab } from "./browser-client.ts"
 import {
   captureBrowserScreenshot,
   closeBrowserTab,
-  fetchBrowserScreenshotDataUrl,
   focusBrowserTab,
   goBrowserHistory,
   isBrowserEvaluateDisabledError,
@@ -203,12 +202,7 @@ export class BrowserPanelController implements ReactiveController {
       if (!current()) {
         return;
       }
-      const dataUrl = await fetchBrowserScreenshotDataUrl({
-        resourceBasePath: this.host.resourceBasePath,
-        authToken: this.host.authToken,
-        path: shot.path,
-      });
-      const image = await loadBrowserPanelImage(dataUrl);
+      const image = await loadBrowserPanelImage(shot.dataUrl);
       const observedMetrics = await readBrowserPanelOwnedMetrics(
         client,
         targetId,
@@ -227,7 +221,7 @@ export class BrowserPanelController implements ReactiveController {
       // Tab snapshots can lag history and in-page navigation. Keep the stable
       // identity aligned with the document this capture owns.
       this.setState("tabs", this.operations.capturedTabs(this.tabs, targetId, metrics, shot.url));
-      this.setState("view", { targetId, dataUrl, image, url: shot.url, metrics });
+      this.setState("view", { targetId, dataUrl: shot.dataUrl, image, url: shot.url, metrics });
       if (
         metrics &&
         this.observedViewportSize &&

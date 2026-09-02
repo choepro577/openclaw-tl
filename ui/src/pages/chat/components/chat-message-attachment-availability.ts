@@ -26,6 +26,7 @@ type AssistantAttachmentAvailability =
       durationMs?: number;
       width?: number;
       height?: number;
+      workspacePath?: string;
     }
   | { status: "unavailable"; reason: string; checkedAt: number; retryAttempted?: true };
 
@@ -51,6 +52,7 @@ export function resolveAssistantAttachmentAvailability(
   resourceBasePath: string | undefined,
   authToken: string | null | undefined,
   onRequestUpdate: (() => void) | undefined,
+  sessionKey?: string,
 ): AssistantAttachmentAvailability {
   if (!isLocalAssistantAttachmentSource(source)) {
     return { status: "available" };
@@ -67,7 +69,7 @@ export function resolveAssistantAttachmentAvailability(
     };
   }
   const normalizedAuthToken = authToken?.trim() ?? "";
-  const cacheKey = `${resourceBasePath ?? ""}::${normalizedAuthToken}::${source}`;
+  const cacheKey = `${resourceBasePath ?? ""}::${normalizedAuthToken}::${sessionKey ?? ""}::${source}`;
   const resource = observeChatMediaResource<AssistantAttachmentAvailability>(
     "assistant-attachment",
     cacheKey,
@@ -156,7 +158,7 @@ export function resolveAssistantAttachmentAvailability(
         ),
       ASSISTANT_ATTACHMENT_METADATA_FETCH_TIMEOUT_MS,
     );
-    const pending = fetch(buildAssistantAttachmentMetaUrl(source, resourceBasePath), {
+    const pending = fetch(buildAssistantAttachmentMetaUrl(source, resourceBasePath, sessionKey), {
       method: "GET",
       headers,
       credentials: "same-origin",
@@ -172,6 +174,7 @@ export function resolveAssistantAttachmentAvailability(
           durationMs?: number;
           width?: number;
           height?: number;
+          workspacePath?: string;
           reason?: string;
         } | null;
         if (payload?.available === true) {
@@ -199,6 +202,9 @@ export function resolveAssistantAttachmentAvailability(
             ...(typeof payload.durationMs === "number" ? { durationMs: payload.durationMs } : {}),
             ...(typeof payload.width === "number" ? { width: payload.width } : {}),
             ...(typeof payload.height === "number" ? { height: payload.height } : {}),
+            ...(typeof payload.workspacePath === "string"
+              ? { workspacePath: payload.workspacePath }
+              : {}),
           };
           resource.retryAttempted = false;
           setAssistantAttachmentAvailability(resource, availability);
@@ -250,8 +256,17 @@ function createUnavailableAssistantAttachment(
   };
 }
 
-function buildAssistantAttachmentMetaUrl(source: string, resourceBasePath?: string): string {
-  const attachmentUrl = buildAssistantAttachmentUrl(source, resourceBasePath);
+function buildAssistantAttachmentMetaUrl(
+  source: string,
+  resourceBasePath?: string,
+  sessionKey?: string,
+): string {
+  const attachmentUrl = buildAssistantAttachmentUrl(
+    source,
+    resourceBasePath,
+    undefined,
+    sessionKey,
+  );
   return `${attachmentUrl}${attachmentUrl.includes("?") ? "&" : "?"}meta=1`;
 }
 

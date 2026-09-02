@@ -464,6 +464,38 @@ describe("refreshChat", () => {
     expect(host.request).not.toHaveBeenCalledWith("commands.list", expect.anything());
   });
 
+  it("hydrates the Enterprise model catalog when startup metadata is redacted", async () => {
+    const model = {
+      available: true,
+      id: "prepared-model",
+      name: "Prepared Model",
+      provider: "openai",
+    };
+    const host = makeChatHost({
+      hello: gatewayHelloForMethods(["chat.metadata", "chat.startup", "models.list"], []),
+      requestHandlers: {
+        "chat.startup": async () => ({ messages: [] }),
+        "chat.metadata": async () => ({ swarmEnabled: false }),
+        "models.list": async () => ({ models: [model] }),
+      },
+    });
+
+    await refreshPageChat(asChatPageHost(host), {
+      awaitHistory: true,
+      deferBranches: true,
+      preparedModelCatalogFallback: true,
+      startup: true,
+    });
+
+    await waitForFast(() => expect(host.chatModelCatalog).toEqual([model]));
+    expect(host.request).toHaveBeenCalledWith("chat.metadata", { agentId: "main" });
+    expect(host.request).toHaveBeenCalledWith("models.list", {
+      agentId: "main",
+      preparedOnly: true,
+      view: "configured",
+    });
+  });
+
   it("commits startup history before immediately hydrating missing metadata", async () => {
     const metadata = createDeferred<unknown>();
     const message = {

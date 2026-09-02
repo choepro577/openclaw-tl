@@ -448,7 +448,15 @@ export async function detectAndLoadPromptImages(params: {
       continue;
     }
     if (slot.kind === "inline") {
-      failedMediaCount++;
+      const ref = slot.factIndex === undefined ? undefined : refsByFact.get(slot.factIndex);
+      const canRecoverManagedInbound =
+        ref?.hydrate === true && ref.type === "media-uri" && ref.raw.startsWith("media://inbound/");
+      const image = canRecoverManagedInbound && ref ? await loadRef(ref) : null;
+      if (image) {
+        promptImages.push({ image, factIndex: ref?.factIndex ?? null });
+      } else {
+        failedMediaCount++;
+      }
       continue;
     }
     const ref = slot.factIndex === undefined ? undefined : refsByFact.get(slot.factIndex);

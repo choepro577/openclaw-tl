@@ -184,6 +184,7 @@ function workerDeployBuildConfig(): UserConfig {
     },
     alias: {
       bufferutil: WORKER_DEPLOY_OPTIONAL_NATIVE_MODULE_ID,
+      canvas: WORKER_DEPLOY_OPTIONAL_NATIVE_MODULE_ID,
       "chromium-bidi/lib/cjs/bidiMapper/BidiMapper": WORKER_DEPLOY_OPTIONAL_NATIVE_MODULE_ID,
       "chromium-bidi/lib/cjs/cdp/CdpConnection": WORKER_DEPLOY_OPTIONAL_NATIVE_MODULE_ID,
       "electron/index.js": WORKER_DEPLOY_OPTIONAL_NATIVE_MODULE_ID,
@@ -308,6 +309,7 @@ function shouldAlwaysBundleDependency(id: string): boolean {
     id.startsWith("@openclaw/fs-safe/") ||
     id === "@openclaw/normalization-core" ||
     id.startsWith("@openclaw/normalization-core/") ||
+    id === "@openclaw/knowledge-graph-core" ||
     id === "@openclaw/retry" ||
     id === "@openclaw/media-core" ||
     id.startsWith("@openclaw/media-core/") ||
@@ -722,6 +724,7 @@ const configs = [
       neverBundle: shouldExternalizeMarkdownCoreDependency,
     },
   }),
+  nodeWorkspacePackageBuildConfig("knowledge-graph-core"),
   nodeWorkspacePackageBuildConfig("normalization-core"),
   nodeWorkspacePackageBuildConfig("retry"),
   nodeWorkspacePackageBuildConfig("media-core"),

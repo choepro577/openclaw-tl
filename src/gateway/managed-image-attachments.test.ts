@@ -53,6 +53,8 @@ const loadSessionEntryMock = vi.fn();
 const readSessionMessagesMock = vi.fn();
 const resolveSessionHistoryTranscriptPathMock = vi.fn();
 const getRuntimeConfigMock = vi.fn(() => ({}));
+const getEnterpriseAccountByIdMock = vi.fn();
+const getActiveEnterpriseSessionMock = vi.fn();
 const probePlaybackMediaFileDescriptorMock = vi.fn(async () => ({ durationMs: 1000 }));
 const resolvePlaybackModeForSourceMock = vi.fn<PlaybackModeForSourceResolver>();
 const resolvePlaybackTranscodeMock = vi.fn(
@@ -62,6 +64,14 @@ const tempDirs = useAutoCleanupTempDirTracker(afterEach);
 
 vi.mock("../config/config.js", () => ({
   getRuntimeConfig: getRuntimeConfigMock,
+}));
+
+vi.mock("../enterprise/accounts/account-store.js", () => ({
+  getEnterpriseAccountById: getEnterpriseAccountByIdMock,
+}));
+
+vi.mock("../enterprise/auth/session-store.js", () => ({
+  getActiveEnterpriseSession: getActiveEnterpriseSessionMock,
 }));
 
 vi.mock("./http-utils.js", () => ({
@@ -280,6 +290,7 @@ async function requestManagedImage(params: {
   scopes?: string[];
   denyAuth?: boolean;
   authResponse?: Record<string, unknown>;
+  authMode?: string;
   headers?: http.ClientRequestArgs["headers"];
   transcriptMessages?: Record<string, unknown>[];
   sessionEntry?: { sessionId: string; sessionFile?: string };
@@ -330,7 +341,7 @@ async function requestManagedImage(params: {
     );
   });
 
-  const auth = { mode: "test" } as never;
+  const auth = { mode: params.authMode ?? "test" } as never;
   const server = http.createServer((req, res) => {
     void (async () => {
       const handled = await handleManagedOutgoingImageHttpRequest(req, res, {
@@ -451,6 +462,35 @@ describe("handleManagedOutgoingImageHttpRequest", () => {
     expect(result.statusCode).toBe(200);
     expect(result.headers["content-disposition"]).toContain("filename*=UTF-8''");
     expect(result.headers["content-disposition"]).toContain("%E9%9F%B3%E5%A3%B0.mp3");
+  });
+
+  it("downloads managed documents as attachments with their original filename", async () => {
+    const body = Buffer.from("%PDF-1.7\nmanaged document\n", "utf8");
+    const { attachmentId, sessionKey } = await createFixture(stateDir, {
+      filename: "Báo cáo quý.pdf",
+      contentType: "application/pdf",
+      body,
+    });
+    const pathName = `/api/chat/media/outgoing/${encodeURIComponent(sessionKey)}/${attachmentId}/full`;
+
+    const { result } = await requestManagedImage({
+      stateDir,
+      pathName,
+      authResponse: { authMethod: "token" },
+      transcriptMessages: [
+        {
+          role: "assistant",
+          content: [{ type: "file", url: pathName, openUrl: pathName }],
+          __openclaw: { id: "msg-1" },
+        },
+      ],
+    });
+
+    expect(result.statusCode).toBe(200);
+    expect(result.headers["content-type"]).toBe("application/pdf");
+    expect(result.headers["content-disposition"]).toMatch(/^attachment;/u);
+    expect(result.headers["content-disposition"]).toContain("filename*=UTF-8''");
+    expect(result.body).toEqual(body);
   });
 
   it("serves a byte range from the validated managed image", async () => {
@@ -909,6 +949,124 @@ describe("handleManagedOutgoingImageHttpRequest", () => {
     });
     expect(wrong.result.statusCode).toBe(401);
     expect(authorizeGatewayHttpRequestOrReplyMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("serves Enterprise document tickets after rechecking their account and auth session", async () => {
+    const body = Buffer.from("%PDF-1.7\naccount document\n", "utf8");
+    const { attachmentId, sessionKey } = await createFixture(stateDir, {
+      filename: "Báo cáo nội bộ.pdf",
+      contentType: "application/pdf",
+      body,
+    });
+    const canonicalPath = `/api/chat/media/outgoing/${encodeURIComponent(sessionKey)}/${attachmentId}/full`;
+    loadSessionEntryMock.mockReturnValue({
+      storePath: path.join(stateDir, "gateway-sessions.json"),
+      entry: { sessionId: "sess-1", sessionFile: "session.jsonl" },
+    });
+    resolveSessionHistoryTranscriptPathMock.mockResolvedValue("session.jsonl");
+    readSessionMessagesMock.mockResolvedValue([
+      {
+        role: "assistant",
+        content: [{ type: "file", url: canonicalPath, openUrl: canonicalPath }],
+        __openclaw: { id: "msg-1" },
+      },
+    ]);
+    const enterprisePrincipal = {
+      profileId: "profile-a",
+      accountId: "account-a",
+      accountRole: "employee" as const,
+      sessionId: "enterprise-session-a",
+    };
+    const download = await resolveManagedOutgoingImageArtifactDownload({
+      sessionKey,
+      artifactId: `${MANAGED_OUTGOING_MEDIA_ARTIFACT_ID_PREFIX}${attachmentId}`,
+      stateDir,
+      enterprisePrincipal,
+    });
+    expect(download?.url).toContain("mediaTicket=v2.");
+
+    vi.clearAllMocks();
+    getEnterpriseAccountByIdMock.mockReturnValue({
+      id: enterprisePrincipal.accountId,
+      profileId: enterprisePrincipal.profileId,
+      role: enterprisePrincipal.accountRole,
+      enabled: true,
+      mustChangePassword: false,
+    });
+    getActiveEnterpriseSessionMock.mockReturnValue({
+      accountId: enterprisePrincipal.accountId,
+    });
+    const owned = await requestManagedImage({
+      stateDir,
+      pathName: download?.url ?? "",
+      authMode: "accounts",
+      denyAuth: true,
+      transcriptMessages: [
+        {
+          role: "assistant",
+          content: [{ type: "file", url: canonicalPath, openUrl: canonicalPath }],
+          __openclaw: { id: "msg-1" },
+        },
+      ],
+    });
+    expect(owned.result.statusCode).toBe(200);
+    expect(owned.result.body).toEqual(body);
+    expect(authorizeGatewayHttpRequestOrReplyMock).not.toHaveBeenCalled();
+    expect(getEnterpriseAccountByIdMock).toHaveBeenCalledWith(enterprisePrincipal.accountId);
+    expect(getActiveEnterpriseSessionMock).toHaveBeenCalledWith(
+      enterprisePrincipal.sessionId,
+      {},
+      "user",
+    );
+
+    getActiveEnterpriseSessionMock.mockReturnValue({ accountId: "account-b" });
+    const crossAccountSession = await requestManagedImage({
+      stateDir,
+      pathName: download?.url ?? "",
+      authMode: "accounts",
+      denyAuth: true,
+    });
+    expect(crossAccountSession.result.statusCode).toBe(401);
+
+    getActiveEnterpriseSessionMock.mockReturnValue(undefined);
+    const revoked = await requestManagedImage({
+      stateDir,
+      pathName: download?.url ?? "",
+      authMode: "accounts",
+      denyAuth: true,
+    });
+    expect(revoked.result.statusCode).toBe(401);
+
+    getActiveEnterpriseSessionMock.mockReturnValue({
+      accountId: enterprisePrincipal.accountId,
+    });
+    getEnterpriseAccountByIdMock.mockReturnValue({
+      id: enterprisePrincipal.accountId,
+      profileId: enterprisePrincipal.profileId,
+      role: enterprisePrincipal.accountRole,
+      enabled: false,
+      mustChangePassword: false,
+    });
+    const disabledAccount = await requestManagedImage({
+      stateDir,
+      pathName: download?.url ?? "",
+      authMode: "accounts",
+      denyAuth: true,
+    });
+    expect(disabledAccount.result.statusCode).toBe(401);
+
+    const legacyDownload = await resolveManagedOutgoingImageArtifactDownload({
+      sessionKey,
+      artifactId: `${MANAGED_OUTGOING_MEDIA_ARTIFACT_ID_PREFIX}${attachmentId}`,
+      stateDir,
+    });
+    const legacyInAccountsMode = await requestManagedImage({
+      stateDir,
+      pathName: legacyDownload?.url ?? "",
+      authMode: "accounts",
+      denyAuth: true,
+    });
+    expect(legacyInAccountsMode.result.statusCode).toBe(401);
   });
 
   it("keeps a managed audio filename stable in artifact downloads", async () => {
@@ -1377,6 +1535,98 @@ describe("createManagedOutgoingImageBlocks", () => {
     },
   );
 
+  it("creates a managed file artifact block for a generated DOCX", async () => {
+    const workspaceDir = path.join(stateDir, "workspace");
+    const fileName = "Nội quy công ty.docx";
+    const sourcePath = path.join(workspaceDir, fileName);
+    await fs.mkdir(workspaceDir, { recursive: true });
+    await fs.writeFile(
+      sourcePath,
+      Buffer.from("PK\u0003\u0004[Content_Types].xml word/document.xml", "utf8"),
+    );
+
+    const blocks = await createManagedOutgoingImageBlocks({
+      sessionKey: "agent:main:main",
+      mediaUrls: [sourcePath],
+      stateDir,
+      localRoots: [workspaceDir],
+      allowLocalNonImage: true,
+    });
+
+    expect(blocks).toHaveLength(1);
+    const block = requireBlock(blocks);
+    expect(block).toMatchObject({
+      type: "file",
+      fileName,
+      mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    });
+    const attachmentId = requireAttachmentIdFromUrl(block.url);
+    expect(block.artifactId).toBe(`${MANAGED_OUTGOING_MEDIA_ARTIFACT_ID_PREFIX}${attachmentId}`);
+    expect(readManagedImageRecord(attachmentId, stateDir)?.original.filename).toBe(fileName);
+  });
+
+  it("creates managed file artifacts for generated office, archive, and text files", async () => {
+    const workspaceDir = path.join(stateDir, "workspace");
+    const fixtures = [
+      {
+        relativePath: "pdf/Báo cáo.pdf",
+        body: Buffer.from("%PDF-1.7\nreport\n", "utf8"),
+        mimeType: "application/pdf",
+      },
+      {
+        relativePath: "sheets/Kế hoạch.xlsx",
+        body: Buffer.from("PK\u0003\u0004[Content_Types].xml xl/workbook.xml", "utf8"),
+        mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      },
+      {
+        relativePath: "slides/Trình bày.pptx",
+        body: Buffer.from("PK\u0003\u0004[Content_Types].xml ppt/presentation.xml", "utf8"),
+        mimeType: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+      },
+      {
+        relativePath: "archives/source.zip",
+        body: Buffer.from("PK\u0003\u0004archive payload", "utf8"),
+        mimeType: "application/zip",
+      },
+      {
+        relativePath: "first/notes.txt",
+        body: Buffer.from("first text document", "utf8"),
+        mimeType: "text/plain",
+      },
+      {
+        relativePath: "second/notes.txt",
+        body: Buffer.from("duplicate filename, distinct bytes", "utf8"),
+        mimeType: "text/plain",
+      },
+    ];
+    const sourcePaths: string[] = [];
+    for (const fixture of fixtures) {
+      const sourcePath = path.join(workspaceDir, fixture.relativePath);
+      await fs.mkdir(path.dirname(sourcePath), { recursive: true });
+      await fs.writeFile(sourcePath, fixture.body);
+      sourcePaths.push(sourcePath);
+    }
+
+    const blocks = await createManagedOutgoingImageBlocks({
+      sessionKey: "agent:main:main",
+      mediaUrls: sourcePaths,
+      stateDir,
+      localRoots: [workspaceDir],
+      allowLocalNonImage: true,
+    });
+
+    expect(blocks).toHaveLength(fixtures.length);
+    for (const [index, fixture] of fixtures.entries()) {
+      expect(blocks[index]).toMatchObject({
+        type: "file",
+        fileName: path.basename(fixture.relativePath),
+        mimeType: fixture.mimeType,
+        sizeBytes: fixture.body.byteLength,
+      });
+    }
+    expect(new Set(blocks.map((block) => block.artifactId)).size).toBe(fixtures.length);
+  });
+
   it("marks exotic managed media metadata for playback transcoding", async () => {
     const sourcePath = path.join(stateDir, "workspace", "voice.caf");
     await fs.mkdir(path.dirname(sourcePath), { recursive: true });
@@ -1822,6 +2072,28 @@ describe("createManagedOutgoingImageBlocks", () => {
     }
   });
 
+  it("rejects missing, outside, and symlink-escaped generated documents", async () => {
+    const workspaceDir = path.join(stateDir, "workspace");
+    const outsideDir = tempDirs.make("managed-document-outside-");
+    const outsidePath = path.join(outsideDir, "secret.txt");
+    const symlinkPath = path.join(workspaceDir, "escaped.txt");
+    await fs.mkdir(workspaceDir, { recursive: true });
+    await fs.writeFile(outsidePath, "outside", "utf8");
+    await fs.symlink(outsidePath, symlinkPath);
+
+    for (const sourcePath of [path.join(workspaceDir, "missing.txt"), outsidePath, symlinkPath]) {
+      await expect(
+        createManagedOutgoingImageBlocks({
+          sessionKey: "agent:main:main",
+          mediaUrls: [sourcePath],
+          stateDir,
+          localRoots: [workspaceDir],
+          allowLocalNonImage: true,
+        }),
+      ).rejects.toThrow(/could not be prepared/i);
+    }
+  });
+
   it("accepts local image paths inside allowed roots", async () => {
     const allowedDir = path.join(stateDir, "workspace", "uploads");
     const allowedPath = path.join(allowedDir, "inside.png");
@@ -1878,17 +2150,18 @@ describe("createManagedOutgoingImageBlocks", () => {
     }
   });
 
-  it("drops downloaded non-image sources without leaving orphaned originals", async () => {
+  it("rejects untrusted local documents without leaving orphaned originals", async () => {
     const pdfPath = path.join(stateDir, "not-an-image.pdf");
     await fs.writeFile(pdfPath, Buffer.from("%PDF-1.4\n% test\n"));
 
-    const blocks = await createManagedOutgoingImageBlocks({
-      sessionKey: "agent:main:main",
-      mediaUrls: [pdfPath],
-      stateDir,
-      localRoots: [stateDir],
-    });
-    expect(blocks).toStrictEqual([]);
+    await expect(
+      createManagedOutgoingImageBlocks({
+        sessionKey: "agent:main:main",
+        mediaUrls: [pdfPath],
+        stateDir,
+        localRoots: [stateDir],
+      }),
+    ).rejects.toThrow(/Managed media attachment.*could not be prepared/u);
     const originalsDir = path.join(stateDir, "media", "outgoing", "originals");
     let originals: string[] | null = null;
     try {

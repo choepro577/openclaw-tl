@@ -12,16 +12,29 @@ import { useAutoCleanupTempDirTracker } from "../../test/helpers/temp-dir.js";
 import { normalizeAssistantIdentity } from "../../ui/src/lib/assistant-identity.ts";
 import * as configIo from "../config/io.js";
 import { resolveStateDir } from "../config/paths.js";
+import { replaceSessionEntry } from "../config/sessions/session-accessor.js";
 import type { OpenClawConfig } from "../config/types.openclaw.js";
+import {
+  createEnterpriseAccount,
+  updateEnterpriseAccount,
+} from "../enterprise/accounts/account-store.js";
+import { loginEnterpriseAccount } from "../enterprise/auth/auth-service.js";
+import { ENTERPRISE_AUTH_COOKIE } from "../enterprise/auth/cookie.js";
+import { hashEnterprisePassword } from "../enterprise/auth/password.js";
+import { revokeEnterpriseSession } from "../enterprise/auth/session-store.js";
+import { resolveEnterprisePersonalAgentId } from "../enterprise/personal-agent/personal-agent-config.js";
+import { resolveEnterpriseWorkspacePath } from "../enterprise/personal-agent/personal-workspace.js";
 import { approveDevicePairing } from "../infra/device-pairing-approval.js";
 import { ensureDeviceToken } from "../infra/device-pairing-tokens.js";
 import { requestDevicePairing } from "../infra/device-pairing.js";
 import { resolvePreferredOpenClawTmpDir } from "../infra/tmp-openclaw-dir.js";
+import { saveMediaBuffer } from "../media/store.js";
 import { createEmptyPluginRegistry } from "../plugins/registry-empty.js";
 import { resetPluginRuntimeStateForTest, setActivePluginRegistry } from "../plugins/runtime.js";
 import { AVATAR_MAX_DATA_URL_CHARS } from "../shared/avatar-limits.js";
 import { AVATAR_MAX_BYTES } from "../shared/avatar-policy.js";
 import { withEnvAsync } from "../test-utils/env.js";
+import { withOpenClawTestState } from "../test-utils/openclaw-test-state.js";
 import { buildAssistantMediaContentDisposition } from "./assistant-media-content-disposition.js";
 import {
   AUTH_RATE_LIMIT_SCOPE_DEVICE_TOKEN,
@@ -41,7 +54,9 @@ import {
   handleControlUiHttpRequest,
 } from "./control-ui.js";
 import { setControlUiPluginAuthCookieForRequest } from "./http-auth-utils.js";
+import { appendAssistantTranscriptMessage } from "./server-methods/chat-transcript-persistence.js";
 import { resolveSharedGatewaySessionGeneration } from "./server/ws-shared-generation.js";
+import { loadGatewaySessionEntryReadOnly } from "./session-utils.js";
 import { makeMockHttpResponse } from "./test-http-response.js";
 
 type PlaybackTranscodeResolution = Awaited<
@@ -294,6 +309,8 @@ describe("handleControlUiHttpRequest", () => {
     distinctHeaders?: IncomingMessage["headersDistinct"];
     trustedProxies?: string[];
     remoteAddress?: string;
+    config?: OpenClawConfig;
+    agentId?: string;
   }) {
     const { res, end, setHeader } = makeMockHttpResponse();
     const handled = await handleControlUiAssistantMediaRequest(
@@ -315,6 +332,8 @@ describe("handleControlUiHttpRequest", () => {
       {
         ...(params.basePath ? { basePath: params.basePath } : {}),
         ...(params.auth ? { auth: params.auth } : {}),
+        ...(params.config ? { config: params.config } : {}),
+        ...(params.agentId ? { agentId: params.agentId } : {}),
         ...(params.trustedProxies ? { trustedProxies: params.trustedProxies } : {}),
       },
     );
@@ -1259,6 +1278,13 @@ describe("handleControlUiHttpRequest", () => {
         expect(media.handled).toBe(true);
         expect(media.res.statusCode).toBe(200);
 
+        const rejectedInAccountMode = await runAssistantMediaRequest({
+          url: `/__openclaw__/assistant-media?source=${encodeURIComponent(filePath)}&mediaTicket=${encodeURIComponent(payload.mediaTicket ?? "")}`,
+          method: "GET",
+          auth: { mode: "accounts", allowTailscale: false },
+        });
+        expect(rejectedInAccountMode.res.statusCode).toBe(401);
+
         const shortenedTicket = payload.mediaTicket?.slice(0, -1) ?? "";
         const rejected = await runAssistantMediaRequest({
           url: `/__openclaw__/assistant-media?source=${encodeURIComponent(filePath)}&mediaTicket=${encodeURIComponent(shortenedTicket)}`,
@@ -1268,6 +1294,299 @@ describe("handleControlUiHttpRequest", () => {
         expect(rejected.handled).toBe(true);
         expect(rejected.res.statusCode).toBe(401);
       },
+    });
+  });
+
+  it("binds Enterprise assistant media to the authorized session workspace", async () => {
+    await withOpenClawTestState({ scenario: "minimal", applyEnv: true }, async (state) => {
+      const globalWorkspace = state.path("global-workspace");
+      await fs.mkdir(globalWorkspace, { recursive: true });
+      const globalFile = path.join(globalWorkspace, "operator-secret.txt");
+      await fs.writeFile(globalFile, "global-secret", "utf8");
+      const password = "enterprise-password";
+      const account = createEnterpriseAccount({
+        username: "assistant-media.employee",
+        displayName: "Assistant Media Employee",
+        passwordHash: await hashEnterprisePassword(password),
+        role: "employee",
+        mustChangePassword: false,
+      });
+      const config: OpenClawConfig = {
+        enterprise: { enabled: true, personalAgent: { templateAgentId: "main" } },
+        gateway: { auth: { mode: "accounts" } },
+        agents: { entries: { main: { workspace: globalWorkspace } } },
+      };
+      vi.spyOn(configIo, "getRuntimeConfig").mockReturnValue(config);
+      const agentId = resolveEnterprisePersonalAgentId(config, account);
+      const accountWorkspace = resolveEnterpriseWorkspacePath(account.profileId, agentId);
+      await fs.mkdir(accountWorkspace, { recursive: true });
+      await fs.writeFile(path.join(accountWorkspace, "owned.txt"), "owned-by-account", "utf8");
+      await fs.writeFile(path.join(accountWorkspace, "empty.txt"), "", "utf8");
+      await fs.writeFile(path.join(accountWorkspace, "báo cáo đính kèm.txt"), "unicode", "utf8");
+      await fs.symlink(globalFile, path.join(accountWorkspace, "escape-link.txt"));
+      const sessionKey = `agent:${agentId}:dashboard:${randomUUID()}`;
+      const chatSessionId = randomUUID();
+      await replaceSessionEntry(
+        { agentId, sessionKey, env: state.env },
+        {
+          sessionId: chatSessionId,
+          updatedAt: Date.now(),
+          createdActor: { type: "human", id: account.profileId },
+          spawnedWorkspaceDir: accountWorkspace,
+        },
+      );
+      const otherAccount = createEnterpriseAccount({
+        username: "assistant-media.other",
+        displayName: "Assistant Media Other",
+        passwordHash: await hashEnterprisePassword("other-password"),
+        role: "employee",
+        mustChangePassword: false,
+      });
+      const otherAgentId = resolveEnterprisePersonalAgentId(config, otherAccount);
+      const otherWorkspace = resolveEnterpriseWorkspacePath(otherAccount.profileId, otherAgentId);
+      await fs.mkdir(otherWorkspace, { recursive: true });
+      const otherFile = path.join(otherWorkspace, "other-account.txt");
+      await fs.writeFile(otherFile, "owned-by-other-account", "utf8");
+      const otherSessionKey = `agent:${otherAgentId}:dashboard:${randomUUID()}`;
+      await replaceSessionEntry(
+        { agentId: otherAgentId, sessionKey: otherSessionKey, env: state.env },
+        {
+          sessionId: randomUUID(),
+          updatedAt: Date.now(),
+          createdActor: { type: "human", id: otherAccount.profileId },
+          spawnedWorkspaceDir: otherWorkspace,
+        },
+      );
+      const login = await loginEnterpriseAccount(account.username, password);
+      const auth: ResolvedGatewayAuth = { mode: "accounts", allowTailscale: false };
+      const headers = {
+        host: "localhost:18789",
+        origin: "http://localhost:18789",
+        "sec-fetch-site": "same-origin",
+        cookie: `${ENTERPRISE_AUTH_COOKIE}=${login.token}`,
+      };
+
+      const bootstrap = await runBootstrapConfigRequest({
+        rootPath: globalWorkspace,
+        auth,
+        config,
+        headers,
+      });
+      expect(bootstrap.res.statusCode).toBe(200);
+      expect(parseBootstrapPayload(bootstrap.end).localMediaPreviewRoots).toEqual([]);
+
+      const globalMeta = await runAssistantMediaRequest({
+        url: `/__openclaw__/assistant-media?meta=1&sessionKey=${encodeURIComponent(sessionKey)}&source=${encodeURIComponent(globalFile)}`,
+        method: "GET",
+        auth,
+        config,
+        agentId: "main",
+        headers,
+      });
+      expect(globalMeta.res.statusCode).toBe(200);
+      expect(responseJson(globalMeta.end)).toMatchObject({ available: false });
+      const globalDirect = await runAssistantMediaRequest({
+        url: `/__openclaw__/assistant-media?sessionKey=${encodeURIComponent(sessionKey)}&source=${encodeURIComponent(globalFile)}`,
+        method: "GET",
+        auth,
+        config,
+        agentId: "main",
+        headers,
+      });
+      expect(globalDirect.res.statusCode).toBe(404);
+      for (const otherAccountRequest of [
+        `/__openclaw__/assistant-media?meta=1&sessionKey=${encodeURIComponent(sessionKey)}&source=${encodeURIComponent(otherFile)}`,
+        `/__openclaw__/assistant-media?meta=1&sessionKey=${encodeURIComponent(otherSessionKey)}&source=${encodeURIComponent("/workspace/other-account.txt")}`,
+      ]) {
+        const otherAccountMeta = await runAssistantMediaRequest({
+          url: otherAccountRequest,
+          method: "GET",
+          auth,
+          config,
+          agentId: "main",
+          headers,
+        });
+        expect(responseJson(otherAccountMeta.end)).toMatchObject({ available: false });
+      }
+
+      const ownedMeta = await runAssistantMediaRequest({
+        url: `/__openclaw__/assistant-media?meta=1&sessionKey=${encodeURIComponent(sessionKey)}&source=${encodeURIComponent("/workspace/owned.txt")}`,
+        method: "GET",
+        auth,
+        config,
+        agentId: "main",
+        headers,
+      });
+      const ownedPayload = responseJson(ownedMeta.end) as {
+        available?: boolean;
+        mediaTicket?: string;
+        workspacePath?: string;
+      };
+      expect(ownedMeta.res.statusCode).toBe(200);
+      expect(ownedPayload).toMatchObject({ available: true, workspacePath: "owned.txt" });
+      expect(ownedPayload.mediaTicket).toEqual(expect.any(String));
+
+      for (const allowedLegacySource of [
+        path.join(accountWorkspace, "owned.txt"),
+        `file://${path.join(accountWorkspace, "owned.txt")}`,
+        "MEDIA:/workspace/owned.txt",
+        "/workspace/báo cáo đính kèm.txt",
+      ]) {
+        const allowedLegacy = await runAssistantMediaRequest({
+          url: `/__openclaw__/assistant-media?meta=1&sessionKey=${encodeURIComponent(sessionKey)}&source=${encodeURIComponent(allowedLegacySource)}`,
+          method: "GET",
+          auth,
+          config,
+          agentId: "main",
+          headers,
+        });
+        expect(responseJson(allowedLegacy.end)).toMatchObject({ available: true });
+      }
+
+      for (const blockedSource of [
+        "/workspace/../global-workspace/operator-secret.txt",
+        "/workspace/escape-link.txt",
+        `file://${globalFile}`,
+        `MEDIA:${globalFile}`,
+        "~/operator-secret.txt",
+        "/workspace",
+      ]) {
+        const blocked = await runAssistantMediaRequest({
+          url: `/__openclaw__/assistant-media?meta=1&sessionKey=${encodeURIComponent(sessionKey)}&source=${encodeURIComponent(blockedSource)}`,
+          method: "GET",
+          auth,
+          config,
+          agentId: "main",
+          headers,
+        });
+        expect(responseJson(blocked.end)).toMatchObject({ available: false });
+      }
+
+      const emptyMeta = await runAssistantMediaRequest({
+        url: `/__openclaw__/assistant-media?meta=1&sessionKey=${encodeURIComponent(sessionKey)}&source=${encodeURIComponent("/workspace/empty.txt")}`,
+        method: "GET",
+        auth,
+        config,
+        agentId: "main",
+        headers,
+      });
+      expect(responseJson(emptyMeta.end)).toMatchObject({ available: true, sizeBytes: 0 });
+
+      const referencedInbound = await saveMediaBuffer(
+        Buffer.from(REAL_PNG),
+        "image/png",
+        "inbound",
+        undefined,
+        "owned.png",
+      );
+      const foreignInbound = await saveMediaBuffer(
+        Buffer.from(REAL_PNG),
+        "image/png",
+        "inbound",
+        undefined,
+        "foreign.png",
+      );
+      const referencedInboundUri = `media://inbound/${referencedInbound.id}`;
+      const foreignInboundUri = `media://inbound/${foreignInbound.id}`;
+      const { storePath } = loadGatewaySessionEntryReadOnly(sessionKey, {
+        cfg: config,
+        agentId,
+      });
+      const appendedInboundReference = await appendAssistantTranscriptMessage({
+        sessionKey,
+        sessionId: chatSessionId,
+        storePath,
+        agentId,
+        cfg: config,
+        createIfMissing: true,
+        message: "Attached image",
+        content: [{ type: "image", url: referencedInboundUri }],
+      });
+      expect(appendedInboundReference.ok, JSON.stringify(appendedInboundReference)).toBe(true);
+      const referencedInboundMeta = await runAssistantMediaRequest({
+        url: `/__openclaw__/assistant-media?meta=1&sessionKey=${encodeURIComponent(sessionKey)}&source=${encodeURIComponent(referencedInboundUri)}`,
+        method: "GET",
+        auth,
+        config,
+        agentId: "main",
+        headers,
+      });
+      expect(responseJson(referencedInboundMeta.end)).toMatchObject({ available: true });
+      for (const foreignSource of [foreignInboundUri, foreignInbound.path]) {
+        const foreignMeta = await runAssistantMediaRequest({
+          url: `/__openclaw__/assistant-media?meta=1&sessionKey=${encodeURIComponent(sessionKey)}&source=${encodeURIComponent(foreignSource)}`,
+          method: "GET",
+          auth,
+          config,
+          agentId: "main",
+          headers,
+        });
+        expect(responseJson(foreignMeta.end)).toMatchObject({ available: false });
+      }
+
+      const ownedBytes = await runAssistantMediaRequest({
+        url: `/__openclaw__/assistant-media?sessionKey=${encodeURIComponent(sessionKey)}&source=${encodeURIComponent("/workspace/owned.txt")}&mediaTicket=${encodeURIComponent(ownedPayload.mediaTicket ?? "")}`,
+        method: "HEAD",
+        auth,
+        config,
+        agentId: "main",
+      });
+      expect(ownedBytes.res.statusCode).toBe(200);
+      expect(ownedBytes.setHeader).toHaveBeenCalledWith(
+        "Content-Length",
+        String(Buffer.byteLength("owned-by-account")),
+      );
+
+      for (const alteredUrl of [
+        `/__openclaw__/assistant-media?sessionKey=${encodeURIComponent(`${sessionKey}-other`)}&source=${encodeURIComponent("/workspace/owned.txt")}&mediaTicket=${encodeURIComponent(ownedPayload.mediaTicket ?? "")}`,
+        `/__openclaw__/assistant-media?sessionKey=${encodeURIComponent(sessionKey)}&source=${encodeURIComponent("/workspace/empty.txt")}&mediaTicket=${encodeURIComponent(ownedPayload.mediaTicket ?? "")}`,
+      ]) {
+        const altered = await runAssistantMediaRequest({
+          url: alteredUrl,
+          method: "HEAD",
+          auth,
+          config,
+          agentId: "main",
+        });
+        expect(altered.res.statusCode).toBe(401);
+      }
+
+      const ticketIssuedAt = Date.now();
+      const nowSpy = vi.spyOn(Date, "now").mockReturnValue(ticketIssuedAt + 5 * 60 * 1000 + 1);
+      let expiredTicket: Awaited<ReturnType<typeof runAssistantMediaRequest>>;
+      try {
+        expiredTicket = await runAssistantMediaRequest({
+          url: `/__openclaw__/assistant-media?sessionKey=${encodeURIComponent(sessionKey)}&source=${encodeURIComponent("/workspace/owned.txt")}&mediaTicket=${encodeURIComponent(ownedPayload.mediaTicket ?? "")}`,
+          method: "HEAD",
+          auth,
+          config,
+          agentId: "main",
+        });
+      } finally {
+        nowSpy.mockRestore();
+      }
+      expect(expiredTicket!.res.statusCode).toBe(401);
+
+      updateEnterpriseAccount(account.id, { enabled: false });
+      const lockedAccountTicket = await runAssistantMediaRequest({
+        url: `/__openclaw__/assistant-media?sessionKey=${encodeURIComponent(sessionKey)}&source=${encodeURIComponent("/workspace/owned.txt")}&mediaTicket=${encodeURIComponent(ownedPayload.mediaTicket ?? "")}`,
+        method: "HEAD",
+        auth,
+        config,
+        agentId: "main",
+      });
+      expect(lockedAccountTicket.res.statusCode).toBe(401);
+      updateEnterpriseAccount(account.id, { enabled: true });
+
+      revokeEnterpriseSession(login.principal.sessionId, "test-revocation");
+      const revokedTicket = await runAssistantMediaRequest({
+        url: `/__openclaw__/assistant-media?sessionKey=${encodeURIComponent(sessionKey)}&source=${encodeURIComponent("/workspace/owned.txt")}&mediaTicket=${encodeURIComponent(ownedPayload.mediaTicket ?? "")}`,
+        method: "HEAD",
+        auth,
+        config,
+        agentId: "main",
+      });
+      expect(revokedTicket.res.statusCode).toBe(401);
     });
   });
 

@@ -66,6 +66,7 @@ export type DescribeImageFileWithModelParams = {
   prompt: string;
   maxTokens?: number;
   timeoutMs?: number;
+  signal?: AbortSignal;
 };
 
 export type PreparedImageDescriptionInput = {

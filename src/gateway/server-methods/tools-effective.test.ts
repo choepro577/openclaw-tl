@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ErrorCodes } from "../../../packages/gateway-protocol/src/index.js";
 import type { McpToolCatalog } from "../../agents/agent-bundle-mcp-types.js";
 import { setPluginToolMeta } from "../../plugins/tools.js";
+import { markGatewayRequestScopedRuntimeConfig } from "../request-runtime-config.js";
 import { createToolsEffectiveHandlers, testing } from "./tools-effective.js";
 
 type ToolsEffectiveDependencies = NonNullable<Parameters<typeof createToolsEffectiveHandlers>[0]>;
@@ -407,6 +408,56 @@ describe("tools.effective handler", () => {
         modelProvider: "openai",
         modelId: "gpt-4.1",
       }),
+    );
+  });
+
+  it("preserves request-scoped config while loading trusted persisted session facts", async () => {
+    const globalConfig = {
+      tools: { profile: "full" },
+      agents: { entries: { main: { workspace: "/tmp/global-workspace" } } },
+    };
+    const scopedConfig = markGatewayRequestScopedRuntimeConfig({
+      tools: { allow: ["read"] },
+      agents: { entries: { main: { workspace: "/tmp/account-workspace" } } },
+    });
+    runtimeMocks.loadSessionEntry.mockReturnValueOnce({
+      cfg: globalConfig,
+      agentId: "main",
+      storePath: "/tmp/sessions.json",
+      store: {},
+      canonicalKey: "main:abc",
+      entry: {
+        sessionId: "session-1",
+        updatedAt: 1,
+        modelProvider: "openai",
+        model: "gpt-4.1",
+      },
+      storeKeys: ["main:abc"],
+      legacyKey: undefined,
+    } as never);
+    runtimeMocks.resolveAgentWorkspaceDir.mockReturnValueOnce("/tmp/account-workspace");
+
+    const { respond, invoke } = createInvokeParams({ sessionKey: "main:abc" }, scopedConfig);
+    await invoke();
+
+    expect(firstRespondCall(respond)?.[0]).toBe(true);
+    expect(resolveEffectiveToolInventoryArg()?.cfg).toBe(scopedConfig);
+    expect(resolveEffectiveToolInventoryArg()?.workspaceDir).toBe("/tmp/account-workspace");
+    expect(runtimeMocks.resolveAgentWorkspaceDir).toHaveBeenCalledWith(scopedConfig, "main");
+    expect(runtimeMocks.resolveSessionAgentId).toHaveBeenCalledWith(
+      expect.objectContaining({ config: scopedConfig }),
+    );
+    expect(runtimeMocks.resolveSessionModelRef).toHaveBeenCalledWith(
+      scopedConfig,
+      expect.any(Object),
+      "main",
+    );
+    expect(runtimeMocks.resolveRuntimeConfigCacheKey).toHaveBeenCalledWith(scopedConfig);
+    expect(runtimeMocks.resolveReplyToMode).toHaveBeenCalledWith(
+      scopedConfig,
+      "telegram",
+      "acct-1",
+      undefined,
     );
   });
 

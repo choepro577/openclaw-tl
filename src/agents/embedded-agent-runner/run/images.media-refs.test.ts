@@ -310,6 +310,39 @@ describe("fact-carried image references", () => {
     }
   });
 
+  it("recovers a missing inline block from its exact managed inbound fact", async () => {
+    const stateDir = await fs.mkdtemp(path.join(os.tmpdir(), "openclaw-inline-inbound-fallback-"));
+    const workspaceDir = path.join(stateDir, "workspace-agent");
+    const inboundDir = path.join(stateDir, "media", "inbound");
+    const mediaId = "current-turn.png";
+    await fs.mkdir(workspaceDir, { recursive: true });
+    await fs.mkdir(inboundDir, { recursive: true });
+    await fs.writeFile(path.join(inboundDir, mediaId), Buffer.from(TINY_PNG_BASE64, "base64"));
+    const envSnapshot = captureEnv(["OPENCLAW_STATE_DIR"]);
+    setTestEnvValue("OPENCLAW_STATE_DIR", stateDir);
+
+    try {
+      const result = await detectAndLoadPromptImages({
+        prompt: "inspect the attached image",
+        media: [{ url: `media://inbound/${mediaId}`, contentType: "image/png" }],
+        workspaceDir,
+        model: { input: ["text", "image"] },
+        imageOrder: ["inline"],
+        workspaceOnly: true,
+      });
+
+      expect(result.loadedCount).toBe(1);
+      expect(result.failedMediaCount).toBe(0);
+      expect(result.imageFactIndexes).toEqual([0]);
+      expect(result.images).toEqual([
+        { type: "image", data: TINY_PNG_BASE64, mimeType: "image/png" },
+      ]);
+    } finally {
+      envSnapshot.restore();
+      await fs.rm(stateDir, { recursive: true, force: true });
+    }
+  });
+
   it("hydrates sandbox-staged inbound media URIs", async () => {
     const sandboxRoot = await fs.mkdtemp(path.join(os.tmpdir(), "openclaw-native-image-sbx-uri-"));
     const inboundDir = path.join(sandboxRoot, "media", "inbound");

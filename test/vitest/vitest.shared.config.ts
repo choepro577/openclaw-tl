@@ -164,6 +164,10 @@ export const sharedVitestConfig = {
   resolve: {
     alias: [
       {
+        find: /^@openclaw\/knowledge-graph-core$/u,
+        replacement: path.join(repoRoot, "packages", "knowledge-graph-core", "src", "index.ts"),
+      },
+      {
         // Route bare `zod` through a runtime shim (same pattern as the
         // discord-api-types shims below): zod's own entry re-exports `z` as a
         // namespace binding, which Bun's linker drops under Vitest's loader

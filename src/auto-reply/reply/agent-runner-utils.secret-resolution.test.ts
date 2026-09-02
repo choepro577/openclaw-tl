@@ -1,6 +1,10 @@
 // Tests queued reply runtime secret resolution for agent and channel scopes.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { OpenClawConfig } from "../../config/config.js";
+import {
+  isGatewayRequestScopedRuntimeConfig,
+  markGatewayRequestScopedRuntimeConfig,
+} from "../../gateway/request-runtime-config.js";
 
 const hoisted = vi.hoisted(() => ({
   resolveCommandSecretRefsViaGatewayMock: vi.fn(),
@@ -197,5 +201,31 @@ describe("resolveQueuedReplyExecutionConfig channel scope", () => {
 
     expect(resolveQueuedReplyRuntimeConfig(structuredClone(sourceConfig))).toBe(staleRuntimeConfig);
     expect(resolveQueuedReplyRuntimeConfig(scopedResolvedConfig)).toBe(scopedResolvedConfig);
+  });
+
+  it("preserves request-scoped config through runtime refresh and secret resolution", async () => {
+    const accountWorkspace = "/tmp/enterprise-account-workspace";
+    const requestScopedConfig = markGatewayRequestScopedRuntimeConfig({
+      agents: { entries: { main: { workspace: accountWorkspace } } },
+    } as OpenClawConfig);
+    const globalConfig = {
+      agents: { entries: { main: { workspace: "/tmp/global-workspace" } } },
+    } as OpenClawConfig;
+    setRuntimeConfigSnapshot(globalConfig, structuredClone(requestScopedConfig));
+    const secretResolvedConfig = structuredClone(requestScopedConfig);
+    hoisted.resolveCommandSecretRefsViaGatewayMock.mockResolvedValueOnce({
+      resolvedConfig: secretResolvedConfig,
+      diagnostics: [],
+      targetStatesByPath: {},
+      hadUnresolvedTargets: false,
+    });
+
+    expect(resolveQueuedReplyRuntimeConfig(requestScopedConfig)).toBe(requestScopedConfig);
+    const resolved = await resolveQueuedReplyExecutionConfig(requestScopedConfig);
+
+    expect(resolved).toBe(secretResolvedConfig);
+    expect(isGatewayRequestScopedRuntimeConfig(resolved)).toBe(true);
+    expect(resolveQueuedReplyRuntimeConfig(resolved)).toBe(resolved);
+    expect(resolved.agents?.entries?.main?.workspace).toBe(accountWorkspace);
   });
 });

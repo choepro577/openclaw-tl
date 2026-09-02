@@ -23,6 +23,10 @@ import {
   type OpenClawConfig,
 } from "../../config/config.js";
 import type { SessionEntry } from "../../config/sessions.js";
+import {
+  inheritGatewayRequestScopedRuntimeConfig,
+  isGatewayRequestScopedRuntimeConfig,
+} from "../../gateway/request-runtime-config.js";
 import { isReasoningTagProvider } from "../../utils/provider-utils.js";
 import type { TemplateContext } from "../templating.js";
 import { resolveRunAuthProfile } from "./agent-runner-auth-profile.js";
@@ -47,6 +51,9 @@ type EmbeddedReplyRoute = Pick<
 
 /** Selects the freshest runtime config usable by queued reply execution. */
 export function resolveQueuedReplyRuntimeConfig(config: OpenClawConfig): OpenClawConfig {
+  if (isGatewayRequestScopedRuntimeConfig(config)) {
+    return config;
+  }
   const runtimeConfig =
     typeof getRuntimeConfigSnapshot === "function" ? getRuntimeConfigSnapshot() : null;
   const runtimeSourceConfig =
@@ -78,6 +85,7 @@ export async function resolveQueuedReplyExecutionConfig(
     optionalActivePaths: getAgentRuntimeOptionalCommandSecretPaths(runtimeConfig),
   });
   const baseResolvedConfig = resolvedConfig ?? runtimeConfig;
+  inheritGatewayRequestScopedRuntimeConfig(config, baseResolvedConfig);
 
   const scope = resolveMessageSecretScope({
     channel: params?.originatingChannel,
@@ -104,7 +112,10 @@ export async function resolveQueuedReplyExecutionConfig(
     targetIds: scopedTargets.targetIds,
     ...(scopedTargets.allowedPaths ? { allowedPaths: scopedTargets.allowedPaths } : {}),
   });
-  return scopedResolved.resolvedConfig ?? baseResolvedConfig;
+  return inheritGatewayRequestScopedRuntimeConfig(
+    config,
+    scopedResolved.resolvedConfig ?? baseResolvedConfig,
+  );
 }
 
 /**

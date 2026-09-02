@@ -278,6 +278,36 @@ describe("message-normalizer", () => {
       ]);
     });
 
+    it("normalizes managed assistant file blocks as document artifacts", () => {
+      const result = normalizeMessage({
+        role: "assistant",
+        content: [
+          {
+            type: "file",
+            artifactId: "artifact_managed_media_docx",
+            url: "/api/chat/media/outgoing/agent%3Amain%3Amain/docx/full",
+            fileName: "Nội quy công ty.docx",
+            mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            sizeBytes: 7_698,
+          },
+        ],
+      });
+
+      expect(result.content).toEqual([
+        {
+          type: "attachment",
+          attachment: {
+            artifactId: "artifact_managed_media_docx",
+            url: "/api/chat/media/outgoing/agent%3Amain%3Amain/docx/full",
+            kind: "document",
+            label: "Nội quy công ty.docx",
+            mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            sizeBytes: 7_698,
+          },
+        },
+      ]);
+    });
+
     it("does not normalize non-assistant structured audio blocks as attachments", () => {
       const result = normalizeMessage({
         role: "user",

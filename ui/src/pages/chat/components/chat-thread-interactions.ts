@@ -101,6 +101,7 @@ export type ChatThreadProps = {
   localMediaPreviewRoots?: string[];
   assistantAttachmentAuthToken?: string | null;
   resolveArtifactDownload?: ArtifactDownloadResolver;
+  onOpenArtifact?: (artifactId: string) => void;
   canvasPluginSurfaceUrl?: string | null;
   embedSandboxMode?: EmbedSandboxMode;
   allowExternalEmbedUrls?: boolean;
@@ -129,6 +130,8 @@ export type ChatThreadProps = {
   onCompanionPrefill?: (question: string) => void;
   onOpenSession?: (sessionKey: string) => void;
   modelSetupRequired?: boolean;
+  enterpriseUserPresentation?: boolean;
+  enterpriseUserUnavailable?: boolean;
   onModelSetup?: () => void;
   backgroundTasks?: BackgroundTasksProps;
 };

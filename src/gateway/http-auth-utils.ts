@@ -79,7 +79,7 @@ export function getBearerToken(req: IncomingMessage): string | undefined {
 }
 
 type SharedSecretGatewayAuth = Pick<ResolvedGatewayAuth, "mode">;
-export type AuthorizedGatewayHttpRequest = {
+export type AuthorizedGatewayHttpRequest = Partial<GatewayAuthResult> & {
   authMethod?: GatewayAuthResult["method"];
   user?: string;
   trustDeclaredOperatorScopes: boolean;
@@ -120,7 +120,7 @@ type GatewayHttpConnectAuthorizer = (
   params: Parameters<typeof authorizeHttpGatewayConnect>[0],
 ) => Promise<GatewayAuthResult>;
 
-export type AuthorizedControlUiReadRequest = {
+export type AuthorizedControlUiReadRequest = Partial<GatewayAuthResult> & {
   authMethod: NonNullable<GatewayAuthResult["method"]>;
   operatorScopes: string[];
 };
@@ -396,7 +396,7 @@ export async function authorizeControlUiReadRequestOrReply(
       sendMissingScopeForbidden(params.res, scopeAuth.missingScope);
       return null;
     }
-    return { authMethod, operatorScopes };
+    return { ...resolvedAuthResult, authMethod, operatorScopes };
   };
 
   if (!canUseDeviceTokenFallback || !params.rateLimiter) {
@@ -614,8 +614,7 @@ async function checkGatewayHttpRequestAuthWith(
   return {
     ok: true,
     requestAuth: {
-      authMethod: authResult.method,
-      ...(authResult.user ? { user: authResult.user } : {}),
+      ...authResult,
       // Shared-secret bearer auth proves possession of the gateway secret, but it
       // does not prove a narrower per-request operator identity. HTTP endpoints
       // must opt in explicitly if they want to treat that shared-secret path as a

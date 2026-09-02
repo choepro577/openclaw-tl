@@ -77,6 +77,7 @@ export function createApplicationGateway(
   initialBootstrapToken = "",
   createClient: GatewayClientFactory = defaultClientFactory,
   options: {
+    enableCanvasSurfaceLease?: boolean;
     persistDefaultConnectionSettings?: boolean;
     resourceBasePath?: string;
     bootstrapProfile?: ControlUiBootstrapProfileHint;
@@ -409,10 +410,12 @@ export function createApplicationGateway(
           });
         }
         everConnected = true;
-        const canvasPluginSurfaceUrl = normalizeCanvasPluginSurfaceUrl(
-          hello.pluginSurfaceUrls?.canvas,
-        );
-        const canvasLeaseGeneration = beginCanvasSurfaceLease(nextClient);
+        const canvasPluginSurfaceUrl =
+          options.enableCanvasSurfaceLease === false
+            ? null
+            : normalizeCanvasPluginSurfaceUrl(hello.pluginSurfaceUrls?.canvas);
+        const canvasLeaseGeneration =
+          options.enableCanvasSurfaceLease === false ? null : beginCanvasSurfaceLease(nextClient);
         setSnapshot({
           ...snapshot,
           client: nextClient,
@@ -429,11 +432,13 @@ export function createApplicationGateway(
             nextClient.instanceId,
           ),
         });
-        startCanvasSurfaceLease(
-          nextClient,
-          canvasLeaseGeneration,
-          canvasPluginSurfaceUrl ?? undefined,
-        );
+        if (canvasLeaseGeneration !== null) {
+          startCanvasSurfaceLease(
+            nextClient,
+            canvasLeaseGeneration,
+            canvasPluginSurfaceUrl ?? undefined,
+          );
+        }
       },
       onRecoveryScopeChange: () => {
         if (client !== nextClient || snapshot.phase !== "connected") {

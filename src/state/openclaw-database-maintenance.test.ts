@@ -188,6 +188,15 @@ describe("OpenClaw database maintenance schema validation", () => {
       "installed_plugin_index.workspace_dir TEXT",
       "secret_store_entries.allowed_hosts TEXT",
       "skill_workshop_proposals.claim_released_time INTEGER",
+      "enterprise_knowledge_zones.build_revision INTEGER",
+      "enterprise_knowledge_index_generations.build_revision INTEGER",
+      "enterprise_knowledge_index_generations.graph_status TEXT",
+      "enterprise_knowledge_index_generations.graph_schema_version INTEGER",
+      "enterprise_knowledge_index_generations.graph_node_count INTEGER",
+      "enterprise_knowledge_index_generations.graph_edge_count INTEGER",
+      "enterprise_knowledge_index_generations.graph_proposed_count INTEGER",
+      "enterprise_knowledge_index_generations.graph_orphan_count INTEGER",
+      "enterprise_knowledge_index_generations.graph_enrichment_identity_json TEXT",
     ]);
 
     const database = createGlobalDatabase();

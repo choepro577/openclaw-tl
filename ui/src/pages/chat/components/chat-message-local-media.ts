@@ -118,11 +118,12 @@ export function buildAssistantAttachmentUrl(
   source: string,
   resourceBasePath?: string,
   mediaTicket?: string | null,
+  sessionKey?: string | null,
 ): string {
   if (!isLocalAssistantAttachmentSource(source)) {
     return source;
   }
-  return buildAssistantMediaUrl(source, resourceBasePath, mediaTicket);
+  return buildAssistantMediaUrl(source, resourceBasePath, mediaTicket, sessionKey);
 }
 
 export function appendAttachmentUrlSearchParam(

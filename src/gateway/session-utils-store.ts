@@ -132,10 +132,17 @@ function readAcpMetaForDeletedAgentCheck(params: {
 
 function loadSessionEntryWithMode(
   sessionKey: string,
-  opts: { agentId?: string; clone?: boolean; includeStoreChildEntries?: boolean } | undefined,
+  opts:
+    | {
+        agentId?: string;
+        clone?: boolean;
+        includeStoreChildEntries?: boolean;
+        cfg?: OpenClawConfig;
+      }
+    | undefined,
   readOnly: boolean,
 ) {
-  const cfg = getRuntimeConfig();
+  const cfg = opts?.cfg ?? getRuntimeConfig();
   const key = normalizeOptionalString(sessionKey) ?? "";
   const target = resolveGatewaySessionStoreTargetWithStore({
     cfg,
@@ -179,7 +186,12 @@ export function loadGatewaySessionEntry(
 
 export function loadGatewaySessionEntryReadOnly(
   sessionKey: string,
-  opts?: { agentId?: string; clone?: boolean; includeStoreChildEntries?: boolean },
+  opts?: {
+    agentId?: string;
+    clone?: boolean;
+    includeStoreChildEntries?: boolean;
+    cfg?: OpenClawConfig;
+  },
 ) {
   return loadSessionEntryWithMode(sessionKey, opts, true);
 }

@@ -96,6 +96,7 @@ describe("navigationIconForRoute", () => {
       activity: "activity",
       apps: "layoutGrid",
       portals: "monitor",
+      enterprise: "users",
       approvals: "badgeCheck",
       workboard: "kanban",
       dashboards: "layoutDashboard",
@@ -220,6 +221,7 @@ describe("titleForRoute", () => {
       activity: "Activity",
       apps: "Apps",
       portals: "Portals",
+      enterprise: "Enterprise",
       approvals: "Approvals",
       workboard: "Workboard",
       dashboards: "Dashboards",
@@ -272,6 +274,7 @@ describe("subtitleForRoute", () => {
       activity: "Recent sessions across people using this gateway.",
       apps: "Companion apps for phone, watch, desktop, and browser.",
       portals: "Live previews from agent-run applications.",
+      enterprise: "Personal Agents, account access, and enterprise policy.",
       approvals: "Recent exec, plugin, and system-agent approvals.",
       workboard: "Agent work queue and session handoff.",
       dashboards: "Sessions that open on their dashboard face.",
@@ -529,6 +532,7 @@ describe("SIDEBAR_NAV_ROUTES", () => {
       "plugins",
       "apps",
       "portals",
+      "enterprise",
     ]);
   });
 

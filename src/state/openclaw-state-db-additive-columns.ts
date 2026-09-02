@@ -44,6 +44,51 @@ export const CLAW_LAZY_ADDITIVE_STATE_COLUMN_DEFINITIONS = [
     dataType: "INTEGER",
     tableName: "skill_workshop_proposals",
   },
+  {
+    columnName: "build_revision",
+    dataType: "INTEGER",
+    tableName: "enterprise_knowledge_zones",
+  },
+  {
+    columnName: "build_revision",
+    dataType: "INTEGER",
+    tableName: "enterprise_knowledge_index_generations",
+  },
+  {
+    columnName: "graph_status",
+    dataType: "TEXT",
+    tableName: "enterprise_knowledge_index_generations",
+  },
+  {
+    columnName: "graph_schema_version",
+    dataType: "INTEGER",
+    tableName: "enterprise_knowledge_index_generations",
+  },
+  {
+    columnName: "graph_node_count",
+    dataType: "INTEGER",
+    tableName: "enterprise_knowledge_index_generations",
+  },
+  {
+    columnName: "graph_edge_count",
+    dataType: "INTEGER",
+    tableName: "enterprise_knowledge_index_generations",
+  },
+  {
+    columnName: "graph_proposed_count",
+    dataType: "INTEGER",
+    tableName: "enterprise_knowledge_index_generations",
+  },
+  {
+    columnName: "graph_orphan_count",
+    dataType: "INTEGER",
+    tableName: "enterprise_knowledge_index_generations",
+  },
+  {
+    columnName: "graph_enrichment_identity_json",
+    dataType: "TEXT",
+    tableName: "enterprise_knowledge_index_generations",
+  },
 ] as const satisfies readonly LazyAdditiveStateColumnDefinition[];
 
 function isFirstUseAdditiveStateColumn({
@@ -55,7 +100,9 @@ function isFirstUseAdditiveStateColumn({
     (tableName === "skill_workshop_proposals" && columnName === "claim_released_time") ||
     (tableName === "worker_session_placement_moves" &&
       (columnName === "abandon_source" || columnName === "target_machine_class")) ||
-    (tableName === "session_groups" && (columnName === "cwd" || columnName === "worktree"))
+    (tableName === "session_groups" && (columnName === "cwd" || columnName === "worktree")) ||
+    (tableName === "enterprise_knowledge_zones" && columnName === "build_revision") ||
+    tableName === "enterprise_knowledge_index_generations"
   );
 }
 

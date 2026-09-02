@@ -175,7 +175,7 @@ export type GatewayControlUiConfig = {
 };
 
 /** Gateway authentication strategy for WebSocket and HTTP clients. */
-export type GatewayAuthMode = "none" | "token" | "password" | "trusted-proxy";
+export type GatewayAuthMode = "none" | "token" | "password" | "trusted-proxy" | "accounts";
 
 /**
  * Configuration for trusted reverse proxy authentication.

@@ -28,6 +28,7 @@ export type ArtifactDownloadResolver = (params: {
 }) => Promise<{ url: string; expiresAt?: string } | null>;
 
 export type ImageRenderOptions = {
+  sessionKey?: string;
   localMediaPreviewRoots?: readonly string[];
   resourceBasePath?: string;
   authToken?: string | null;
@@ -35,6 +36,8 @@ export type ImageRenderOptions = {
   onRequestOpenImage?: () => number;
   onOpenImage?: (item: ImageLightboxItem, requestVersion?: number) => void;
   resolveArtifactDownload?: ArtifactDownloadResolver;
+  onOpenArtifact?: (artifactId: string) => void;
+  onOpenWorkspaceFile?: (target: { path: string; line?: number | null }) => void;
 };
 
 export type RenderableImageBlock = ImageBlock & {

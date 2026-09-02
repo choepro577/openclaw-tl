@@ -95,6 +95,7 @@ const sharedUiTestConfig = {
   hookTimeout: 60_000,
 } as const;
 const nodeDrivenBrowserLayoutTests = [
+  "src/pages/enterprise-user/tests/style-contract.browser.test.ts",
   "src/ui/chat/sidebar-session-picker.browser.test.ts",
   "src/pages/chat/chat-responsive.browser.test.ts",
   "src/components/form-controls.browser.test.ts",

@@ -3,6 +3,7 @@ import {
   GATEWAY_SERVER_CAPS,
   PROTOCOL_VERSION,
 } from "../../../../packages/gateway-protocol/src/index.js";
+import { projectEnterpriseUserGatewayMethods } from "../../../enterprise/isolation/enterprise-user-methods.js";
 import { sha256Base64Url } from "../../../infra/crypto-digest.js";
 import {
   redeemDeviceBootstrapTokenProfile,
@@ -30,6 +31,7 @@ import { canReadDetailedUpdateMetadata } from "../../events.js";
 import { ADMIN_SCOPE } from "../../method-scopes.js";
 import { scheduleNodeConnectionNotification } from "../../node-connection-notifications.js";
 import { MAX_BUFFERED_BYTES, MAX_PAYLOAD_BYTES, TICK_INTERVAL_MS } from "../../server-constants.js";
+import { projectSystemPresenceForProfile } from "../../server-methods/gateway-client-identity.js";
 import { formatError } from "../../server-utils.js";
 import { allowedSessionVisibilities } from "../../session-sharing.js";
 import { formatForLog, logWs } from "../../ws-log.js";
@@ -105,6 +107,12 @@ export async function sendGatewayHello(
     includeUpdateDetails: canReadDetailedUpdateMetadata(role, scopes),
     revisionProjector: buildRequestContext().configRevisionProjector,
   });
+  if (authResult.enterpriseSessionId && authResult.enterpriseAccountId) {
+    snapshot.presence = projectSystemPresenceForProfile(
+      snapshot.presence,
+      authenticatedUserProfileId,
+    );
+  }
   const cachedHealth = getHealthCache();
   if (cachedHealth) {
     snapshot.health = cachedHealth;
@@ -132,7 +140,10 @@ export async function sendGatewayHello(
       connId,
     },
     features: {
-      methods: gatewayMethods,
+      methods:
+        authResult.enterpriseSessionId && authResult.enterpriseAccountId
+          ? projectEnterpriseUserGatewayMethods(gatewayMethods)
+          : gatewayMethods,
       events,
       capabilities: [
         GATEWAY_SERVER_CAPS.BOARD_WIDGET_PUT_CANVAS_DOC,

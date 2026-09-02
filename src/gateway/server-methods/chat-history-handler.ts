@@ -52,6 +52,7 @@ import {
 } from "./chat-history-pages.js";
 import { resolveRequestedChatAgentId, validateChatSelectedAgent } from "./chat-origin-routing.js";
 import { normalizeOptionalChatText as normalizeOptionalText } from "./chat-text-normalization.js";
+import { enterpriseUserPortalIdentity } from "./gateway-client-identity.js";
 import {
   loadOptionalServerMethodModelCatalogSnapshot,
   startOptionalServerMethodModelCatalogSnapshotLoad,
@@ -82,6 +83,7 @@ async function handleChatMetadataRequest({
   params,
   respond,
   context,
+  client,
 }: GatewayRequestHandlerOptions): Promise<void> {
   if (!assertValidParams(params, validateChatMetadataParams, "chat.metadata", respond)) {
     return;
@@ -100,11 +102,38 @@ async function handleChatMetadataRequest({
   if (!resolvedAgent) {
     return;
   }
+  if (enterpriseUserPortalIdentity(client)) {
+    respond(true, { swarmEnabled: false });
+    return;
+  }
   respond(
     true,
     await context.readChatMetadata({
       agentId: resolvedAgent.agentId,
     }),
+  );
+}
+
+function projectEnterpriseUserSessionInfo(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return {};
+  }
+  const source = value as Record<string, unknown>;
+  const safeKeys = [
+    "activeLeafEntryId",
+    "activeRunIds",
+    "archived",
+    "createdAt",
+    "hasActiveRun",
+    "key",
+    "label",
+    "sessionId",
+    "status",
+    "unread",
+    "updatedAt",
+  ] as const;
+  return Object.fromEntries(
+    safeKeys.filter((key) => Object.hasOwn(source, key)).map((key) => [key, source[key]]),
   );
 }
 
@@ -157,6 +186,7 @@ async function handleChatHistoryRequest({
   params,
   respond,
   context,
+  client,
   method,
 }: GatewayRequestHandlerOptions & {
   method: ChatHistoryMethod;
@@ -207,6 +237,7 @@ async function handleChatHistoryRequest({
     return;
   }
   const requestConfig = context.getRuntimeConfig();
+  const enterpriseUserRequest = enterpriseUserPortalIdentity(client) !== undefined;
   const agentIdOverride = normalizeOptionalText((params as { agentId?: string }).agentId);
   const requestedAgent = resolveRequestedChatAgentId({
     cfg: requestConfig,
@@ -320,7 +351,7 @@ async function handleChatHistoryRequest({
       { config: cfg, phase: method, attributes: { agentId: sessionAgentId } },
     );
   const startupProjectionPromise =
-    method === "chat.startup" && entry?.authProfileOverride?.trim()
+    !enterpriseUserRequest && method === "chat.startup" && entry?.authProfileOverride?.trim()
       ? readStartupProjection()
       : undefined;
   const sessionId = requestedSessionId ?? entry?.sessionId;
@@ -424,7 +455,7 @@ async function handleChatHistoryRequest({
   const modelCatalog = catalogOwnedBySessionAgent ? modelCatalogSnapshot.entries : undefined;
   const compatibilityOwnerAgentId = tryResolveSessionCompatibilityOwnerAgentId(cfg, sessionKey);
   const startupProjection =
-    method === "chat.startup"
+    !enterpriseUserRequest && method === "chat.startup"
       ? await (startupProjectionPromise ?? readStartupProjection())
       : undefined;
   const startupMetadata = startupProjection?.metadata;
@@ -545,8 +576,10 @@ async function handleChatHistoryRequest({
       kind: "delta",
       messages: delta.messages,
       deltaCursor: delta.deltaCursor,
-      sessionInfo,
-      ...(startupMetadata ? { metadata: startupMetadata } : {}),
+      sessionInfo: enterpriseUserRequest
+        ? projectEnterpriseUserSessionInfo(sessionInfo)
+        : sessionInfo,
+      ...(!enterpriseUserRequest && startupMetadata ? { metadata: startupMetadata } : {}),
     });
     return;
   }
@@ -562,14 +595,16 @@ async function handleChatHistoryRequest({
     ...(historyPage.completeCliImport && !hasMore && historyBudgetPreserved
       ? { completeSnapshot: true }
       : {}),
-    defaults,
-    sessionInfo,
-    thinkingLevel,
-    fastMode: entry?.fastMode,
-    toolOverrides: entry?.toolOverrides,
-    verboseLevel,
+    ...(!enterpriseUserRequest ? { defaults } : {}),
+    sessionInfo: enterpriseUserRequest
+      ? projectEnterpriseUserSessionInfo(sessionInfo)
+      : sessionInfo,
+    ...(!enterpriseUserRequest ? { thinkingLevel } : {}),
+    ...(!enterpriseUserRequest ? { fastMode: entry?.fastMode } : {}),
+    ...(!enterpriseUserRequest ? { toolOverrides: entry?.toolOverrides } : {}),
+    ...(!enterpriseUserRequest ? { verboseLevel } : {}),
     ...(boundedInFlightRun ? { inFlightRun: boundedInFlightRun } : {}),
-    ...(startupMetadata ? { metadata: startupMetadata } : {}),
+    ...(!enterpriseUserRequest && startupMetadata ? { metadata: startupMetadata } : {}),
   };
   respond(true, payload);
 }

@@ -13,6 +13,7 @@ import {
 } from "../../sessions/session-lifecycle-admission.js";
 import { withTestDir } from "../../test-helpers/temp-dir.js";
 import { normalizeSessionDeliveryState } from "../../utils/delivery-context.shared.js";
+import { markGatewayRequestScopedRuntimeConfig } from "../request-runtime-config.js";
 import {
   getAgentTestMocks,
   makeContext,
@@ -69,6 +70,35 @@ describe("gateway agent handler", () => {
         maxEntries: 42,
       },
     });
+  });
+
+  it("preserves request-scoped agent config through session lookup and run dispatch", async () => {
+    const publishedConfig = {
+      agents: { list: [{ id: "main", workspace: "/tmp/global-main-workspace" }] },
+    };
+    const scopedConfig = markGatewayRequestScopedRuntimeConfig({
+      agents: { list: [{ id: "main", workspace: "/tmp/enterprise-main-workspace" }] },
+    });
+    mocks.loadConfigReturn = publishedConfig;
+    primeMainAgentRun({ cfg: publishedConfig });
+    const context = {
+      ...makeContext(),
+      getRuntimeConfig: () => scopedConfig,
+    } as GatewayRequestContext;
+
+    await invokeAgent(
+      {
+        message: "hi",
+        agentId: "main",
+        sessionKey: "agent:main:main",
+        idempotencyKey: "request-scoped-agent-config",
+      },
+      { context },
+    );
+
+    const dispatchCall = mocks.agentCommand.mock.calls.at(-1) as unknown[] | undefined;
+    const commandRuntimeContext = dispatchCall?.[4] as { config?: unknown } | undefined;
+    expect(commandRuntimeContext?.config).toBe(scopedConfig);
   });
 
   it("carries exact cron creator authority through direct local agent RPC", async () => {

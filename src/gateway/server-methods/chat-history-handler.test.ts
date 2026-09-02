@@ -40,4 +40,43 @@ describe("chat metadata ownership", () => {
     );
     expect(readChatMetadata).not.toHaveBeenCalled();
   });
+
+  it("does not expose model or command metadata to Enterprise user-portal clients", async () => {
+    const config: OpenClawConfig = {
+      agents: { entries: { main: {} } },
+    };
+    const respond = vi.fn();
+    const readChatMetadata = vi.fn(async () => ({
+      commands: [{ name: "model" }],
+      models: [{ id: "provider/hidden-model" }],
+      swarmEnabled: true,
+    }));
+
+    await expectDefined(
+      chatHistoryHandlers["chat.metadata"],
+      'chatHistoryHandlers["chat.metadata"] Enterprise projection invariant',
+    )({
+      params: { agentId: "main" },
+      respond: respond as unknown as RespondFn,
+      req: {} as never,
+      client: {
+        authenticatedUserProfile: { profileId: "profile-user" },
+        internal: {
+          enterpriseSession: {
+            accountId: "account-user",
+            accountRole: "employee",
+            audience: "user",
+          },
+        },
+      } as never,
+      isWebchatConnect: () => false,
+      context: {
+        getRuntimeConfig: () => config,
+        readChatMetadata,
+      } as unknown as GatewayRequestContext,
+    });
+
+    expect(respond).toHaveBeenCalledWith(true, { swarmEnabled: false });
+    expect(readChatMetadata).not.toHaveBeenCalled();
+  });
 });

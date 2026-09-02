@@ -23,6 +23,7 @@ import {
   parseManagedOutgoingArtifactId,
   resolveManagedOutgoingMediaArtifactDownload,
   resolveManagedOutgoingMediaUrlDownload,
+  type ManagedOutgoingEnterprisePrincipal,
 } from "../managed-image-attachments.js";
 import {
   resolveRequestedSessionAgentId,
@@ -43,6 +44,22 @@ import {
 } from "./artifacts-session-resolution.js";
 import type { GatewayClient, GatewayRequestHandlers, RespondFn } from "./types.js";
 import { assertValidParams } from "./validation.js";
+
+function resolveManagedOutgoingEnterprisePrincipal(
+  client: GatewayClient | null | undefined,
+): ManagedOutgoingEnterprisePrincipal | undefined {
+  const enterpriseSession = client?.internal?.enterpriseSession;
+  const profileId = client?.authenticatedUserProfile?.profileId;
+  if (!enterpriseSession || !profileId) {
+    return undefined;
+  }
+  return {
+    profileId,
+    accountId: enterpriseSession.accountId,
+    accountRole: enterpriseSession.accountRole,
+    sessionId: enterpriseSession.sessionId,
+  };
+}
 
 type ArtifactDownloadMode = ArtifactSummary["download"]["mode"];
 
@@ -488,6 +505,7 @@ export const artifactsHandlers: GatewayRequestHandlers = {
     if (!admittedQuery) {
       return;
     }
+    const enterprisePrincipal = resolveManagedOutgoingEnterprisePrincipal(client);
     if (
       admittedQuery.sessionKey &&
       !admittedQuery.runId &&
@@ -510,6 +528,7 @@ export const artifactsHandlers: GatewayRequestHandlers = {
             ...(resolved.agentId ? { agentId: resolved.agentId } : {}),
             ...(defaultAgentId ? { defaultAgentId } : {}),
             artifactId: params.artifactId,
+            ...(enterprisePrincipal ? { enterprisePrincipal } : {}),
           })
         : null;
       if (managed) {
@@ -558,6 +577,7 @@ export const artifactsHandlers: GatewayRequestHandlers = {
         ? await resolveManagedOutgoingMediaUrlDownload({
             sessionKey: artifact.sessionKey,
             url: artifact.url,
+            ...(enterprisePrincipal ? { enterprisePrincipal } : {}),
           })
         : null;
     respond(true, {

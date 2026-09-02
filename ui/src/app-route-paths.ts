@@ -29,6 +29,8 @@ const APP_ROUTE_DEFINITIONS = {
   activity: { path: "/activity" },
   apps: { path: "/apps" },
   portals: { path: "/portals" },
+  enterprise: { path: "/enterprise" },
+  knowledge: { path: "/knowledge" },
   agents: { path: "/settings/agents", aliases: ["/agents"] },
   channels: { path: "/settings/channels", aliases: ["/channels"] },
   connection: { path: "/settings/connection" },

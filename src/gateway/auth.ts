@@ -6,6 +6,7 @@ import {
   normalizeOptionalString,
 } from "@openclaw/normalization-core/string-coerce";
 import type { GatewayAuthConfig, GatewayTrustedProxyConfig } from "../config/types.gateway.js";
+import { authenticateEnterpriseRequest } from "../enterprise/auth/auth-service.js";
 import { safeEqualSecret } from "../security/secret-equal.js";
 import {
   AUTH_RATE_LIMIT_SCOPE_SHARED_SECRET,
@@ -46,8 +47,17 @@ export type GatewayAuthResult = {
     | "tailscale"
     | "device-token"
     | "bootstrap-token"
-    | "trusted-proxy";
+    | "trusted-proxy"
+    | "accounts";
   user?: string;
+  /** Durable profile selected by Enterprise account authentication. */
+  profileId?: string;
+  /** Durable Enterprise account selected by account authentication. */
+  enterpriseAccountId?: string;
+  /** Account role projected into connection scope policy. */
+  accountRole?: "administrator" | "employee";
+  /** Server-verified Enterprise session retained for per-request revocation checks. */
+  enterpriseSessionId?: string;
   /** Full verified Tailscale identity; present only after header + WhoIs agreement. */
   tailscaleIdentity?: VerifiedTailscaleIdentity;
   reason?: string;
@@ -508,6 +518,37 @@ async function authorizeGatewayConnectCore(
       });
     }
     return { ok: false, reason: result.reason };
+  }
+
+  if (auth.mode === "accounts") {
+    if (!req) {
+      return { ok: false, reason: "enterprise_request_required" };
+    }
+    const originResult = authorizeHttpBrowserOrigin({
+      authSurface,
+      browserOriginPolicy: params.browserOriginPolicy,
+      isLocalClient: localDirect,
+      reason: "origin_not_allowed",
+    });
+    if (originResult) {
+      return originResult;
+    }
+    const principal = authenticateEnterpriseRequest(req);
+    if (!principal) {
+      return { ok: false, reason: "enterprise_session_invalid" };
+    }
+    if (authSurface === "ws-control-ui" && principal.account.mustChangePassword) {
+      return { ok: false, reason: "enterprise_password_change_required" };
+    }
+    return {
+      ok: true,
+      method: "accounts",
+      user: principal.account.username,
+      profileId: principal.account.profileId,
+      enterpriseAccountId: principal.account.id,
+      accountRole: principal.account.role,
+      enterpriseSessionId: principal.sessionId,
+    };
   }
 
   if (auth.mode === "none") {

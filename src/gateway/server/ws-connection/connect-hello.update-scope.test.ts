@@ -19,7 +19,11 @@ const {
       channel: "dev",
     };
     return {
-      presence: [],
+      presence: [] as Array<{
+        text?: string;
+        ts?: number;
+        user?: { id: string; name?: string };
+      }>,
       health: {},
       stateVersion: { presence: 1, health: 1 },
       uptimeMs: 1,
@@ -190,6 +194,46 @@ describe("sendGatewayHello update detail scope", () => {
     expect(helloPayload(context)?.server.buildId).toBe("build-a");
     expect(helloPayload(context)?.server.bootId).toBe("gateway-boot-a");
     expect(helloPayload(context)?.server.controlUiBuildSource).toBe("bundled");
+  });
+
+  it("projects the initial Enterprise hello presence to the authenticated profile", async () => {
+    buildGatewaySnapshotMock.mockReturnValueOnce({
+      presence: [
+        { text: "current", ts: 3, user: { id: "profile-current", name: "Current" } },
+        { text: "foreign", ts: 2, user: { id: "profile-foreign", name: "Foreign" } },
+        { text: "gateway", ts: 1 },
+      ],
+      health: {},
+      stateVersion: { presence: 1, health: 1 },
+      uptimeMs: 1,
+      sessionDefaults: {
+        defaultAgentId: "main",
+        mainKey: "main",
+        mainSessionKey: "main",
+        scope: "per-sender",
+      },
+      updateAvailable: {
+        currentVersion: "2026.8.7",
+        latestVersion: "2026.8.8",
+        channel: "dev",
+      },
+    });
+    const context = makeContext("operator", ["operator.read"]);
+    const state = {
+      ...makeState("operator", ["operator.read"]),
+      authResult: {
+        ok: true,
+        method: "accounts",
+        enterpriseSessionId: "enterprise-session",
+        enterpriseAccountId: "enterprise-account",
+      },
+    };
+
+    await sendGatewayHello(context as never, state as never, {}, "profile-current");
+
+    expect(helloSnapshot(context)?.presence).toEqual([
+      { text: "current", ts: 3, user: { id: "profile-current", name: "Current" } },
+    ]);
   });
 
   it("omits package build identity for independently built configured UI roots", async () => {

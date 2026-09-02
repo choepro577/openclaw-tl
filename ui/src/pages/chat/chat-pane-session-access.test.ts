@@ -6,11 +6,81 @@ import type { GatewayBrowserClient } from "../../api/gateway.ts";
 import type { GatewaySessionRow } from "../../api/types.ts";
 import type { ApplicationContext } from "../../app/context.ts";
 import type { SessionCapability } from "../../lib/sessions/index.ts";
+import { resolveChatPaneTranscriptPresentation } from "./chat-pane-render.ts";
 import { createTestChatPane } from "./chat-pane.test-support.ts";
 import { createBackgroundTasksProps } from "./components/chat-background-tasks.ts";
 import { createSessionWorkspaceProps } from "./components/chat-session-workspace.ts";
 
 describe("chat pane session access", () => {
+  it("keeps safe Files and side-panel controls in Enterprise User Chat", () => {
+    const { pane, state } = createTestChatPane({
+      client: {} as GatewayBrowserClient,
+      sessions: {} as SessionCapability,
+    });
+    pane.context = { ...pane.context, presentation: "enterprise-user" };
+    Object.assign(pane, { mergedChrome: true, narrow: true });
+    const container = document.createElement("div");
+    const onToggleFiles = vi.fn();
+    const workspace = {
+      ...createSessionWorkspaceProps(state),
+      onToggleCollapsed: onToggleFiles,
+    };
+
+    render(
+      pane.renderPaneHeader(
+        workspace,
+        createBackgroundTasksProps(state),
+        undefined,
+        false,
+        undefined,
+        false,
+      ),
+      container,
+    );
+
+    expect(container.querySelector(".chat-pane__nav-toggle")).toBeNull();
+    expect(container.querySelector(".chat-pane__palette-open")).toBeNull();
+    container.querySelector<HTMLButtonElement>(".chat-workspace-panel-toggle")?.click();
+    expect(onToggleFiles).toHaveBeenCalledOnce();
+    expect(container.querySelector(".chat-side-panel-toggle")).not.toBeNull();
+    expect(container.querySelector(".chat-browser-panel-toggle")).toBeNull();
+
+    const onToggleBrowser = vi.fn();
+    render(
+      pane.renderPaneHeader(
+        { ...workspace, onToggleBrowser },
+        createBackgroundTasksProps(state),
+        undefined,
+        false,
+        undefined,
+        false,
+      ),
+      container,
+    );
+    container.querySelector<HTMLButtonElement>(".chat-browser-panel-toggle")?.click();
+    expect(onToggleBrowser).toHaveBeenCalledOnce();
+  });
+
+  it("shows original tool activity in Enterprise User Chat even when the operator setting is off", () => {
+    const toolMessages = [{ role: "tool", content: "read IDENTITY.md" }];
+
+    expect(
+      resolveChatPaneTranscriptPresentation({
+        catalog: false,
+        enterpriseUserPresentation: true,
+        configuredAutoExpandToolCalls: true,
+        configuredShowThinking: true,
+        configuredShowToolCalls: false,
+        toolMessages,
+      }),
+    ).toEqual({
+      autoExpandToolCalls: false,
+      showThinking: false,
+      showToolCalls: true,
+      toolMessages,
+    });
+  });
+
   it("opens the resolved parent from the header breadcrumb", () => {
     const { pane, state } = createTestChatPane({
       client: {} as GatewayBrowserClient,

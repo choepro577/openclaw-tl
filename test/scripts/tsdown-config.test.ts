@@ -8,6 +8,10 @@ import {
   TSDOWN_UNIFIED_CONFIG_GROUP,
   TSDOWN_UNIFIED_DTS_CONFIG_GROUPS,
 } from "../../scripts/lib/tsdown-config-groups.mts";
+import {
+  TSDOWN_PACKAGE_OUTPUT_ROOTS,
+  tsdownPackageOutputRoot,
+} from "../../scripts/lib/tsdown-output-roots.mts";
 import { WORKER_DEPLOY_OPTIONAL_NATIVE_MODULE_ID } from "../../scripts/lib/worker-deploy-build-plugin.mts";
 import config from "../../tsdown.config.ts";
 
@@ -36,6 +40,17 @@ const isWorkerBuildConfig = (config: TsdownConfig) =>
   isWorkerDeployConfig(config) || isWorkerRsyncReceiverConfig(config);
 
 describe("tsdown config", () => {
+  it("registers an owned output root for every package build config", () => {
+    const packageOutputRoots = configs
+      .filter((entry) => entry.name === TSDOWN_PACKAGE_CONFIG_GROUP)
+      .map((entry) => entry.outDir);
+
+    expect(tsdownPackageOutputRoot("knowledge-graph-core")).toBe(
+      "packages/knowledge-graph-core/dist",
+    );
+    expect(TSDOWN_PACKAGE_OUTPUT_ROOTS).toEqual(expect.arrayContaining(packageOutputRoots));
+  });
+
   it.each(["tsdown.config.ts", "tsdown.ai.config.ts"])(
     "keeps %s free of runtime imports from tsdown",
     (configPath) => {
@@ -125,6 +140,7 @@ describe("tsdown config", () => {
     });
     expect(workerConfig?.alias).toMatchObject({
       bufferutil: WORKER_DEPLOY_OPTIONAL_NATIVE_MODULE_ID,
+      canvas: WORKER_DEPLOY_OPTIONAL_NATIVE_MODULE_ID,
       "chromium-bidi/lib/cjs/bidiMapper/BidiMapper": WORKER_DEPLOY_OPTIONAL_NATIVE_MODULE_ID,
       "chromium-bidi/lib/cjs/cdp/CdpConnection": WORKER_DEPLOY_OPTIONAL_NATIVE_MODULE_ID,
       "electron/index.js": WORKER_DEPLOY_OPTIONAL_NATIVE_MODULE_ID,

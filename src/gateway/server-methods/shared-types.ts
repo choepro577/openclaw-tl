@@ -135,6 +135,13 @@ export type GatewayClient = {
     senderAttribution?: { id: string; name?: string };
     /** Trusted session creation provenance; never accepted from Gateway wire params. */
     sessionCreation?: TrustedSessionCreation;
+    /** Server-verified Enterprise user session; never accepted from Gateway wire params. */
+    enterpriseSession?: {
+      sessionId: string;
+      audience: "user";
+      accountId: string;
+      accountRole: "administrator" | "employee";
+    };
     /** Trusted built-in agent tool caller; never accepted from Gateway wire params. */
     agentToolCaller?: TrustedAgentToolCaller;
     allowModelOverride?: boolean;

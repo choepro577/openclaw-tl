@@ -8,6 +8,7 @@ import type { OpenClawConfig } from "../config/types.openclaw.js";
 import {
   loadDeferredCatalog,
   registerGatewayModelCatalogPrivateAccess,
+  type PreparedGatewayModelCatalogSnapshot,
 } from "./server-model-catalog-auth.js";
 import {
   loadGatewayModelCatalog,
@@ -55,6 +56,42 @@ function ownerSnapshot(
 }
 
 describe("gateway prepared model catalog", () => {
+  it("carries the request-scoped config through private catalog access", async () => {
+    const scopedConfig = ownerConfig("enterprise-personal");
+    const publicLoader = vi.fn();
+    const loadDeferred = vi.fn(
+      async () =>
+        ({
+          ...ownerSnapshot(scopedConfig, snapshot, "enterprise-personal"),
+          workspaceDir: "/tmp/gateway-workspace",
+          catalogComplete: false,
+          entries: snapshot.entries,
+          routeVariants: snapshot.routeVariants,
+          authMaterializations: [],
+        }) as PreparedGatewayModelCatalogSnapshot,
+    );
+    registerGatewayModelCatalogPrivateAccess(publicLoader, {
+      loadDeferred,
+      readPrepared: async () => undefined,
+    });
+
+    await loadDeferredCatalog(
+      {
+        loadGatewayModelCatalogSnapshot: publicLoader,
+        getRuntimeConfig: () => scopedConfig,
+      },
+      "enterprise-personal",
+      { readOnly: true, refreshAuth: true },
+    );
+
+    expect(loadDeferred).toHaveBeenCalledWith({
+      agentId: "enterprise-personal",
+      config: scopedConfig,
+      readOnly: true,
+      refreshAuth: true,
+    });
+  });
+
   it("reads the published read-only generation directly", async () => {
     const config = ownerConfig();
     const loadPublishedPreparedModelCatalogOwnerSnapshot = vi.fn(async () => ownerSnapshot(config));

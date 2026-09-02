@@ -1,3 +1,4 @@
+import type { EnterpriseConfig } from "../enterprise/enterprise-config.js";
 // Defines the top-level OpenClaw configuration type.
 import type { SilentReplyPolicyShape } from "../shared/silent-reply-policy.js";
 import type { TranscriptsConfig } from "../transcripts/config.js";
@@ -92,6 +93,8 @@ export type OpenClawConfig = {
   };
   /** Authentication provider/profile configuration. */
   auth?: AuthConfig;
+  /** Additive enterprise accounts and per-user policy module. Disabled by default. */
+  enterprise?: EnterpriseConfig;
   /** Named access groups used by channel/provider policy allowlists. */
   accessGroups?: AccessGroupsConfig;
   /** ACP integration settings. */

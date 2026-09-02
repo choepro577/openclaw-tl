@@ -792,6 +792,104 @@ describe("gateway broadcaster", () => {
     expectSentEvents(adminSocket, writeVisibleEvents);
   });
 
+  it("projects realtime presence to the current Enterprise profile", () => {
+    const portalSocket = makeRecordingSocket();
+    const operatorSocket = makeRecordingSocket();
+    const portalClient = makeOperatorWsClient("enterprise-portal", portalSocket, [
+      "operator.admin",
+    ]);
+    portalClient.authenticatedUserProfile = {
+      profileId: "profile-current",
+      displayName: "Current",
+      avatarRevision: "1",
+      hasAvatar: false,
+      updatedAt: 1,
+    };
+    portalClient.internal = {
+      enterpriseSession: {
+        sessionId: "enterprise-session-current",
+        audience: "user",
+        accountId: "account-current",
+        accountRole: "administrator",
+      },
+    };
+    const operatorClient = makeOperatorWsClient("ordinary-operator", operatorSocket, [
+      "operator.admin",
+    ]);
+    const presence = [
+      { text: "current", ts: 3, user: { id: "profile-current", name: "Current" } },
+      { text: "other", ts: 2, user: { id: "profile-other", name: "Other" } },
+      { text: "host", ts: 1 },
+    ];
+    const { broadcast } = createGatewayBroadcaster({
+      clients: new Set([portalClient, operatorClient]),
+    });
+
+    broadcast("presence", { presence });
+
+    expect(portalSocket.sent[0]?.payload).toEqual({ presence: [presence[0]] });
+    expect(operatorSocket.sent[0]?.payload).toEqual({ presence });
+  });
+
+  it("sends Enterprise cron events only to the owning account", () => {
+    const ownerSocket = makeRecordingSocket();
+    const foreignSocket = makeRecordingSocket();
+    const operatorSocket = makeRecordingSocket();
+    const ownerClient = makeOperatorWsClient("enterprise-owner", ownerSocket, ["operator.write"]);
+    ownerClient.authenticatedUserProfile = {
+      profileId: "profile-owner",
+      displayName: "Owner",
+      avatarRevision: "1",
+      hasAvatar: false,
+      updatedAt: 1,
+    };
+    ownerClient.internal = {
+      enterpriseSession: {
+        sessionId: "enterprise-session-owner",
+        audience: "user",
+        accountId: "account-owner",
+        accountRole: "employee",
+      },
+    };
+    const foreignClient = makeOperatorWsClient("enterprise-foreign", foreignSocket, [
+      "operator.write",
+    ]);
+    foreignClient.authenticatedUserProfile = {
+      profileId: "profile-foreign",
+      displayName: "Foreign",
+      avatarRevision: "1",
+      hasAvatar: false,
+      updatedAt: 1,
+    };
+    foreignClient.internal = {
+      enterpriseSession: {
+        sessionId: "enterprise-session-foreign",
+        audience: "user",
+        accountId: "account-foreign",
+        accountRole: "employee",
+      },
+    };
+    const operatorClient = makeOperatorWsClient("ordinary-operator", operatorSocket, [
+      "operator.admin",
+    ]);
+    const { broadcast } = createGatewayBroadcaster({
+      clients: new Set([ownerClient, foreignClient, operatorClient]),
+    });
+
+    broadcast(
+      "cron",
+      { jobId: "job-owner" },
+      {
+        enterpriseAccountId: "account-owner",
+        sessionKeys: ["enterprise-account:account-owner"],
+      },
+    );
+
+    expectSentEvents(ownerSocket, ["cron"]);
+    expect(foreignSocket.send).not.toHaveBeenCalled();
+    expectSentEvents(operatorSocket, ["cron"]);
+  });
+
   it("keeps event seq contiguous per receiving client when scoped events are filtered", () => {
     const pairingSocket = makeRecordingSocket();
     const readSocket = makeRecordingSocket();

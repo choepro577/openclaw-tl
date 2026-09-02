@@ -32,6 +32,10 @@ import type {
 } from "./server-broadcast-types.js";
 import type { SessionMessageSubscriberRegistry } from "./server-chat-state.js";
 import { MAX_BUFFERED_BYTES, WEBSOCKET_OPEN_READY_STATE } from "./server-constants.js";
+import {
+  enterpriseUserPortalIdentity,
+  projectSystemPresenceForClient,
+} from "./server-methods/gateway-client-identity.js";
 import { GatewayClientRegistry } from "./server/client-registry.js";
 import type { GatewayWsClient } from "./server/ws-types.js";
 import { logWs, summarizeAgentEventForWsLog } from "./ws-log.js";
@@ -122,6 +126,24 @@ function serializeFrameField(name: "payload" | "stateVersion", value: unknown): 
   const keyJSON = JSON.stringify(name);
   const prefix = `{${keyJSON}:`;
   return fieldJSON.startsWith(prefix) ? `,${keyJSON}:${fieldJSON.slice(prefix.length, -1)}` : "";
+}
+
+function projectBroadcastPayloadForClient(
+  event: string,
+  payload: unknown,
+  client: GatewayWsClient,
+): unknown {
+  if (event !== "presence" || !payload || typeof payload !== "object" || Array.isArray(payload)) {
+    return payload;
+  }
+  const record = payload as { presence?: unknown };
+  if (!Array.isArray(record.presence)) {
+    return payload;
+  }
+  return {
+    ...record,
+    presence: projectSystemPresenceForClient(record.presence, client),
+  };
 }
 
 function resolveBroadcastSessionScope(
@@ -286,8 +308,17 @@ export function createGatewayBroadcaster(params: {
       if (!hasEventScope(c, event, explicitPluginScope)) {
         continue;
       }
+      const enterpriseIdentity = enterpriseUserPortalIdentity(c);
+      const isOwnedEnterpriseCronEvent =
+        event === "cron" &&
+        enterpriseIdentity !== undefined &&
+        opts?.enterpriseAccountId === enterpriseIdentity.accountId;
+      if (event === "cron" && enterpriseIdentity && !isOwnedEnterpriseCronEvent) {
+        continue;
+      }
       if (
         sessionKeys.length > 0 &&
+        !isOwnedEnterpriseCronEvent &&
         params.canReceiveSessionEvent &&
         !params.canReceiveSessionEvent(c, sessionKeys, agentId, event, payload)
       ) {
@@ -373,7 +404,18 @@ export function createGatewayBroadcaster(params: {
       // detector at once — a synchronized reconnect storm with no evidence.
       let frame: string;
       try {
-        const base = getFrameBase();
+        const projectedPayload = projectBroadcastPayloadForClient(event, payload, c);
+        const base =
+          projectedPayload === payload
+            ? getFrameBase()
+            : {
+                eventJSON: JSON.stringify(event),
+                payloadFragment: serializeFrameField("payload", projectedPayload),
+                stateVersionFragment:
+                  opts?.stateVersion === undefined
+                    ? ""
+                    : serializeFrameField("stateVersion", opts.stateVersion),
+              };
         frame = `{"type":"event","event":${base.eventJSON}${base.payloadFragment},"seq":${nextSeq}${base.stateVersionFragment}}`;
       } catch (err) {
         log.error(`broadcast serialization failed for event ${event}: ${formatErrorMessage(err)}`);

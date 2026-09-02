@@ -56,6 +56,8 @@ import { resolveCronJobsStorePathFromConfig } from "../cron/store.js";
 import { cronStreamScheduleKey } from "../cron/stream-schedule.js";
 import { createCronScriptRuntime } from "../cron/trigger-script.js";
 import type { CronJob, CronPayload } from "../cron/types.js";
+import { resolveEnterpriseCronExecution } from "../enterprise/automations/enterprise-cron-execution.js";
+import { enterpriseCronOwnerAccountId } from "../enterprise/automations/enterprise-cron-owner.js";
 import { formatErrorMessage } from "../infra/errors.js";
 import { resolveMainScopedEventSessionKey } from "../infra/event-session-routing.js";
 import { runHeartbeatOnce } from "../infra/heartbeat-runner.js";
@@ -372,7 +374,16 @@ const CRON_ACTIVE_RUN_SHUTDOWN_DRAIN_MS = 10_000;
 export function buildGatewayCronService(params: {
   cfg: OpenClawConfig;
   deps: CliDeps;
-  broadcast: (event: string, payload: unknown, opts?: { dropIfSlow?: boolean }) => void;
+  broadcast: (
+    event: string,
+    payload: unknown,
+    opts?: {
+      dropIfSlow?: boolean;
+      sessionKeys?: readonly string[];
+      agentId?: string;
+      enterpriseAccountId?: string;
+    },
+  ) => void;
   env?: NodeJS.ProcessEnv;
   resolveGatewayContext?: () => GatewayRequestContext | undefined;
 }): GatewayCronState {
@@ -852,9 +863,14 @@ export function buildGatewayCronService(params: {
       onLaneWait,
     }) => {
       const { agentId, cfg: runtimeConfig } = resolveCronAgent(job.agentId);
+      const enterpriseExecution = resolveEnterpriseCronExecution({
+        job,
+        agentId,
+        runtimeConfig,
+      });
       const sessionKey = resolveCronSessionTargetSessionKey(job.sessionTarget) ?? `cron:${job.id}`;
       return await runCronIsolatedAgentTurn({
-        cfg: runtimeConfig,
+        cfg: enterpriseExecution.cfg,
         deps: params.deps,
         job,
         message,
@@ -865,6 +881,9 @@ export function buildGatewayCronService(params: {
         agentId,
         sessionKey,
         lane: "cron",
+        ...(enterpriseExecution.createdActor
+          ? { createdActor: enterpriseExecution.createdActor }
+          : {}),
       });
     },
     runCommandJob: async ({ job, abortSignal }) => {
@@ -1036,8 +1055,12 @@ export function buildGatewayCronService(params: {
         jobSnapshot?.sessionKey ??
         evt.sessionKey;
       const scopedAgentId = jobSnapshot?.owner?.agentId ?? jobSnapshot?.agentId;
+      const enterpriseAccountId = jobSnapshot
+        ? enterpriseCronOwnerAccountId(jobSnapshot)
+        : undefined;
       params.broadcast("cron", evt.job ? { ...evt, job: toPublicCronJob(evt.job) } : evt, {
         dropIfSlow: true,
+        ...(enterpriseAccountId ? { enterpriseAccountId } : {}),
         ...(scopedSessionKey
           ? {
               sessionKeys: [scopedSessionKey],

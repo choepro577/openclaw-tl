@@ -457,6 +457,8 @@ const CORE_GATEWAY_METHOD_SPECS = [
   // Session checkout diff reads the session's own git worktree, matching the
   // sessions.files.* trusted-operator read domain.
   ["sessions.diff", "sessions-diff", "operator.read", "<=2026.7"],
+  ["enterprise.knowledge.subscribe", "enterprise-knowledge", "operator.read", "2026.9"],
+  ["enterprise.knowledge.unsubscribe", "enterprise-knowledge", "operator.read", "2026.9"],
   // Additive protocol methods append here to preserve existing advertised indices.
   ["openclaw.setup.verify", "system-agent", "operator.admin", "<=2026.7"],
   // Cloud-worker mutations depend on the loaded provider registry and owned

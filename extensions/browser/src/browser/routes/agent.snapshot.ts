@@ -212,6 +212,7 @@ async function saveNormalizedScreenshotResponse(params: {
   labelsSkipped?: number;
   truncated?: boolean;
   annotations?: AnnotationItem[];
+  includeDataUrl?: boolean;
 }) {
   // Measure original dimensions BEFORE normalization so we can rescale
   // annotation coordinates if the response pipeline shrinks the image
@@ -241,6 +242,7 @@ async function saveNormalizedScreenshotResponse(params: {
     labelsSkipped: params.labelsSkipped,
     truncated: params.truncated,
     annotations,
+    includeDataUrl: params.includeDataUrl,
   });
 }
 
@@ -285,6 +287,7 @@ async function saveBrowserMediaResponse(params: {
   labelsSkipped?: number;
   truncated?: boolean;
   annotations?: AnnotationItem[];
+  includeDataUrl?: boolean;
 }) {
   await ensureMediaDir();
   const saved = await saveMediaBuffer(
@@ -296,6 +299,9 @@ async function saveBrowserMediaResponse(params: {
   params.res.json({
     ok: true,
     path: path.resolve(saved.path),
+    ...(params.includeDataUrl
+      ? { dataUrl: `data:${params.contentType};base64,${params.buffer.toString("base64")}` }
+      : {}),
     targetId: params.targetId,
     url: params.url,
     ...(params.labels ? { labels: true } : {}),
@@ -434,6 +440,7 @@ export function registerBrowserAgentSnapshotRoutes(
     const element = toStringOrEmpty(body.element) || undefined;
     const labels = toBoolean(body.labels) ?? false;
     const type = body.type === "jpeg" ? "jpeg" : "png";
+    const includeDataUrl = toBoolean(body.includeDataUrl) ?? false;
     let timeoutMs: number;
     try {
       const timeoutMsRaw = readRoutePositiveInteger(body.timeoutMs, "timeoutMs");
@@ -502,6 +509,7 @@ export function registerBrowserAgentSnapshotRoutes(
                 labelsCount: labelResult.labels,
                 labelsSkipped: labelResult.skipped,
                 truncated: built?.truncated,
+                includeDataUrl,
               });
             } finally {
               await clearChromeMcpOverlay(operation);
@@ -520,6 +528,7 @@ export function registerBrowserAgentSnapshotRoutes(
             type,
             targetId: tab.targetId,
             url: tab.url,
+            includeDataUrl,
           });
           return;
         }
@@ -564,6 +573,7 @@ export function registerBrowserAgentSnapshotRoutes(
               labelsCount: labeled.labels,
               labelsSkipped: labeled.skipped,
               annotations: labeled.annotations,
+              includeDataUrl,
             });
             return;
           }
@@ -594,6 +604,7 @@ export function registerBrowserAgentSnapshotRoutes(
           type,
           targetId: tab.targetId,
           url: tab.url,
+          includeDataUrl,
         });
       },
     });

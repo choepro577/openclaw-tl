@@ -392,15 +392,18 @@ function coerceAudioContentBlock(
 function coerceManagedMediaContentBlock(
   item: RawContentBlock,
 ): Extract<MessageContentItem, { type: "attachment" }> | null {
-  if ((item.type !== "audio" && item.type !== "video") || item.url === undefined) {
+  if (
+    (item.type !== "audio" && item.type !== "video" && item.type !== "file") ||
+    item.url === undefined
+  ) {
     return null;
   }
   const url = item.url.trim();
   if (!url) {
     return null;
   }
-  const kind = item.type;
-  const fallbackLabel = kind === "audio" ? "Audio" : "Video";
+  const kind = item.type === "file" ? "document" : item.type;
+  const fallbackLabel = kind === "audio" ? "Audio" : kind === "video" ? "Video" : "Document";
   const label = item.fileName?.trim() || item.label?.trim() || fallbackLabel;
   return {
     type: "attachment",

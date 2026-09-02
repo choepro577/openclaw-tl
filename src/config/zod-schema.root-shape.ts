@@ -1,6 +1,7 @@
 import { normalizeStringifiedOptionalString } from "@openclaw/normalization-core/string-coerce";
 import { z } from "zod";
 import { parseDurationMs } from "../cli/parse-duration.js";
+import { EnterpriseConfigSchema } from "../enterprise/enterprise-config.js";
 import { SilentReplyPolicyConfigSchema } from "./zod-schema.agent-defaults.js";
 import { ToolsSchema } from "./zod-schema.agent-runtime.js";
 import { AgentsSchema, BindingsSchema, BroadcastSchema } from "./zod-schema.agents.js";
@@ -54,6 +55,7 @@ export const OpenClawSchemaShape = {
         .optional(),
     })
     .optional(),
+  enterprise: EnterpriseConfigSchema,
   env: z
     .object({
       shellEnv: z

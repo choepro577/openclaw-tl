@@ -29,6 +29,7 @@ type NormalizedReply = {
   mediaUrl?: string;
   mediaUrls?: string[];
   text?: string;
+  trustedLocalMedia?: boolean;
 };
 
 function isObjectRecord(value: unknown): value is Record<string, unknown> {
@@ -116,6 +117,7 @@ describe("createReplyMediaPathNormalizer", () => {
     });
 
     expectMedia(result, "/tmp/outbound-media/photo.png", ["/tmp/outbound-media/photo.png"]);
+    expect(result.trustedLocalMedia).toBe(true);
     const options = expectOutboundAttachmentCall(
       0,
       path.join("/tmp/agent-workspace", "out", "photo.png"),
@@ -381,6 +383,7 @@ describe("createReplyMediaPathNormalizer", () => {
     expectMedia(result, "/Users/peter/.openclaw/media/outbound/generated.png", [
       "/Users/peter/.openclaw/media/outbound/generated.png",
     ]);
+    expect(result.trustedLocalMedia).toBeUndefined();
     expect(resolveOutboundAttachmentFromUrl).not.toHaveBeenCalled();
   });
 

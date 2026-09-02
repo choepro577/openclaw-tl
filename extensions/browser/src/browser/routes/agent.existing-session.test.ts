@@ -325,7 +325,7 @@ describe("existing-session browser routes", () => {
       {
         params: {},
         query: {},
-        body: { ref: "btn-1", type: "jpeg", timeoutMs: 4321 },
+        body: { ref: "btn-1", type: "jpeg", timeoutMs: 4321, includeDataUrl: true },
       },
       response.res,
     );
@@ -334,6 +334,7 @@ describe("existing-session browser routes", () => {
     const body = requireRecord(response.body, "response body");
     expect(body.ok).toBe(true);
     expect(body.path).toBe("/tmp/fake.png");
+    expect(body.dataUrl).toBe("data:image/png;base64,cG5n");
     expect(body.targetId).toBe("7");
     const screenshotParams = requireRecord(
       callArg(chromeMcpMocks.takeChromeMcpScreenshot, 0, 0, "screenshot params"),

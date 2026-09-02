@@ -91,6 +91,20 @@ function identifiedClient(profileId: string, displayName: string | null = null):
   };
 }
 
+function enterprisePortalClient(profileId: string): GatewayClient {
+  return {
+    ...identifiedClient(profileId, profileId),
+    internal: {
+      enterpriseSession: {
+        sessionId: `enterprise-session-${profileId}`,
+        audience: "user",
+        accountId: `account-${profileId}`,
+        accountRole: "employee",
+      },
+    },
+  };
+}
+
 function context(
   broadcast: ReturnType<typeof vi.fn>,
   runtimeConfig: ReturnType<GatewayRequestContext["getRuntimeConfig"]> = {},
@@ -125,6 +139,39 @@ async function call(
 }
 
 describe("session sharing handlers", () => {
+  it("describes only sessions owned by the Enterprise user profile", async () => {
+    await withOpenClawTestState({ scenario: "minimal" }, async () => {
+      const sessionKey = "agent:main:enterprise-user-describe";
+      await upsertSessionEntryCore(
+        { agentId: "main", sessionKey },
+        {
+          sessionId: "session-enterprise-user-describe",
+          updatedAt: 1,
+          visibility: "shared",
+          createdActor: { type: "human", id: "profile-owner" },
+        },
+      );
+      const requestContext = context(vi.fn());
+
+      const describe = async (profileId: string) => {
+        const responses: Parameters<RespondFn>[] = [];
+        await sessionReadHandlers["sessions.describe"]?.({
+          params: { key: sessionKey },
+          client: enterprisePortalClient(profileId),
+          context: requestContext,
+          respond: (...response: Parameters<RespondFn>) => responses.push(response),
+        } as never);
+        return responses[0];
+      };
+
+      expect(await describe("profile-owner")).toMatchObject([
+        true,
+        { session: { key: sessionKey, sessionId: "session-enterprise-user-describe" } },
+      ]);
+      expect(await describe("profile-foreign")).toEqual([true, { session: null }, undefined]);
+    });
+  });
+
   it("admits bare fixed-store keys only through their persisted owner", async () => {
     await withOpenClawTestState({ scenario: "minimal" }, async (state) => {
       const storePath = state.path("shared-sessions.sqlite");

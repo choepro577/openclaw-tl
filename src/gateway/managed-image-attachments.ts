@@ -1,5 +1,5 @@
 // Gateway managed media attachment store.
-// Validates, stores, serves, and cleans up outgoing image/audio/video attachments.
+// Validates, stores, serves, and cleans up outgoing media and file attachments.
 import { createHmac, randomBytes, randomUUID } from "node:crypto";
 import fs from "node:fs/promises";
 import type { IncomingMessage, ServerResponse } from "node:http";
@@ -22,6 +22,8 @@ import {
   resolveExistingAgentSessionStoreTargetsReadOnlyResult,
   type SessionStoreTargetsReadCache,
 } from "../config/sessions/targets-read-availability.js";
+import { getEnterpriseAccountById } from "../enterprise/accounts/account-store.js";
+import { getActiveEnterpriseSession } from "../enterprise/auth/session-store.js";
 import { openLocalFileSafely, readLocalFileSafely } from "../infra/fs-safe.js";
 import { pruneMapToMaxSize } from "../infra/map-size.js";
 import { loadPendingSessionDeliveries } from "../infra/session-delivery-queue-storage.js";
@@ -109,7 +111,7 @@ type ManagedImageAttachmentLimitsConfig = Partial<
   Pick<ManagedImageAttachmentLimits, "maxBytes" | "maxWidth" | "maxHeight" | "maxPixels">
 >;
 
-type ManagedMediaKind = Extract<MediaKind, "image" | "audio" | "video">;
+type ManagedMediaKind = Extract<MediaKind, "image" | "audio" | "video"> | "file";
 
 type ParsedMediaDataUrl =
   | { kind: "not-data-url" }
@@ -160,6 +162,25 @@ type ManagedOutgoingImageTicketPayload = {
   variant: "full";
   exp: number;
 };
+
+export type ManagedOutgoingEnterprisePrincipal = {
+  profileId: string;
+  accountId: string;
+  accountRole: "administrator" | "employee";
+  sessionId: string;
+};
+
+type ManagedOutgoingEnterpriseTicketPayload = ManagedOutgoingImageTicketPayload & {
+  subject: "enterprise";
+  profileId: string;
+  accountId: string;
+  accountRole: "administrator" | "employee";
+  enterpriseSessionId: string;
+};
+
+type VerifiedManagedOutgoingTicket =
+  | { kind: "operator" }
+  | { kind: "enterprise"; principal: ManagedOutgoingEnterprisePrincipal };
 
 export type ManagedOutgoingMediaArtifactDownload = {
   artifactId: string;
@@ -315,7 +336,11 @@ function maxBytesForManagedMediaKind(
   kind: ManagedMediaKind,
   imageLimits: ManagedImageAttachmentLimits,
 ): number {
-  return kind === "image" ? imageLimits.maxBytes : maxBytesForKind(kind);
+  return kind === "image"
+    ? imageLimits.maxBytes
+    : kind === "file"
+      ? maxBytesForKind("document")
+      : maxBytesForKind(kind);
 }
 
 function createManagedMediaByteLimitError(params: {
@@ -510,6 +535,7 @@ function signManagedOutgoingImageTicketPayload(encodedPayload: string): string {
 function createManagedOutgoingImageTicket(params: {
   sessionKey: string;
   attachmentId: string;
+  enterprisePrincipal?: ManagedOutgoingEnterprisePrincipal;
   nowMs?: number;
 }): { ticket: string; expiresAt: string } | null {
   const now = asDateTimestampMs(params.nowMs ?? Date.now());
@@ -520,17 +546,28 @@ function createManagedOutgoingImageTicket(params: {
   if (exp === undefined) {
     return null;
   }
-  const payload: ManagedOutgoingImageTicketPayload = {
+  const basePayload: ManagedOutgoingImageTicketPayload = {
     scope: MANAGED_OUTGOING_IMAGE_TICKET_SCOPE,
     sessionKey: params.sessionKey,
     attachmentId: params.attachmentId,
     variant: "full",
     exp,
   };
+  const payload: ManagedOutgoingImageTicketPayload | ManagedOutgoingEnterpriseTicketPayload =
+    params.enterprisePrincipal
+      ? {
+          ...basePayload,
+          subject: "enterprise",
+          profileId: params.enterprisePrincipal.profileId,
+          accountId: params.enterprisePrincipal.accountId,
+          accountRole: params.enterprisePrincipal.accountRole,
+          enterpriseSessionId: params.enterprisePrincipal.sessionId,
+        }
+      : basePayload;
   const encodedPayload = Buffer.from(JSON.stringify(payload), "utf8").toString("base64url");
   const signature = signManagedOutgoingImageTicketPayload(encodedPayload);
   return {
-    ticket: `v1.${encodedPayload}.${signature}`,
+    ticket: `${params.enterprisePrincipal ? "v2" : "v1"}.${encodedPayload}.${signature}`,
     expiresAt: resolveTimestampMsToIsoString(exp),
   };
 }
@@ -540,34 +577,70 @@ function verifyManagedOutgoingImageTicket(params: {
   sessionKey: string;
   attachmentId: string;
   nowMs?: number;
-}): boolean {
+}): VerifiedManagedOutgoingTicket | null {
   const now = asDateTimestampMs(params.nowMs ?? Date.now());
   if (now === undefined) {
-    return false;
+    return null;
   }
   const parts = params.ticket?.split(".");
-  if (!parts || parts.length !== 3 || parts[0] !== "v1") {
-    return false;
+  if (!parts || parts.length !== 3 || (parts[0] !== "v1" && parts[0] !== "v2")) {
+    return null;
   }
-  const [, encodedPayload, signature] = parts;
+  const [version, encodedPayload, signature] = parts;
   if (!encodedPayload || !signature) {
-    return false;
+    return null;
   }
   if (!safeEqualSecret(signature, signManagedOutgoingImageTicketPayload(encodedPayload))) {
-    return false;
+    return null;
   }
   try {
     const payload = JSON.parse(
       Buffer.from(encodedPayload, "base64url").toString("utf8"),
-    ) as Partial<ManagedOutgoingImageTicketPayload>;
-    return (
+    ) as Partial<ManagedOutgoingEnterpriseTicketPayload>;
+    const baseValid =
       payload.scope === MANAGED_OUTGOING_IMAGE_TICKET_SCOPE &&
       payload.sessionKey === params.sessionKey &&
       payload.attachmentId === params.attachmentId &&
       payload.variant === "full" &&
       typeof payload.exp === "number" &&
       Number.isFinite(payload.exp) &&
-      payload.exp >= now
+      payload.exp >= now;
+    if (!baseValid) {
+      return null;
+    }
+    if (version === "v1") {
+      return payload.subject === undefined ? { kind: "operator" } : null;
+    }
+    return payload.subject === "enterprise" &&
+      typeof payload.profileId === "string" &&
+      typeof payload.accountId === "string" &&
+      (payload.accountRole === "administrator" || payload.accountRole === "employee") &&
+      typeof payload.enterpriseSessionId === "string"
+      ? {
+          kind: "enterprise",
+          principal: {
+            profileId: payload.profileId,
+            accountId: payload.accountId,
+            accountRole: payload.accountRole,
+            sessionId: payload.enterpriseSessionId,
+          },
+        }
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function isActiveEnterpriseTicketPrincipal(principal: ManagedOutgoingEnterprisePrincipal): boolean {
+  try {
+    const account = getEnterpriseAccountById(principal.accountId);
+    const session = getActiveEnterpriseSession(principal.sessionId, {}, "user");
+    return Boolean(
+      account?.enabled &&
+      !account.mustChangePassword &&
+      account.profileId === principal.profileId &&
+      account.role === principal.accountRole &&
+      session?.accountId === account.id,
     );
   } catch {
     return false;
@@ -817,7 +890,7 @@ function resolveManagedSessionOwnerAgentId(
 
 function resolveManagedRecordKind(record: ManagedImageRecord): ManagedMediaKind | null {
   const kind = mediaKindFromMime(record.original.contentType);
-  return kind === "image" || kind === "audio" || kind === "video" ? kind : null;
+  return kind === "image" || kind === "audio" || kind === "video" ? kind : "file";
 }
 
 function buildManagedMediaBlock(
@@ -903,7 +976,12 @@ function collectManagedOutgoingAttachmentRefs(
 ) {
   const refs = new Map<string, { attachmentId: string; sessionKey: string }>();
   for (const block of blocks ?? []) {
-    if (block?.type !== "image" && block?.type !== "audio" && block?.type !== "video") {
+    if (
+      block?.type !== "image" &&
+      block?.type !== "audio" &&
+      block?.type !== "video" &&
+      block?.type !== "file"
+    ) {
       continue;
     }
     for (const candidate of [block.url, block.openUrl]) {
@@ -1216,6 +1294,7 @@ async function recordMatchesTranscriptMessage(
 async function resolveManagedOutgoingMediaArtifactDownloadForRecord(
   record: ManagedImageRecord,
   stateDir?: string,
+  enterprisePrincipal?: ManagedOutgoingEnterprisePrincipal,
 ): Promise<ManagedOutgoingMediaArtifactDownload | null> {
   if (
     (await recordMatchesTranscriptMessage(record, undefined, undefined, undefined, stateDir)) !==
@@ -1230,6 +1309,7 @@ async function resolveManagedOutgoingMediaArtifactDownloadForRecord(
   const ticket = createManagedOutgoingImageTicket({
     sessionKey: record.sessionKey,
     attachmentId: record.attachmentId,
+    ...(enterprisePrincipal ? { enterprisePrincipal } : {}),
   });
   if (!ticket) {
     return null;
@@ -1263,6 +1343,7 @@ export async function resolveManagedOutgoingMediaArtifactDownload(params: {
   defaultAgentId?: string;
   artifactId: string;
   stateDir?: string;
+  enterprisePrincipal?: ManagedOutgoingEnterprisePrincipal;
 }): Promise<ManagedOutgoingMediaArtifactDownload | null> {
   const parsed = parseManagedOutgoingArtifactId(params.artifactId);
   if (!parsed) {
@@ -1285,7 +1366,11 @@ export async function resolveManagedOutgoingMediaArtifactDownload(params: {
   if (!kind || (parsed.family === "image") !== (kind === "image")) {
     return null;
   }
-  return await resolveManagedOutgoingMediaArtifactDownloadForRecord(record, params.stateDir);
+  return await resolveManagedOutgoingMediaArtifactDownloadForRecord(
+    record,
+    params.stateDir,
+    params.enterprisePrincipal,
+  );
 }
 
 /** Upgrade legacy managed-image URLs that predate stable artifact ids. */
@@ -1293,6 +1378,7 @@ export async function resolveManagedOutgoingMediaUrlDownload(params: {
   sessionKey: string;
   url: string;
   stateDir?: string;
+  enterprisePrincipal?: ManagedOutgoingEnterprisePrincipal;
 }): Promise<ManagedOutgoingMediaArtifactDownload | null> {
   const parsed = parseManagedOutgoingRoute(params.url);
   if (!parsed || parsed.sessionKey !== params.sessionKey) {
@@ -1302,7 +1388,11 @@ export async function resolveManagedOutgoingMediaUrlDownload(params: {
   if (!record || record.sessionKey !== params.sessionKey) {
     return null;
   }
-  return await resolveManagedOutgoingMediaArtifactDownloadForRecord(record, params.stateDir);
+  return await resolveManagedOutgoingMediaArtifactDownloadForRecord(
+    record,
+    params.stateDir,
+    params.enterprisePrincipal,
+  );
 }
 
 export function attachManagedOutgoingMediaToMessage(params: {
@@ -1378,12 +1468,8 @@ export async function createManagedOutgoingMediaBlocks(params: {
       if (parsedDataUrl.kind === "unsupported-data-url") {
         continue;
       }
-      if (
-        localMediaPath &&
-        (hintedKind === "audio" || hintedKind === "video") &&
-        params.allowLocalNonImage !== true
-      ) {
-        throw new Error("Local audio/video media requires an explicitly trusted reply payload");
+      if (localMediaPath && hintedKind !== "image" && params.allowLocalNonImage !== true) {
+        throw new Error("Local non-image media requires an explicitly trusted reply payload");
       }
       let resizeWarning: ManagedMediaBlock | null = null;
       let savedOriginal =
@@ -1420,6 +1506,7 @@ export async function createManagedOutgoingMediaBlocks(params: {
                   limits.maxBytes,
                   maxBytesForKind("audio"),
                   maxBytesForKind("video"),
+                  maxBytesForKind("document"),
                   MEDIA_MAX_BYTES,
                 ),
               );
@@ -1431,14 +1518,15 @@ export async function createManagedOutgoingMediaBlocks(params: {
         savedOriginalPath = null;
         continue;
       }
-      const mediaKind = mediaKindFromMime(savedOriginalContentType);
-      if (mediaKind !== "image" && mediaKind !== "audio" && mediaKind !== "video") {
-        await fs.rm(savedOriginal.path, { force: true }).catch(() => {});
-        savedOriginalPath = null;
-        continue;
-      }
+      const detectedMediaKind = mediaKindFromMime(savedOriginalContentType);
+      const mediaKind: ManagedMediaKind =
+        detectedMediaKind === "image" ||
+        detectedMediaKind === "audio" ||
+        detectedMediaKind === "video"
+          ? detectedMediaKind
+          : "file";
       if (localMediaPath && mediaKind !== "image" && params.allowLocalNonImage !== true) {
-        throw new Error("Local audio/video media requires an explicitly trusted reply payload");
+        throw new Error("Local non-image media requires an explicitly trusted reply payload");
       }
       const maxBytes = maxBytesForManagedMediaKind(mediaKind, limits);
       if (savedOriginal.size > maxBytes) {
@@ -1608,9 +1696,7 @@ function buildManagedMediaContentDisposition(value: string | null, contentType: 
   const fallback = contentType.startsWith("image/") ? "generated-image" : "generated-media";
   const base = (value ?? fallback).replace(/[\r\n"\\]/g, "_").trim();
   const filename = base || fallback;
-  return /^[\x20-\x7e]+$/u.test(filename)
-    ? `inline; filename="${filename}"`
-    : buildAssistantMediaContentDisposition(filename, contentType);
+  return buildAssistantMediaContentDisposition(filename, contentType);
 }
 
 export async function handleManagedOutgoingMediaHttpRequest(
@@ -1659,12 +1745,31 @@ export async function handleManagedOutgoingMediaHttpRequest(
     sendStatus(res, 404, "not found");
     return true;
   }
-  const hasValidMediaTicket = verifyManagedOutgoingImageTicket({
+  const verifiedMediaTicket = verifyManagedOutgoingImageTicket({
     ticket: requestUrl.searchParams.get("mediaTicket"),
     sessionKey,
     attachmentId,
   });
-  if (!hasValidMediaTicket) {
+  const hasValidMediaTicket = verifiedMediaTicket !== null;
+  if (opts.auth.mode === "accounts") {
+    if (verifiedMediaTicket?.kind !== "enterprise") {
+      sendStatus(res, 401, "unauthorized");
+      return true;
+    }
+    // Downloads and Review links are opened as top-level browser navigations,
+    // where the Gateway connection's account credentials are unavailable.
+    // Treat the short-lived, route-bound v2 ticket as the transport credential,
+    // but recheck its signed Enterprise identity against durable account/session
+    // state so logout, revocation, expiry, role changes, and disabled accounts
+    // still take effect before any bytes are served.
+    if (!isActiveEnterpriseTicketPrincipal(verifiedMediaTicket.principal)) {
+      sendStatus(res, 401, "unauthorized");
+      return true;
+    }
+  } else if (verifiedMediaTicket?.kind === "enterprise") {
+    sendStatus(res, 401, "unauthorized");
+    return true;
+  } else if (!verifiedMediaTicket) {
     const requestAuth = await authorizeGatewayHttpRequestOrReply({
       req,
       res,
@@ -1676,7 +1781,6 @@ export async function handleManagedOutgoingMediaHttpRequest(
     if (!requestAuth) {
       return true;
     }
-
     const requestedScopes = resolveOpenAiCompatibleHttpOperatorScopes(req, requestAuth);
     const scopeAuth = authorizeOperatorScopesForMethod("chat.history", requestedScopes);
     if (!scopeAuth.allowed) {

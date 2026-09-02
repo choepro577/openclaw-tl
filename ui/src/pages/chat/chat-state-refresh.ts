@@ -31,6 +31,7 @@ type ChatRefreshOptions = {
   deferBranches?: boolean;
   scheduleScroll?: boolean;
   awaitHistory?: boolean;
+  preparedModelCatalogFallback?: boolean;
   startup?: boolean;
 };
 
@@ -48,7 +49,13 @@ type ChatMetadataRequest = {
 };
 
 type ChatMetadataRefreshOptions = {
+  preparedModelCatalogFallback?: boolean;
   requestVersion?: number;
+};
+
+type ChatModelCatalogRefreshOptions = {
+  preparedOnly?: boolean;
+  refreshIfDue?: boolean;
 };
 
 export function retireChatMetadataRequests(
@@ -91,6 +98,10 @@ function applyChatMetadataResult(
     agentId,
     result,
   });
+}
+
+function needsPreparedModelCatalogFallback(result: ChatMetadataResult): boolean {
+  return !Array.isArray(result.models) || result.models.length === 0;
 }
 
 function seedChatModelCatalogFromStore(host: ChatPageHost, client: GatewayBrowserClient): void {
@@ -138,6 +149,9 @@ export async function refreshChatMetadata(
       return;
     }
     applyChatMetadataResult(host, client, agentId, result);
+    if (opts?.preparedModelCatalogFallback === true && needsPreparedModelCatalogFallback(result)) {
+      await refreshChatModelCatalog(host, { preparedOnly: true });
+    }
   } catch (error) {
     if (ownsChatMetadataRequest(request)) {
       host.chatModelCatalogError = formatUiError(error);
@@ -174,7 +188,10 @@ export async function refreshChatModelAuthStatus(host: ChatPageHost, opts?: { re
   }
 }
 
-export async function refreshChatModelCatalogOnDemand(host: ChatPageHost): Promise<void> {
+async function refreshChatModelCatalog(
+  host: ChatPageHost,
+  opts?: ChatModelCatalogRefreshOptions,
+): Promise<void> {
   if (!host.client || !host.connected) {
     return;
   }
@@ -192,13 +209,14 @@ export async function refreshChatModelCatalogOnDemand(host: ChatPageHost): Promi
   try {
     const models = await loadModels(client, {
       agentId,
-      refreshIfDue: true,
+      preparedOnly: opts?.preparedOnly,
+      refreshIfDue: opts?.refreshIfDue,
       rejectOnFailure: true,
     });
     if (ownsRequest()) {
       host.chatModelCatalog = models;
       host.chatModelCatalogError = null;
-      // Full model discovery can complete after the session projection used at mount time.
+      // Model catalog hydration can complete after the session projection used at mount time.
       // Refresh through the normal session owner so thinking/context metadata converges without
       // letting the UI guess which provider- or runtime-specific levels are valid.
       await refreshCurrentChatSessionList(host).catch(() => undefined);
@@ -215,6 +233,16 @@ export async function refreshChatModelCatalogOnDemand(host: ChatPageHost): Promi
       host.requestUpdate?.();
     }
   }
+}
+
+export async function refreshChatModelCatalogOnDemand(
+  host: ChatPageHost,
+  opts?: { preparedOnly?: boolean },
+): Promise<void> {
+  await refreshChatModelCatalog(host, {
+    preparedOnly: opts?.preparedOnly,
+    refreshIfDue: true,
+  });
 }
 
 async function refreshChat(
@@ -363,11 +391,20 @@ export function refreshPageChat(host: ChatPageHost, opts?: ChatRefreshOptions) {
         if (!metadata) {
           // Missing startup metadata means the bounded catalog projection could not finish.
           // Start the scoped combined fallback now, on the response signal, rather than at idle.
-          await refreshChatMetadata(host, { requestVersion: startupMetadataRequestVersion });
+          await refreshChatMetadata(host, {
+            preparedModelCatalogFallback: opts?.preparedModelCatalogFallback,
+            requestVersion: startupMetadataRequestVersion,
+          });
           return;
         }
         rememberChatMetadata(client, agentId, metadata);
         applyChatMetadataResult(host, client, agentId, metadata);
+        if (
+          opts?.preparedModelCatalogFallback === true &&
+          needsPreparedModelCatalogFallback(metadata)
+        ) {
+          await refreshChatModelCatalog(host, { preparedOnly: true });
+        }
       } finally {
         if (ownsChatMetadataRequest(request)) {
           host.chatModelsLoading = false;

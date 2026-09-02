@@ -99,7 +99,6 @@ export function sidebarPanelDefinitions(
           .client=${state.connected ? state.client : null}
           .available=${state.terminalAvailable}
           .agentId=${params?.agentId ?? null}
-          .sessionKey=${state.sessionKey}
           .themeMode=${params?.themeMode ?? "dark"}
           .basePath=${state.basePath}
         ></openclaw-terminal-panel>`
@@ -114,6 +113,7 @@ export function sidebarPanelDefinitions(
           .presented=${params?.browserPresented ?? false}
           .resourceBasePath=${state.resourceBasePath}
           .authToken=${resolveAssistantAttachmentAuthToken(state)}
+          .sessionKey=${state.sessionKey}
         ></openclaw-browser-panel>`
       : null;
   const companion = params

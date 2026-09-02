@@ -10,6 +10,8 @@ export type GatewayBroadcastOpts = {
   /** Agent scope for agent-relative keys such as `global`. */
   agentId?: string;
   dropIfSlow?: boolean;
+  /** Server-only Enterprise owner boundary for account-scoped events. */
+  enterpriseAccountId?: string;
   /** Canonical subscription keys for session-scoped delivery. */
   sessionKeys?: readonly string[];
   stateVersion?: GatewayBroadcastStateVersion;

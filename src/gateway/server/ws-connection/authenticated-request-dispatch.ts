@@ -161,7 +161,32 @@ export function createGatewayAuthenticatedRequestDispatcher(params: {
       });
     };
 
-    const context = buildRequestContext();
+    let context = buildRequestContext();
+    if (client.internal?.enterpriseSession) {
+      const { prepareEnterpriseGatewayRequest } =
+        await import("../../../enterprise/isolation/enterprise-gateway-policy.js");
+      const admission = prepareEnterpriseGatewayRequest({
+        client,
+        context,
+        method: req.method,
+        requestParams: req.params,
+      });
+      if (!admission.allowed) {
+        respond(
+          false,
+          undefined,
+          errorShape(ErrorCodes.FORBIDDEN, "Enterprise policy denied this request.", {
+            details: { reason: admission.reason },
+          }),
+        );
+        if (admission.closeConnection) {
+          setCloseCause("client-invalidated", { reason: admission.reason, method: req.method });
+          close(4001, "enterprise session revoked");
+        }
+        return;
+      }
+      context = admission.context;
+    }
     const agentRuntimeIdentity = client.internal?.agentRuntimeIdentity;
     if (
       agentRuntimeIdentity &&

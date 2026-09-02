@@ -66,14 +66,15 @@ function shouldPassThroughManagedInboundPdfOffloadRef(ref: OffloadedRef): boolea
 // staging failures stay 5xx. Managed PDFs retain their host-readable fallback.
 async function prestageMediaPathOffloads(params: {
   offloadedRefs: OffloadedRef[];
-  includeImageRefs?: boolean;
   cfg: OpenClawConfig;
   sessionKey: string;
   agentId: string;
 }): Promise<{ paths: string[]; types: string[]; workspaceDir?: string }> {
-  const mediaPathRefs = params.offloadedRefs.filter(
-    (ref) => params.includeImageRefs || !ref.mimeType.startsWith("image/"),
-  );
+  // Every claim-check attachment needs one execution-scoped path. In particular,
+  // offloaded images must not keep their durable media:// URI in replyOptions:
+  // native vision resolves those options inside the sandbox and cannot read the
+  // host media store directly.
+  const mediaPathRefs = params.offloadedRefs;
   if (mediaPathRefs.length === 0) {
     return { paths: [], types: [] };
   }
@@ -249,7 +250,6 @@ export async function prepareChatSendAttachments(params: {
             workspaceDir: mediaPathOffloadWorkspaceDir,
           } = await prestageMediaPathOffloads({
             offloadedRefs,
-            includeImageRefs: !parsedSupportsImages,
             cfg,
             sessionKey,
             agentId,

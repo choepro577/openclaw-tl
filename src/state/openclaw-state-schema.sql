@@ -2670,3 +2670,396 @@ CREATE TABLE IF NOT EXISTS secret_store_entries (
 ) STRICT;
 CREATE INDEX IF NOT EXISTS secret_store_entries_live_idx
   ON secret_store_entries (scope_kind, scope_id, name) WHERE deleted_at_ms IS NULL;
+
+CREATE TABLE IF NOT EXISTS enterprise_knowledge_zones (
+  id TEXT NOT NULL PRIMARY KEY,
+  slug TEXT NOT NULL UNIQUE,
+  name TEXT NOT NULL,
+  description TEXT NOT NULL DEFAULT '',
+  status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'archived')),
+  egress_policy TEXT NOT NULL DEFAULT 'local_only' CHECK (egress_policy IN ('local_only', 'external_allowed')),
+  revision INTEGER NOT NULL DEFAULT 1,
+  access_revision INTEGER NOT NULL DEFAULT 1,
+  source_set_revision INTEGER NOT NULL DEFAULT 1,
+  build_revision INTEGER,
+  active_publication_id TEXT,
+  created_by_account_id TEXT,
+  updated_by_account_id TEXT,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL,
+  FOREIGN KEY (created_by_account_id) REFERENCES enterprise_accounts(id) ON DELETE SET NULL,
+  FOREIGN KEY (updated_by_account_id) REFERENCES enterprise_accounts(id) ON DELETE SET NULL
+) STRICT;
+CREATE INDEX IF NOT EXISTS idx_enterprise_knowledge_zones_status
+  ON enterprise_knowledge_zones(status, updated_at DESC, id);
+
+CREATE TABLE IF NOT EXISTS enterprise_knowledge_zone_memberships (
+  zone_id TEXT NOT NULL,
+  account_id TEXT NOT NULL,
+  role TEXT NOT NULL CHECK (role IN ('viewer', 'curator', 'manager')),
+  created_by_account_id TEXT,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL,
+  PRIMARY KEY (zone_id, account_id),
+  FOREIGN KEY (zone_id) REFERENCES enterprise_knowledge_zones(id) ON DELETE CASCADE,
+  FOREIGN KEY (account_id) REFERENCES enterprise_accounts(id) ON DELETE CASCADE,
+  FOREIGN KEY (created_by_account_id) REFERENCES enterprise_accounts(id) ON DELETE SET NULL
+) STRICT;
+CREATE INDEX IF NOT EXISTS idx_enterprise_knowledge_memberships_account
+  ON enterprise_knowledge_zone_memberships(account_id, role, zone_id);
+
+CREATE TABLE IF NOT EXISTS enterprise_knowledge_agent_zone_bindings (
+  zone_id TEXT NOT NULL,
+  agent_resource_key TEXT NOT NULL,
+  created_by_account_id TEXT,
+  created_at INTEGER NOT NULL,
+  PRIMARY KEY (zone_id, agent_resource_key),
+  FOREIGN KEY (zone_id) REFERENCES enterprise_knowledge_zones(id) ON DELETE CASCADE,
+  FOREIGN KEY (created_by_account_id) REFERENCES enterprise_accounts(id) ON DELETE SET NULL
+) STRICT;
+CREATE INDEX IF NOT EXISTS idx_enterprise_knowledge_bindings_agent
+  ON enterprise_knowledge_agent_zone_bindings(agent_resource_key, zone_id);
+
+CREATE TABLE IF NOT EXISTS enterprise_knowledge_sources (
+  id TEXT NOT NULL PRIMARY KEY,
+  zone_id TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  title TEXT NOT NULL,
+  canonical_url TEXT,
+  status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'staged_remove', 'archived')),
+  draft_revision INTEGER NOT NULL DEFAULT 1,
+  current_version_number INTEGER NOT NULL DEFAULT 0,
+  created_by_account_id TEXT,
+  updated_by_account_id TEXT,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL,
+  FOREIGN KEY (zone_id) REFERENCES enterprise_knowledge_zones(id) ON DELETE CASCADE,
+  FOREIGN KEY (created_by_account_id) REFERENCES enterprise_accounts(id) ON DELETE SET NULL,
+  FOREIGN KEY (updated_by_account_id) REFERENCES enterprise_accounts(id) ON DELETE SET NULL,
+  UNIQUE (zone_id, id)
+) STRICT;
+CREATE INDEX IF NOT EXISTS idx_enterprise_knowledge_sources_zone
+  ON enterprise_knowledge_sources(zone_id, status, updated_at DESC, id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_enterprise_knowledge_sources_url
+  ON enterprise_knowledge_sources(zone_id, canonical_url)
+  WHERE canonical_url IS NOT NULL AND status != 'archived';
+
+CREATE TABLE IF NOT EXISTS enterprise_knowledge_source_versions (
+  id TEXT NOT NULL PRIMARY KEY,
+  source_id TEXT NOT NULL,
+  zone_id TEXT NOT NULL,
+  version_number INTEGER NOT NULL,
+  pipeline_generation INTEGER NOT NULL,
+  publication_status TEXT NOT NULL DEFAULT 'draft' CHECK (publication_status IN ('draft', 'published', 'superseded', 'archived')),
+  processing_status TEXT NOT NULL DEFAULT 'queued' CHECK (processing_status IN ('queued', 'validating', 'scanning', 'extracting', 'needs_ocr', 'normalizing', 'chunking', 'indexing', 'embedding', 'building', 'ready', 'degraded', 'error', 'cancelled')),
+  content_hash TEXT NOT NULL,
+  blob_hash TEXT,
+  byte_size INTEGER NOT NULL,
+  mime_type TEXT NOT NULL,
+  original_name TEXT,
+  parser_provenance_json TEXT,
+  ocr_provenance_json TEXT,
+  normalized_artifact_hash TEXT,
+  segment_count INTEGER,
+  vector_status TEXT NOT NULL DEFAULT 'pending' CHECK (vector_status IN ('pending', 'ready', 'unavailable', 'error')),
+  safe_error_code TEXT,
+  created_by_account_id TEXT,
+  created_at INTEGER NOT NULL,
+  completed_at INTEGER,
+  FOREIGN KEY (source_id) REFERENCES enterprise_knowledge_sources(id) ON DELETE RESTRICT,
+  FOREIGN KEY (zone_id, source_id) REFERENCES enterprise_knowledge_sources(zone_id, id) ON DELETE RESTRICT,
+  FOREIGN KEY (created_by_account_id) REFERENCES enterprise_accounts(id) ON DELETE SET NULL,
+  UNIQUE (source_id, version_number),
+  UNIQUE (source_id, pipeline_generation)
+) STRICT;
+CREATE INDEX IF NOT EXISTS idx_enterprise_knowledge_versions_source
+  ON enterprise_knowledge_source_versions(source_id, version_number DESC);
+CREATE INDEX IF NOT EXISTS idx_enterprise_knowledge_versions_processing
+  ON enterprise_knowledge_source_versions(zone_id, processing_status, created_at);
+
+CREATE TABLE IF NOT EXISTS enterprise_knowledge_index_generations (
+  id TEXT NOT NULL PRIMARY KEY,
+  zone_id TEXT NOT NULL,
+  source_set_revision INTEGER NOT NULL,
+  build_revision INTEGER,
+  status TEXT NOT NULL CHECK (status IN ('building', 'candidate', 'active', 'retired', 'orphaned', 'error')),
+  lexical_status TEXT NOT NULL CHECK (lexical_status IN ('pending', 'ready', 'error')),
+  vector_status TEXT NOT NULL CHECK (vector_status IN ('pending', 'ready', 'unavailable', 'error')),
+  artifact_checksum TEXT,
+  embedding_identity_json TEXT,
+  graph_status TEXT,
+  graph_schema_version INTEGER,
+  graph_node_count INTEGER,
+  graph_edge_count INTEGER,
+  graph_proposed_count INTEGER,
+  graph_orphan_count INTEGER,
+  graph_enrichment_identity_json TEXT,
+  integrity_status TEXT NOT NULL DEFAULT 'unknown' CHECK (integrity_status IN ('unknown', 'valid', 'corrupt', 'missing')),
+  created_at INTEGER NOT NULL,
+  completed_at INTEGER,
+  retired_at INTEGER,
+  FOREIGN KEY (zone_id) REFERENCES enterprise_knowledge_zones(id) ON DELETE RESTRICT,
+  UNIQUE (zone_id, source_set_revision, id)
+) STRICT;
+CREATE INDEX IF NOT EXISTS idx_enterprise_knowledge_generations_zone
+  ON enterprise_knowledge_index_generations(zone_id, status, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS enterprise_knowledge_graph_settings (
+  zone_id TEXT NOT NULL PRIMARY KEY,
+  enabled INTEGER NOT NULL DEFAULT 0 CHECK (enabled IN (0, 1)),
+  enrichment_enabled INTEGER NOT NULL DEFAULT 1 CHECK (enrichment_enabled IN (0, 1)),
+  auto_approval_threshold REAL NOT NULL DEFAULT 0.92 CHECK (auto_approval_threshold >= 0.92 AND auto_approval_threshold <= 1.0),
+  revision INTEGER NOT NULL DEFAULT 1,
+  updated_by_account_id TEXT,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL,
+  FOREIGN KEY (zone_id) REFERENCES enterprise_knowledge_zones(id) ON DELETE CASCADE,
+  FOREIGN KEY (updated_by_account_id) REFERENCES enterprise_accounts(id) ON DELETE SET NULL
+) STRICT;
+
+CREATE TABLE IF NOT EXISTS enterprise_knowledge_graph_edge_reviews (
+  zone_id TEXT NOT NULL,
+  fingerprint TEXT NOT NULL,
+  review_status TEXT NOT NULL CHECK (review_status IN ('accepted', 'rejected')),
+  edge_kind TEXT,
+  note TEXT,
+  evidence_hash TEXT NOT NULL,
+  reviewed_by_account_id TEXT,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL,
+  PRIMARY KEY (zone_id, fingerprint),
+  FOREIGN KEY (zone_id) REFERENCES enterprise_knowledge_zones(id) ON DELETE CASCADE,
+  FOREIGN KEY (reviewed_by_account_id) REFERENCES enterprise_accounts(id) ON DELETE SET NULL
+) STRICT;
+CREATE INDEX IF NOT EXISTS idx_enterprise_knowledge_graph_reviews_status
+  ON enterprise_knowledge_graph_edge_reviews(zone_id, review_status, updated_at DESC);
+
+CREATE TABLE IF NOT EXISTS enterprise_knowledge_graph_manual_edges (
+  id TEXT NOT NULL PRIMARY KEY,
+  zone_id TEXT NOT NULL,
+  source_canonical_key TEXT NOT NULL,
+  target_canonical_key TEXT NOT NULL,
+  edge_kind TEXT NOT NULL,
+  evidence_source_version_id TEXT NOT NULL,
+  evidence_segment_id TEXT NOT NULL,
+  evidence_locator_json TEXT NOT NULL,
+  note TEXT,
+  status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'deleted')),
+  revision INTEGER NOT NULL DEFAULT 1,
+  created_by_account_id TEXT,
+  updated_by_account_id TEXT,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL,
+  FOREIGN KEY (zone_id) REFERENCES enterprise_knowledge_zones(id) ON DELETE CASCADE,
+  FOREIGN KEY (evidence_source_version_id) REFERENCES enterprise_knowledge_source_versions(id) ON DELETE RESTRICT,
+  FOREIGN KEY (created_by_account_id) REFERENCES enterprise_accounts(id) ON DELETE SET NULL,
+  FOREIGN KEY (updated_by_account_id) REFERENCES enterprise_accounts(id) ON DELETE SET NULL
+) STRICT;
+CREATE INDEX IF NOT EXISTS idx_enterprise_knowledge_graph_manual_edges_zone
+  ON enterprise_knowledge_graph_manual_edges(zone_id, status, updated_at DESC);
+
+CREATE TABLE IF NOT EXISTS enterprise_knowledge_graph_exports (
+  id TEXT NOT NULL PRIMARY KEY,
+  zone_id TEXT NOT NULL,
+  publication_id TEXT NOT NULL,
+  generation_id TEXT NOT NULL,
+  status TEXT NOT NULL CHECK (status IN ('running', 'complete', 'failed', 'expired')),
+  file_path TEXT,
+  checksum TEXT,
+  entry_count INTEGER NOT NULL DEFAULT 0,
+  uncompressed_bytes INTEGER NOT NULL DEFAULT 0,
+  requested_by_account_id TEXT NOT NULL,
+  idempotency_key TEXT NOT NULL,
+  safe_error_code TEXT,
+  created_at INTEGER NOT NULL,
+  completed_at INTEGER,
+  expires_at INTEGER NOT NULL,
+  FOREIGN KEY (zone_id) REFERENCES enterprise_knowledge_zones(id) ON DELETE CASCADE,
+  FOREIGN KEY (publication_id) REFERENCES enterprise_knowledge_publications(id) ON DELETE CASCADE,
+  FOREIGN KEY (generation_id) REFERENCES enterprise_knowledge_index_generations(id) ON DELETE CASCADE,
+  FOREIGN KEY (requested_by_account_id) REFERENCES enterprise_accounts(id) ON DELETE CASCADE,
+  UNIQUE (requested_by_account_id, zone_id, publication_id, idempotency_key)
+) STRICT;
+CREATE INDEX IF NOT EXISTS idx_enterprise_knowledge_graph_exports_expiry
+  ON enterprise_knowledge_graph_exports(status, expires_at);
+
+CREATE TABLE IF NOT EXISTS enterprise_knowledge_publications (
+  id TEXT NOT NULL PRIMARY KEY,
+  zone_id TEXT NOT NULL,
+  generation_id TEXT NOT NULL,
+  source_set_revision INTEGER NOT NULL,
+  publication_number INTEGER NOT NULL,
+  lexical_status TEXT NOT NULL CHECK (lexical_status = 'ready'),
+  vector_status TEXT NOT NULL CHECK (vector_status IN ('ready', 'unavailable', 'error')),
+  degraded_override INTEGER NOT NULL DEFAULT 0 CHECK (degraded_override IN (0, 1)),
+  degraded_reason TEXT,
+  published_by_account_id TEXT,
+  published_at INTEGER NOT NULL,
+  FOREIGN KEY (zone_id) REFERENCES enterprise_knowledge_zones(id) ON DELETE RESTRICT,
+  FOREIGN KEY (generation_id) REFERENCES enterprise_knowledge_index_generations(id) ON DELETE RESTRICT,
+  FOREIGN KEY (published_by_account_id) REFERENCES enterprise_accounts(id) ON DELETE SET NULL,
+  UNIQUE (zone_id, publication_number)
+) STRICT;
+CREATE INDEX IF NOT EXISTS idx_enterprise_knowledge_publications_zone
+  ON enterprise_knowledge_publications(zone_id, published_at DESC, id);
+
+CREATE TABLE IF NOT EXISTS enterprise_knowledge_publication_sources (
+  publication_id TEXT NOT NULL,
+  source_id TEXT NOT NULL,
+  source_version_id TEXT NOT NULL,
+  position INTEGER NOT NULL,
+  PRIMARY KEY (publication_id, source_id),
+  FOREIGN KEY (publication_id) REFERENCES enterprise_knowledge_publications(id) ON DELETE CASCADE,
+  FOREIGN KEY (source_id) REFERENCES enterprise_knowledge_sources(id) ON DELETE RESTRICT,
+  FOREIGN KEY (source_version_id) REFERENCES enterprise_knowledge_source_versions(id) ON DELETE RESTRICT
+) STRICT;
+CREATE INDEX IF NOT EXISTS idx_enterprise_knowledge_publication_versions
+  ON enterprise_knowledge_publication_sources(source_version_id, publication_id);
+
+CREATE TABLE IF NOT EXISTS enterprise_knowledge_jobs (
+  id TEXT NOT NULL PRIMARY KEY,
+  zone_id TEXT NOT NULL,
+  source_id TEXT,
+  source_version_id TEXT,
+  generation_id TEXT,
+  kind TEXT NOT NULL CHECK (kind IN ('source_ingest', 'zone_build', 'artifact_gc', 'index_gc')),
+  stage TEXT NOT NULL,
+  status TEXT NOT NULL CHECK (status IN ('queued', 'running', 'retry_wait', 'succeeded', 'failed', 'cancelled')),
+  attempt INTEGER NOT NULL DEFAULT 0,
+  pipeline_generation INTEGER NOT NULL,
+  claim_token TEXT,
+  claim_owner TEXT,
+  lease_expires_at INTEGER,
+  heartbeat_at INTEGER,
+  available_at INTEGER NOT NULL,
+  progress_current INTEGER NOT NULL DEFAULT 0,
+  progress_total INTEGER NOT NULL DEFAULT 0,
+  safe_error_code TEXT,
+  retry_after_ms INTEGER,
+  created_by_account_id TEXT,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL,
+  completed_at INTEGER,
+  FOREIGN KEY (zone_id) REFERENCES enterprise_knowledge_zones(id) ON DELETE CASCADE,
+  FOREIGN KEY (source_id) REFERENCES enterprise_knowledge_sources(id) ON DELETE CASCADE,
+  FOREIGN KEY (source_version_id) REFERENCES enterprise_knowledge_source_versions(id) ON DELETE CASCADE,
+  FOREIGN KEY (generation_id) REFERENCES enterprise_knowledge_index_generations(id) ON DELETE CASCADE,
+  FOREIGN KEY (created_by_account_id) REFERENCES enterprise_accounts(id) ON DELETE SET NULL
+) STRICT;
+CREATE INDEX IF NOT EXISTS idx_enterprise_knowledge_jobs_claim
+  ON enterprise_knowledge_jobs(status, available_at, lease_expires_at, created_at);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_enterprise_knowledge_jobs_source_active
+  ON enterprise_knowledge_jobs(source_id)
+  WHERE source_id IS NOT NULL AND kind = 'source_ingest' AND status IN ('queued', 'running', 'retry_wait');
+CREATE UNIQUE INDEX IF NOT EXISTS idx_enterprise_knowledge_jobs_zone_active
+  ON enterprise_knowledge_jobs(zone_id)
+  WHERE kind = 'zone_build' AND status IN ('queued', 'running', 'retry_wait');
+
+CREATE TABLE IF NOT EXISTS enterprise_knowledge_job_steps (
+  job_id TEXT NOT NULL,
+  step_id TEXT NOT NULL,
+  stage TEXT NOT NULL,
+  status TEXT NOT NULL CHECK (status IN ('queued', 'running', 'retry_wait', 'completed', 'degraded', 'failed', 'cancelled', 'superseded')),
+  progress_current INTEGER,
+  progress_total INTEGER,
+  checkpoint_ref TEXT,
+  attempt INTEGER NOT NULL DEFAULT 0,
+  started_at INTEGER,
+  updated_at INTEGER NOT NULL,
+  completed_at INTEGER,
+  safe_error_code TEXT,
+  degraded_reason TEXT,
+  PRIMARY KEY (job_id, step_id),
+  FOREIGN KEY (job_id) REFERENCES enterprise_knowledge_jobs(id) ON DELETE CASCADE
+) STRICT;
+CREATE INDEX IF NOT EXISTS idx_enterprise_knowledge_job_steps_status
+  ON enterprise_knowledge_job_steps(job_id, status, updated_at, step_id);
+
+CREATE TABLE IF NOT EXISTS enterprise_knowledge_changes (
+  sequence INTEGER PRIMARY KEY AUTOINCREMENT,
+  zone_id TEXT NOT NULL,
+  entity_type TEXT NOT NULL CHECK (entity_type IN ('job', 'job_step', 'source', 'candidate', 'publication', 'graph', 'upload', 'readiness')),
+  entity_id TEXT,
+  operation TEXT NOT NULL CHECK (operation IN ('created', 'updated', 'completed', 'deleted')),
+  revision INTEGER,
+  status TEXT,
+  stage TEXT,
+  progress_current INTEGER,
+  progress_total INTEGER,
+  safe_error_code TEXT,
+  occurred_at INTEGER NOT NULL,
+  FOREIGN KEY (zone_id) REFERENCES enterprise_knowledge_zones(id) ON DELETE CASCADE
+) STRICT;
+CREATE INDEX IF NOT EXISTS idx_enterprise_knowledge_changes_zone_sequence
+  ON enterprise_knowledge_changes(zone_id, sequence);
+CREATE INDEX IF NOT EXISTS idx_enterprise_knowledge_changes_occurred
+  ON enterprise_knowledge_changes(occurred_at, sequence);
+
+CREATE TABLE IF NOT EXISTS enterprise_knowledge_artifact_revisions (
+  artifact_hash TEXT PRIMARY KEY,
+  source_version_id TEXT NOT NULL,
+  artifact_schema_version INTEGER NOT NULL CHECK (artifact_schema_version IN (1, 2, 3)),
+  extractor_identity TEXT NOT NULL,
+  artifact_checksum TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  FOREIGN KEY (source_version_id) REFERENCES enterprise_knowledge_source_versions(id) ON DELETE CASCADE
+) STRICT;
+CREATE INDEX IF NOT EXISTS idx_enterprise_knowledge_artifact_revisions_source
+  ON enterprise_knowledge_artifact_revisions(source_version_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS enterprise_knowledge_generation_artifacts (
+  generation_id TEXT NOT NULL,
+  source_version_id TEXT NOT NULL,
+  artifact_hash TEXT NOT NULL,
+  PRIMARY KEY (generation_id, source_version_id),
+  FOREIGN KEY (generation_id) REFERENCES enterprise_knowledge_index_generations(id) ON DELETE CASCADE,
+  FOREIGN KEY (source_version_id) REFERENCES enterprise_knowledge_source_versions(id) ON DELETE RESTRICT,
+  FOREIGN KEY (artifact_hash) REFERENCES enterprise_knowledge_artifact_revisions(artifact_hash) ON DELETE RESTRICT
+) STRICT;
+
+CREATE TABLE IF NOT EXISTS enterprise_knowledge_uploads (
+  id TEXT NOT NULL PRIMARY KEY,
+  zone_id TEXT NOT NULL,
+  owner_account_id TEXT NOT NULL,
+  target_source_id TEXT,
+  title TEXT NOT NULL,
+  original_name TEXT NOT NULL,
+  declared_mime_type TEXT NOT NULL,
+  expected_size INTEGER NOT NULL,
+  expected_hash TEXT,
+  received_size INTEGER NOT NULL DEFAULT 0,
+  chunk_claim_token TEXT,
+  chunk_claim_offset INTEGER,
+  chunk_claim_size INTEGER,
+  chunk_claim_expires_at INTEGER,
+  state TEXT NOT NULL CHECK (state IN ('active', 'committing', 'committed', 'cancelled', 'expired', 'error')),
+  staging_name TEXT NOT NULL,
+  expires_at INTEGER NOT NULL,
+  revision INTEGER NOT NULL DEFAULT 1,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL,
+  committed_source_version_id TEXT,
+  FOREIGN KEY (zone_id) REFERENCES enterprise_knowledge_zones(id) ON DELETE CASCADE,
+  FOREIGN KEY (owner_account_id) REFERENCES enterprise_accounts(id) ON DELETE CASCADE,
+  FOREIGN KEY (target_source_id) REFERENCES enterprise_knowledge_sources(id) ON DELETE SET NULL,
+  FOREIGN KEY (committed_source_version_id) REFERENCES enterprise_knowledge_source_versions(id) ON DELETE SET NULL
+) STRICT;
+CREATE INDEX IF NOT EXISTS idx_enterprise_knowledge_uploads_owner
+  ON enterprise_knowledge_uploads(owner_account_id, state, expires_at);
+
+CREATE TABLE IF NOT EXISTS enterprise_knowledge_idempotency (
+  audience TEXT NOT NULL,
+  actor_account_id TEXT NOT NULL,
+  operation TEXT NOT NULL,
+  idempotency_key TEXT NOT NULL,
+  request_hash TEXT NOT NULL,
+  response_status INTEGER,
+  response_json TEXT,
+  state TEXT NOT NULL CHECK (state IN ('running', 'complete', 'failed')),
+  created_at INTEGER NOT NULL,
+  expires_at INTEGER NOT NULL,
+  PRIMARY KEY (audience, actor_account_id, operation, idempotency_key),
+  FOREIGN KEY (actor_account_id) REFERENCES enterprise_accounts(id) ON DELETE CASCADE
+) STRICT;
+CREATE INDEX IF NOT EXISTS idx_enterprise_knowledge_idempotency_expiry
+  ON enterprise_knowledge_idempotency(expires_at);

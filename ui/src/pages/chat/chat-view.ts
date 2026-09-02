@@ -154,6 +154,8 @@ export type ChatProps = ChatTaskSuggestionTrayProps &
     disabledReason: string | null;
     disabledBanner?: ChatComposerDisabledBanner;
     modelSetupRequired?: boolean;
+    enterpriseUserPresentation?: boolean;
+    enterpriseUserUnavailable?: boolean;
     onModelSetup?: () => void;
     error: string | null;
     diskSpace?: SessionPlacementDiskSpace;
@@ -193,6 +195,7 @@ export type ChatProps = ChatTaskSuggestionTrayProps &
     localMediaPreviewRoots?: string[];
     assistantAttachmentAuthToken?: string | null;
     resolveArtifactDownload?: ArtifactDownloadResolver;
+    onOpenArtifact?: (artifactId: string) => void;
     autoExpandToolCalls?: boolean;
     attachmentLimits?: { maxBytes: number; maxImageBytes: number };
     attachments?: ChatAttachment[];
@@ -353,6 +356,7 @@ export function renderChat(props: ChatProps) {
       localMediaPreviewRoots: props.localMediaPreviewRoots,
       assistantAttachmentAuthToken: props.assistantAttachmentAuthToken,
       resolveArtifactDownload: props.resolveArtifactDownload,
+      onOpenArtifact: props.onOpenArtifact,
       canvasPluginSurfaceUrl: props.canvasPluginSurfaceUrl,
       embedSandboxMode: props.embedSandboxMode,
       allowExternalEmbedUrls: props.allowExternalEmbedUrls,
@@ -382,6 +386,8 @@ export function renderChat(props: ChatProps) {
         props.canSend && !props.suggestionComposer ? props.onCompanionPrefill : undefined,
       onOpenSession: props.onSessionSelect,
       modelSetupRequired: props.modelSetupRequired,
+      enterpriseUserPresentation: props.enterpriseUserPresentation,
+      enterpriseUserUnavailable: props.enterpriseUserUnavailable,
       onModelSetup: props.onModelSetup,
       backgroundTasks: props.backgroundTasks,
       onFocusComposer: () =>

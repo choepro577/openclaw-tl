@@ -23,6 +23,37 @@ function buildRow(params: { textWidth: number; labelWidth: number }) {
   return { row, viewport, label };
 }
 
+function buildCodexRow(params: { textWidth: number; labelWidth: number; fontSize?: number }) {
+  const row = document.createElement("div");
+  const label = document.createElement("span");
+  const clip = document.createElement("span");
+  const track = document.createElement("span");
+  const content = document.createElement("span");
+  label.className = "hover-marquee";
+  label.dataset.hoverMarqueeMode = "codex";
+  content.dataset.hoverMarqueeContent = "";
+  content.textContent = "Fix stale iMessage group-allowlist warning copy";
+  content.style.fontSize = `${params.fontSize ?? 10}px`;
+  track.append(content);
+  clip.append(track);
+  label.append(clip);
+  row.append(label);
+  document.body.append(row);
+  Object.defineProperty(label, "clientWidth", { value: params.labelWidth });
+  vi.spyOn(content, "getBoundingClientRect").mockReturnValue({
+    top: 0,
+    right: params.textWidth,
+    bottom: 10,
+    left: 0,
+    width: params.textWidth,
+    height: 10,
+    x: 0,
+    y: 0,
+    toJSON: () => ({}),
+  });
+  return { row, label };
+}
+
 describe("hover marquee", () => {
   beforeEach(() => {
     vi.useFakeTimers();
@@ -107,6 +138,32 @@ describe("hover marquee", () => {
     const { row, label } = buildRow({ textWidth: 120, labelWidth: 180 });
     startHoverMarquee(row);
     runPendingFrame();
+    expect(label.classList.contains("hover-marquee--scrolling")).toBe(false);
+    expect(label.style.getPropertyValue("--hover-marquee-shift")).toBe("");
+  });
+
+  it("matches the Codex pause, speed, easing samples, and stop-at-end behavior", () => {
+    const { row, label } = buildCodexRow({ textWidth: 320, labelWidth: 180 });
+    startHoverMarquee(row);
+    runPendingFrame();
+
+    expect(label.style.getPropertyValue("--hover-marquee-shift")).toBe("-140px");
+    expect(label.style.getPropertyValue("--hover-marquee-duration")).toBe("7.350s");
+    expect(label.style.getPropertyValue("--hover-marquee-timing")).toMatch(
+      /^linear\(0\.0000 0\.0000%, 0\.0000 4\.7619%,/,
+    );
+    expect(label.style.getPropertyValue("--hover-marquee-timing")).toMatch(/1\.0000 100\.0000%\)$/);
+    expect(label.classList.contains("hover-marquee--scrolling")).toBe(true);
+
+    stopHoverMarquee(row);
+    expect(label.classList.contains("hover-marquee--scrolling")).toBe(false);
+  });
+
+  it("does not animate a Codex-style title that fits its viewport", () => {
+    const { row, label } = buildCodexRow({ textWidth: 120, labelWidth: 180 });
+    startHoverMarquee(row);
+    runPendingFrame();
+
     expect(label.classList.contains("hover-marquee--scrolling")).toBe(false);
     expect(label.style.getPropertyValue("--hover-marquee-shift")).toBe("");
   });

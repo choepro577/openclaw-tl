@@ -73,9 +73,22 @@ function buildChatSendPromptMedia(
   if (!attachments.imageOrder.includes("offloaded")) {
     return undefined;
   }
-  const media = attachments.offloadedRefs
-    .filter((ref) => ref.mimeType.startsWith("image/"))
-    .map((ref) => ({ path: ref.path, url: ref.mediaRef, contentType: ref.mimeType }));
+  const media = attachments.offloadedRefs.flatMap((ref, index) => {
+    if (!ref.mimeType.startsWith("image/")) {
+      return [];
+    }
+    const stagedPath = attachments.mediaPathOffloadPaths[index] ?? ref.path;
+    return [
+      {
+        path: stagedPath,
+        url: stagedPath,
+        contentType: attachments.mediaPathOffloadTypes[index] ?? ref.mimeType,
+        ...(attachments.mediaPathOffloadWorkspaceDir
+          ? { workspaceDir: attachments.mediaPathOffloadWorkspaceDir }
+          : {}),
+      },
+    ];
+  });
   return media.length > 0 ? media : undefined;
 }
 
@@ -246,17 +259,13 @@ export function prepareChatSendUserTurn(params: {
     systemProvenanceReceipt: request.systemProvenanceReceipt,
     toolBindings: request.toolBindings,
   });
-  const mediaPathOffloadsIncludeImages = attachments.mediaPathOffloadTypes.some((type) =>
-    type.startsWith("image/"),
-  );
   return {
     ...messageContext,
     pluginBoundMediaPromise,
-    replyOptionImages: mediaPathOffloadsIncludeImages
-      ? undefined
-      : attachments.parsedImages.length > 0
-        ? attachments.parsedImages
-        : undefined,
+    // parsedImages contains only the images that stayed inline. Offloaded
+    // images travel separately through replyOptionMedia, so a mixed turn must
+    // keep both collections instead of dropping its inline images.
+    replyOptionImages: attachments.parsedImages.length > 0 ? attachments.parsedImages : undefined,
     replyOptionMedia: buildChatSendPromptMedia(attachments),
   };
 }

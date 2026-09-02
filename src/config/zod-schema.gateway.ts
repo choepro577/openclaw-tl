@@ -120,6 +120,7 @@ export const GatewayConfigSchema = z
             z.literal("token"),
             z.literal("password"),
             z.literal("trusted-proxy"),
+            z.literal("accounts"),
           ])
           .optional(),
         token: SecretInputSchema.optional().register(sensitive),

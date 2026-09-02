@@ -116,14 +116,17 @@ export async function detectSetupInference(
   }
   const cfg = snapshot.runtimeConfig ?? snapshot.config;
   const targetAgentId = resolveAmbientOwnerAgentId(cfg, agentId);
-  const detected = await (deps.detectInferenceBackends ?? detectInferenceBackends)({
-    config: cfg,
-    agentId: targetAgentId,
-  });
   const unavailableCandidates: SetupInferenceUnavailableCandidate[] = [];
   const deferredUnavailableCandidates: SetupInferenceUnavailableCandidate[] = [];
   const probe = deps.probeLocalCommand ?? probeLocalCommand;
-  const [pi, opencode] = await Promise.all([probe("pi"), probe("opencode")]);
+  const [detected, pi, opencode] = await Promise.all([
+    (deps.detectInferenceBackends ?? detectInferenceBackends)({
+      config: cfg,
+      agentId: targetAgentId,
+    }),
+    probe("pi"),
+    probe("opencode"),
+  ]);
   if (pi.found && !pi.timedOut) {
     deferredUnavailableCandidates.push({
       id: "pi-cli",

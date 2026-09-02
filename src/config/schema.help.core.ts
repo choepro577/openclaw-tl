@@ -16,6 +16,47 @@ export const CORE_FIELD_HELP: Record<string, string> = {
   "meta.migrations": "Bounded compatibility markers for completed config migrations.",
   "meta.migrations.modelPolicyAllowlist":
     "Records that legacy model-map restrictions were preserved or evaluated.",
+  enterprise:
+    "Additive multi-account module for the existing Gateway. Keep disabled to preserve the original OpenClaw UI and authentication behavior.",
+  "enterprise.enabled":
+    "Enables Enterprise accounts, entitlement APIs, isolated user workspaces, and Enterprise UI routes. Default false.",
+  "enterprise.userPortal":
+    "Selects the Enterprise employee portal implementation independently from the Admin portal.",
+  "enterprise.userPortal.version":
+    "Use legacy for rollback-safe rollout or v2 for the restricted Enterprise User UI. Default legacy.",
+  "enterprise.personalAgent":
+    "Personal Agent settings that reuse an existing OpenClaw Agent as a shared template while keeping each account's data isolated.",
+  "enterprise.personalAgent.templateAgentId":
+    "Existing OpenClaw Agent id used as the Personal Agent template. The definition is shared; workspace, sessions, and memory are account-specific.",
+  "enterprise.userExtensions":
+    "Account-owned ClawHub Skill installs and Admin-reviewed native plugin access requests.",
+  "enterprise.userExtensions.enabled":
+    "Enable the Enterprise User Plugins page and extension APIs for this tenant. Defaults to false.",
+  "enterprise.knowledge": "Enterprise Knowledge feature and rollout settings.",
+  "enterprise.knowledge.graph":
+    "Derived per-Zone graph settings. Source Versions and normalized artifacts remain the source of truth.",
+  "enterprise.knowledge.graph.enabled":
+    "Enable graph generation and Graph View. Existing Zones remain opt-in until rebuilt.",
+  "enterprise.knowledge.graph.aiAnalysis":
+    "Control AI-first structural analysis: off, shadow, or on. AI never publishes automatically.",
+  "enterprise.knowledge.graph.agentExpansion":
+    "Control graph expansion in enterprise_knowledge_search: off, shadow, or on.",
+  "enterprise.knowledge.graph.enrichmentProvider":
+    "Canonical provider for isolated Enterprise Knowledge relation enrichment.",
+  "enterprise.knowledge.graph.enrichmentModel":
+    "Canonical model for isolated Enterprise Knowledge relation enrichment.",
+  "enterprise.knowledge.graph.localEnrichmentProvider":
+    "Local-only enrichment provider identity for Zones whose data egress policy is local_only.",
+  "enterprise.knowledge.graph.localEnrichmentModel":
+    "Local-only enrichment model identity for Enterprise Knowledge Graph analysis.",
+  "enterprise.knowledge.graph.autoApprovalThreshold":
+    "Confidence threshold for auto-accepting low-risk AI mentions. Defaults to 0.92.",
+  "enterprise.knowledge.graph.maxConcurrentZoneBuilds":
+    "Maximum concurrent Enterprise Knowledge Zone builds.",
+  "enterprise.knowledge.graph.maxConcurrentAiCallsPerZone":
+    "Maximum concurrent isolated AI analysis calls per Zone. Defaults to 2.",
+  "enterprise.knowledge.graph.changeFeedRetentionHours":
+    "Retention window for the durable Enterprise Knowledge change feed. Minimum 24 hours.",
   env: "Environment import and override settings used to supply runtime variables to the gateway process. Use this section to control shell-env loading and explicit variable injection behavior.",
   "env.shellEnv":
     "Shell environment import controls for loading variables from your login shell during startup. Keep this enabled when you depend on profile-defined secrets or PATH customizations.",
@@ -118,7 +159,7 @@ export const CORE_FIELD_HELP: Record<string, string> = {
   "gateway.auth":
     "Authentication policy for gateway HTTP/WebSocket access including mode, credentials, trusted-proxy behavior, and rate limiting. Keep auth enabled for every non-loopback deployment.",
   "gateway.auth.mode":
-    'Gateway auth mode: "none", "token", "password", or "trusted-proxy" depending on your edge architecture. Use token/password for direct exposure, and trusted-proxy only behind hardened identity-aware proxies.',
+    'Gateway auth mode: "none", "token", "password", "trusted-proxy", or "accounts". Accounts mode uses the built-in Enterprise login cookie and requires enterprise.enabled=true.',
   "gateway.auth.allowTailscale":
     "Allows trusted Tailscale identity paths to satisfy gateway auth checks when configured. Use this only when your tailnet identity posture is strong and operator workflows depend on it.",
   "gateway.auth.identityScopes":

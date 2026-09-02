@@ -5431,6 +5431,8 @@ describe("chat welcome", () => {
     sessionHost?: { assistantAgentId?: string | null } | null;
     onOpenSession?: (sessionKey: string) => void;
     modelSetupRequired?: boolean;
+    enterpriseUserPresentation?: boolean;
+    enterpriseUserUnavailable?: boolean;
     onModelSetup?: () => void;
   }) {
     const container = document.createElement("div");
@@ -5444,6 +5446,8 @@ describe("chat welcome", () => {
         sessionHost: params.sessionHost,
         onOpenSession: params.onOpenSession,
         modelSetupRequired: params.modelSetupRequired,
+        enterpriseUserPresentation: params.enterpriseUserPresentation,
+        enterpriseUserUnavailable: params.enterpriseUserUnavailable,
         onModelSetup: params.onModelSetup,
         onDraftChange: () => undefined,
         onSend: () => undefined,
@@ -5491,6 +5495,32 @@ describe("chat welcome", () => {
 
     container.querySelector<HTMLButtonElement>(".agent-chat__welcome button")?.click();
     expect(onModelSetup).toHaveBeenCalledOnce();
+  });
+
+  it("uses user-safe copy and suggestions for the Enterprise User presentation", () => {
+    const container = renderWelcome({
+      assistantAvatar: null,
+      enterpriseUserPresentation: true,
+    });
+
+    expect(container.querySelector(".agent-chat__hint")?.textContent?.trim()).toBe(
+      "Type a message to start a conversation.",
+    );
+    expect(container.querySelector("kbd")).toBeNull();
+    expect(container.querySelectorAll(".agent-chat__suggestion")).toHaveLength(2);
+    expect(container.textContent).not.toContain("configure a channel");
+    expect(container.textContent).not.toContain("system health");
+  });
+
+  it("does not offer sendable suggestions when an Enterprise Agent is unavailable", () => {
+    const container = renderWelcome({
+      assistantAvatar: null,
+      enterpriseUserPresentation: true,
+      enterpriseUserUnavailable: true,
+    });
+
+    expect(container.querySelector(".agent-chat__suggestions")).toBeNull();
+    expect(container.textContent).not.toContain("AI provider");
   });
 
   it("omits the composer footer behind the empty model setup splash", () => {

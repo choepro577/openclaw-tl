@@ -98,6 +98,7 @@ export class ModelSetupPage extends OpenClawLightDomElement {
 
   private observedConnection: (ModelSetupRouteData["connection"] & { connected: boolean }) | null =
     null;
+  private routeDetectionScheduled = false;
   private pendingPrepareOption: ModelSetupPrepareOption | null = null;
   private wizardMutationGeneration = 0;
   private wizardMutationActive = false;
@@ -338,21 +339,32 @@ export class ModelSetupPage extends OpenClawLightDomElement {
     }
   }
 
-  // Route data can settle after mount and be discarded as another
-  // connection's result. Nothing else re-arms detection then, so a loading
-  // page with a connected, capable Gateway self-heals here instead of
+  // Route data can settle after mount and be discarded as another connection's
+  // result, while embedded surfaces can mount without route data at all. A
+  // loading page with a connected, capable Gateway self-heals here instead of
   // dead-ending silently.
   private ensureRouteSettledDetection(): void {
     if (
       !this.hasUpdated ||
-      !this.routeData ||
+      this.routeDetectionScheduled ||
       this.pageState.phase !== "loading" ||
       this.detectTask.status !== TaskStatus.INITIAL
     ) {
       return;
     }
     if (this.canUseSetup(this.context.gateway.snapshot.client)) {
-      void this.detect();
+      this.routeDetectionScheduled = true;
+      queueMicrotask(() => {
+        this.routeDetectionScheduled = false;
+        if (
+          this.isConnected &&
+          this.pageState.phase === "loading" &&
+          this.detectTask.status === TaskStatus.INITIAL &&
+          this.canUseSetup(this.context.gateway.snapshot.client)
+        ) {
+          void this.detect();
+        }
+      });
     }
   }
 

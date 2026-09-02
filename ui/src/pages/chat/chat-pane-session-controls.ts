@@ -33,6 +33,17 @@ type SessionActionCallbacks = Pick<
   "onAbort" | "onClearHistory" | "onCompact" | "onForkMessage" | "onRewindMessage"
 >;
 
+export function resolveChatPaneComposerControlPolicy(params: {
+  catalog: boolean;
+  enterpriseUserPresentation: boolean;
+}) {
+  return {
+    renderModelControls: !params.catalog,
+    renderModelSetup: !params.enterpriseUserPresentation,
+    renderPermissionPicker: !params.enterpriseUserPresentation,
+  };
+}
+
 export function readChatPaneMutationAccess(
   snapshot: ApplicationGatewaySnapshot,
   sessionKey: string,
@@ -87,8 +98,9 @@ export function renderChatPaneComposerControls(params: {
   effortAccess: SessionMethodAccess;
   permissionAccess: SessionMethodAccess;
   canSelectFull: boolean;
+  preparedModelCatalogOnly?: boolean;
   toastAnchor: Element;
-  onModelSetup: () => void;
+  onModelSetup?: () => void;
 }): {
   composerControls: NonNullable<ChatProps["composerControls"]>;
   permissionPicker: ChatPermissionPickerProps;
@@ -101,6 +113,7 @@ export function renderChatPaneComposerControls(params: {
     effortAccess,
     permissionAccess,
     canSelectFull,
+    preparedModelCatalogOnly,
     toastAnchor,
     onModelSetup,
   } = params;
@@ -137,7 +150,10 @@ export function renderChatPaneComposerControls(params: {
             effortAccess.allowed
               ? switchChatContextWindow(state, next, targetSessionKey)
               : Promise.resolve(false),
-          onModelPickerOpen: () => refreshChatModelCatalogOnDemand(state),
+          onModelPickerOpen: () =>
+            refreshChatModelCatalogOnDemand(state, {
+              preparedOnly: preparedModelCatalogOnly,
+            }),
           onModelSelect: (next, targetSessionKey) =>
             modelAccess.allowed
               ? switchChatModel(state, next, targetSessionKey)

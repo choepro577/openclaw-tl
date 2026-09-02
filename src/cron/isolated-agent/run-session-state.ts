@@ -158,7 +158,7 @@ export function createPersistCronSessionEntry(params: {
         if (!currentEntry) {
           const creationStamp = buildSessionCreationStamp({
             via: "cron",
-            actor: { type: "system" },
+            actor: persistedEntry.createdActor ?? { type: "system" },
           });
           committedEntry = { ...persistedEntry, ...creationStamp };
           mergedLiveEntry = { ...liveEntry, ...creationStamp };

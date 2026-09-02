@@ -293,6 +293,7 @@ export function projectChatTranscript(
     localMediaPreviewRoots: props.localMediaPreviewRoots ?? [],
     assistantAttachmentAuthToken: props.assistantAttachmentAuthToken ?? null,
     resolveArtifactDownload: props.resolveArtifactDownload,
+    onOpenArtifact: props.onOpenArtifact,
     onAssistantAttachmentLoaded: props.onAssistantAttachmentLoaded,
     onRequestOpenImage: props.onRequestOpenImage,
     onOpenImage: props.onOpenImage,

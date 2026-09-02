@@ -3,6 +3,8 @@ import { isCoreCanvasHostEnabled } from "../canvas/config.js";
 import { createShowWidgetTool, hasRegisteredShowWidgetKinds } from "../canvas/widget-tool.js";
 import { selectApplicableRuntimeConfig } from "../config/config.js";
 import { resolveControlUiSessionLinkBase } from "../config/control-ui-link-base.js";
+import type { EnterpriseKnowledgeAuthority } from "../enterprise/knowledge/authority.js";
+import { readGatewayRequestRuntimeMetadata } from "../gateway/request-runtime-config.js";
 import { isEmbeddedMode } from "../infra/embedded-mode.js";
 import { getActiveSecretsRuntimeConfigSnapshot } from "../secrets/runtime-state.js";
 import { getActiveRuntimeWebToolsMetadataFromState } from "../secrets/runtime-web-tools-state.js";
@@ -46,6 +48,7 @@ import {
 import { createCronTool } from "./tools/cron-tool.js";
 import { createDashboardTool } from "./tools/dashboard-tool.js";
 import { createEmbeddedCallGateway } from "./tools/embedded-gateway-stub.js";
+import { createEnterpriseKnowledgeTools } from "./tools/enterprise-knowledge-tools.js";
 import { createGatewayToolCallerWrapper } from "./tools/gateway-caller-context.js";
 import { createGatewayTool } from "./tools/gateway-tool.js";
 import { createGitHubIdentityStatusTool } from "./tools/github-identity-status-tool.js";
@@ -100,6 +103,11 @@ export function createOpenClawTools(options?: OpenClawToolsOptions): AnyAgentToo
     config: resolvedConfig,
     agentId: options?.requesterAgentIdOverride,
   });
+  const enterpriseKnowledgeAuthority = resolvedConfig
+    ? (readGatewayRequestRuntimeMetadata(resolvedConfig)?.enterpriseKnowledge?.createAuthority(
+        sessionAgentId,
+      ) as EnterpriseKnowledgeAuthority | undefined)
+    : undefined;
   const swarmToolGroups = createOpenClawSwarmToolGroups({
     config: resolvedConfig,
     effectiveRequesterAgentId: sessionAgentId,
@@ -576,6 +584,9 @@ export function createOpenClawTools(options?: OpenClawToolsOptions): AnyAgentToo
       },
     }),
     ...collectPresentOpenClawTools([webSearchTool, webFetchTool, imageTool, pdfTool]),
+    ...(enterpriseKnowledgeAuthority
+      ? createEnterpriseKnowledgeTools(enterpriseKnowledgeAuthority)
+      : []),
   ];
   options?.recordToolPrepStage?.("openclaw-tools:core-tool-list");
   let allTools = tools;

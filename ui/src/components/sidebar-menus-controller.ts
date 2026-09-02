@@ -89,6 +89,7 @@ interface SidebarMenusControllerHost
     routeId: NavigationRouteId,
     options?: ApplicationNavigationOptions,
   ) => void;
+  readonly onLogout?: () => void;
   readonly onPairMobile?: () => void;
   readonly onRetryConnect?: () => void;
   readonly onUpdateSidebarEntries?: (entries: string[]) => void;

@@ -130,13 +130,19 @@ export function resolveRenderableMessageImages(
           opts?.resourceBasePath,
           opts?.authToken,
           opts?.onRequestUpdate,
+          opts?.sessionKey,
         )
       : { status: "available" as const };
     if (availability.status !== "available") {
       return [];
     }
     const displayUrl = canProxyLocalImage
-      ? buildAssistantAttachmentUrl(img.url, opts?.resourceBasePath, availability.mediaTicket)
+      ? buildAssistantAttachmentUrl(
+          img.url,
+          opts?.resourceBasePath,
+          availability.mediaTicket,
+          opts?.sessionKey,
+        )
       : img.url;
     return [{ ...img, displayUrl }];
   });

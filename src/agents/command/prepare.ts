@@ -122,13 +122,15 @@ export async function prepareAgentCommandExecution(
     );
   }
 
-  const { cfg } = await resolveAgentRuntimeConfig(runtime, {
-    runtimeTargetsChannelSecrets: opts.deliver === true,
-    runtimeChannelSecretScope:
-      opts.deliver !== true && shouldResolveExplicitRecipientSession && recipientChannel
-        ? { channel: recipientChannel, accountId: opts.accountId }
-        : undefined,
-  });
+  const { cfg } = runtimeContext
+    ? { cfg: runtimeContext.config }
+    : await resolveAgentRuntimeConfig(runtime, {
+        runtimeTargetsChannelSecrets: opts.deliver === true,
+        runtimeChannelSecretScope:
+          opts.deliver !== true && shouldResolveExplicitRecipientSession && recipientChannel
+            ? { channel: recipientChannel, accountId: opts.accountId }
+            : undefined,
+      });
   const normalizedSpawned = normalizeSpawnedRunMetadata({
     spawnedBy: opts.spawnedBy,
     groupId: opts.groupId,

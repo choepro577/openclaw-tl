@@ -1,0 +1,30 @@
+.eu-auth-screen {
+  display: grid;
+  min-height: 100dvh;
+  place-items: center;
+  padding: var(--space-6);
+  background: var(--bg);
+}
+
+.eu-auth-card {
+  display: grid;
+  width: min(100%, 420px);
+  gap: var(--space-5);
+  margin: 0;
+}
+
+.eu-auth-card h1,
+.eu-auth-card p {
+  margin: 0;
+}
+
+.eu-auth-card h1 {
+  color: var(--text-strong);
+  font-size: var(--control-ui-text-lg);
+  font-weight: 650;
+  line-height: 1.2;
+}
+
+.eu-auth-card p {
+  color: var(--muted);
+}

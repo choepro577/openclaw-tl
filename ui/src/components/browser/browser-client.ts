@@ -34,6 +34,7 @@ type BrowserTabsSnapshot = {
 
 type BrowserScreenshotCapture = {
   path: string;
+  dataUrl: string;
   targetId: string;
   url: string;
 };
@@ -141,15 +142,17 @@ export async function captureBrowserScreenshot(
     await browserRequest(client, {
       method: "POST",
       path: "/screenshot",
-      body: { targetId, type: "png" },
+      body: { targetId, type: "png", includeDataUrl: true },
     }),
   );
   const path = stringOrEmpty(result?.path);
-  if (!path) {
+  const dataUrl = stringOrEmpty(result?.dataUrl);
+  if (!path || !dataUrl.startsWith("data:image/")) {
     throw new Error(t("browser.errors.screenshotPathMissing"));
   }
   return {
     path,
+    dataUrl,
     targetId: stringOrEmpty(result?.targetId) || targetId,
     url: stringOrEmpty(result?.url),
   };

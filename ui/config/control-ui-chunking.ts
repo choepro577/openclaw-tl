@@ -46,6 +46,21 @@ export function controlUiStableChunkName(id: string): string | undefined {
     return "gateway-runtime";
   }
 
+  // Automation parsing is shared by Control and Enterprise User surfaces, but
+  // it is not needed to resolve the portal or paint the shell. Keep it out of
+  // the largest recursive boot chunk without duplicating the implementation.
+  if (normalized.endsWith("/ui/src/lib/cron/index.ts")) {
+    return "cron-runtime";
+  }
+
+  if (normalized.endsWith("/ui/src/lib/config/config-write-coordinator.ts")) {
+    return "config-runtime";
+  }
+
+  if (normalized.endsWith("/ui/src/components/app-sidebar-session-navigation.ts")) {
+    return "session-navigation-runtime";
+  }
+
   if (
     moduleIdIncludesPackage(id, "lit") ||
     moduleIdIncludesPackage(id, "lit-html") ||
@@ -54,6 +69,21 @@ export function controlUiStableChunkName(id: string): string | undefined {
     return "lit-runtime";
   }
 
+  // Knowledge Graph's WebGL renderer is lazy, but its upstream bundle is larger
+  // than the per-chunk budget. Keep the independently cacheable ThreeJS layers
+  // separate without pulling any of them into the initial Control UI graph.
+  if (moduleIdIncludesPackage(id, "3d-force-graph")) {
+    return "knowledge-graph-3d-runtime";
+  }
+  if (moduleIdIncludesPackage(id, "three-forcegraph")) {
+    return "knowledge-graph-force-runtime";
+  }
+  if (moduleIdIncludesPackage(id, "three-render-objects")) {
+    return "knowledge-graph-render-runtime";
+  }
+  if (moduleIdIncludesPackage(id, "three-spritetext")) {
+    return "knowledge-graph-label-runtime";
+  }
   if (
     moduleIdIncludesPackage(id, "highlight.js") ||
     moduleIdIncludesPackage(id, "markdown-it") ||

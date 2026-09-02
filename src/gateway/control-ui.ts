@@ -12,6 +12,13 @@ import {
   resolvePublicAgentAvatarSource,
 } from "../agents/identity-avatar.js";
 import type { OpenClawConfig } from "../config/types.openclaw.js";
+import { getEnterpriseAccountById } from "../enterprise/accounts/account-store.js";
+import { getActiveEnterpriseSession } from "../enterprise/auth/session-store.js";
+import { resolveEnterpriseWorkspacePath } from "../enterprise/personal-agent/personal-workspace.js";
+import {
+  createEnterpriseUserGatewayClient,
+  resolveEnterpriseUserAgentKey,
+} from "../enterprise/user/user-gateway-client.js";
 import {
   matchRootFileOpenFailure,
   openRootFileSync,
@@ -24,10 +31,12 @@ import { safeFileURLToPath } from "../infra/local-file-access.js";
 import { isWithinDir } from "../infra/path-safety.js";
 import { assertLocalMediaAllowed, getDefaultLocalRootsCore } from "../media/local-media-access.js";
 import { getAgentScopedMediaLocalRoots } from "../media/local-roots.js";
+import { readPersistedMediaFacts } from "../media/media-facts.js";
 import { probePlaybackMediaFileDescriptor, type MediaProbeResult } from "../media/media-probe.js";
 import {
   resolveMediaReferenceLocalPath,
   resolveMediaReferenceLocalPathInfo,
+  normalizeMediaReferenceSource,
 } from "../media/media-reference.js";
 import {
   replacePlaybackFileExtension,
@@ -88,6 +97,9 @@ import {
   writeByteHeaders,
 } from "./http-byte-range.js";
 import { authorizeControlUiReadRequestOrReply } from "./http-utils.js";
+import { resolveLocalSessionWorkspaceRoot } from "./server-methods/sessions-files.js";
+import { createSessionListEntryFilter, resolveSessionSharingTarget } from "./session-sharing.js";
+import { readSessionMessagesWithSourceAsync } from "./session-transcript-readers.js";
 import { isTerminalConfigEnabled } from "./terminal/enabled.js";
 
 const ROOT_PREFIX = "/";
@@ -245,14 +257,41 @@ type AssistantMediaAvailability =
       mimeType?: string;
       playback?: "native" | "transcode";
       sizeBytes?: number;
+      workspacePath?: string;
     } & MediaProbeResult)
   | { available: false; reason: string; code: string };
 
-type AssistantMediaTicketPayload = {
+type OperatorAssistantMediaTicketPayload = {
   scope: typeof CONTROL_UI_ASSISTANT_MEDIA_TICKET_SCOPE;
   source: string;
   exp: number;
 };
+
+type EnterpriseAssistantMediaPrincipal = {
+  profileId: string;
+  accountId: string;
+  accountRole: "administrator" | "employee";
+  sessionId: string;
+};
+
+type EnterpriseAssistantMediaTicketPayload = OperatorAssistantMediaTicketPayload & {
+  subject: "enterprise";
+  profileId: string;
+  accountId: string;
+  accountRole: "administrator" | "employee";
+  enterpriseSessionId: string;
+  sessionKey: string;
+  agentId: string;
+};
+
+type VerifiedAssistantMediaTicket =
+  | { kind: "operator" }
+  | {
+      kind: "enterprise";
+      principal: EnterpriseAssistantMediaPrincipal;
+      sessionKey: string;
+      agentId: string;
+    };
 
 function signAssistantMediaTicketPayload(encodedPayload: string): string {
   return createHmac("sha256", controlUiAssistantMediaTicketSecret)
@@ -260,7 +299,17 @@ function signAssistantMediaTicketPayload(encodedPayload: string): string {
     .digest("base64url");
 }
 
-function createAssistantMediaTicket(source: string, nowMs = Date.now()) {
+function createAssistantMediaTicket(
+  source: string,
+  enterprise:
+    | {
+        principal: EnterpriseAssistantMediaPrincipal;
+        sessionKey: string;
+        agentId: string;
+      }
+    | undefined,
+  nowMs = Date.now(),
+) {
   const now = asDateTimestampMs(nowMs);
   if (now === undefined) {
     return {};
@@ -269,50 +318,298 @@ function createAssistantMediaTicket(source: string, nowMs = Date.now()) {
   if (exp === undefined) {
     return {};
   }
-  const payload: AssistantMediaTicketPayload = {
+  const payload: OperatorAssistantMediaTicketPayload | EnterpriseAssistantMediaTicketPayload = {
     scope: CONTROL_UI_ASSISTANT_MEDIA_TICKET_SCOPE,
     source,
     exp,
+    ...(enterprise
+      ? {
+          subject: "enterprise" as const,
+          profileId: enterprise.principal.profileId,
+          accountId: enterprise.principal.accountId,
+          accountRole: enterprise.principal.accountRole,
+          enterpriseSessionId: enterprise.principal.sessionId,
+          sessionKey: enterprise.sessionKey,
+          agentId: enterprise.agentId,
+        }
+      : {}),
   };
   const encodedPayload = Buffer.from(JSON.stringify(payload), "utf8").toString("base64url");
   const sig = signAssistantMediaTicketPayload(encodedPayload);
   return {
-    mediaTicket: `v1.${encodedPayload}.${sig}`,
+    mediaTicket: `${enterprise ? "v2" : "v1"}.${encodedPayload}.${sig}`,
     mediaTicketExpiresAt: resolveTimestampMsToIsoString(exp),
   };
 }
 
-function verifyAssistantMediaTicket(ticket: string | null, source: string, nowMs = Date.now()) {
+function verifyAssistantMediaTicket(
+  ticket: string | null,
+  source: string,
+  nowMs = Date.now(),
+): VerifiedAssistantMediaTicket | null {
   const now = asDateTimestampMs(nowMs);
   if (now === undefined) {
-    return false;
+    return null;
   }
   const parts = ticket?.split(".");
-  if (!parts || parts.length !== 3 || parts[0] !== "v1") {
-    return false;
+  if (!parts || parts.length !== 3 || (parts[0] !== "v1" && parts[0] !== "v2")) {
+    return null;
   }
-  const [, encodedPayload, sig] = parts;
+  const [version, encodedPayload, sig] = parts;
   if (!encodedPayload || !sig) {
-    return false;
+    return null;
   }
   const expectedSig = signAssistantMediaTicketPayload(encodedPayload);
   if (!safeEqualSecret(sig, expectedSig)) {
-    return false;
+    return null;
   }
   try {
     const payload = JSON.parse(
       Buffer.from(encodedPayload, "base64url").toString("utf8"),
-    ) as Partial<AssistantMediaTicketPayload>;
-    return (
+    ) as Partial<EnterpriseAssistantMediaTicketPayload>;
+    const commonValid =
       payload.scope === CONTROL_UI_ASSISTANT_MEDIA_TICKET_SCOPE &&
       payload.source === source &&
       typeof payload.exp === "number" &&
       Number.isFinite(payload.exp) &&
-      payload.exp >= now
-    );
+      payload.exp >= now;
+    if (!commonValid) {
+      return null;
+    }
+    if (version === "v1") {
+      return payload.subject === undefined ? { kind: "operator" } : null;
+    }
+    return payload.subject === "enterprise" &&
+      typeof payload.profileId === "string" &&
+      typeof payload.accountId === "string" &&
+      (payload.accountRole === "administrator" || payload.accountRole === "employee") &&
+      typeof payload.enterpriseSessionId === "string" &&
+      typeof payload.sessionKey === "string" &&
+      typeof payload.agentId === "string"
+      ? {
+          kind: "enterprise",
+          principal: {
+            profileId: payload.profileId,
+            accountId: payload.accountId,
+            accountRole: payload.accountRole,
+            sessionId: payload.enterpriseSessionId,
+          },
+          sessionKey: payload.sessionKey,
+          agentId: payload.agentId,
+        }
+      : null;
   } catch {
+    return null;
+  }
+}
+
+type EnterpriseAssistantMediaScope = {
+  principal: EnterpriseAssistantMediaPrincipal;
+  sessionKey: string;
+  agentId: string;
+  workspaceRoot: string;
+  target: NonNullable<ReturnType<typeof resolveSessionSharingTarget>>;
+};
+
+function assistantMediaPathDenied(): Error {
+  return Object.assign(new Error("assistant media path is outside the authorized session"), {
+    code: "path-not-allowed",
+  });
+}
+
+function resolveWorkspaceRelativePath(root: string, candidate: string): string | null {
+  const relative = path.relative(path.resolve(root), path.resolve(candidate));
+  if (
+    relative === "" ||
+    relative === ".." ||
+    relative.startsWith(`..${path.sep}`) ||
+    path.isAbsolute(relative)
+  ) {
+    return relative === "" ? "" : null;
+  }
+  return relative.split(path.sep).join("/");
+}
+
+function mapSessionWorkspaceSource(source: string, workspaceRoot: string): string {
+  const normalized = normalizeMediaReferenceSource(source);
+  if (normalized !== "/workspace" && !normalized.startsWith("/workspace/")) {
+    return normalized;
+  }
+  const relative = normalized.slice("/workspace".length).replace(/^\/+/, "");
+  const candidate = path.resolve(workspaceRoot, ...relative.split("/").filter(Boolean));
+  if (resolveWorkspaceRelativePath(workspaceRoot, candidate) === null) {
+    throw assistantMediaPathDenied();
+  }
+  return candidate;
+}
+
+async function resolveEnterpriseAssistantMediaScope(params: {
+  config: OpenClawConfig | undefined;
+  principal: EnterpriseAssistantMediaPrincipal;
+  sessionKey: string | null;
+  expectedAgentId?: string;
+}): Promise<EnterpriseAssistantMediaScope | null> {
+  const sessionKey = params.sessionKey?.trim();
+  if (!params.config || !sessionKey) {
+    return null;
+  }
+  const account = getEnterpriseAccountById(params.principal.accountId);
+  const authSession = getActiveEnterpriseSession(params.principal.sessionId, {}, "user");
+  if (
+    !account?.enabled ||
+    account.mustChangePassword ||
+    account.profileId !== params.principal.profileId ||
+    account.role !== params.principal.accountRole ||
+    !authSession ||
+    authSession.accountId !== account.id
+  ) {
+    return null;
+  }
+  const config = params.config;
+  const client = createEnterpriseUserGatewayClient(account, params.principal.sessionId);
+  const target = resolveSessionSharingTarget({ cfg: config, sessionKey });
+  const filter = createSessionListEntryFilter({ cfg: config, client });
+  if (
+    !target ||
+    (filter && !filter(target.canonicalKey, target.entry)) ||
+    (params.expectedAgentId && target.agentId !== params.expectedAgentId) ||
+    !resolveEnterpriseUserAgentKey(config, account, target.agentId)
+  ) {
+    return null;
+  }
+  const workspaceRoot = resolveLocalSessionWorkspaceRoot({
+    cfg: config,
+    sessionKey: target.canonicalKey,
+    agentId: target.agentId,
+  });
+  if (!workspaceRoot) {
+    return null;
+  }
+  const accountAgentWorkspace = resolveEnterpriseWorkspacePath(account.profileId, target.agentId);
+  if (resolveWorkspaceRelativePath(accountAgentWorkspace, workspaceRoot) === null) {
+    return null;
+  }
+  return {
+    principal: params.principal,
+    sessionKey: target.canonicalKey,
+    agentId: target.agentId,
+    workspaceRoot: path.resolve(workspaceRoot),
+    target,
+  };
+}
+
+function collectTranscriptMediaSources(message: unknown): string[] {
+  if (!message || typeof message !== "object") {
+    return [];
+  }
+  const sources = new Set<string>();
+  for (const fact of readPersistedMediaFacts(message as object) ?? []) {
+    if (fact.path) {
+      sources.add(fact.path);
+    }
+    if (fact.url) {
+      sources.add(fact.url);
+    }
+  }
+  const content = (message as { content?: unknown }).content;
+  if (!Array.isArray(content)) {
+    return [...sources];
+  }
+  for (const rawBlock of content) {
+    if (!rawBlock || typeof rawBlock !== "object") {
+      continue;
+    }
+    const block = rawBlock as Record<string, unknown>;
+    for (const key of ["url", "openUrl", "path"] as const) {
+      if (typeof block[key] === "string") {
+        sources.add(block[key] as string);
+      }
+    }
+    const imageUrl = block.image_url;
+    if (typeof imageUrl === "string") {
+      sources.add(imageUrl);
+    } else if (
+      imageUrl &&
+      typeof imageUrl === "object" &&
+      typeof (imageUrl as { url?: unknown }).url === "string"
+    ) {
+      sources.add((imageUrl as { url: string }).url);
+    }
+    const source = block.source;
+    if (source && typeof source === "object") {
+      for (const value of [
+        (source as { url?: unknown }).url,
+        (source as { path?: unknown }).path,
+      ]) {
+        if (typeof value === "string") {
+          sources.add(value);
+        }
+      }
+    }
+  }
+  return [...sources];
+}
+
+async function sessionTranscriptReferencesSource(
+  scope: EnterpriseAssistantMediaScope,
+  source: string,
+  requestedPath: string,
+): Promise<boolean> {
+  const sessionId = scope.target.entry.sessionId;
+  if (!sessionId) {
     return false;
   }
+  const normalizedSource = normalizeMediaReferenceSource(source);
+  const read = await readSessionMessagesWithSourceAsync(
+    {
+      agentId: scope.agentId,
+      sessionEntry: scope.target.entry,
+      sessionId,
+      sessionKey: scope.sessionKey,
+      storePath: scope.target.storePath,
+    },
+    {
+      mode: "full",
+      reason: "enterprise assistant media ownership",
+      allowResetArchiveFallback: true,
+    },
+  );
+  for (const message of read.messages) {
+    for (const candidate of collectTranscriptMediaSources(message)) {
+      if (normalizeMediaReferenceSource(candidate) === normalizedSource) {
+        return true;
+      }
+      try {
+        const candidatePath = await resolveMediaReferenceLocalPath(candidate);
+        if (path.resolve(candidatePath) === path.resolve(requestedPath)) {
+          return true;
+        }
+      } catch {
+        // Malformed or stale transcript references never grant access.
+      }
+    }
+  }
+  return false;
+}
+
+async function prepareEnterpriseAssistantMediaSource(
+  scope: EnterpriseAssistantMediaScope,
+  source: string,
+): Promise<{ source: string; localRoots: readonly string[]; workspacePath?: string }> {
+  const mappedSource = mapSessionWorkspaceSource(source, scope.workspaceRoot);
+  const localPath = await resolveMediaReferenceLocalPath(mappedSource);
+  const workspacePath = resolveWorkspaceRelativePath(scope.workspaceRoot, localPath);
+  if (
+    workspacePath === null &&
+    !(await sessionTranscriptReferencesSource(scope, source, localPath))
+  ) {
+    throw assistantMediaPathDenied();
+  }
+  return {
+    source: mappedSource,
+    localRoots: [scope.workspaceRoot],
+    ...(workspacePath !== null ? { workspacePath } : {}),
+  };
 }
 
 function classifyAssistantMediaError(err: unknown): AssistantMediaAvailability {
@@ -363,6 +660,7 @@ function classifyAssistantMediaError(err: unknown): AssistantMediaAvailability {
 async function resolveAssistantMediaAvailability(
   source: string,
   localRoots: readonly string[],
+  workspacePath?: string,
 ): Promise<AssistantMediaAvailability> {
   try {
     const localPath = await resolveMediaReferenceLocalPath(source);
@@ -413,6 +711,7 @@ async function resolveAssistantMediaAvailability(
         ...(mimeType ? { mimeType } : {}),
         ...(playback ? { playback } : {}),
         sizeBytes,
+        ...(workspacePath !== undefined ? { workspacePath } : {}),
         ...probe,
       };
     } finally {
@@ -452,11 +751,17 @@ export async function handleControlUiAssistantMediaRequest(
     return true;
   }
   const isMetaRequest = url.searchParams.get("meta") === "1";
-  const hasValidMediaTicket =
-    !isMetaRequest && verifyAssistantMediaTicket(url.searchParams.get("mediaTicket"), source);
-  if (
-    !hasValidMediaTicket &&
-    !(await authorizeControlUiReadRequestOrReply({
+  const requestedSessionKey = url.searchParams.get("sessionKey")?.trim() || null;
+  const verifiedTicket = isMetaRequest
+    ? null
+    : verifyAssistantMediaTicket(url.searchParams.get("mediaTicket"), source);
+  if (verifiedTicket?.kind === "operator" && opts?.auth?.mode === "accounts") {
+    respondPlainText(res, 401, "Unauthorized");
+    return true;
+  }
+  let requestAuth: Awaited<ReturnType<typeof authorizeControlUiReadRequestOrReply>> = null;
+  if (!verifiedTicket) {
+    requestAuth = await authorizeControlUiReadRequestOrReply({
       req,
       res,
       auth: opts?.auth,
@@ -464,21 +769,106 @@ export async function handleControlUiAssistantMediaRequest(
       allowRealIpFallback: opts?.allowRealIpFallback,
       rateLimiter: opts?.rateLimiter,
       allowQueryToken: true,
-    }))
-  ) {
-    return true;
+    });
+    if (!requestAuth) {
+      return true;
+    }
   }
-  const localRoots = opts?.config
+
+  let enterpriseScope: EnterpriseAssistantMediaScope | null = null;
+  if (verifiedTicket?.kind === "enterprise") {
+    if (requestedSessionKey !== verifiedTicket.sessionKey) {
+      respondPlainText(res, 401, "Unauthorized");
+      return true;
+    }
+    enterpriseScope = await resolveEnterpriseAssistantMediaScope({
+      config: opts?.config,
+      principal: verifiedTicket.principal,
+      sessionKey: verifiedTicket.sessionKey,
+      expectedAgentId: verifiedTicket.agentId,
+    });
+    if (!enterpriseScope) {
+      respondPlainText(res, 401, "Unauthorized");
+      return true;
+    }
+  } else if (requestAuth?.authMethod === "accounts") {
+    const enterprisePrincipal =
+      typeof requestAuth.profileId === "string" &&
+      typeof requestAuth.enterpriseAccountId === "string" &&
+      (requestAuth.accountRole === "administrator" || requestAuth.accountRole === "employee") &&
+      typeof requestAuth.enterpriseSessionId === "string"
+        ? {
+            profileId: requestAuth.profileId,
+            accountId: requestAuth.enterpriseAccountId,
+            accountRole: requestAuth.accountRole,
+            sessionId: requestAuth.enterpriseSessionId,
+          }
+        : null;
+    enterpriseScope = enterprisePrincipal
+      ? await resolveEnterpriseAssistantMediaScope({
+          config: opts?.config,
+          principal: enterprisePrincipal,
+          sessionKey: requestedSessionKey,
+        })
+      : null;
+    if (!enterpriseScope) {
+      if (isMetaRequest) {
+        sendJson(res, 200, {
+          available: false,
+          code: "attachment-unavailable",
+          reason: "Attachment unavailable",
+        } satisfies AssistantMediaAvailability);
+      } else {
+        respondControlUiNotFound(res);
+      }
+      return true;
+    }
+  }
+
+  let effectiveSource = source;
+  let localRoots: readonly string[] = opts?.config
     ? getAgentScopedMediaLocalRoots(opts.config, opts.agentId)
     : getDefaultLocalRootsCore();
+  let workspacePath: string | undefined;
+  if (enterpriseScope) {
+    try {
+      const prepared = await prepareEnterpriseAssistantMediaSource(enterpriseScope, source);
+      effectiveSource = prepared.source;
+      localRoots = prepared.localRoots;
+      workspacePath = prepared.workspacePath;
+    } catch (error) {
+      if (isMetaRequest) {
+        sendJson(res, 200, classifyAssistantMediaError(error));
+      } else {
+        respondControlUiNotFound(res);
+      }
+      return true;
+    }
+  }
 
   if (isMetaRequest) {
-    const availability = await resolveAssistantMediaAvailability(source, localRoots);
+    const availability = await resolveAssistantMediaAvailability(
+      effectiveSource,
+      localRoots,
+      workspacePath,
+    );
     sendJson(
       res,
       200,
       availability.available
-        ? { ...availability, ...createAssistantMediaTicket(source) }
+        ? {
+            ...availability,
+            ...createAssistantMediaTicket(
+              source,
+              enterpriseScope
+                ? {
+                    principal: enterpriseScope.principal,
+                    sessionKey: enterpriseScope.sessionKey,
+                    agentId: enterpriseScope.agentId,
+                  }
+                : undefined,
+            ),
+          }
         : availability,
     );
     return true;
@@ -486,7 +876,7 @@ export async function handleControlUiAssistantMediaRequest(
 
   let byteStream: ReturnType<typeof createGatewayByteStream> | undefined;
   try {
-    const resolvedReference = await resolveMediaReferenceLocalPathInfo(source);
+    const resolvedReference = await resolveMediaReferenceLocalPathInfo(effectiveSource);
     const localPath = resolvedReference.path;
     await assertLocalMediaAllowed(localPath, localRoots);
     let opened = await openLocalFileSafely({ filePath: localPath });
@@ -844,19 +1234,18 @@ export async function handleControlUiHttpRequest(
 
   if (matchesControlUiBootstrapConfigPath(pathname, basePath)) {
     let pluginFrameGrants: readonly ControlUiPluginFrameGrantAck[] = [];
-    if (
-      !(await authorizeControlUiReadRequestOrReply({
-        req,
-        res,
-        auth: opts?.auth,
-        trustedProxies: opts?.trustedProxies,
-        allowRealIpFallback: opts?.allowRealIpFallback,
-        rateLimiter: opts?.rateLimiter,
-        onPluginFrameGrants: (grants) => {
-          pluginFrameGrants = grants;
-        },
-      }))
-    ) {
+    const requestAuth = await authorizeControlUiReadRequestOrReply({
+      req,
+      res,
+      auth: opts?.auth,
+      trustedProxies: opts?.trustedProxies,
+      allowRealIpFallback: opts?.allowRealIpFallback,
+      rateLimiter: opts?.rateLimiter,
+      onPluginFrameGrants: (grants) => {
+        pluginFrameGrants = grants;
+      },
+    });
+    if (!requestAuth) {
       return true;
     }
     if (req.method === "HEAD") {
@@ -891,7 +1280,10 @@ export async function handleControlUiHttpRequest(
           ? (resolveRuntimeServiceBuildId() ?? undefined)
           : undefined,
       devGitBranch: (await resolveDevInstallGitBranch()) ?? undefined,
-      localMediaPreviewRoots: [...getAgentScopedMediaLocalRoots(config ?? {}, assistantAgentId)],
+      localMediaPreviewRoots:
+        requestAuth.authMethod === "accounts"
+          ? []
+          : [...getAgentScopedMediaLocalRoots(config ?? {}, assistantAgentId)],
       embedSandbox:
         config?.gateway?.controlUi?.embedSandbox === "trusted"
           ? "trusted"

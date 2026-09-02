@@ -122,7 +122,7 @@ describe("ModelSetupPage Gateway reconnect ownership", () => {
     vi.restoreAllMocks();
   });
 
-  it("recovers when stale route data settles after mounting under a connected gateway", async () => {
+  it("starts detection when an embedded page mounts without route data", async () => {
     const { context, request, runtimeConfig } = createFixture();
     request.mockImplementation(async (method) =>
       method === "openclaw.setup.detect" ? detection : {},
@@ -131,15 +131,6 @@ describe("ModelSetupPage Gateway reconnect ownership", () => {
     const page = document.createElement("openclaw-model-setup-page") as TestModelSetupPage;
     provider.append(page);
     document.body.append(provider);
-    await page.updateComplete;
-
-    expect(request).not.toHaveBeenCalled();
-
-    page.routeData = {
-      state: { phase: "loading" },
-      connection: { client: null, hello: null, agentId: null },
-      firstRun: false,
-    };
     await page.updateComplete;
 
     await vi.waitFor(() => {

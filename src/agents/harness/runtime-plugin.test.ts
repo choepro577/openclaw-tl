@@ -105,6 +105,51 @@ describe("harness runtime plugins", () => {
     );
   });
 
+  it("allows implicit Codex selection to fall back when the plugin is disabled", async () => {
+    const config = {
+      models: {
+        providers: {
+          openai: {
+            api: "openai-responses",
+            baseUrl: "https://api.openai.com/v1",
+            models: [],
+          },
+        },
+      },
+      plugins: { entries: { codex: { enabled: false } } },
+    } satisfies OpenClawConfig;
+
+    await expect(
+      ensureSelectedAgentHarnessPlugin({
+        provider: "openai",
+        modelId: "gpt-5.5",
+        config,
+        workspaceDir: "/tmp/workspace",
+        pluginRegistry: createEmptyPluginRegistry(),
+      }),
+    ).resolves.toBeUndefined();
+  });
+
+  it("still rejects an authored Codex model policy when its registration is missing", async () => {
+    const config = {
+      agents: {
+        defaults: {
+          models: { "openai/gpt-5.5": { agentRuntime: { id: "codex" } } },
+        },
+      },
+    } satisfies OpenClawConfig;
+
+    await expect(
+      ensureSelectedAgentHarnessPlugin({
+        provider: "openai",
+        modelId: "gpt-5.5",
+        config,
+        workspaceDir: "/tmp/workspace",
+        pluginRegistry: createEmptyPluginRegistry(),
+      }),
+    ).rejects.toThrow('Agent harness runtime "codex" is unavailable');
+  });
+
   it("force-activates a default-disabled harness owner selected for a run", () => {
     const plan = resolveAgentRuntimePluginLoadPlan({
       config: {},

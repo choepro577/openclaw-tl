@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { requiresChatModelSetup } from "./chat-model-setup.ts";
+import { requiresChatModelSetup, resolveChatModelAvailabilityGate } from "./chat-model-setup.ts";
 
 describe("requiresChatModelSetup", () => {
   it("requires setup after the selected agent loads without a model route", () => {
@@ -34,5 +34,55 @@ describe("requiresChatModelSetup", () => {
         selectedAgentFound: false,
       }),
     ).toBe(false);
+  });
+});
+
+describe("resolveChatModelAvailabilityGate", () => {
+  it("does not treat redacted Enterprise model metadata as an unavailable Agent", () => {
+    expect(
+      resolveChatModelAvailabilityGate({
+        agentsLoaded: true,
+        enterpriseUserPresentation: true,
+        modelSetupRequired: true,
+        modelUnavailable: true,
+        selectedAgentFound: true,
+      }),
+    ).toEqual({
+      enterpriseUserUnavailable: false,
+      modelSetupRequired: false,
+      modelUnavailable: false,
+    });
+  });
+
+  it("keeps a missing projected Enterprise Agent unavailable", () => {
+    expect(
+      resolveChatModelAvailabilityGate({
+        agentsLoaded: true,
+        enterpriseUserPresentation: true,
+        modelSetupRequired: false,
+        modelUnavailable: false,
+        selectedAgentFound: false,
+      }),
+    ).toEqual({
+      enterpriseUserUnavailable: true,
+      modelSetupRequired: false,
+      modelUnavailable: true,
+    });
+  });
+
+  it("preserves the Control UI model gates", () => {
+    expect(
+      resolveChatModelAvailabilityGate({
+        agentsLoaded: true,
+        enterpriseUserPresentation: false,
+        modelSetupRequired: true,
+        modelUnavailable: true,
+        selectedAgentFound: true,
+      }),
+    ).toEqual({
+      enterpriseUserUnavailable: false,
+      modelSetupRequired: true,
+      modelUnavailable: true,
+    });
   });
 });

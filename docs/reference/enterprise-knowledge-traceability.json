@@ -1,0 +1,317 @@
+{
+  "schemaVersion": 1,
+  "feature": "enterprise-knowledge-zones",
+  "liveEvidencePolicy": "Paths are mandatory release-evidence destinations; listing a path does not claim that staging, screenshot, soak, canary or rehearsal evidence has already been collected.",
+  "columns": [
+    "requirement",
+    "role",
+    "surface",
+    "positiveCase",
+    "deniedCase",
+    "failureOrRestartCase",
+    "automatedTest",
+    "liveEvidence"
+  ],
+  "rows": [
+    {
+      "requirement": "Additive schema and concurrent lazy ensure",
+      "role": "system",
+      "surface": "state SQLite",
+      "positiveCase": "first open and concurrent open create all Knowledge tables without user_version change",
+      "deniedCase": "older reader does not require Knowledge tables",
+      "failureOrRestartCase": "candidate reopen and partial additive-column upgrade",
+      "automatedTest": "src/enterprise/database/enterprise-schema.test.ts",
+      "liveEvidence": "release/schema-ensure.log"
+    },
+    {
+      "requirement": "Zone revision CAS",
+      "role": "administrator",
+      "surface": "Admin API and UI",
+      "positiveCase": "create and update with current revision",
+      "deniedCase": "User audience cannot create/archive Zone",
+      "failureOrRestartCase": "stale revision returns STALE_REVISION",
+      "automatedTest": "src/enterprise/knowledge/knowledge-store.test.ts",
+      "liveEvidence": "release/admin-zone-drawer.png"
+    },
+    {
+      "requirement": "Admin/User HTTP role contract",
+      "role": "administrator,manager,curator,viewer",
+      "surface": "Admin and User Knowledge APIs",
+      "positiveCase": "Administrator creates and assigns; Curator creates a draft Source",
+      "deniedCase": "wrong audience, Viewer mutation, Manager Agent binding, Curator publish and foreign Zone access are denied",
+      "failureOrRestartCase": "same Idempotency-Key replays the exact successful create response",
+      "automatedTest": "src/enterprise/knowledge/enterprise-knowledge-http.test.ts",
+      "liveEvidence": "release/http-role-contract.log"
+    },
+    {
+      "requirement": "Manager grants are Administrator-only",
+      "role": "manager",
+      "surface": "User members API",
+      "positiveCase": "Manager replaces Viewer and Curator",
+      "deniedCase": "Manager cannot add or remove Manager",
+      "failureOrRestartCase": "concurrent member edit is revision-rejected",
+      "automatedTest": "src/enterprise/knowledge/knowledge-store.test.ts",
+      "liveEvidence": "release/user-manager-members.png"
+    },
+    {
+      "requirement": "Canonical Agent-Zone binding",
+      "role": "administrator",
+      "surface": "Admin bindings API",
+      "positiveCase": "shared and personal canonical resource keys bind",
+      "deniedCase": "Manager and Curator cannot bind",
+      "failureOrRestartCase": "unbind increments access revision",
+      "automatedTest": "src/enterprise/knowledge/knowledge-store.test.ts",
+      "liveEvidence": "release/admin-agent-bindings.png"
+    },
+    {
+      "requirement": "Resumable upload and writer fencing",
+      "role": "curator",
+      "surface": "Upload API and queue UI",
+      "positiveCase": "4 MiB chunks resume at exact offset and commit once",
+      "deniedCase": "wrong owner, oversize, wrong offset, invalid filename and quota fail",
+      "failureOrRestartCase": "claim lease fences concurrent writer; TTL expires staging",
+      "automatedTest": "src/enterprise/knowledge/upload-service.test.ts",
+      "liveEvidence": "release/upload-resume.webm"
+    },
+    {
+      "requirement": "Mutation idempotency",
+      "role": "administrator,manager,curator",
+      "surface": "create, upload, retry, publish and rollback APIs",
+      "positiveCase": "same key and body replay exact status and identities",
+      "deniedCase": "same key with another body returns IDEMPOTENCY_KEY_REUSED",
+      "failureOrRestartCase": "running claim prevents concurrent duplicate execution",
+      "automatedTest": "src/enterprise/knowledge/knowledge-store.test.ts",
+      "liveEvidence": "release/idempotency-contract.log"
+    },
+    {
+      "requirement": "Archived Zone hard purge",
+      "role": "administrator",
+      "surface": "Admin API and drawer",
+      "positiveCase": "typed slug plus current revision permanently removes the dependency graph",
+      "deniedCase": "active Zone, wrong confirmation, User audience and active jobs/uploads are blocked",
+      "failureOrRestartCase": "shared CAS blobs remain while another Source Version references the same hash",
+      "automatedTest": "src/enterprise/knowledge/knowledge-store.test.ts",
+      "liveEvidence": "release/admin-purge-confirmation.png"
+    },
+    {
+      "requirement": "Safe Office extraction with locators",
+      "role": "curator",
+      "surface": "DOCX, XLSX and PPTX ingestion",
+      "positiveCase": "heading/table/cell, sheet/range/formula and slide/shape locators survive",
+      "deniedCase": "macro, OLE, external relationship and DTD/XXE are rejected",
+      "failureOrRestartCase": "malformed or oversized archive becomes permanent parser failure",
+      "automatedTest": "extensions/document-extract/office-document-extractor.test.ts",
+      "liveEvidence": "release/office-fixture-preview.png"
+    },
+    {
+      "requirement": "OCR publication block",
+      "role": "curator,manager",
+      "surface": "image and scanned PDF pipeline",
+      "positiveCase": "permitted provider emits OCR locator and provenance",
+      "deniedCase": "local-only Zone cannot use remote OCR",
+      "failureOrRestartCase": "missing or failed OCR leaves needs_ocr and publish is blocked",
+      "automatedTest": "src/enterprise/knowledge/ingestion.test.ts",
+      "liveEvidence": "release/ocr-needs-provider.png"
+    },
+    {
+      "requirement": "Bounded SSRF-safe URL crawl",
+      "role": "curator",
+      "surface": "URL ingestion",
+      "positiveCase": "exact page or same-origin depth-two crawl",
+      "deniedCase": "robots denial, cross-origin link and unsafe IP are not fetched",
+      "failureOrRestartCase": "redirect and child failure remain bounded and safe",
+      "automatedTest": "src/enterprise/knowledge/url-crawler.test.ts and src/media/fetch.ssrf.test.ts",
+      "liveEvidence": "release/url-crawl-preview.png"
+    },
+    {
+      "requirement": "Immutable per-Zone generation",
+      "role": "system",
+      "surface": "Zone index backend",
+      "positiveCase": "private FTS generation returns exact locator",
+      "deniedCase": "another Zone index is never opened as a candidate source",
+      "failureOrRestartCase": "missing or corrupt derived index is rebuildable",
+      "automatedTest": "src/enterprise/knowledge/index-store.test.ts",
+      "liveEvidence": "release/index-doctor.log"
+    },
+    {
+      "requirement": "Hybrid ranking contract",
+      "role": "agent,curator",
+      "surface": "published search and candidate preview",
+      "positiveCase": "FTS/vector RRF, title boost, dedup, diversity and source cap",
+      "deniedCase": "provider/model/dimension mismatch cannot use vector results",
+      "failureOrRestartCase": "query embedding failure falls back to FTS with warning",
+      "automatedTest": "src/enterprise/knowledge/index-store.test.ts",
+      "liveEvidence": "release/search-preview.png"
+    },
+    {
+      "requirement": "Atomic publish and rollback",
+      "role": "manager",
+      "surface": "Admin/User publication API and UI",
+      "positiveCase": "current candidate flips active pointer atomically; verified old publication rolls back",
+      "deniedCase": "Curator cannot publish; degraded candidate requires reason",
+      "failureOrRestartCase": "stale source-set and concurrent revision fail before flip",
+      "automatedTest": "src/enterprise/knowledge/knowledge-store.test.ts",
+      "liveEvidence": "release/publication-history.png"
+    },
+    {
+      "requirement": "Session, entitlement and binding authority",
+      "role": "agent",
+      "surface": "enterprise_knowledge_search/get",
+      "positiveCase": "valid User session plus Agent entitlement plus binding searches active publication",
+      "deniedCase": "membership alone grants no Agent access",
+      "failureOrRestartCase": "pre-return revision check blocks concurrent revoke",
+      "automatedTest": "src/enterprise/knowledge/authority.test.ts",
+      "liveEvidence": "release/agent-authority.log"
+    },
+    {
+      "requirement": "Evidence grounding",
+      "role": "agent",
+      "surface": "Agent tool and terminal guard",
+      "positiveCase": "search reference is followed by authorized get",
+      "deniedCase": "search excerpt is withheld and signed citation tamper fails",
+      "failureOrRestartCase": "final answer without get requests one revision; zero hit uses fixed fallback",
+      "automatedTest": "src/agents/tools/enterprise-knowledge-tools.test.ts and src/enterprise/knowledge/authority.test.ts",
+      "liveEvidence": "release/structured-citation.png"
+    },
+    {
+      "requirement": "Partial multi-Zone failure",
+      "role": "agent",
+      "surface": "enterprise_knowledge_search",
+      "positiveCase": "healthy authorized Zones still return results",
+      "deniedCase": "foreign and unbound Zones are absent",
+      "failureOrRestartCase": "partial true and unavailable coverage are explicit",
+      "automatedTest": "src/enterprise/knowledge/authority.test.ts",
+      "liveEvidence": "release/partial-search.log"
+    },
+    {
+      "requirement": "Historical citation authorization",
+      "role": "viewer,agent",
+      "surface": "citation get, preview and download",
+      "positiveCase": "exact Source Version and locator open while current access permits",
+      "deniedCase": "tampered, purged or currently unauthorized citation returns not found",
+      "failureOrRestartCase": "historical transcript chip survives but click rechecks binding",
+      "automatedTest": "src/enterprise/knowledge/index-store.test.ts and src/enterprise/knowledge/authority.test.ts",
+      "liveEvidence": "release/historical-citation.png"
+    },
+    {
+      "requirement": "Audit privacy",
+      "role": "administrator",
+      "surface": "Knowledge activity API and audit store",
+      "positiveCase": "success, denial and failure include safe correlation metadata",
+      "deniedCase": "User audience cannot enumerate global audit",
+      "failureOrRestartCase": "raw query, chunk, embedding, credential and signed citation are absent",
+      "automatedTest": "src/enterprise/knowledge/authority.test.ts and src/enterprise/audit/audit-store.test.ts",
+      "liveEvidence": "release/audit-redaction.json"
+    },
+    {
+      "requirement": "Operational doctor",
+      "role": "operator,administrator",
+      "surface": "Admin doctor API",
+      "positiveCase": "artifact permissions, index checksum/integrity, jobs and search percentiles report without corpus data",
+      "deniedCase": "User audience cannot call doctor and filesystem paths are absent",
+      "failureOrRestartCase": "missing artifact and mismatched index checksum are explicit",
+      "automatedTest": "src/enterprise/knowledge/knowledge-doctor.test.ts and src/enterprise/knowledge/index-store.test.ts",
+      "liveEvidence": "release/index-doctor.log"
+    },
+    {
+      "requirement": "Responsive accessible UI",
+      "role": "administrator,manager,curator,viewer",
+      "surface": "Admin /admin/knowledge and User /app/knowledge",
+      "positiveCase": "role-specific states, keyboard, focus, progress and aria-live work",
+      "deniedCase": "hidden actions remain server-denied by direct request",
+      "failureOrRestartCase": "offline, reload, stale revision and durable job state are visible",
+      "automatedTest": "ui/src/pages/enterprise-admin/pages/knowledge-page.test.ts and ui/src/pages/enterprise-user/pages/knowledge/knowledge-page.test.ts",
+      "liveEvidence": "release/ui-390-768-1100-1440-light-dark/"
+    },
+    {
+      "requirement": "Backup and restore",
+      "role": "operator",
+      "surface": "shared DB, artifacts and derived generations",
+      "positiveCase": "same-epoch DB and artifact restore preserves publication pointers",
+      "deniedCase": "checksum mismatch cannot be promoted",
+      "failureOrRestartCase": "derived indexes rebuild with no Source Version mutation",
+      "automatedTest": "src/commands/backup.create-verify.test.ts, src/commands/backup-verify.test.ts and src/enterprise/knowledge/knowledge-doctor.test.ts",
+      "liveEvidence": "release/backup-restore-rehearsal.log"
+    },
+    {
+      "requirement": "Load and graceful shutdown",
+      "role": "system",
+      "surface": "Gateway worker and retrieval",
+      "positiveCase": "one million chunks and twenty Zones stay within FD/RAM budgets",
+      "deniedCase": "queue and upload quotas apply pressure",
+      "failureOrRestartCase": "leases recover after crash at every stage",
+      "automatedTest": "src/enterprise/knowledge/worker-restart.test.ts; one-million-chunk capacity is a mandatory pre-release environment test",
+      "liveEvidence": "release/performance-and-soak-report.json"
+    },
+    {
+      "requirement": "Shared Markdown graph primitives and artifact v1/v2 compatibility",
+      "role": "system",
+      "surface": "knowledge-graph-core, memory-wiki and ingestion",
+      "positiveCase": "wikilink, Markdown link, alias and backlink normalization have one canonical implementation and v2 preserves locators",
+      "deniedCase": "inline-code and fenced-code links are ignored; v1 artifacts are never rewritten",
+      "failureOrRestartCase": "malformed markup remains plain untrusted content",
+      "automatedTest": "packages/knowledge-graph-core/src/index.test.ts, extensions/memory-wiki/src/markdown.test.ts and src/enterprise/knowledge/ingestion.test.ts",
+      "liveEvidence": "release/graph-parser-parity.log"
+    },
+    {
+      "requirement": "Immutable per-Zone graph generation and risk review",
+      "role": "curator,manager",
+      "surface": "generation v2, review and manual-edge APIs",
+      "positiveCase": "deterministic/semantic/enriched graph retains evidence and review/manual overlays rebuild a new candidate",
+      "deniedCase": "proposed, rejected, orphan and broken-evidence edges never enter active traversal/export",
+      "failureOrRestartCase": "stale refs/evidence fingerprints and build revisions fail closed",
+      "automatedTest": "src/enterprise/knowledge/graph-index.test.ts and src/enterprise/knowledge/graph-enrichment-provider.test.ts",
+      "liveEvidence": "release/graph-candidate-review.png"
+    },
+    {
+      "requirement": "Graph HTTP ACL and opaque references",
+      "role": "administrator,manager,curator,viewer",
+      "surface": "Admin/User graph routes",
+      "positiveCase": "Viewer reads active, Curator reviews candidate, Manager exports, Administrator changes graph policy",
+      "deniedCase": "Viewer candidate, non-Admin settings, Curator export and foreign/stale refs are denied",
+      "failureOrRestartCase": "generation change invalidates node and edge references with 404",
+      "automatedTest": "src/enterprise/knowledge/enterprise-knowledge-http.test.ts and src/enterprise/knowledge/graph-index.test.ts",
+      "liveEvidence": "release/graph-role-matrix.log"
+    },
+    {
+      "requirement": "Bounded Agent graph expansion",
+      "role": "agent",
+      "surface": "enterprise_knowledge_search",
+      "positiveCase": "accepted graph adds evidence behind hybrid seeds while exact get remains mandatory",
+      "deniedCase": "candidate/rejected edges and chained similar edges cannot expand retrieval",
+      "failureOrRestartCase": "1.5-second budget returns hybrid results with partial warning and authority is rechecked before return",
+      "automatedTest": "src/enterprise/knowledge/graph-index.test.ts and src/enterprise/knowledge/authority.test.ts",
+      "liveEvidence": "release/graph-retrieval-benchmark.json"
+    },
+    {
+      "requirement": "Role-aware accessible Graph View",
+      "role": "administrator,manager,curator,viewer",
+      "surface": "Admin and User Graph tab",
+      "positiveCase": "Active/Candidate/Compare, filters, inspector, review, manual relation and quick-open work by role",
+      "deniedCase": "role-hidden controls remain denied by direct HTTP request",
+      "failureOrRestartCase": "stale requests cancel and WebGL/context loss/reduced motion use synchronized list fallback with renderer cleanup",
+      "automatedTest": "ui/src/pages/knowledge/knowledge-graph-view.test.ts and portal Knowledge page tests",
+      "liveEvidence": "release/graph-ui-390-768-1100-1440-light-dark/"
+    },
+    {
+      "requirement": "Safe Obsidian-compatible export",
+      "role": "manager,administrator",
+      "surface": "Graph export API and ZIP",
+      "positiveCase": "active accepted graph exports Markdown, wikilinks, backlinks, report, manifest and checksum",
+      "deniedCase": "raw binary, ACL/account/Agent IDs, credentials, embeddings, signed refs, server paths and plugins are absent",
+      "failureOrRestartCase": "size cap fails safely; private archive expires and permission is rechecked on download",
+      "automatedTest": "src/enterprise/knowledge/knowledge-graph-export.test.ts",
+      "liveEvidence": "release/obsidian-export-opened.png"
+    },
+    {
+      "requirement": "Graph staged rollout and reversible operations",
+      "role": "operator,administrator",
+      "surface": "feature flags, doctor, canary and rollback",
+      "positiveCase": "one Zone progresses off to shadow to on with health/capacity evidence",
+      "deniedCase": "existing Zones are never bulk rebuilt or bulk published",
+      "failureOrRestartCase": "agentExpansion off and publication rollback preserve FTS/vector/search/get",
+      "automatedTest": "src/enterprise/knowledge/knowledge-doctor.test.ts, worker restart tests and config tests",
+      "liveEvidence": "release/graph-72h-soak-24h-canary.json"
+    }
+  ]
+}

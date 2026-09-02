@@ -126,6 +126,31 @@ export function closeSlot(layout: SidebarLayout, slot: SidebarSlotId): SidebarLa
   return next;
 }
 
+/** Keeps a presentation-scoped subset without mutating the persisted layout. */
+export function retainSidebarSlots(
+  layout: SidebarLayout,
+  allowedSlots: readonly SidebarSlotId[],
+): SidebarLayout {
+  const allowed = new Set(allowedSlots);
+  const next = cloneLayout(layout);
+  next.columns = next.columns.flatMap((column) => {
+    const panels = column.panels.filter((panel) => allowed.has(panel.slot));
+    if (panels.length === 0) {
+      return [];
+    }
+    return [
+      {
+        ...column,
+        panels,
+        activePanelId: panels.some((panel) => panel.id === column.activePanelId)
+          ? column.activePanelId
+          : panels[0]!.id,
+      },
+    ];
+  });
+  return next;
+}
+
 export function activatePanel(layout: SidebarLayout, panelId: string): SidebarLayout {
   const next = cloneLayout(layout);
   const column = next.columns.find((entry) => entry.panels.some((panel) => panel.id === panelId));

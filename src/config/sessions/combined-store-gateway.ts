@@ -46,6 +46,8 @@ type GatewaySessionEntryProjection = NonNullable<SessionEntryListScope["projecti
 type GatewaySessionStoreOptions = {
   agentId?: string;
   configuredAgentsOnly?: boolean;
+  /** Restrict durable discovery to configured Agent stores before loading any rows. */
+  strictConfiguredAgentStoresOnly?: boolean;
   includeIncognito?: boolean;
   projection?: SessionEntryListScope["projection"];
 };
@@ -301,9 +303,6 @@ function resolveGatewaySessionStoreTargets(
     typeof opts.agentId === "string" && opts.agentId.trim()
       ? normalizeAgentId(opts.agentId)
       : undefined;
-  if (opts.configuredAgentsOnly === true && !requestedAgentId) {
-    return resolvePreparedConfiguredSessionStoreTargets(cfg, opts.includeIncognito !== false);
-  }
   const defaultAgentId = normalizeAgentId(resolveSessionStoreCompatibilityAgentId(cfg));
   const incognitoTargets =
     opts.includeIncognito === false
@@ -311,6 +310,36 @@ function resolveGatewaySessionStoreTargets(
       : listOpenIncognitoAgentDatabases().filter(
           (target) => !requestedAgentId || target.agentId === requestedAgentId,
         );
+
+  if (opts.strictConfiguredAgentStoresOnly === true && !requestedAgentId) {
+    const configuredIds = listConfiguredSessionStoreAgentIds(cfg);
+    const configuredAgentIds = new Set(configuredIds);
+    const strictIncognitoTargets = incognitoTargets.filter((target) =>
+      configuredAgentIds.has(normalizeAgentId(target.agentId)),
+    );
+    const durableTargets = dedupeSessionStoreTargetsBySqliteTarget(
+      configuredIds.map((agentId) => ({
+        agentId,
+        storePath: resolveSessionStorePathCore(storeConfig, { agentId }),
+      })),
+      {
+        defaultAgentId,
+        onDiagnostic: (diagnostic) => diagnostics.push(diagnostic.message),
+      },
+    );
+    return {
+      configuredAgentIds,
+      defaultAgentId,
+      diagnostics,
+      durableTargets,
+      incognitoTargets: strictIncognitoTargets,
+      storeConfig,
+    };
+  }
+
+  if (opts.configuredAgentsOnly === true && !requestedAgentId) {
+    return resolvePreparedConfiguredSessionStoreTargets(cfg, opts.includeIncognito !== false);
+  }
 
   if (storeConfig && !isStorePathTemplate(storeConfig)) {
     const ownerIds = [

@@ -97,8 +97,20 @@ const readPreparedGatewayModelCatalogOwnerSnapshot: ReadPreparedGatewayModelCata
   };
 
 registerGatewayModelCatalogPrivateAccess(loadGatewayModelCatalogSnapshot, {
-  loadDeferred: (params) => loadPreparedGatewayModelCatalogSnapshot(params),
-  readPrepared: readPreparedGatewayModelCatalogOwnerSnapshot,
+  loadDeferred: (params = {}) => {
+    const { config, ...loadParams } = params;
+    return loadPreparedGatewayModelCatalogSnapshot({
+      ...loadParams,
+      ...(config ? { getConfig: () => config } : {}),
+    });
+  },
+  readPrepared: (params = {}) => {
+    const { config, ...loadParams } = params;
+    return readPreparedGatewayModelCatalogOwnerSnapshot({
+      ...loadParams,
+      ...(config ? { getConfig: () => config } : {}),
+    });
+  },
 });
 
 function formatRuntimeGatewayAuthTokenWarning(): string {

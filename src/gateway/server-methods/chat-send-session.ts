@@ -12,6 +12,7 @@ import { isIncognitoSessionKey } from "../../routing/session-key.js";
 import { resolveMissingAgentHarnessSessionError } from "../../sessions/agent-harness-session-key.js";
 import { isBrowserOperatorUiClient } from "../../utils/message-channel.js";
 import { authorizeGatewaySessionCreation } from "../operator-role-policy.js";
+import { preserveGatewayRequestScopedRuntimeConfig } from "../request-runtime-config.js";
 import { pendingChatSendDedupeKey } from "../server-shared.js";
 import {
   loadSessionEntry,
@@ -75,7 +76,14 @@ function loadChatSendSessionContext(params: {
     },
   );
   const sessionLoadMs = roundedChatSendTimingMs(performance.now() - sessionLoadStartedAtMs);
-  const { cfg, storePath, entry, canonicalKey: sessionKey, legacyKey } = sessionLoadResult;
+  const {
+    cfg: loadedConfig,
+    storePath,
+    entry,
+    canonicalKey: sessionKey,
+    legacyKey,
+  } = sessionLoadResult;
+  const cfg = preserveGatewayRequestScopedRuntimeConfig(runtimeConfig, loadedConfig);
   const expectedSessionRoutingContract = normalizeOptionalChatText(
     p.expectedSessionRoutingContract,
   );

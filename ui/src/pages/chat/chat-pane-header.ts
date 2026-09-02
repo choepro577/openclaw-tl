@@ -164,6 +164,91 @@ export abstract class ChatPaneHeader extends ChatPaneDiscussion {
     workspaceGit: boolean,
     sidebarLayout?: SidebarLayout,
   ) {
+    if (this.context.presentation === "enterprise-user") {
+      const sidePanelOpen = sidebarLayout?.open === true;
+      const filesLabel = t(
+        sessionWorkspace.collapsed
+          ? "chat.workspaceFiles.showFiles"
+          : "chat.workspaceFiles.collapse",
+      );
+      const filesAction = html`<openclaw-tooltip .content=${filesLabel}>
+        <button
+          class="btn btn--ghost btn--icon chat-icon-btn chat-workspace-panel-toggle"
+          type="button"
+          aria-label=${filesLabel}
+          aria-pressed=${String(!sessionWorkspace.collapsed)}
+          @click=${sessionWorkspace.onToggleCollapsed}
+        >
+          ${icons.fileText}
+        </button>
+      </openclaw-tooltip>`;
+      const browserAction = sessionWorkspace.onToggleBrowser
+        ? html`<openclaw-tooltip .content=${t("browser.toggle")}>
+            <button
+              class="btn btn--ghost btn--icon chat-icon-btn chat-browser-panel-toggle"
+              type="button"
+              aria-label=${t("browser.toggle")}
+              @click=${sessionWorkspace.onToggleBrowser}
+            >
+              ${icons.globe}
+            </button>
+          </openclaw-tooltip>`
+        : nothing;
+      const sidePanelLabel = t(sidePanelOpen ? "chat.sidePanel.minimize" : "chat.sidePanel.label");
+      const sidePanelAction = html`<openclaw-tooltip .content=${sidePanelLabel}>
+        <button
+          class="btn btn--ghost btn--icon chat-icon-btn chat-side-panel-toggle"
+          type="button"
+          aria-label=${sidePanelLabel}
+          aria-expanded=${String(sidePanelOpen)}
+          @click=${() => this.setChatSidePanelOpen(!sidePanelOpen, sidebarLayout)}
+        >
+          ${sidePanelOpen ? icons.panelRightClose : icons.panelRightOpen}
+        </button>
+      </openclaw-tooltip>`;
+      return renderChatPaneHeader({
+        paneId: this.paneId,
+        narrow: this.narrow,
+        // Enterprise User shell owns its mobile navigation and intentionally
+        // omits the Control UI command palette entry point.
+        mergedChrome: false,
+        navDrawerOpen: this.navDrawerOpen,
+        title: this.paneTitle,
+        session: row,
+        catalog,
+        editing: false,
+        renameValue: "",
+        workspaceRoot: null,
+        workspaceLabel: null,
+        workspaceIcon: null,
+        parentSession: null,
+        branch: null,
+        branches: [],
+        branchSwitchDisabledReason: null,
+        platform: null,
+        canReveal: false,
+        copiedAction: null,
+        renameDisabledReason: " ",
+        panelActions: html`${filesAction}${browserAction}${sidePanelAction}`,
+        discussionAction: nothing,
+        diffAction: nothing,
+        backgroundTasksAction: nothing,
+        sessionRailAction: nothing,
+        workspaceAction: nothing,
+        presence: nothing,
+        faceControl: nothing,
+        sharingControl: nothing,
+        sessionMenuAction: nothing,
+        onBeginRename: () => undefined,
+        onRenameInput: () => undefined,
+        onCommitRename: () => undefined,
+        onCancelRename: () => undefined,
+        onMenuOpenChange: () => undefined,
+        onMenuAction: () => undefined,
+        onOpenParentSession: () => undefined,
+        onBranchSelect: () => undefined,
+      });
+    }
     const board = this.resolveBoardView();
     const canChangeBoardDock = board.hasBoard && board.provider.canMutate;
     const workspace = resolveChatPaneWorkspace({

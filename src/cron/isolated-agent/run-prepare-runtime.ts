@@ -3,6 +3,7 @@ import { normalizeOptionalString } from "@openclaw/normalization-core/string-coe
 import { retireSessionMcpRuntime } from "../../agents/agent-bundle-mcp-tools.js";
 import { HEARTBEAT_TOKEN } from "../../auto-reply/tokens.js";
 import type { CliDeps } from "../../cli/outbound-send-deps.js";
+import type { SessionEntry } from "../../config/sessions.js";
 import type { OpenClawConfig } from "../../config/types.openclaw.js";
 import { createLazyImportLoader } from "../../shared/lazy-promise.js";
 import type {
@@ -28,6 +29,7 @@ export type RunCronAgentTurnParams = {
   sessionKey: string;
   agentId?: string;
   lane?: string;
+  createdActor?: SessionEntry["createdActor"];
 };
 
 export function resolveCronAgentTurnMessage(input: RunCronAgentTurnParams): string {

@@ -35,6 +35,7 @@ type FetchMediaResult = {
   buffer: Buffer;
   contentType?: string;
   fileName?: string;
+  finalUrl?: string;
 };
 
 /** Saved media record enriched with the best remote filename candidate. */
@@ -768,6 +769,7 @@ async function readRemoteMediaBufferOnce(options: FetchMediaOptions): Promise<Fe
       buffer,
       contentType: contentType ?? undefined,
       fileName,
+      finalUrl,
     };
   } finally {
     if (release) {

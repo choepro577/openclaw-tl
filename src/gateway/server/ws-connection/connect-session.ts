@@ -25,6 +25,7 @@ import {
   ensureProfileForEmail,
   ensureProfileForTailscaleIdentity,
   getUserProfileDisplay,
+  getUserProfileListItem,
 } from "../../../state/user-profiles.js";
 import {
   isBrowserCopilotClient,
@@ -207,11 +208,13 @@ export async function attachAuthenticatedGatewayConnect(
   let authenticatedUserProfile: GatewayWsClient["authenticatedUserProfile"];
   if (authenticatedUserId && (!resolveAuthenticatedGitHubIdentity || rolesConfigured)) {
     try {
-      const profile = resolveAuthenticatedGitHubIdentity
-        ? await resolveAuthenticatedGitHubIdentity()
-        : authResult.tailscaleIdentity
-          ? ensureProfileForTailscaleIdentity(authResult.tailscaleIdentity)
-          : ensureProfileForEmail(authenticatedUserId);
+      const profile = authResult.profileId
+        ? getUserProfileListItem(authResult.profileId)
+        : resolveAuthenticatedGitHubIdentity
+          ? await resolveAuthenticatedGitHubIdentity()
+          : authResult.tailscaleIdentity
+            ? ensureProfileForTailscaleIdentity(authResult.tailscaleIdentity)
+            : ensureProfileForEmail(authenticatedUserId);
       const profileId = "profileId" in profile ? profile.profileId : profile.id;
       const display = getUserProfileDisplay(profileId);
       // User edits become visible after reconnect; detached provider-avatar adoption refreshes below.
@@ -238,6 +241,15 @@ export async function attachAuthenticatedGatewayConnect(
     identityScopes: context.configSnapshot.gateway?.auth?.identityScopes,
     upgradeReq: context.handler.upgradeReq,
   });
+  const accountScopedScopes =
+    authResult.method === "accounts" && authResult.accountRole === "employee"
+      ? effectiveScopes.scopes.filter(
+          (scope) =>
+            scope === "operator.read" ||
+            scope === "operator.write" ||
+            scope === "operator.questions",
+        )
+      : effectiveScopes.scopes;
   const rolePolicy =
     role === "operator" && !sharedSecretOperatorOwner
       ? resolveOperatorRolePolicyForProfile(
@@ -249,10 +261,10 @@ export async function attachAuthenticatedGatewayConnect(
     role === "operator" && authenticatedUserId && rolesConfigured && !authenticatedUserProfile
       ? []
       : rolePolicy
-        ? effectiveScopes.scopes.filter((scope) =>
+        ? accountScopedScopes.filter((scope) =>
             rolePolicy.scopes.some((allowedScope) => allowedScope === scope),
           )
-        : effectiveScopes.scopes;
+        : accountScopedScopes;
   state.scopes = scopes;
   connectParams.scopes = scopes;
   const addedIdentityScopes = effectiveScopes.addedIdentityScopes.filter((scope) =>
@@ -378,7 +390,8 @@ export async function attachAuthenticatedGatewayConnect(
     isLocalClient ||
     isTrustedApprovalRuntime ||
     trustedAgentRuntimeIdentity ||
-    sharedSecretOperatorOwner
+    sharedSecretOperatorOwner ||
+    authResult.enterpriseSessionId
       ? {
           ...(isLocalClient ? { isLocalClient: true as const } : {}),
           ...(isTrustedApprovalRuntime ? { approvalRuntime: true } : {}),
@@ -386,6 +399,18 @@ export async function attachAuthenticatedGatewayConnect(
             ? { agentRuntimeIdentity: trustedAgentRuntimeIdentity }
             : {}),
           ...(sharedSecretOperatorOwner ? { operatorRoleActor: { kind: "system" as const } } : {}),
+          ...(authResult.enterpriseSessionId &&
+          authResult.enterpriseAccountId &&
+          authResult.accountRole
+            ? {
+                enterpriseSession: {
+                  sessionId: authResult.enterpriseSessionId,
+                  audience: "user" as const,
+                  accountId: authResult.enterpriseAccountId,
+                  accountRole: authResult.accountRole,
+                },
+              }
+            : {}),
         }
       : undefined;
   const prepareLocalUserIngress = (profile = authenticatedUserProfile) =>

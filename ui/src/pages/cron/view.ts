@@ -72,6 +72,9 @@ type CronProps = {
   loading: boolean;
   /** Canonical gateway capability for every mutation-capable cron control. */
   canManage: boolean;
+  /** Enterprise user portal jobs have an intentionally narrower authoring contract. */
+  enterpriseRestricted: boolean;
+  enterpriseAgentOptions: Array<{ value: string; label: string }>;
   jobsLoadingMore: boolean;
   status: CronStatus | null;
   failingCount: number | null;
@@ -425,7 +428,9 @@ export function renderCron(props: CronProps) {
   const mode: CronPanelMode = props.editingJob ? "job" : props.createOpen ? "create" : "overview";
   return html`
     ${mode === "overview" ? renderListView(props) : renderDetailView(props, mode)}
-    ${renderSuggestionList("cron-agent-suggestions", props.agentSuggestions)}
+    ${props.enterpriseRestricted
+      ? nothing
+      : renderSuggestionList("cron-agent-suggestions", props.agentSuggestions)}
     ${renderSuggestionList("cron-thinking-suggestions", props.thinkingSuggestions)}
     ${renderSuggestionList("cron-tz-suggestions", props.timezoneSuggestions)}
     ${renderSuggestionList("cron-delivery-to-suggestions", props.deliveryToSuggestions)}
@@ -1362,7 +1367,7 @@ function renderPromptSection(
         `,
   });
   const actionLabel = t("cron.form.action");
-  const actionRow = ctx.payloadLocked
+  const actionRow = props.enterpriseRestricted
     ? renderFieldRow({
         label: actionLabel,
         controlId: inputIdForField("payloadKind"),
@@ -1370,18 +1375,31 @@ function renderPromptSection(
           <input
             id=${inputIdForField("payloadKind")}
             class="settings-input"
-            .value=${lockedPayloadLabel}
+            .value=${t("cron.form.agentTurn")}
             readonly
           />
         `,
       })
-    : renderCronSelectField(props, "payloadKind", {
-        label: actionLabel,
-        options: [
-          { value: "systemEvent", label: t("cron.form.systemEvent") },
-          { value: "agentTurn", label: t("cron.form.agentTurn") },
-        ],
-      });
+    : ctx.payloadLocked
+      ? renderFieldRow({
+          label: actionLabel,
+          controlId: inputIdForField("payloadKind"),
+          control: html`
+            <input
+              id=${inputIdForField("payloadKind")}
+              class="settings-input"
+              .value=${lockedPayloadLabel}
+              readonly
+            />
+          `,
+        })
+      : renderCronSelectField(props, "payloadKind", {
+          label: actionLabel,
+          options: [
+            { value: "systemEvent", label: t("cron.form.systemEvent") },
+            { value: "agentTurn", label: t("cron.form.agentTurn") },
+          ],
+        });
   const modelLabel = t("cron.form.model");
   const modelError = props.fieldErrors.payloadModel;
   const modelOptions = uniqueStrings(props.modelSuggestions).map((value) => {
@@ -1427,6 +1445,34 @@ function renderPromptSection(
 function renderGeneralSection(props: CronProps) {
   const sessionTarget = props.form.sessionTarget;
   const knownSessionTarget = sessionTarget === "main" || sessionTarget === "isolated";
+  const agentField =
+    props.enterpriseRestricted && props.editingJob
+      ? renderFieldRow({
+          label: t("cron.form.agentId"),
+          controlId: inputIdForField("agentId"),
+          help: t("cron.form.agentHelp"),
+          control: html`
+            <input
+              id=${inputIdForField("agentId")}
+              class="settings-input"
+              .value=${props.form.agentId}
+              readonly
+            />
+          `,
+        })
+      : props.enterpriseRestricted
+        ? renderCronSelectField(props, "agentId", {
+            label: t("cron.form.agentId"),
+            help: t("cron.form.agentHelp"),
+            options: props.enterpriseAgentOptions,
+          })
+        : renderCronInputField(props, "agentId", {
+            label: t("cron.form.agentId"),
+            help: t("cron.form.agentHelp"),
+            list: "cron-agent-suggestions",
+            disabled: props.form.clearAgent,
+            placeholder: t("cron.form.agentPlaceholder"),
+          });
   return renderSettingsSection(
     { title: t("cron.detail.generalSection") },
     html`
@@ -1436,22 +1482,30 @@ function renderGeneralSection(props: CronProps) {
         errorKey: "name",
         placeholder: t("cron.form.namePlaceholder"),
       })}
-      ${renderCronInputField(props, "agentId", {
-        label: t("cron.form.agentId"),
-        help: t("cron.form.agentHelp"),
-        list: "cron-agent-suggestions",
-        disabled: props.form.clearAgent,
-        placeholder: t("cron.form.agentPlaceholder"),
-      })}
-      ${renderCronSelectField(props, "sessionTarget", {
-        label: t("cron.form.runsIn"),
-        help: t("cron.form.sessionHelp"),
-        options: [
-          { value: "main", label: t("cron.form.mainSession") },
-          { value: "isolated", label: t("cron.form.isolatedSession") },
-          ...(knownSessionTarget ? [] : [{ value: sessionTarget, label: sessionTarget }]),
-        ],
-      })}
+      ${agentField}
+      ${props.enterpriseRestricted
+        ? renderFieldRow({
+            label: t("cron.form.runsIn"),
+            controlId: inputIdForField("sessionTarget"),
+            help: t("cron.form.sessionHelp"),
+            control: html`
+              <input
+                id=${inputIdForField("sessionTarget")}
+                class="settings-input"
+                .value=${t("cron.form.isolatedSession")}
+                readonly
+              />
+            `,
+          })
+        : renderCronSelectField(props, "sessionTarget", {
+            label: t("cron.form.runsIn"),
+            help: t("cron.form.sessionHelp"),
+            options: [
+              { value: "main", label: t("cron.form.mainSession") },
+              { value: "isolated", label: t("cron.form.isolatedSession") },
+              ...(knownSessionTarget ? [] : [{ value: sessionTarget, label: sessionTarget }]),
+            ],
+          })}
     `,
   );
 }
@@ -1684,7 +1738,7 @@ function renderAdvanced(
         </summary>
         <p class="settings-section__desc">${t("cron.form.advancedHelp")}</p>
         <div class="settings-group">
-          ${renderTriggerRows(props)}
+          ${props.enterpriseRestricted ? nothing : renderTriggerRows(props)}
           ${renderCronInputField(props, "description", {
             label: t("cron.form.description"),
             placeholder: t("cron.form.descriptionPlaceholder"),
@@ -1716,25 +1770,29 @@ function renderAdvanced(
                 help: t("cron.form.deleteAfterRunHelp"),
               })
             : nothing}
-          ${renderToggleRow(props, "clearAgent", {
-            label: t("cron.form.clearAgentOverride"),
-            help: t("cron.form.clearAgentHelp"),
-          })}
-          ${renderFieldRow({
-            label: t("cron.form.sessionKey"),
-            controlId: "cron-session-key",
-            help: t("cron.form.sessionKeyHelp"),
-            control: html`
-              <input
-                id="cron-session-key"
-                class="settings-input"
-                .value=${props.form.sessionKey}
-                placeholder="agent:main:main"
-                @input=${(e: Event) =>
-                  props.onFormChange({ sessionKey: (e.target as HTMLInputElement).value })}
-              />
-            `,
-          })}
+          ${props.enterpriseRestricted
+            ? nothing
+            : html`
+                ${renderToggleRow(props, "clearAgent", {
+                  label: t("cron.form.clearAgentOverride"),
+                  help: t("cron.form.clearAgentHelp"),
+                })}
+                ${renderFieldRow({
+                  label: t("cron.form.sessionKey"),
+                  controlId: "cron-session-key",
+                  help: t("cron.form.sessionKeyHelp"),
+                  control: html`
+                    <input
+                      id="cron-session-key"
+                      class="settings-input"
+                      .value=${props.form.sessionKey}
+                      placeholder="agent:main:main"
+                      @input=${(e: Event) =>
+                        props.onFormChange({ sessionKey: (e.target as HTMLInputElement).value })}
+                    />
+                  `,
+                })}
+              `}
           ${isCronSchedule
             ? html`
                 ${renderToggleRow(props, "scheduleExact", {

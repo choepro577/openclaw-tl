@@ -118,6 +118,7 @@ export abstract class ChatPaneContext extends ChatPaneLifecycle {
     if (!state) {
       return;
     }
+    const operatorFeaturesEnabled = this.context.presentation !== "enterprise-user";
     const selectedSessionDeleted = stateValue.deletedSessions.some(({ key, agentId }) =>
       uiSessionEventMatches(
         {
@@ -136,7 +137,9 @@ export abstract class ChatPaneContext extends ChatPaneLifecycle {
     state.sessionsResultAgentId = stateValue.agentId;
     state.sessionsLoading = stateValue.loading;
     state.sessionsError = stateValue.error;
-    this.refreshSwarmRoster();
+    if (operatorFeaturesEnabled) {
+      this.refreshSwarmRoster();
+    }
     const selectedSession = selectedChatSessionRow(state);
     if (applySelectedSessionProjection(state, selectedSession)) {
       // Hidden retained panes keep this subscription alive; only the pane the
@@ -227,6 +230,7 @@ export abstract class ChatPaneContext extends ChatPaneLifecycle {
     if (!state) {
       return;
     }
+    const operatorFeaturesEnabled = this.context.presentation !== "enterprise-user";
     const previousMediaAuthToken = resolveAssistantAttachmentAuthToken(state);
     const wasConnected = state.connected;
     const previousAssistantAgentId = state.assistantAgentId;
@@ -354,6 +358,7 @@ export abstract class ChatPaneContext extends ChatPaneLifecycle {
         startup: true,
         awaitHistory: true,
         deferBranches: true,
+        preparedModelCatalogFallback: !operatorFeaturesEnabled,
       });
       this.deferSessionHydrationUntilTranscript(state.sessionKey, historyRefresh);
     }
@@ -402,7 +407,9 @@ export abstract class ChatPaneContext extends ChatPaneLifecycle {
       state.requestUpdate?.();
       return;
     }
-    this.refreshSwarmRoster();
+    if (operatorFeaturesEnabled) {
+      this.refreshSwarmRoster();
+    }
     if (clientChanged && snapshot.client) {
       const startupClient = snapshot.client;
       const startupGeneration = this.connectionGeneration;
@@ -431,7 +438,9 @@ export abstract class ChatPaneContext extends ChatPaneLifecycle {
       this.headerWorktreePaths.clear();
       this.headerBranches.clear();
       this.headerPlatform = null;
-      void this.loadHeaderPlatform(startupClient, startupGeneration);
+      if (operatorFeaturesEnabled) {
+        void this.loadHeaderPlatform(startupClient, startupGeneration);
+      }
       if (catalogRouteKey) {
         void this.loadCatalogSession(catalogRouteKey, false);
         state.requestUpdate?.();
@@ -443,15 +452,20 @@ export abstract class ChatPaneContext extends ChatPaneLifecycle {
         startup: true,
         awaitHistory: true,
         deferBranches: true,
+        preparedModelCatalogFallback: !operatorFeaturesEnabled,
       });
       this.deferSessionHydrationUntilTranscript(startupSessionKey, historyRefresh);
       void historyRefresh.finally(() => {
         void finishStartup();
       });
-      void refreshChatModelAuthStatus(state).finally(() => state.requestUpdate?.());
+      if (operatorFeaturesEnabled) {
+        void refreshChatModelAuthStatus(state).finally(() => state.requestUpdate?.());
+      }
       void state.loadAssistantIdentity();
-      void this.refreshTaskSuggestions();
-      void this.refreshSessionSuggestions();
+      if (operatorFeaturesEnabled) {
+        void this.refreshTaskSuggestions();
+        void this.refreshSessionSuggestions();
+      }
     }
     this.reconcileWaitingApprovalSnapshot();
     state.requestUpdate?.();

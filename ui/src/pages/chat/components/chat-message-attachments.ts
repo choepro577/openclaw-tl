@@ -322,6 +322,7 @@ export function renderAssistantAttachments(
     return nothing;
   }
   const {
+    sessionKey,
     localMediaPreviewRoots = [],
     resourceBasePath,
     authToken,
@@ -329,6 +330,8 @@ export function renderAssistantAttachments(
     onRequestOpenImage,
     onOpenImage,
     resolveArtifactDownload,
+    onOpenArtifact,
+    onOpenWorkspaceFile,
   } = options;
   return html`
     <div class="chat-assistant-attachments">
@@ -339,6 +342,7 @@ export function renderAssistantAttachments(
           resourceBasePath,
           authToken,
           onRequestUpdate,
+          sessionKey,
         );
         const managedAvailability =
           assistantAvailability.status === "available"
@@ -364,6 +368,7 @@ export function renderAssistantAttachments(
                   attachment.url,
                   resourceBasePath,
                   assistantAvailability.mediaTicket,
+                  sessionKey,
                 )
               : managedAvailability.url
             : null;
@@ -491,17 +496,36 @@ export function renderAssistantAttachments(
               <span class="chat-assistant-attachment-card__icon"
                 >${texty ? icons.fileText : icons.paperclip}</span
               >
-              ${downloadHref
-                ? html`<a
+              ${attachment.artifactId && onOpenArtifact
+                ? html`<button
                     class="chat-assistant-attachment-card__link"
-                    href=${downloadHref}
-                    target="_blank"
-                    rel="noreferrer"
-                    >${attachment.label}</a
-                  >`
-                : html`<span class="chat-assistant-attachment-card__title"
-                    >${attachment.label}</span
-                  >`}
+                    type="button"
+                    @click=${() => onOpenArtifact(attachment.artifactId!)}
+                  >
+                    ${attachment.label}
+                  </button>`
+                : assistantAvailability.status === "available" &&
+                    assistantAvailability.workspacePath &&
+                    onOpenWorkspaceFile
+                  ? html`<button
+                      class="chat-assistant-attachment-card__link"
+                      type="button"
+                      @click=${() =>
+                        onOpenWorkspaceFile({ path: assistantAvailability.workspacePath! })}
+                    >
+                      ${attachment.label}
+                    </button>`
+                  : downloadHref
+                    ? html`<a
+                        class="chat-assistant-attachment-card__link"
+                        href=${downloadHref}
+                        target="_blank"
+                        rel="noreferrer"
+                        >${attachment.label}</a
+                      >`
+                    : html`<span class="chat-assistant-attachment-card__title"
+                        >${attachment.label}</span
+                      >`}
               <span class="chat-assistant-attachment-card__actions">
                 ${downloadHref
                   ? html`<a

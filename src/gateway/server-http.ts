@@ -123,6 +123,9 @@ const getHttpAuthUtilsModule = createLazyRuntimeModule(() => import("./http-auth
 const getPluginRouteRuntimeScopesModule = createLazyRuntimeModule(
   () => import("./server/plugin-route-runtime-scopes.js"),
 );
+const getEnterpriseHttpModule = createLazyRuntimeModule(
+  () => import("../enterprise/api/enterprise-http.js"),
+);
 
 function isWebSocketUpgradeRequest(req: IncomingMessage): boolean {
   const headerContains = (value: string | readonly string[] | undefined, token: string) =>
@@ -359,6 +362,18 @@ export function createGatewayHttpServer(opts: {
       };
       const addAdmittedStage = (enabled: boolean, stage: GatewayHttpRequestStage) =>
         addRequestStage(enabled, stage, true);
+
+      addAdmittedStage(
+        configSnapshot.enterprise?.enabled === true &&
+          (scopedRequestPath.startsWith("/api/auth/") ||
+            scopedRequestPath.startsWith("/api/enterprise/")),
+        async () =>
+          (await getEnterpriseHttpModule()).handleEnterpriseHttpRequest(req, res, configSnapshot, {
+            disconnectClientsForProfile: (profileId) =>
+              opts.getGatewayRequestContext?.()?.disconnectClientsForUserProfile?.(profileId),
+            getGatewayContext: opts.getGatewayRequestContext,
+          }),
+      );
 
       const workerGatewayRoute = classifyWorkerGatewayPath(scopedRequestPath);
       addRequestStage(workerGatewayRoute !== "outside", () => {

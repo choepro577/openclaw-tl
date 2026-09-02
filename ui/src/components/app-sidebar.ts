@@ -23,6 +23,7 @@ import type { CatalogProjectGrouping } from "../lib/sessions/catalog-project-gro
 import { showToast } from "../lib/toast.ts";
 import { SubscriptionsController } from "../lit/subscriptions-controller.ts";
 import { SETTINGS_SEARCH_TARGETS } from "../pages/config/settings-targets.ts";
+import { enterpriseUiCanShowHome } from "../pages/enterprise/state/enterprise-ui-access.ts";
 import type { NewSessionTarget } from "../pages/new-session/location.ts";
 import { sidebarPluginTabs } from "./app-sidebar-nav-menus.ts";
 import {
@@ -547,7 +548,7 @@ class AppSidebar extends AppSidebarSessionNavigationElement implements SessionLi
                     this.sessionOrganizer.handleSidebarZoneDragLeave(event)}
                   @drop=${(event: DragEvent) => this.sessionOrganizer.handleSidebarZoneDrop(event)}
                 >
-                  ${renderAppSidebarHomeRow(this)}
+                  ${enterpriseUiCanShowHome() ? renderAppSidebarHomeRow(this) : nothing}
                   ${sidebarZone.entries.map((entry) =>
                     renderAppSidebarZoneEntry(
                       this,

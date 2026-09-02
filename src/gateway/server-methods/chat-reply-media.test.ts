@@ -340,6 +340,75 @@ describe("normalizeWebchatReplyMediaPathsForDisplay", () => {
     expect(content).toEqual([expect.objectContaining({ type: "audio", mimeType: "audio/mpeg" })]);
   });
 
+  it("projects a generated DOCX MEDIA directive as a managed file without leaking its path", async () => {
+    const { workspaceDir } = createMediaTestContext({ allowRead: true });
+    const fileName = "Nội quy công ty.docx";
+    const documentPath = path.join(workspaceDir, fileName);
+    await fs.mkdir(workspaceDir, { recursive: true });
+    await fs.writeFile(
+      documentPath,
+      Buffer.from("PK\u0003\u0004[Content_Types].xml word/document.xml", "utf8"),
+    );
+
+    const content = await buildAssistantDisplayContentFromReplyPayloads({
+      sessionKey: TEST_SESSION_KEY,
+      agentId: "main",
+      payloads: [
+        {
+          text: `Tôi đã tạo file.\nMEDIA:${documentPath}`,
+          trustedLocalMedia: true,
+        },
+      ],
+      managedMediaLocalRoots: [workspaceDir],
+    });
+
+    expect(content).toEqual([
+      { type: "text", text: "Tôi đã tạo file." },
+      expect.objectContaining({
+        type: "file",
+        artifactId: expect.stringMatching(/^artifact_managed_media_/u),
+        fileName,
+        mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      }),
+    ]);
+    expect(JSON.stringify(content)).not.toContain(documentPath);
+    expect(JSON.stringify(content)).not.toContain("MEDIA:");
+  });
+
+  it("keeps a sandbox-generated DOCX trusted through display normalization", async () => {
+    const { cfg, workspaceDir } = createMediaTestContext({ allowRead: true });
+    const fileName = "Noi_quy_cong_ty_mau.docx";
+    const documentPath = path.join(workspaceDir, fileName);
+    await fs.mkdir(workspaceDir, { recursive: true });
+    await fs.writeFile(
+      documentPath,
+      Buffer.from("PK\u0003\u0004[Content_Types].xml word/document.xml", "utf8"),
+    );
+
+    const normalized = await normalizeReplyMedia({
+      cfg,
+      payloads: [{ text: "Đã tạo file.", mediaUrls: [documentPath] }],
+    });
+
+    expect(normalized?.trustedLocalMedia, JSON.stringify(normalized)).toBe(true);
+    const content = await buildAssistantDisplayContentFromReplyPayloads({
+      sessionKey: TEST_SESSION_KEY,
+      agentId: "main",
+      payloads: normalized ? [normalized] : [],
+      managedMediaLocalRoots: getAgentScopedMediaLocalRoots(cfg, "main"),
+    });
+    expect(content).toEqual([
+      { type: "text", text: "Đã tạo file." },
+      expect.objectContaining({
+        type: "file",
+        artifactId: expect.stringMatching(/^artifact_managed_media_/u),
+        fileName: expect.stringMatching(/^Noi_quy_cong_ty_mau/u),
+        mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      }),
+    ]);
+    expect(JSON.stringify(content)).not.toContain(documentPath);
+  });
+
   it("splits a mixed pending batch so only trusted local media reaches managed history", async () => {
     const { workspaceDir } = createMediaTestContext({ allowRead: true });
     const trustedPath = path.join(workspaceDir, "trusted.mp3");

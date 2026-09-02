@@ -210,10 +210,12 @@ export abstract class ChatPaneSession extends ChatPaneTaskSuggestions {
       state.renderLifecycle.afterCommit((complete) => {
         if (isCurrent() && this.presented) {
           this.deferredSessionHydrationActive = false;
-          void loadChatBranches(state);
-          void this.probeSessionDiscussion(sessionKey);
-          this.hydrateSessionCompanion(sessionKey);
-          void this.refreshSessionPullRequests();
+          if (this.context.presentation !== "enterprise-user") {
+            void loadChatBranches(state);
+            void this.probeSessionDiscussion(sessionKey);
+            this.hydrateSessionCompanion(sessionKey);
+            void this.refreshSessionPullRequests();
+          }
         } else if (isCurrent()) {
           this.pendingDeferredSessionHydration = scheduleHydration;
         } else {

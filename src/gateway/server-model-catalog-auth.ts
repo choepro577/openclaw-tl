@@ -1,6 +1,7 @@
 import type { RuntimeAuthMaterialization } from "../agents/auth-profiles/runtime-materializations.js";
 import type { ResolvedPublishedModelCatalogOwner } from "../agents/prepared-model-catalog.types.js";
 import type { PreparedModelRuntimeAuthScope } from "../agents/prepared-model-runtime-auth.js";
+import type { OpenClawConfig } from "../config/types.openclaw.js";
 import type { GatewayRequestContext } from "./server-methods/shared-types.js";
 import type { GatewayModelCatalogSnapshot } from "./server-model-catalog.types.js";
 
@@ -13,6 +14,8 @@ type GatewayModelCatalogReadParams = {
   agentId?: string;
   agentDir?: string;
   authScope?: PreparedModelRuntimeAuthScope;
+  /** Exact per-request config projection that owns this catalog read. */
+  config?: OpenClawConfig;
   readOnly?: boolean;
   refreshAuth?: boolean;
   refreshFullCatalog?: boolean;
@@ -52,19 +55,30 @@ function requirePrivateAccess(
 }
 
 export async function loadDeferredCatalog(
-  context: Pick<GatewayRequestContext, "loadGatewayModelCatalogSnapshot">,
+  context: Pick<GatewayRequestContext, "loadGatewayModelCatalogSnapshot"> &
+    Partial<Pick<GatewayRequestContext, "getRuntimeConfig">>,
   agentId: string,
   options: Pick<
     GatewayModelCatalogReadParams,
     "authScope" | "readOnly" | "refreshAuth" | "refreshFullCatalog"
   >,
 ): Promise<PreparedGatewayModelCatalogSnapshot> {
-  return await requirePrivateAccess(context).loadDeferred({ agentId, ...options });
+  const config = context.getRuntimeConfig?.();
+  return await requirePrivateAccess(context).loadDeferred({
+    agentId,
+    ...options,
+    ...(config ? { config } : {}),
+  });
 }
 
 export async function readPreparedCatalog(
-  context: Pick<GatewayRequestContext, "loadGatewayModelCatalogSnapshot">,
+  context: Pick<GatewayRequestContext, "loadGatewayModelCatalogSnapshot"> &
+    Partial<Pick<GatewayRequestContext, "getRuntimeConfig">>,
   agentId: string,
 ): Promise<PreparedGatewayModelCatalogSnapshot | undefined> {
-  return await requirePrivateAccess(context).readPrepared({ agentId });
+  const config = context.getRuntimeConfig?.();
+  return await requirePrivateAccess(context).readPrepared({
+    agentId,
+    ...(config ? { config } : {}),
+  });
 }

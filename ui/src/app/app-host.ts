@@ -43,6 +43,7 @@ import { showToast } from "../lib/toast.ts";
 import { OpenClawLightDomElement } from "../lit/openclaw-element.ts";
 import { SubscriptionsController } from "../lit/subscriptions-controller.ts";
 import type { ChatPage } from "../pages/chat/chat-page.ts";
+import { enterpriseEnabledRouteIds } from "../pages/enterprise/state/enterprise-ui-access.ts";
 import type { NewSessionTarget } from "../pages/new-session/location.ts";
 import { selectShellRouteState, type ShellRouteState } from "./app-host-route-state.ts";
 import { OpenClawApp } from "./app-root.ts";
@@ -96,7 +97,6 @@ type AppSidebarElement = HTMLElement & {
 const APP_SIDEBAR_TAG = "openclaw-app-sidebar";
 // Stable references so the sidebar's enabledRouteIds property does not churn
 // on every shell render.
-const ROUTE_IDS_WITHOUT_WORKBOARD = APP_ROUTE_IDS.filter((routeId) => routeId !== "workboard");
 const APP_SIDEBAR_ELEMENT = {
   tagName: APP_SIDEBAR_TAG,
   label: APP_SIDEBAR_TAG,
@@ -127,7 +127,7 @@ function equalShellRouteState(previous: ShellRouteState, next: ShellRouteState):
   );
 }
 
-class OpenClawShell
+export class OpenClawShell
   extends OpenClawLightDomElement
   implements
     ShellChromeHost,
@@ -749,9 +749,10 @@ class OpenClawShell
   }
 
   enabledRouteIds(): readonly RouteId[] {
-    return isWorkboardEnabledInConfigSnapshot(this.context?.runtimeConfig.state.configSnapshot)
-      ? APP_ROUTE_IDS
-      : ROUTE_IDS_WITHOUT_WORKBOARD;
+    return enterpriseEnabledRouteIds(
+      APP_ROUTE_IDS,
+      isWorkboardEnabledInConfigSnapshot(this.context?.runtimeConfig.state.configSnapshot),
+    );
   }
 
   /** Agent targeted by the open new-session route, keyed off its ?agent param. */

@@ -91,6 +91,12 @@ const subCliCommandCatalog = defineCommandDescriptorCatalog([
     parentDefaultHelp: true,
   },
   {
+    name: "auth",
+    description: "Manage Enterprise account authentication",
+    hasSubcommands: true,
+    parentDefaultHelp: true,
+  },
+  {
     name: "users",
     description: "Manage durable user profiles and email aliases",
     hasSubcommands: true,

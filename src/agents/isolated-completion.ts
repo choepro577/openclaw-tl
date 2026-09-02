@@ -10,6 +10,7 @@ import path from "node:path";
 import type { ThinkLevel } from "../auto-reply/thinking.js";
 import { getRuntimeConfig } from "../config/config.js";
 import type { OpenClawConfig } from "../config/types.openclaw.js";
+import { isGatewayRequestScopedRuntimeConfig } from "../gateway/request-runtime-config.js";
 import { withTempWorkspace } from "../infra/private-temp-workspace.js";
 import { resolvePreferredOpenClawTmpDir } from "../infra/tmp-openclaw-dir.js";
 import type { AssistantMessage } from "../llm/types.js";
@@ -446,6 +447,7 @@ export async function runIsolatedCompletion(
   const lease = await acquireAgentRunPreparedModelRuntime(
     {
       config,
+      ...(isGatewayRequestScopedRuntimeConfig(config) ? { preserveConfigOnRefresh: true } : {}),
       agentId,
       agentDir,
       workspaceDir,
@@ -548,6 +550,9 @@ export async function runIsolatedCompletion(
             readOnly: true,
             allowKeychainPrompt: false,
             config,
+            ...(lease.snapshot.inheritedAuthDir
+              ? { inheritedAuthDir: lease.snapshot.inheritedAuthDir }
+              : {}),
           });
           authAttempts = prepareAgentRuntimeAuth({
             provider: runtimeModel.provider,

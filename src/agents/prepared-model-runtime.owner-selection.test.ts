@@ -175,6 +175,32 @@ describe("prepared model runtime owner selection", () => {
     lease.release();
   });
 
+  it("does not rebind a request-scoped run to the process-wide gateway owner", async () => {
+    mocks.configuredAgentIds = ["main"];
+    mocks.configuredAgentDirs.set("main", "/tmp/global-main-agent");
+    mocks.configuredWorkspaces.set("main", "/tmp/global-main-workspace");
+    const globalConfig = { messages: { responsePrefix: "global" } };
+    await refreshPreparedModelRuntimeSnapshots(globalConfig, { gatewayLifecycle: true });
+
+    const accountConfig = { messages: { responsePrefix: "account" } };
+    const lease = await acquireAgentRunPreparedModelRuntime({
+      agentId: "main",
+      agentDir: "/tmp/account-main-agent",
+      config: accountConfig,
+      inheritedAuthDir: "/tmp/global-main-agent",
+      workspaceDir: "/tmp/account-main-workspace",
+      preserveConfigOnRefresh: true,
+    });
+
+    expect(lease.snapshot).toMatchObject({
+      agentId: "main",
+      agentDir: "/tmp/account-main-agent",
+      config: accountConfig,
+      workspaceDir: "/tmp/account-main-workspace",
+    });
+    lease.release();
+  });
+
   it("publishes provider selections kept on the core runtime by request parameters", async () => {
     mocks.configuredAgentIds = ["default"];
     const config = {

@@ -78,6 +78,25 @@ describe("chat pane session hydration", () => {
     expect(complete).toHaveBeenCalledOnce();
   });
 
+  it("does not hydrate operator-only session affordances in Enterprise User Chat", async () => {
+    const { commitEffects, listBranches, pane, request, state } = createSecondaryHydrationPane();
+    pane.context = { ...pane.context, presentation: "enterprise-user" };
+    const transcript = deferred<void>();
+
+    pane.deferSessionHydrationUntilTranscript(state.sessionKey, transcript.promise);
+    transcript.resolve();
+    await transcript.promise;
+    await Promise.resolve();
+
+    const complete = vi.fn();
+    commitEffects[0]!(complete);
+    await Promise.resolve();
+
+    expect(listBranches).not.toHaveBeenCalled();
+    expect(request).not.toHaveBeenCalled();
+    expect(complete).toHaveBeenCalledOnce();
+  });
+
   it("drops a previous session's deferred hydration before it reaches commit", async () => {
     const request = vi.fn((_method: string, _params?: unknown) => new Promise<never>(() => {}));
     const { pane, state } = createTestChatPane({

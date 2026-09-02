@@ -175,7 +175,7 @@ export async function resolveConnectAuthState(params: {
   const sharedAuthOk =
     (sharedAuthResult?.ok === true &&
       (sharedAuthResult.method === "token" || sharedAuthResult.method === "password")) ||
-    (authResult.ok && authResult.method === "trusted-proxy");
+    (authResult.ok && (authResult.method === "trusted-proxy" || authResult.method === "accounts"));
   const pendingSharedAuthFailure =
     deferRateLimitFailure &&
     (authResult.reason === "token_mismatch" || authResult.reason === "password_mismatch");

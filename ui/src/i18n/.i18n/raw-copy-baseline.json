@@ -460,6 +460,4094 @@
       "count": 1,
       "kind": "html-text",
       "name": "text",
+      "path": "ui/src/pages/enterprise-admin/admin-root.ts",
+      "text": "· sau khi đổi bạn cần đăng nhập lại."
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/admin-root.ts",
+      "text": "Chỉ tài khoản administrator có thể truy cập portal này."
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/admin-root.ts",
+      "text": "Đang kiểm tra phiên quản trị…"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/admin-root.ts",
+      "text": "Đăng nhập quản trị"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/admin-root.ts",
+      "text": "Đổi mật khẩu"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/admin-root.ts",
+      "text": "Enterprise Admin"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/admin-root.ts",
+      "text": "Mật khẩu"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/admin-root.ts",
+      "text": "Mật khẩu hiện tại"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/admin-root.ts",
+      "text": "Mật khẩu mới"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/admin-root.ts",
+      "text": "OpenClaw"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/admin-root.ts",
+      "text": "Quay lại dashboard"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/admin-root.ts",
+      "text": "Thử lại"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/admin-root.ts",
+      "text": "Username"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/admin-root.ts",
+      "text": "Xác nhận mật khẩu mới"
+    },
+    {
+      "count": 1,
+      "kind": "html-attribute",
+      "name": "aria-label",
+      "path": "ui/src/pages/enterprise-admin/admin-shell.ts",
+      "text": "Config"
+    },
+    {
+      "count": 1,
+      "kind": "html-attribute",
+      "name": "aria-label",
+      "path": "ui/src/pages/enterprise-admin/admin-shell.ts",
+      "text": "Mở menu"
+    },
+    {
+      "count": 1,
+      "kind": "html-attribute",
+      "name": "aria-label",
+      "path": "ui/src/pages/enterprise-admin/admin-shell.ts",
+      "text": "Quản trị Enterprise"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/admin-shell.ts",
+      "text": "Config"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/admin-shell.ts",
+      "text": "Đăng xuất"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/admin-shell.ts",
+      "text": "Đổi mật khẩu"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/admin-shell.ts",
+      "text": "Enterprise Admin"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/admin-shell.ts",
+      "text": "OpenClaw"
+    },
+    {
+      "count": 1,
+      "kind": "object-property",
+      "name": "label",
+      "path": "ui/src/pages/enterprise-admin/admin-shell.ts",
+      "text": "Change History & Audit"
+    },
+    {
+      "count": 1,
+      "kind": "object-property",
+      "name": "label",
+      "path": "ui/src/pages/enterprise-admin/admin-shell.ts",
+      "text": "Models"
+    },
+    {
+      "count": 1,
+      "kind": "object-property",
+      "name": "label",
+      "path": "ui/src/pages/enterprise-admin/admin-shell.ts",
+      "text": "Quản lý agent"
+    },
+    {
+      "count": 1,
+      "kind": "object-property",
+      "name": "label",
+      "path": "ui/src/pages/enterprise-admin/admin-shell.ts",
+      "text": "Quản lý skill"
+    },
+    {
+      "count": 1,
+      "kind": "object-property",
+      "name": "label",
+      "path": "ui/src/pages/enterprise-admin/admin-shell.ts",
+      "text": "Quản lý tài khoản"
+    },
+    {
+      "count": 1,
+      "kind": "object-property",
+      "name": "label",
+      "path": "ui/src/pages/enterprise-admin/admin-shell.ts",
+      "text": "System Config"
+    },
+    {
+      "count": 1,
+      "kind": "object-property",
+      "name": "label",
+      "path": "ui/src/pages/enterprise-admin/admin-shell.ts",
+      "text": "Tools"
+    },
+    {
+      "count": 1,
+      "kind": "object-property",
+      "name": "label",
+      "path": "ui/src/pages/enterprise-admin/admin-shell.ts",
+      "text": "Tri thức doanh nghiệp"
+    },
+    {
+      "count": 1,
+      "kind": "object-property",
+      "name": "label",
+      "path": "ui/src/pages/enterprise-admin/admin-shell.ts",
+      "text": "UI & Appearance"
+    },
+    {
+      "count": 1,
+      "kind": "html-attribute",
+      "name": "aria-label",
+      "path": "ui/src/pages/enterprise-admin/components/access-dialog.ts",
+      "text": "Quyền của"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/components/access-dialog.ts",
+      "text": "Chưa có tài khoản employee."
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/components/access-dialog.ts",
+      "text": "Đang tải quyền truy cập…"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/components/access-dialog.ts",
+      "text": "Hủy"
+    },
+    {
+      "count": 1,
+      "kind": "html-attribute",
+      "name": "aria-label",
+      "path": "ui/src/pages/enterprise-admin/components/admin-dialog.ts",
+      "text": "Đóng"
+    },
+    {
+      "count": 1,
+      "kind": "html-attribute",
+      "name": "aria-label",
+      "path": "ui/src/pages/enterprise-admin/pages/accounts-page.ts",
+      "text": "Chọn"
+    },
+    {
+      "count": 1,
+      "kind": "html-attribute",
+      "name": "aria-label",
+      "path": "ui/src/pages/enterprise-admin/pages/accounts-page.ts",
+      "text": "Chọn tất cả"
+    },
+    {
+      "count": 1,
+      "kind": "html-attribute",
+      "name": "aria-label",
+      "path": "ui/src/pages/enterprise-admin/pages/accounts-page.ts",
+      "text": "Lọc personal agent"
+    },
+    {
+      "count": 1,
+      "kind": "html-attribute",
+      "name": "aria-label",
+      "path": "ui/src/pages/enterprise-admin/pages/accounts-page.ts",
+      "text": "Lọc preset"
+    },
+    {
+      "count": 1,
+      "kind": "html-attribute",
+      "name": "aria-label",
+      "path": "ui/src/pages/enterprise-admin/pages/accounts-page.ts",
+      "text": "Lọc role"
+    },
+    {
+      "count": 1,
+      "kind": "html-attribute",
+      "name": "aria-label",
+      "path": "ui/src/pages/enterprise-admin/pages/accounts-page.ts",
+      "text": "Lọc trạng thái"
+    },
+    {
+      "count": 1,
+      "kind": "html-attribute",
+      "name": "aria-label",
+      "path": "ui/src/pages/enterprise-admin/pages/accounts-page.ts",
+      "text": "Sắp xếp"
+    },
+    {
+      "count": 1,
+      "kind": "html-attribute",
+      "name": "aria-label",
+      "path": "ui/src/pages/enterprise-admin/pages/accounts-page.ts",
+      "text": "Tìm tài khoản"
+    },
+    {
+      "count": 1,
+      "kind": "html-attribute",
+      "name": "placeholder",
+      "path": "ui/src/pages/enterprise-admin/pages/accounts-page.ts",
+      "text": "Để trống để dùng personal agent"
+    },
+    {
+      "count": 1,
+      "kind": "html-attribute",
+      "name": "placeholder",
+      "path": "ui/src/pages/enterprise-admin/pages/accounts-page.ts",
+      "text": "skill:global:source:key, … (không bắt buộc)"
+    },
+    {
+      "count": 1,
+      "kind": "html-attribute",
+      "name": "placeholder",
+      "path": "ui/src/pages/enterprise-admin/pages/accounts-page.ts",
+      "text": "Tìm tên hoặc username…"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/accounts-page.ts",
+      "text": ". Role, trạng thái và reset mật khẩu sẽ thu hồi session phù hợp."
+    },
+    {
+      "count": 3,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/accounts-page.ts",
+      "text": "Access preset"
+    },
+    {
+      "count": 3,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/accounts-page.ts",
+      "text": "Administrator"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/accounts-page.ts",
+      "text": "Agent"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/accounts-page.ts",
+      "text": "Cập nhật"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/accounts-page.ts",
+      "text": "Đã bật personal agent"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/accounts-page.ts",
+      "text": "Đã khóa"
+    },
+    {
+      "count": 2,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/accounts-page.ts",
+      "text": "Đang hoạt động"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/accounts-page.ts",
+      "text": "Đăng nhập cuối"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/accounts-page.ts",
+      "text": "Đăng nhập gần nhất"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/accounts-page.ts",
+      "text": "Đang tải danh sách tài khoản…"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/accounts-page.ts",
+      "text": "Đang tải tài khoản…"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/accounts-page.ts",
+      "text": "Default agent"
+    },
+    {
+      "count": 3,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/accounts-page.ts",
+      "text": "Employee"
+    },
+    {
+      "count": 2,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/accounts-page.ts",
+      "text": "Không cấp preset"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/accounts-page.ts",
+      "text": "Không có personal agent"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/accounts-page.ts",
+      "text": "Không có phiên đăng nhập."
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/accounts-page.ts",
+      "text": "Không có preset"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/accounts-page.ts",
+      "text": "Không có tài khoản phù hợp."
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/accounts-page.ts",
+      "text": "Kích hoạt ngay"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/accounts-page.ts",
+      "text": "Mật khẩu tạm"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/accounts-page.ts",
+      "text": "Mới cập nhật"
+    },
+    {
+      "count": 2,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/accounts-page.ts",
+      "text": "Personal agent"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/accounts-page.ts",
+      "text": "Phiên đăng nhập ("
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/accounts-page.ts",
+      "text": "Policy revision"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/accounts-page.ts",
+      "text": "Quản lý tài khoản"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/accounts-page.ts",
+      "text": "Quay lại"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/accounts-page.ts",
+      "text": "Quyền effective"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/accounts-page.ts",
+      "text": "Reset mật khẩu"
+    },
+    {
+      "count": 3,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/accounts-page.ts",
+      "text": "Role"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/accounts-page.ts",
+      "text": "Sau"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/accounts-page.ts",
+      "text": "Shared/default agent"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/accounts-page.ts",
+      "text": "Skill ban đầu"
+    },
+    {
+      "count": 3,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/accounts-page.ts",
+      "text": "Standard Coding v1"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/accounts-page.ts",
+      "text": "Tài khoản"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/accounts-page.ts",
+      "text": "tài khoản · quyền truy cập và phiên đăng nhập Enterprise"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/accounts-page.ts",
+      "text": "Tạo tài khoản"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/accounts-page.ts",
+      "text": "Tất cả personal agent"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/accounts-page.ts",
+      "text": "Tất cả preset"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/accounts-page.ts",
+      "text": "Tất cả role"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/accounts-page.ts",
+      "text": "Tất cả trạng thái"
+    },
+    {
+      "count": 2,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/accounts-page.ts",
+      "text": "Tên hiển thị"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/accounts-page.ts",
+      "text": "Thao tác"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/accounts-page.ts",
+      "text": "Thu hồi"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/accounts-page.ts",
+      "text": "Thử lại"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/accounts-page.ts",
+      "text": "Trang"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/accounts-page.ts",
+      "text": "Trạng thái"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/accounts-page.ts",
+      "text": "Trước"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/accounts-page.ts",
+      "text": "Username"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/accounts-page.ts",
+      "text": "Username A–Z"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/accounts-page.ts",
+      "text": "Workspace riêng, quyền filesystem 0700"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/accounts-page.ts",
+      "text": "Xác nhận mật khẩu"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/accounts-page.ts",
+      "text": "Xem"
+    },
+    {
+      "count": 1,
+      "kind": "html-attribute",
+      "name": "aria-label",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-files-policy-views.ts",
+      "text": "Đóng preview"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-files-policy-views.ts",
+      "text": "B"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-files-policy-views.ts",
+      "text": "Chọn một core file để xem và chỉnh sửa."
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-files-policy-views.ts",
+      "text": "Coding"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-files-policy-views.ts",
+      "text": "Đặt lại kế thừa"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-files-policy-views.ts",
+      "text": "Được dùng"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-files-policy-views.ts",
+      "text": "File chưa tồn tại và sẽ được tạo khi lưu."
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-files-policy-views.ts",
+      "text": "File được kiểm tra revision trước khi lưu. Audit chỉ ghi tên, kích thước và hành động; không ghi nội dung file."
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-files-policy-views.ts",
+      "text": "Full"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-files-policy-views.ts",
+      "text": "Hoàn tác"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-files-policy-views.ts",
+      "text": "Kế thừa"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-files-policy-views.ts",
+      "text": "Lý do setup"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-files-policy-views.ts",
+      "text": "Markdown Preview"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-files-policy-views.ts",
+      "text": "Messaging"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-files-policy-views.ts",
+      "text": "Minimal"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-files-policy-views.ts",
+      "text": "Mô tả"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-files-policy-views.ts",
+      "text": "Nguồn"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-files-policy-views.ts",
+      "text": "Nội dung"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-files-policy-views.ts",
+      "text": "Preview"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-files-policy-views.ts",
+      "text": "Profile"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-files-policy-views.ts",
+      "text": "Quyền"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-files-policy-views.ts",
+      "text": "Skill"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-files-policy-views.ts",
+      "text": "Skill binding"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-files-policy-views.ts",
+      "text": "Tool"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-files-policy-views.ts",
+      "text": "Trạng thái"
+    },
+    {
+      "count": 1,
+      "kind": "html-attribute",
+      "name": "aria-label",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-overview-list-views.ts",
+      "text": "Loại agent"
+    },
+    {
+      "count": 1,
+      "kind": "html-attribute",
+      "name": "aria-label",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-overview-list-views.ts",
+      "text": "Primary Model"
+    },
+    {
+      "count": 1,
+      "kind": "html-attribute",
+      "name": "aria-label",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-overview-list-views.ts",
+      "text": "Tìm agent"
+    },
+    {
+      "count": 1,
+      "kind": "html-attribute",
+      "name": "aria-label",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-overview-list-views.ts",
+      "text": "Workspace"
+    },
+    {
+      "count": 1,
+      "kind": "html-attribute",
+      "name": "placeholder",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-overview-list-views.ts",
+      "text": "Để trống dùng mặc định"
+    },
+    {
+      "count": 1,
+      "kind": "html-attribute",
+      "name": "placeholder",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-overview-list-views.ts",
+      "text": "Kế thừa model mặc định"
+    },
+    {
+      "count": 1,
+      "kind": "html-attribute",
+      "name": "placeholder",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-overview-list-views.ts",
+      "text": "Kế thừa workspace mặc định"
+    },
+    {
+      "count": 1,
+      "kind": "html-attribute",
+      "name": "placeholder",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-overview-list-views.ts",
+      "text": "provider/model hoặc để trống"
+    },
+    {
+      "count": 1,
+      "kind": "html-attribute",
+      "name": "placeholder",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-overview-list-views.ts",
+      "text": "Tìm agent…"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-overview-list-views.ts",
+      "text": "Agent"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-overview-list-views.ts",
+      "text": "Agent ID"
+    },
+    {
+      "count": 2,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-overview-list-views.ts",
+      "text": "Cập nhật"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-overview-list-views.ts",
+      "text": "Đang tải catalog agent…"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-overview-list-views.ts",
+      "text": "Hủy"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-overview-list-views.ts",
+      "text": "Không có personal agent phù hợp."
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-overview-list-views.ts",
+      "text": "Không có shared agent phù hợp."
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-overview-list-views.ts",
+      "text": "Loại"
+    },
+    {
+      "count": 3,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-overview-list-views.ts",
+      "text": "Model"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-overview-list-views.ts",
+      "text": "Owner"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-overview-list-views.ts",
+      "text": "Personal Agents ("
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-overview-list-views.ts",
+      "text": "Primary Model"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-overview-list-views.ts",
+      "text": "Quản lý agent"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-overview-list-views.ts",
+      "text": "Reserved internal agents đã được ẩn"
+    },
+    {
+      "count": 2,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-overview-list-views.ts",
+      "text": "Runtime"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-overview-list-views.ts",
+      "text": "Runtime agent"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-overview-list-views.ts",
+      "text": "Sessions"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-overview-list-views.ts",
+      "text": "Shared agent nghiệp vụ và personal agent theo từng tài khoản"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-overview-list-views.ts",
+      "text": "Shared Agents ("
+    },
+    {
+      "count": 2,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-overview-list-views.ts",
+      "text": "Skill/Tool"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-overview-list-views.ts",
+      "text": "Skills Filter"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-overview-list-views.ts",
+      "text": "Tạo shared agent"
+    },
+    {
+      "count": 2,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-overview-list-views.ts",
+      "text": "Tên hiển thị"
+    },
+    {
+      "count": 2,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-overview-list-views.ts",
+      "text": "Thao tác"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-overview-list-views.ts",
+      "text": "Thinking Default"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-overview-list-views.ts",
+      "text": "Trạng thái"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-overview-list-views.ts",
+      "text": "User"
+    },
+    {
+      "count": 4,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-overview-list-views.ts",
+      "text": "Workspace"
+    },
+    {
+      "count": 2,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-overview-list-views.ts",
+      "text": "Xem"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-overview-list-views.ts",
+      "text": "Xóa agent"
+    },
+    {
+      "count": 1,
+      "kind": "object-property",
+      "name": "description",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-overview-list-views.ts",
+      "text": "Để trống để kế thừa cấu hình mặc định của hệ thống."
+    },
+    {
+      "count": 1,
+      "kind": "object-property",
+      "name": "description",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-overview-list-views.ts",
+      "text": "Files dùng workspace riêng; Tools và Skills được resolve từ preset/entitlement."
+    },
+    {
+      "count": 1,
+      "kind": "object-property",
+      "name": "description",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-overview-list-views.ts",
+      "text": "Không thể hoàn tác sau khi agent đã bị xóa."
+    },
+    {
+      "count": 1,
+      "kind": "object-property",
+      "name": "description",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-overview-list-views.ts",
+      "text": "Nếu config đổi ở nơi khác, thao tác sẽ dừng để tải revision mới thay vì ghi đè."
+    },
+    {
+      "count": 1,
+      "kind": "object-property",
+      "name": "description",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-overview-list-views.ts",
+      "text": "Personal agent kế thừa model và chính sách từ template tài khoản."
+    },
+    {
+      "count": 1,
+      "kind": "object-property",
+      "name": "description",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-overview-list-views.ts",
+      "text": "Tên và định danh hiển thị của personal agent."
+    },
+    {
+      "count": 1,
+      "kind": "object-property",
+      "name": "description",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-overview-list-views.ts",
+      "text": "Tên và định danh hiển thị của shared agent."
+    },
+    {
+      "count": 2,
+      "kind": "object-property",
+      "name": "description",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-overview-list-views.ts",
+      "text": "Workspace và cấu hình hiệu lực của agent."
+    },
+    {
+      "count": 1,
+      "kind": "object-property",
+      "name": "label",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-overview-list-views.ts",
+      "text": "CAS"
+    },
+    {
+      "count": 1,
+      "kind": "object-property",
+      "name": "title",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-overview-list-views.ts",
+      "text": "Danger zone"
+    },
+    {
+      "count": 2,
+      "kind": "object-property",
+      "name": "title",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-overview-list-views.ts",
+      "text": "Identity"
+    },
+    {
+      "count": 1,
+      "kind": "object-property",
+      "name": "title",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-overview-list-views.ts",
+      "text": "Model hiệu lực"
+    },
+    {
+      "count": 2,
+      "kind": "object-property",
+      "name": "title",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-overview-list-views.ts",
+      "text": "Model selection"
+    },
+    {
+      "count": 2,
+      "kind": "object-property",
+      "name": "title",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-overview-list-views.ts",
+      "text": "Overview"
+    },
+    {
+      "count": 1,
+      "kind": "object-property",
+      "name": "title",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-overview-list-views.ts",
+      "text": "Primary Model"
+    },
+    {
+      "count": 1,
+      "kind": "object-property",
+      "name": "title",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-overview-list-views.ts",
+      "text": "Quyền quản trị"
+    },
+    {
+      "count": 1,
+      "kind": "object-property",
+      "name": "title",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-overview-list-views.ts",
+      "text": "Revision-safe"
+    },
+    {
+      "count": 1,
+      "kind": "object-property",
+      "name": "title",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-overview-list-views.ts",
+      "text": "Template agent"
+    },
+    {
+      "count": 1,
+      "kind": "object-property",
+      "name": "title",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-overview-list-views.ts",
+      "text": "Workspace"
+    },
+    {
+      "count": 1,
+      "kind": "object-property",
+      "name": "title",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-overview-list-views.ts",
+      "text": "Xóa shared agent"
+    },
+    {
+      "count": 1,
+      "kind": "html-attribute",
+      "name": "aria-label",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-relationship-views.ts",
+      "text": "User dùng shared Agent"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-relationship-views.ts",
+      "text": "· Tên hiệu lực:"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-relationship-views.ts",
+      "text": "Agent gốc:"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-relationship-views.ts",
+      "text": "Agent gọi user là"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-relationship-views.ts",
+      "text": "Agent tự xưng là"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-relationship-views.ts",
+      "text": "Chưa có user nào được cấp Agent này hoặc có hồ sơ danh xưng đã lưu."
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-relationship-views.ts",
+      "text": "Danh xưng của"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-relationship-views.ts",
+      "text": "Files riêng của user"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-relationship-views.ts",
+      "text": "Ghi chú tương tác"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-relationship-views.ts",
+      "text": "Hồ sơ dùng khóa account + Agent và có revision riêng. Biệt danh không tham gia định tuyến hoặc phân quyền."
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-relationship-views.ts",
+      "text": "hồ sơ theo tài khoản"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-relationship-views.ts",
+      "text": "Memory tách biệt"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-relationship-views.ts",
+      "text": "Tên riêng user gọi Agent"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-relationship-views.ts",
+      "text": "User"
+    },
+    {
+      "count": 1,
+      "kind": "html-attribute",
+      "name": "placeholder",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-runtime-views.ts",
+      "text": "Asia/Ho_Chi_Minh"
+    },
+    {
+      "count": 1,
+      "kind": "html-attribute",
+      "name": "placeholder",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-runtime-views.ts",
+      "text": "Channel/chat hoặc webhook URL"
+    },
+    {
+      "count": 1,
+      "kind": "html-attribute",
+      "name": "placeholder",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-runtime-views.ts",
+      "text": "Kế thừa agent"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-runtime-views.ts",
+      "text": "Account"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-runtime-views.ts",
+      "text": "Agent chưa có cron job."
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-runtime-views.ts",
+      "text": "Agent turn"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-runtime-views.ts",
+      "text": "Backfill diary"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-runtime-views.ts",
+      "text": "Cấu hình"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-runtime-views.ts",
+      "text": "Channel"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-runtime-views.ts",
+      "text": "Chạy gần nhất"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-runtime-views.ts",
+      "text": "Chạy một lần"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-runtime-views.ts",
+      "text": "Chạy ngay"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-runtime-views.ts",
+      "text": "Chưa có channel account nào được cấu hình."
+    },
+    {
+      "count": 2,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-runtime-views.ts",
+      "text": "Cron expression"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-runtime-views.ts",
+      "text": "Current"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-runtime-views.ts",
+      "text": "Dedupe diary"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-runtime-views.ts",
+      "text": "Delivery"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-runtime-views.ts",
+      "text": "Đích delivery"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-runtime-views.ts",
+      "text": "Dream diary"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-runtime-views.ts",
+      "text": "Dùng cùng doctor memory service với UI gốc; mọi thao tác được audit."
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-runtime-views.ts",
+      "text": "Embedding"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-runtime-views.ts",
+      "text": "Giờ"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-runtime-views.ts",
+      "text": "Hủy"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-runtime-views.ts",
+      "text": "Isolated"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-runtime-views.ts",
+      "text": "Jobs"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-runtime-views.ts",
+      "text": "Khoảng lặp"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-runtime-views.ts",
+      "text": "Không gửi"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-runtime-views.ts",
+      "text": "Kích hoạt job"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-runtime-views.ts",
+      "text": "Kiểu lịch"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-runtime-views.ts",
+      "text": "Làm mới"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-runtime-views.ts",
+      "text": "Lần chạy kế"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-runtime-views.ts",
+      "text": "Lặp theo khoảng"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-runtime-views.ts",
+      "text": "Lịch"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-runtime-views.ts",
+      "text": "Lỗi gần nhất"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-runtime-views.ts",
+      "text": "Main"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-runtime-views.ts",
+      "text": "Mô tả"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-runtime-views.ts",
+      "text": "Model"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-runtime-views.ts",
+      "text": "Next heartbeat"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-runtime-views.ts",
+      "text": "Nội dung"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-runtime-views.ts",
+      "text": "Now"
+    },
+    {
+      "count": 2,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-runtime-views.ts",
+      "text": "Payload"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-runtime-views.ts",
+      "text": "Phút"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-runtime-views.ts",
+      "text": "Promoted"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-runtime-views.ts",
+      "text": "Provider"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-runtime-views.ts",
+      "text": "Repair artifacts"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-runtime-views.ts",
+      "text": "Reset diary"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-runtime-views.ts",
+      "text": "Reset short-term"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-runtime-views.ts",
+      "text": "Runtime"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-runtime-views.ts",
+      "text": "Scheduler"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-runtime-views.ts",
+      "text": "Session"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-runtime-views.ts",
+      "text": "Short-term"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-runtime-views.ts",
+      "text": "Sửa"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-runtime-views.ts",
+      "text": "System event"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-runtime-views.ts",
+      "text": "Tạo lịch"
+    },
+    {
+      "count": 2,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-runtime-views.ts",
+      "text": "Tên"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-runtime-views.ts",
+      "text": "Thao tác"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-runtime-views.ts",
+      "text": "Thao tác bảo trì"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-runtime-views.ts",
+      "text": "Thời điểm"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-runtime-views.ts",
+      "text": "Thông báo channel"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-runtime-views.ts",
+      "text": "Timezone"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-runtime-views.ts",
+      "text": "Trạng thái"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-runtime-views.ts",
+      "text": "Triggers"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-runtime-views.ts",
+      "text": "Wake mode"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-runtime-views.ts",
+      "text": "Webhook"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-runtime-views.ts",
+      "text": "Xóa"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agents-page.ts",
+      "text": "Copy ID"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agents-page.ts",
+      "text": "Đang tải"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agents-page.ts",
+      "text": "Quản lý user"
+    },
+    {
+      "count": 1,
+      "kind": "object-property",
+      "name": "label",
+      "path": "ui/src/pages/enterprise-admin/pages/agents-page.ts",
+      "text": "Channels"
+    },
+    {
+      "count": 1,
+      "kind": "object-property",
+      "name": "label",
+      "path": "ui/src/pages/enterprise-admin/pages/agents-page.ts",
+      "text": "Cron"
+    },
+    {
+      "count": 1,
+      "kind": "object-property",
+      "name": "label",
+      "path": "ui/src/pages/enterprise-admin/pages/agents-page.ts",
+      "text": "Danh xưng"
+    },
+    {
+      "count": 1,
+      "kind": "object-property",
+      "name": "label",
+      "path": "ui/src/pages/enterprise-admin/pages/agents-page.ts",
+      "text": "Files"
+    },
+    {
+      "count": 1,
+      "kind": "object-property",
+      "name": "label",
+      "path": "ui/src/pages/enterprise-admin/pages/agents-page.ts",
+      "text": "Memory"
+    },
+    {
+      "count": 1,
+      "kind": "object-property",
+      "name": "label",
+      "path": "ui/src/pages/enterprise-admin/pages/agents-page.ts",
+      "text": "Overview"
+    },
+    {
+      "count": 1,
+      "kind": "object-property",
+      "name": "label",
+      "path": "ui/src/pages/enterprise-admin/pages/agents-page.ts",
+      "text": "Revision-safe"
+    },
+    {
+      "count": 1,
+      "kind": "object-property",
+      "name": "label",
+      "path": "ui/src/pages/enterprise-admin/pages/agents-page.ts",
+      "text": "Skills"
+    },
+    {
+      "count": 1,
+      "kind": "object-property",
+      "name": "label",
+      "path": "ui/src/pages/enterprise-admin/pages/agents-page.ts",
+      "text": "Tools"
+    },
+    {
+      "count": 1,
+      "kind": "html-attribute",
+      "name": "aria-label",
+      "path": "ui/src/pages/enterprise-admin/pages/config-appearance-page.ts",
+      "text": "Color mode"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/config-appearance-page.ts",
+      "text": "/app"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/config-appearance-page.ts",
+      "text": "Aa"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/config-appearance-page.ts",
+      "text": "Accent"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/config-appearance-page.ts",
+      "text": "Các lựa chọn dưới đây áp dụng tức thời trong Admin và không thay đổi giao diện"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/config-appearance-page.ts",
+      "text": "Chọn bảng màu nền cho portal quản trị."
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/config-appearance-page.ts",
+      "text": "Color mode"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/config-appearance-page.ts",
+      "text": "Điều chỉnh kích thước chữ trong portal Admin."
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/config-appearance-page.ts",
+      "text": "Khôi phục mặc định"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/config-appearance-page.ts",
+      "text": "Màu nhấn cho nút, focus và trạng thái active."
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/config-appearance-page.ts",
+      "text": "Text scale"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/config-appearance-page.ts",
+      "text": "Theme"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/config-appearance-page.ts",
+      "text": "Theo hệ thống hoặc cố định sáng/tối."
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/config-appearance-page.ts",
+      "text": "Tuỳ chỉnh riêng cho portal Admin trên trình duyệt này."
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/config-appearance-page.ts",
+      "text": "Tùy chọn"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/config-appearance-page.ts",
+      "text": "UI & Appearance"
+    },
+    {
+      "count": 1,
+      "kind": "object-property",
+      "name": "description",
+      "path": "ui/src/pages/enterprise-admin/pages/config-appearance-page.ts",
+      "text": "Giao diện OpenClaw nguyên bản"
+    },
+    {
+      "count": 1,
+      "kind": "object-property",
+      "name": "description",
+      "path": "ui/src/pages/enterprise-admin/pages/config-appearance-page.ts",
+      "text": "Tông màu OpenKnot dịu hơn"
+    },
+    {
+      "count": 1,
+      "kind": "object-property",
+      "name": "description",
+      "path": "ui/src/pages/enterprise-admin/pages/config-appearance-page.ts",
+      "text": "Tương phản cao cho dashboard"
+    },
+    {
+      "count": 1,
+      "kind": "object-property",
+      "name": "label",
+      "path": "ui/src/pages/enterprise-admin/pages/config-appearance-page.ts",
+      "text": "Amber"
+    },
+    {
+      "count": 1,
+      "kind": "object-property",
+      "name": "label",
+      "path": "ui/src/pages/enterprise-admin/pages/config-appearance-page.ts",
+      "text": "Blue"
+    },
+    {
+      "count": 2,
+      "kind": "object-property",
+      "name": "label",
+      "path": "ui/src/pages/enterprise-admin/pages/config-appearance-page.ts",
+      "text": "Claw"
+    },
+    {
+      "count": 1,
+      "kind": "object-property",
+      "name": "label",
+      "path": "ui/src/pages/enterprise-admin/pages/config-appearance-page.ts",
+      "text": "Dash"
+    },
+    {
+      "count": 1,
+      "kind": "object-property",
+      "name": "label",
+      "path": "ui/src/pages/enterprise-admin/pages/config-appearance-page.ts",
+      "text": "Knot"
+    },
+    {
+      "count": 1,
+      "kind": "object-property",
+      "name": "label",
+      "path": "ui/src/pages/enterprise-admin/pages/config-appearance-page.ts",
+      "text": "Mặc định"
+    },
+    {
+      "count": 1,
+      "kind": "object-property",
+      "name": "label",
+      "path": "ui/src/pages/enterprise-admin/pages/config-appearance-page.ts",
+      "text": "Mint"
+    },
+    {
+      "count": 1,
+      "kind": "object-property",
+      "name": "label",
+      "path": "ui/src/pages/enterprise-admin/pages/config-appearance-page.ts",
+      "text": "Pink"
+    },
+    {
+      "count": 1,
+      "kind": "object-property",
+      "name": "label",
+      "path": "ui/src/pages/enterprise-admin/pages/config-appearance-page.ts",
+      "text": "Violet"
+    },
+    {
+      "count": 1,
+      "kind": "html-attribute",
+      "name": "aria-label",
+      "path": "ui/src/pages/enterprise-admin/pages/config-history-page.ts",
+      "text": "Lọc actor hoặc action"
+    },
+    {
+      "count": 1,
+      "kind": "html-attribute",
+      "name": "aria-label",
+      "path": "ui/src/pages/enterprise-admin/pages/config-history-page.ts",
+      "text": "Lọc target"
+    },
+    {
+      "count": 1,
+      "kind": "html-attribute",
+      "name": "placeholder",
+      "path": "ui/src/pages/enterprise-admin/pages/config-history-page.ts",
+      "text": "Lọc actor / action…"
+    },
+    {
+      "count": 1,
+      "kind": "html-attribute",
+      "name": "placeholder",
+      "path": "ui/src/pages/enterprise-admin/pages/config-history-page.ts",
+      "text": "Lọc target…"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/config-history-page.ts",
+      "text": "Actor"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/config-history-page.ts",
+      "text": "Audit action"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/config-history-page.ts",
+      "text": "Backup"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/config-history-page.ts",
+      "text": "Change History & Audit"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/config-history-page.ts",
+      "text": "Chưa có config backup."
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/config-history-page.ts",
+      "text": "Config backup, rollback có CAS và lịch sử thao tác quản trị."
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/config-history-page.ts",
+      "text": "Config revision/backup"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/config-history-page.ts",
+      "text": "Đang tải lịch sử…"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/config-history-page.ts",
+      "text": "Gõ ROLLBACK để xác nhận"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/config-history-page.ts",
+      "text": "Hash/size"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/config-history-page.ts",
+      "text": "Hủy"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/config-history-page.ts",
+      "text": "Kết quả"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/config-history-page.ts",
+      "text": "Không có audit event phù hợp."
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/config-history-page.ts",
+      "text": "Làm mới"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/config-history-page.ts",
+      "text": "Rollback"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/config-history-page.ts",
+      "text": "Target"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/config-history-page.ts",
+      "text": "Thao tác"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/config-history-page.ts",
+      "text": "Thao tác có thể yêu cầu Gateway reload hoặc restart."
+    },
+    {
+      "count": 2,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/config-history-page.ts",
+      "text": "Thời gian"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/config-history-page.ts",
+      "text": "Từ ngày"
+    },
+    {
+      "count": 1,
+      "kind": "html-attribute",
+      "name": "aria-label",
+      "path": "ui/src/pages/enterprise-admin/pages/config-system-page.ts",
+      "text": "Chế độ chỉnh sửa config"
+    },
+    {
+      "count": 1,
+      "kind": "html-attribute",
+      "name": "aria-label",
+      "path": "ui/src/pages/enterprise-admin/pages/config-system-page.ts",
+      "text": "Tìm config path"
+    },
+    {
+      "count": 1,
+      "kind": "html-attribute",
+      "name": "placeholder",
+      "path": "ui/src/pages/enterprise-admin/pages/config-system-page.ts",
+      "text": "Tìm config path…"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/config-system-page.ts",
+      "text": "Advanced Raw JSON"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/config-system-page.ts",
+      "text": "Apply config với CAS"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/config-system-page.ts",
+      "text": "Chỉnh sửa có cấu trúc hoặc Raw JSON, validate và áp dụng bằng CAS."
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/config-system-page.ts",
+      "text": "Config hash:"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/config-system-page.ts",
+      "text": "Đang tải config đã redacted…"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/config-system-page.ts",
+      "text": "false"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/config-system-page.ts",
+      "text": "Gõ APPLY để xác nhận"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/config-system-page.ts",
+      "text": "Không tìm thấy config path phù hợp."
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/config-system-page.ts",
+      "text": "Quy trình an toàn"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/config-system-page.ts",
+      "text": "Raw JSON"
+    },
+    {
+      "count": 2,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/config-system-page.ts",
+      "text": "Review diff & impact"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/config-system-page.ts",
+      "text": "Structured"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/config-system-page.ts",
+      "text": "Sửa draft đã redacted"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/config-system-page.ts",
+      "text": "System Config"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/config-system-page.ts",
+      "text": "Tải lại"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/config-system-page.ts",
+      "text": "Thay đổi yêu cầu reload cấu hình."
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/config-system-page.ts",
+      "text": "Thay đổi yêu cầu restart và có thể làm mất kết nối."
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/config-system-page.ts",
+      "text": "true"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/config-system-page.ts",
+      "text": "Validate schema/plugin/include"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/config-system-page.ts",
+      "text": "Xác nhận APPLY"
+    },
+    {
+      "count": 1,
+      "kind": "html-attribute",
+      "name": "aria-label",
+      "path": "ui/src/pages/enterprise-admin/pages/config-tools-page.ts",
+      "text": "Lọc theo user"
+    },
+    {
+      "count": 1,
+      "kind": "html-attribute",
+      "name": "aria-label",
+      "path": "ui/src/pages/enterprise-admin/pages/config-tools-page.ts",
+      "text": "Tìm tool"
+    },
+    {
+      "count": 1,
+      "kind": "html-attribute",
+      "name": "placeholder",
+      "path": "ui/src/pages/enterprise-admin/pages/config-tools-page.ts",
+      "text": "Tìm tool…"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/config-tools-page.ts",
+      "text": "Agent scope"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/config-tools-page.ts",
+      "text": "Assignable"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/config-tools-page.ts",
+      "text": "Catalog, quyền cấp phát và effective policy theo user."
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/config-tools-page.ts",
+      "text": "Đang tải tool catalog…"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/config-tools-page.ts",
+      "text": "Effective"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/config-tools-page.ts",
+      "text": "Gán quyền"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/config-tools-page.ts",
+      "text": "Không có tool phù hợp."
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/config-tools-page.ts",
+      "text": "Làm mới"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/config-tools-page.ts",
+      "text": "Non-delegable"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/config-tools-page.ts",
+      "text": "Quản lý user"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/config-tools-page.ts",
+      "text": "Read-only"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/config-tools-page.ts",
+      "text": "Risk"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/config-tools-page.ts",
+      "text": "Source"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/config-tools-page.ts",
+      "text": "Tất cả user"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/config-tools-page.ts",
+      "text": "Thao tác"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/config-tools-page.ts",
+      "text": "Tool"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/config-tools-page.ts",
+      "text": "tools"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/config-tools-page.ts",
+      "text": "Tools"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/config-tools-page.ts",
+      "text": "User được cấp"
+    },
+    {
+      "count": 1,
+      "kind": "html-attribute",
+      "name": "aria-label",
+      "path": "ui/src/pages/enterprise-admin/pages/knowledge-page.ts",
+      "text": "Chi tiết vùng tri thức"
+    },
+    {
+      "count": 1,
+      "kind": "html-attribute",
+      "name": "aria-label",
+      "path": "ui/src/pages/enterprise-admin/pages/knowledge-page.ts",
+      "text": "Chọn file tri thức"
+    },
+    {
+      "count": 1,
+      "kind": "html-attribute",
+      "name": "aria-label",
+      "path": "ui/src/pages/enterprise-admin/pages/knowledge-page.ts",
+      "text": "Chọn version file mới"
+    },
+    {
+      "count": 1,
+      "kind": "html-attribute",
+      "name": "placeholder",
+      "path": "ui/src/pages/enterprise-admin/pages/knowledge-page.ts",
+      "text": "Tìm theo tên hoặc slug…"
+    },
+    {
+      "count": 1,
+      "kind": "html-attribute",
+      "name": "placeholder",
+      "path": "ui/src/pages/enterprise-admin/pages/knowledge-page.ts",
+      "text": "Tìm trong candidate…"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/knowledge-page.ts",
+      "text": ". Chỉ Administrator cấp/gỡ Manager."
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/knowledge-page.ts",
+      "text": "· FTS"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/knowledge-page.ts",
+      "text": "· OCR:"
+    },
+    {
+      "count": 2,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/knowledge-page.ts",
+      "text": "· Vector"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/knowledge-page.ts",
+      "text": "· Vector:"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/knowledge-page.ts",
+      "text": "Access rev."
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/knowledge-page.ts",
+      "text": "Access revision"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/knowledge-page.ts",
+      "text": "accountId,viewer|curator|manager"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/knowledge-page.ts",
+      "text": "Agent bindings"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/knowledge-page.ts",
+      "text": "agent:personal:*"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/knowledge-page.ts",
+      "text": "agent:shared:*"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/knowledge-page.ts",
+      "text": "Agents"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/knowledge-page.ts",
+      "text": "Attempt"
+    },
+    {
+      "count": 3,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/knowledge-page.ts",
+      "text": "Cập nhật"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/knowledge-page.ts",
+      "text": "Chỉ Administrator có thể bind/unbind. Mỗi dòng là canonical key"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/knowledge-page.ts",
+      "text": "Chỉ xử lý nội bộ"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/knowledge-page.ts",
+      "text": "Cho phép provider ngoài"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/knowledge-page.ts",
+      "text": "Chưa có candidate sẵn sàng."
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/knowledge-page.ts",
+      "text": "Chưa có vùng tri thức."
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/knowledge-page.ts",
+      "text": "Crawl cùng origin"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/knowledge-page.ts",
+      "text": "Crawl cùng origin (tối đa 50 trang)"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/knowledge-page.ts",
+      "text": "Đã publish"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/knowledge-page.ts",
+      "text": "Đang tải vùng tri thức…"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/knowledge-page.ts",
+      "text": "Đang tải…"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/knowledge-page.ts",
+      "text": "Data egress"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/knowledge-page.ts",
+      "text": "Data egress:"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/knowledge-page.ts",
+      "text": "FTS"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/knowledge-page.ts",
+      "text": "FTS:"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/knowledge-page.ts",
+      "text": "Generation"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/knowledge-page.ts",
+      "text": "hoặc"
+    },
+    {
+      "count": 2,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/knowledge-page.ts",
+      "text": "Hủy"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/knowledge-page.ts",
+      "text": "Index"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/knowledge-page.ts",
+      "text": "Job"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/knowledge-page.ts",
+      "text": "Job đang chạy"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/knowledge-page.ts",
+      "text": "Làm mới"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/knowledge-page.ts",
+      "text": "Lịch sử publication"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/knowledge-page.ts",
+      "text": "Lịch sử version"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/knowledge-page.ts",
+      "text": "Loại"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/knowledge-page.ts",
+      "text": "Lưu bindings"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/knowledge-page.ts",
+      "text": "Lưu thành viên"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/knowledge-page.ts",
+      "text": "Mô tả"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/knowledge-page.ts",
+      "text": "Mỗi dòng:"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/knowledge-page.ts",
+      "text": "Nạp ghi chú"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/knowledge-page.ts",
+      "text": "Nạp URL"
+    },
+    {
+      "count": 3,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/knowledge-page.ts",
+      "text": "Nguồn"
+    },
+    {
+      "count": 2,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/knowledge-page.ts",
+      "text": "Nội dung"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/knowledge-page.ts",
+      "text": "OCR"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/knowledge-page.ts",
+      "text": "Processing"
+    },
+    {
+      "count": 3,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/knowledge-page.ts",
+      "text": "Publication"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/knowledge-page.ts",
+      "text": "Publish candidate"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/knowledge-page.ts",
+      "text": "Purge vĩnh viễn"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/knowledge-page.ts",
+      "text": "Quản lý vùng quyền, version bất biến, candidate và publication mà Agent được phép truy xuất."
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/knowledge-page.ts",
+      "text": "Readiness"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/knowledge-page.ts",
+      "text": "Retry"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/knowledge-page.ts",
+      "text": "Rollback"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/knowledge-page.ts",
+      "text": "Search Preview"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/knowledge-page.ts",
+      "text": "Slug"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/knowledge-page.ts",
+      "text": "Stage"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/knowledge-page.ts",
+      "text": "Tạo draft version"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/knowledge-page.ts",
+      "text": "Tạo version mới ·"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/knowledge-page.ts",
+      "text": "Tạo vùng tri thức"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/knowledge-page.ts",
+      "text": "Tạo zone"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/knowledge-page.ts",
+      "text": "Tên"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/knowledge-page.ts",
+      "text": "Thành viên"
+    },
+    {
+      "count": 3,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/knowledge-page.ts",
+      "text": "Thao tác"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/knowledge-page.ts",
+      "text": "Thay file ·"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/knowledge-page.ts",
+      "text": "Thêm ghi chú"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/knowledge-page.ts",
+      "text": "Thêm URL"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/knowledge-page.ts",
+      "text": "Thời gian"
+    },
+    {
+      "count": 2,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/knowledge-page.ts",
+      "text": "Tiêu đề"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/knowledge-page.ts",
+      "text": "Tối đa 20 file/lần, 50 MiB/file. Có thể tiếp tục theo dõi sau khi reload."
+    },
+    {
+      "count": 2,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/knowledge-page.ts",
+      "text": "Trạng thái"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/knowledge-page.ts",
+      "text": "Tri thức doanh nghiệp"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/knowledge-page.ts",
+      "text": "Upload file"
+    },
+    {
+      "count": 2,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/knowledge-page.ts",
+      "text": "URL"
+    },
+    {
+      "count": 2,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/knowledge-page.ts",
+      "text": "v"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/knowledge-page.ts",
+      "text": "Vector"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/knowledge-page.ts",
+      "text": "Zone"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/knowledge-page.ts",
+      "text": "Zones"
+    },
+    {
+      "count": 1,
+      "kind": "object-property",
+      "name": "label",
+      "path": "ui/src/pages/enterprise-admin/pages/knowledge-page.ts",
+      "text": "Agents"
+    },
+    {
+      "count": 1,
+      "kind": "object-property",
+      "name": "label",
+      "path": "ui/src/pages/enterprise-admin/pages/knowledge-page.ts",
+      "text": "Hoạt động"
+    },
+    {
+      "count": 1,
+      "kind": "object-property",
+      "name": "label",
+      "path": "ui/src/pages/enterprise-admin/pages/knowledge-page.ts",
+      "text": "Nguồn dữ liệu"
+    },
+    {
+      "count": 1,
+      "kind": "object-property",
+      "name": "label",
+      "path": "ui/src/pages/enterprise-admin/pages/knowledge-page.ts",
+      "text": "Search Preview"
+    },
+    {
+      "count": 1,
+      "kind": "object-property",
+      "name": "label",
+      "path": "ui/src/pages/enterprise-admin/pages/knowledge-page.ts",
+      "text": "Thành viên"
+    },
+    {
+      "count": 1,
+      "kind": "object-property",
+      "name": "label",
+      "path": "ui/src/pages/enterprise-admin/pages/knowledge-page.ts",
+      "text": "Tổng quan"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/models-page.ts",
+      "text": "← Quay lại Models"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/models-page.ts",
+      "text": "Đang tải cấu hình Models…"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/models-page.ts",
+      "text": "Thử lại"
+    },
+    {
+      "count": 1,
+      "kind": "html-attribute",
+      "name": "aria-label",
+      "path": "ui/src/pages/enterprise-admin/pages/skills-page.ts",
+      "text": "Lọc theo agent"
+    },
+    {
+      "count": 1,
+      "kind": "html-attribute",
+      "name": "aria-label",
+      "path": "ui/src/pages/enterprise-admin/pages/skills-page.ts",
+      "text": "Lọc theo user"
+    },
+    {
+      "count": 1,
+      "kind": "html-attribute",
+      "name": "aria-label",
+      "path": "ui/src/pages/enterprise-admin/pages/skills-page.ts",
+      "text": "Lọc trạng thái"
+    },
+    {
+      "count": 1,
+      "kind": "html-attribute",
+      "name": "aria-label",
+      "path": "ui/src/pages/enterprise-admin/pages/skills-page.ts",
+      "text": "Nguồn skill"
+    },
+    {
+      "count": 1,
+      "kind": "html-attribute",
+      "name": "aria-label",
+      "path": "ui/src/pages/enterprise-admin/pages/skills-page.ts",
+      "text": "Tìm skill"
+    },
+    {
+      "count": 1,
+      "kind": "html-attribute",
+      "name": "placeholder",
+      "path": "ui/src/pages/enterprise-admin/pages/skills-page.ts",
+      "text": "Lọc theo agent ID"
+    },
+    {
+      "count": 1,
+      "kind": "html-attribute",
+      "name": "placeholder",
+      "path": "ui/src/pages/enterprise-admin/pages/skills-page.ts",
+      "text": "Tìm skill…"
+    },
+    {
+      "count": 1,
+      "kind": "html-attribute",
+      "name": "placeholder",
+      "path": "ui/src/pages/enterprise-admin/pages/skills-page.ts",
+      "text": "Ví dụ: email, github, calendar…"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/skills-page.ts",
+      "text": "← Quay lại kết quả"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/skills-page.ts",
+      "text": "All"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/skills-page.ts",
+      "text": "Bật/tắt và setup chỉ khả dụng khi source hỗ trợ lifecycle ổn định. Quyền user không thay đổi trạng thái kỹ thuật."
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/skills-page.ts",
+      "text": "Cài skill bên ngoài"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/skills-page.ts",
+      "text": "Cài vào agent"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/skills-page.ts",
+      "text": "Catalog occurrence-aware, tách trạng thái kỹ thuật khỏi quyền user"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/skills-page.ts",
+      "text": "Chưa có shared agent"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/skills-page.ts",
+      "text": "Đang tải thông tin skill…"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/skills-page.ts",
+      "text": "Đang tìm…"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/skills-page.ts",
+      "text": "Đang tổng hợp skill catalog…"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/skills-page.ts",
+      "text": "Disabled"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/skills-page.ts",
+      "text": "Effective"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/skills-page.ts",
+      "text": "Không có skill phù hợp bộ lọc."
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/skills-page.ts",
+      "text": "Không tìm thấy skill phù hợp."
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/skills-page.ts",
+      "text": "Không tìm thấy thông tin skill."
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/skills-page.ts",
+      "text": "Needs setup"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/skills-page.ts",
+      "text": "Nền tảng:"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/skills-page.ts",
+      "text": "Nhập tên hoặc chức năng cần tìm trong ClawHub."
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/skills-page.ts",
+      "text": "occurrences"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/skills-page.ts",
+      "text": "Owner agent"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/skills-page.ts",
+      "text": "Phiên bản mới nhất:"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/skills-page.ts",
+      "text": "Quản lý skill"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/skills-page.ts",
+      "text": "Quản lý user"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/skills-page.ts",
+      "text": "Ready"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/skills-page.ts",
+      "text": "Setup reason"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/skills-page.ts",
+      "text": "Skill"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/skills-page.ts",
+      "text": "Source / scope"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/skills-page.ts",
+      "text": "Tất cả user"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/skills-page.ts",
+      "text": "Technical status"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/skills-page.ts",
+      "text": "Thao tác"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/skills-page.ts",
+      "text": "Tìm trên ClawHub"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/skills-page.ts",
+      "text": "Tôi hiểu rủi ro và vẫn cài"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/skills-page.ts",
+      "text": "User được cấp"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/skills-page.ts",
+      "text": "v"
+    },
+    {
+      "count": 1,
+      "kind": "html-attribute",
+      "name": "placeholder",
+      "path": "ui/src/pages/enterprise/admin/account-details-page.ts",
+      "text": "main"
+    },
+    {
+      "count": 1,
+      "kind": "html-attribute",
+      "name": "placeholder",
+      "path": "ui/src/pages/enterprise/admin/account-details-page.ts",
+      "text": "Resource ID"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise/admin/account-details-page.ts",
+      "text": "Administrator"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise/admin/account-details-page.ts",
+      "text": "Agent"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise/admin/account-details-page.ts",
+      "text": "Agent mặc định"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise/admin/account-details-page.ts",
+      "text": "Allow"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise/admin/account-details-page.ts",
+      "text": "Bật Personal Agent"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise/admin/account-details-page.ts",
+      "text": "Cấp Agent, Skill và Tool"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise/admin/account-details-page.ts",
+      "text": "Chọn một tài khoản để quản lý."
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise/admin/account-details-page.ts",
+      "text": "Deny"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise/admin/account-details-page.ts",
+      "text": "Employee"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise/admin/account-details-page.ts",
+      "text": "ID"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise/admin/account-details-page.ts",
+      "text": "Loại"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise/admin/account-details-page.ts",
+      "text": "Lưu tài khoản"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise/admin/account-details-page.ts",
+      "text": "Quyền"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise/admin/account-details-page.ts",
+      "text": "Reset mật khẩu"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise/admin/account-details-page.ts",
+      "text": "Role"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise/admin/account-details-page.ts",
+      "text": "Skill"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise/admin/account-details-page.ts",
+      "text": "Tài khoản hoạt động"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise/admin/account-details-page.ts",
+      "text": "Tên hiển thị"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise/admin/account-details-page.ts",
+      "text": "Thêm / thay thế"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise/admin/account-details-page.ts",
+      "text": "Tool"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise/admin/account-details-page.ts",
+      "text": "Xóa"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise/admin/accounts-page.ts",
+      "text": "Administrator"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise/admin/accounts-page.ts",
+      "text": "Đang tải…"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise/admin/accounts-page.ts",
+      "text": "Employee"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise/admin/accounts-page.ts",
+      "text": "Mật khẩu ban đầu"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise/admin/accounts-page.ts",
+      "text": "Role"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise/admin/accounts-page.ts",
+      "text": "Tài khoản"
+    },
+    {
+      "count": 2,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise/admin/accounts-page.ts",
+      "text": "Tạo tài khoản"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise/admin/accounts-page.ts",
+      "text": "Tên hiển thị"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise/admin/accounts-page.ts",
+      "text": "Username"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise/admin/effective-policy-page.ts",
+      "text": "Agent mặc định:"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise/admin/effective-policy-page.ts",
+      "text": "Hiệu lực"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise/admin/effective-policy-page.ts",
+      "text": "ID"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise/admin/effective-policy-page.ts",
+      "text": "Loại"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise/admin/effective-policy-page.ts",
+      "text": "Personal Agent:"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise/admin/effective-policy-page.ts",
+      "text": "Quyền hiệu lực"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise/admin/effective-policy-page.ts",
+      "text": "Role:"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise/admin/effective-policy-page.ts",
+      "text": "Tool luôn bị khóa với Employee:"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise/auth/change-password-page.ts",
+      "text": ". Mật khẩu mới cần ít nhất 10 ký tự."
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise/auth/change-password-page.ts",
+      "text": "Đổi mật khẩu lần đầu"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise/auth/change-password-page.ts",
+      "text": "Mật khẩu hiện tại"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise/auth/change-password-page.ts",
+      "text": "Mật khẩu mới"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise/auth/change-password-page.ts",
+      "text": "Nhập lại mật khẩu mới"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise/auth/change-password-page.ts",
+      "text": "Xin chào"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise/auth/enterprise-auth-gate.ts",
+      "text": "Đang khởi động OpenClaw…"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise/auth/enterprise-auth-gate.ts",
+      "text": "Thử lại"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise/auth/login-page.ts",
+      "text": "Chưa có tài khoản quản trị đầu tiên."
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise/auth/login-page.ts",
+      "text": "Đăng nhập bằng tài khoản nội bộ OpenClaw."
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise/auth/login-page.ts",
+      "text": "Hãy chạy: openclaw auth bootstrap-admin"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise/auth/login-page.ts",
+      "text": "Mật khẩu"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise/auth/login-page.ts",
+      "text": "OpenClaw Enterprise"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise/auth/login-page.ts",
+      "text": "Username"
+    },
+    {
+      "count": 1,
+      "kind": "html-attribute",
+      "name": "aria-label",
+      "path": "ui/src/pages/enterprise/components/enterprise-shell.ts",
+      "text": "Enterprise navigation"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise/components/enterprise-shell.ts",
+      "text": "Module Enterprise chỉ quản lý quyền tài khoản. Định nghĩa Agent, Skill và Tool vẫn dùng trang OpenClaw gốc."
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise/components/enterprise-shell.ts",
+      "text": "OpenClaw Enterprise"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise/components/enterprise-shell.ts",
+      "text": "Quản lý Agents"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise/components/enterprise-shell.ts",
+      "text": "Quản lý Skills"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise/components/enterprise-shell.ts",
+      "text": "Quản lý Tools & Config"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise/components/enterprise-shell.ts",
+      "text": "Quản trị cấu hình OpenClaw"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise/components/enterprise-shell.ts",
+      "text": "Xin chào"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise/enterprise-page.ts",
+      "text": "Đang tải Enterprise Portal…"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise/user/allowed-agents-page.ts",
+      "text": "Administrator được phép sử dụng toàn bộ Agent hiện có."
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise/user/allowed-agents-page.ts",
+      "text": "Agent hệ thống được cấp"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise/user/allowed-agents-page.ts",
+      "text": "Chưa được cấp Agent hệ thống nào."
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise/user/allowed-agents-page.ts",
+      "text": "Mỗi Agent dùng workspace, session và memory riêng của bạn."
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise/user/allowed-agents-page.ts",
+      "text": "Tạo session mới"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise/user/enterprise-profile-page.ts",
+      "text": "Hồ sơ Enterprise"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise/user/enterprise-profile-page.ts",
+      "text": "Role"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise/user/enterprise-profile-page.ts",
+      "text": "Tên"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise/user/enterprise-profile-page.ts",
+      "text": "Username"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise/user/personal-agent-page.ts",
+      "text": "Agent mặc định:"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise/user/personal-agent-page.ts",
+      "text": "Bắt đầu phiên Personal Agent"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise/user/personal-agent-page.ts",
+      "text": "Personal Agent"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise/user/personal-agent-page.ts",
+      "text": "Personal Agent đang bị quản trị viên tắt."
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise/user/personal-agent-page.ts",
+      "text": "Workspace, memory và session được lưu riêng cho tài khoản"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
       "path": "ui/src/pages/model-providers/default-models-view.ts",
       "text": "i"
     },

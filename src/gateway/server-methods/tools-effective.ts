@@ -47,6 +47,7 @@ import {
   sessionDeliveryOrigin,
 } from "../../utils/delivery-context.shared.js";
 import { getConnectedNodePluginToolsVersion } from "../node-plugin-tool-snapshot.js";
+import { preserveGatewayRequestScopedRuntimeConfig } from "../request-runtime-config.js";
 import { resolveRequestedSessionAgentId } from "../session-request-agent.js";
 import { loadGatewaySessionEntryReadOnly, resolveSessionModelRef } from "../session-utils.js";
 import type { GatewayRequestHandlers, RespondFn } from "./types.js";
@@ -140,10 +141,6 @@ const toolsEffectiveCache = new Map<string, ToolsEffectiveCacheEntry>();
 const toolsEffectiveInflight = new Map<string, Promise<BaseToolsEffectiveResolution>>();
 const mcpConfigSummaryCache = new Map<string, SessionMcpConfigSummary>();
 
-function optionalCacheString(value: string | undefined | null): string {
-  return value?.trim() ?? "";
-}
-
 function buildToolsEffectiveCacheKey(params: {
   sessionKey: string;
   context: TrustedToolsEffectiveContext;
@@ -159,18 +156,18 @@ function buildToolsEffectiveCacheKey(params: {
     // layer is applied after the base cache, so warm/stale runtime state alone
     // never invalidates base entries.
     sessionKey: params.sessionKey,
-    workspaceDir: optionalCacheString(context.workspaceDir),
+    workspaceDir: context.workspaceDir?.trim() ?? "",
     agentId: context.agentId,
-    modelProvider: optionalCacheString(context.modelProvider),
-    modelId: optionalCacheString(context.modelId),
-    messageProvider: optionalCacheString(context.messageProvider),
-    accountId: optionalCacheString(context.accountId),
-    currentChannelId: optionalCacheString(context.currentChannelId),
-    currentThreadTs: optionalCacheString(context.currentThreadTs),
-    groupId: optionalCacheString(context.groupId),
-    groupChannel: optionalCacheString(context.groupChannel),
-    groupSpace: optionalCacheString(context.groupSpace),
-    replyToMode: optionalCacheString(context.replyToMode),
+    modelProvider: context.modelProvider?.trim() ?? "",
+    modelId: context.modelId?.trim() ?? "",
+    messageProvider: context.messageProvider?.trim() ?? "",
+    accountId: context.accountId?.trim() ?? "",
+    currentChannelId: context.currentChannelId?.trim() ?? "",
+    currentThreadTs: context.currentThreadTs?.trim() ?? "",
+    groupId: context.groupId?.trim() ?? "",
+    groupChannel: context.groupChannel?.trim() ?? "",
+    groupSpace: context.groupSpace?.trim() ?? "",
+    replyToMode: context.replyToMode?.trim() ?? "",
   });
 }
 
@@ -332,9 +329,6 @@ function appendToolInventoryNotice(
 }
 
 function formatMcpServerNames(names: readonly string[]): string {
-  if (names.length === 0) {
-    return "configured MCP servers";
-  }
   const visible = names
     .slice(0, 3)
     .map((name) => `"${name}"`)
@@ -586,11 +580,13 @@ async function projectMcpCatalog(params: {
 function resolveTrustedToolsEffectiveContext(params: {
   sessionKey: string;
   requestedAgentId?: string;
+  requestConfig: OpenClawConfig;
   respond: RespondFn;
   dependencies: ToolsEffectiveDependencies;
 }) {
-  // The effective tools request is read-only but security-sensitive. Derive
-  // routing/account/model context from the persisted session, not client params.
+  // The effective tools request is read-only but security-sensitive. Persisted
+  // session state owns identity facts; the server-attested request projection
+  // owns account policy and must not fall back to the host-global config.
   const loaded = params.dependencies.loadGatewaySessionEntryReadOnly(
     params.sessionKey,
     params.requestedAgentId ? { agentId: params.requestedAgentId } : undefined,
@@ -603,11 +599,12 @@ function resolveTrustedToolsEffectiveContext(params: {
     );
     return null;
   }
+  const cfg = preserveGatewayRequestScopedRuntimeConfig(params.requestConfig, loaded.cfg);
 
   const canonicalKey = loaded.canonicalKey ?? params.sessionKey;
   const sessionAgentId = params.dependencies.resolveSessionAgentId({
     sessionKey: canonicalKey,
-    config: loaded.cfg,
+    config: cfg,
     ...(params.requestedAgentId ? { agentId: params.requestedAgentId } : {}),
   });
   if (params.requestedAgentId && params.requestedAgentId !== sessionAgentId) {
@@ -625,19 +622,19 @@ function resolveTrustedToolsEffectiveContext(params: {
   const delivery = params.dependencies.deliveryContextFromSession(loaded.entry);
   const origin = sessionDeliveryOrigin(loaded.entry);
   const resolvedModel = params.dependencies.resolveSessionModelRef(
-    loaded.cfg,
+    cfg,
     loaded.entry,
     sessionAgentId,
   );
   const workspaceDir =
     normalizeOptionalString(loaded.entry.spawnedWorkspaceDir) ??
-    params.dependencies.resolveAgentWorkspaceDir(loaded.cfg, sessionAgentId);
-  const runtimeConfigCacheKey = params.dependencies.resolveRuntimeConfigCacheKey(loaded.cfg);
+    params.dependencies.resolveAgentWorkspaceDir(cfg, sessionAgentId);
+  const runtimeConfigCacheKey = params.dependencies.resolveRuntimeConfigCacheKey(cfg);
   const pluginRegistryVersion = params.dependencies.getActivePluginRegistryVersion();
   const channelRegistryVersion = params.dependencies.getActivePluginChannelRegistryVersion();
   const nodePluginToolsVersion = params.dependencies.getConnectedNodePluginToolsVersion();
   return {
-    cfg: loaded.cfg,
+    cfg,
     agentId: sessionAgentId,
     sessionKey: params.sessionKey,
     sessionId: loaded.entry.sessionId,
@@ -664,7 +661,7 @@ function resolveTrustedToolsEffectiveContext(params: {
     agentHarnessId: normalizeOptionalString(loaded.entry.agentHarnessId),
     toolOverrides: loaded.entry.toolOverrides,
     replyToMode: params.dependencies.resolveReplyToMode(
-      loaded.cfg,
+      cfg,
       delivery?.channel ?? origin?.provider,
       delivery?.accountId ?? origin?.accountId,
       loaded.entry.chatType ?? origin?.chatType,
@@ -710,6 +707,7 @@ async function handleToolsEffectiveRequest(params: {
   const trustedContext = resolveTrustedToolsEffectiveContext({
     sessionKey: params.rawParams.sessionKey,
     requestedAgentId: sessionOwner.agentId,
+    requestConfig: cfg,
     respond: params.respond,
     dependencies: params.dependencies,
   });

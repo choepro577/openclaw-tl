@@ -39,7 +39,20 @@ describe("Control UI build chunking", () => {
       controlUiStableChunkName("/tmp/openclaw-pnpm-node-modules/@noble/ed25519/index.js"),
     ).toBe("gateway-runtime");
     expect(controlUiStableChunkName("/repo/ui/src/lib/gateway-methods.ts")).toBe("gateway-runtime");
+    expect(controlUiStableChunkName("/repo/ui/src/lib/cron/index.ts")).toBe("cron-runtime");
+    expect(controlUiStableChunkName("/repo/ui/src/lib/config/config-write-coordinator.ts")).toBe(
+      "config-runtime",
+    );
+    expect(
+      controlUiStableChunkName("/repo/ui/src/components/app-sidebar-session-navigation.ts"),
+    ).toBe("session-navigation-runtime");
     expect(controlUiStableChunkName("/repo/ui/src/app/app-host.ts")).toBeUndefined();
+    expect(controlUiStableChunkName("/repo/ui/node_modules/3d-force-graph/dist/index.js")).toBe(
+      "knowledge-graph-3d-runtime",
+    );
+    expect(controlUiStableChunkName("/repo/ui/node_modules/three-forcegraph/dist/index.js")).toBe(
+      "knowledge-graph-force-runtime",
+    );
   });
 
   it("bounds only the initial module graph without recursively absorbing dependencies", () => {

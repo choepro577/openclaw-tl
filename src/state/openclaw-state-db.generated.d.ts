@@ -659,6 +659,291 @@ export interface DiagnosticStabilityBundles {
   reason: string;
 }
 
+export interface EnterpriseKnowledgeAgentZoneBindings {
+  agent_resource_key: string;
+  created_at: number;
+  created_by_account_id: string | null;
+  zone_id: string;
+}
+
+export interface EnterpriseKnowledgeArtifactRevisions {
+  artifact_checksum: string;
+  artifact_hash: string;
+  artifact_schema_version: number;
+  created_at: number;
+  extractor_identity: string;
+  source_version_id: string;
+}
+
+export interface EnterpriseKnowledgeChanges {
+  entity_id: string | null;
+  entity_type: string;
+  occurred_at: number;
+  operation: string;
+  progress_current: number | null;
+  progress_total: number | null;
+  revision: number | null;
+  safe_error_code: string | null;
+  sequence: Generated<number>;
+  stage: string | null;
+  status: string | null;
+  zone_id: string;
+}
+
+export interface EnterpriseKnowledgeGenerationArtifacts {
+  artifact_hash: string;
+  generation_id: string;
+  source_version_id: string;
+}
+
+export interface EnterpriseKnowledgeGraphEdgeReviews {
+  created_at: number;
+  edge_kind: string | null;
+  evidence_hash: string;
+  fingerprint: string;
+  note: string | null;
+  review_status: string;
+  reviewed_by_account_id: string | null;
+  updated_at: number;
+  zone_id: string;
+}
+
+export interface EnterpriseKnowledgeGraphExports {
+  checksum: string | null;
+  completed_at: number | null;
+  created_at: number;
+  entry_count: Generated<number>;
+  expires_at: number;
+  file_path: string | null;
+  generation_id: string;
+  id: string;
+  idempotency_key: string;
+  publication_id: string;
+  requested_by_account_id: string;
+  safe_error_code: string | null;
+  status: string;
+  uncompressed_bytes: Generated<number>;
+  zone_id: string;
+}
+
+export interface EnterpriseKnowledgeGraphManualEdges {
+  created_at: number;
+  created_by_account_id: string | null;
+  edge_kind: string;
+  evidence_locator_json: string;
+  evidence_segment_id: string;
+  evidence_source_version_id: string;
+  id: string;
+  note: string | null;
+  revision: Generated<number>;
+  source_canonical_key: string;
+  status: Generated<string>;
+  target_canonical_key: string;
+  updated_at: number;
+  updated_by_account_id: string | null;
+  zone_id: string;
+}
+
+export interface EnterpriseKnowledgeGraphSettings {
+  auto_approval_threshold: Generated<number>;
+  created_at: number;
+  enabled: Generated<number>;
+  enrichment_enabled: Generated<number>;
+  revision: Generated<number>;
+  updated_at: number;
+  updated_by_account_id: string | null;
+  zone_id: string;
+}
+
+export interface EnterpriseKnowledgeIdempotency {
+  actor_account_id: string;
+  audience: string;
+  created_at: number;
+  expires_at: number;
+  idempotency_key: string;
+  operation: string;
+  request_hash: string;
+  response_json: string | null;
+  response_status: number | null;
+  state: string;
+}
+
+export interface EnterpriseKnowledgeIndexGenerations {
+  artifact_checksum: string | null;
+  build_revision: number | null;
+  completed_at: number | null;
+  created_at: number;
+  embedding_identity_json: string | null;
+  graph_edge_count: number | null;
+  graph_enrichment_identity_json: string | null;
+  graph_node_count: number | null;
+  graph_orphan_count: number | null;
+  graph_proposed_count: number | null;
+  graph_schema_version: number | null;
+  graph_status: string | null;
+  id: string;
+  integrity_status: Generated<string>;
+  lexical_status: string;
+  retired_at: number | null;
+  source_set_revision: number;
+  status: string;
+  vector_status: string;
+  zone_id: string;
+}
+
+export interface EnterpriseKnowledgeJobSteps {
+  attempt: Generated<number>;
+  checkpoint_ref: string | null;
+  completed_at: number | null;
+  degraded_reason: string | null;
+  job_id: string;
+  progress_current: number | null;
+  progress_total: number | null;
+  safe_error_code: string | null;
+  stage: string;
+  started_at: number | null;
+  status: string;
+  step_id: string;
+  updated_at: number;
+}
+
+export interface EnterpriseKnowledgeJobs {
+  attempt: Generated<number>;
+  available_at: number;
+  claim_owner: string | null;
+  claim_token: string | null;
+  completed_at: number | null;
+  created_at: number;
+  created_by_account_id: string | null;
+  generation_id: string | null;
+  heartbeat_at: number | null;
+  id: string;
+  kind: string;
+  lease_expires_at: number | null;
+  pipeline_generation: number;
+  progress_current: Generated<number>;
+  progress_total: Generated<number>;
+  retry_after_ms: number | null;
+  safe_error_code: string | null;
+  source_id: string | null;
+  source_version_id: string | null;
+  stage: string;
+  status: string;
+  updated_at: number;
+  zone_id: string;
+}
+
+export interface EnterpriseKnowledgePublicationSources {
+  position: number;
+  publication_id: string;
+  source_id: string;
+  source_version_id: string;
+}
+
+export interface EnterpriseKnowledgePublications {
+  degraded_override: Generated<number>;
+  degraded_reason: string | null;
+  generation_id: string;
+  id: string;
+  lexical_status: string;
+  publication_number: number;
+  published_at: number;
+  published_by_account_id: string | null;
+  source_set_revision: number;
+  vector_status: string;
+  zone_id: string;
+}
+
+export interface EnterpriseKnowledgeSourceVersions {
+  blob_hash: string | null;
+  byte_size: number;
+  completed_at: number | null;
+  content_hash: string;
+  created_at: number;
+  created_by_account_id: string | null;
+  id: string;
+  mime_type: string;
+  normalized_artifact_hash: string | null;
+  ocr_provenance_json: string | null;
+  original_name: string | null;
+  parser_provenance_json: string | null;
+  pipeline_generation: number;
+  processing_status: Generated<string>;
+  publication_status: Generated<string>;
+  safe_error_code: string | null;
+  segment_count: number | null;
+  source_id: string;
+  vector_status: Generated<string>;
+  version_number: number;
+  zone_id: string;
+}
+
+export interface EnterpriseKnowledgeSources {
+  canonical_url: string | null;
+  created_at: number;
+  created_by_account_id: string | null;
+  current_version_number: Generated<number>;
+  draft_revision: Generated<number>;
+  id: string;
+  kind: string;
+  status: Generated<string>;
+  title: string;
+  updated_at: number;
+  updated_by_account_id: string | null;
+  zone_id: string;
+}
+
+export interface EnterpriseKnowledgeUploads {
+  chunk_claim_expires_at: number | null;
+  chunk_claim_offset: number | null;
+  chunk_claim_size: number | null;
+  chunk_claim_token: string | null;
+  committed_source_version_id: string | null;
+  created_at: number;
+  declared_mime_type: string;
+  expected_hash: string | null;
+  expected_size: number;
+  expires_at: number;
+  id: string;
+  original_name: string;
+  owner_account_id: string;
+  received_size: Generated<number>;
+  revision: Generated<number>;
+  staging_name: string;
+  state: string;
+  target_source_id: string | null;
+  title: string;
+  updated_at: number;
+  zone_id: string;
+}
+
+export interface EnterpriseKnowledgeZoneMemberships {
+  account_id: string;
+  created_at: number;
+  created_by_account_id: string | null;
+  role: string;
+  updated_at: number;
+  zone_id: string;
+}
+
+export interface EnterpriseKnowledgeZones {
+  access_revision: Generated<number>;
+  active_publication_id: string | null;
+  build_revision: number | null;
+  created_at: number;
+  created_by_account_id: string | null;
+  description: Generated<string>;
+  egress_policy: Generated<string>;
+  id: string;
+  name: string;
+  revision: Generated<number>;
+  slug: string;
+  source_set_revision: Generated<number>;
+  status: Generated<string>;
+  updated_at: number;
+  updated_by_account_id: string | null;
+}
+
 export interface ExecApprovalsConfig {
   agent_count: number;
   allowlist_count: number;
@@ -1868,6 +2153,25 @@ export interface DB {
   device_pairing_pending: DevicePairingPending;
   diagnostic_events: DiagnosticEvents;
   diagnostic_stability_bundles: DiagnosticStabilityBundles;
+  enterprise_knowledge_agent_zone_bindings: EnterpriseKnowledgeAgentZoneBindings;
+  enterprise_knowledge_artifact_revisions: EnterpriseKnowledgeArtifactRevisions;
+  enterprise_knowledge_changes: EnterpriseKnowledgeChanges;
+  enterprise_knowledge_generation_artifacts: EnterpriseKnowledgeGenerationArtifacts;
+  enterprise_knowledge_graph_edge_reviews: EnterpriseKnowledgeGraphEdgeReviews;
+  enterprise_knowledge_graph_exports: EnterpriseKnowledgeGraphExports;
+  enterprise_knowledge_graph_manual_edges: EnterpriseKnowledgeGraphManualEdges;
+  enterprise_knowledge_graph_settings: EnterpriseKnowledgeGraphSettings;
+  enterprise_knowledge_idempotency: EnterpriseKnowledgeIdempotency;
+  enterprise_knowledge_index_generations: EnterpriseKnowledgeIndexGenerations;
+  enterprise_knowledge_job_steps: EnterpriseKnowledgeJobSteps;
+  enterprise_knowledge_jobs: EnterpriseKnowledgeJobs;
+  enterprise_knowledge_publication_sources: EnterpriseKnowledgePublicationSources;
+  enterprise_knowledge_publications: EnterpriseKnowledgePublications;
+  enterprise_knowledge_source_versions: EnterpriseKnowledgeSourceVersions;
+  enterprise_knowledge_sources: EnterpriseKnowledgeSources;
+  enterprise_knowledge_uploads: EnterpriseKnowledgeUploads;
+  enterprise_knowledge_zone_memberships: EnterpriseKnowledgeZoneMemberships;
+  enterprise_knowledge_zones: EnterpriseKnowledgeZones;
   exec_approvals_config: ExecApprovalsConfig;
   execution_decision_facts: ExecutionDecisionFacts;
   execution_identity_contexts: ExecutionIdentityContexts;

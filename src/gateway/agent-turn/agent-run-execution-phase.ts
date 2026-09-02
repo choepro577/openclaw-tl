@@ -273,7 +273,7 @@ export function startAgentRunExecution(params: {
         withAgentRunDispatchExecutionIdentity(
           {
             commandRuntimeContext: {
-              config: replyDispatchRuntime.config,
+              config: params.cfgForAgent ?? params.cfg,
               pluginGeneration: replyDispatchRuntime.pluginGeneration,
             },
             cronCreatorAuthority: prepared.cronCreatorAuthority,

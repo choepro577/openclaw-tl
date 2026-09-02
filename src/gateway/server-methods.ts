@@ -45,7 +45,10 @@ import {
 } from "./methods/registry.js";
 import { isOperatorScope } from "./operator-scopes.js";
 import { isRoleAuthorizedForMethod, parseGatewayRole } from "./role-policy.js";
-import { authenticatedProfileUnavailableError } from "./server-methods/gateway-client-identity.js";
+import {
+  authenticatedProfileUnavailableError,
+  enterpriseUserPortalIdentity,
+} from "./server-methods/gateway-client-identity.js";
 import { createLazyCoreHandlers, lazyHandlerModule } from "./server-methods/lazy-core-handlers.js";
 import { isTargetedNonSafeGatewayRestartRequest } from "./server-methods/restart-request.js";
 import type {
@@ -66,6 +69,15 @@ import {
 import { classifyGatewayStaleInstall } from "./stale-install.js";
 
 type CoreGatewayHandlerModuleLoader = () => Promise<GatewayRequestHandlers>;
+
+const ENTERPRISE_AUTOMATION_CAPABILITY_METHODS = new Set([
+  "cron.add",
+  "cron.update",
+  "cron.remove",
+  "cron.run",
+  "cron.scratch.get",
+  "cron.scratch.set",
+]);
 
 const CORE_GATEWAY_HANDLER_MODULES = {
   agent: () => import("./server-methods/agent.js").then((module) => module.agentHandlers),
@@ -103,6 +115,10 @@ const CORE_GATEWAY_HANDLER_MODULES = {
     import("./server-methods/doctor.js").then((module) => module.createDoctorHandlers()),
   environments: () =>
     import("./server-methods/environments.js").then((module) => module.environmentsHandlers),
+  "enterprise-knowledge": () =>
+    import("./server-methods/enterprise-knowledge.js").then(
+      (module) => module.enterpriseKnowledgeHandlers,
+    ),
   worktrees: () =>
     import("./server-methods/worktrees.js").then((module) => module.worktreesHandlers),
   "exec-approvals": () =>
@@ -267,6 +283,12 @@ function authorizeGatewayMethod(
     return null;
   }
   if (scopes.includes(ADMIN_SCOPE)) {
+    return null;
+  }
+  if (
+    enterpriseUserPortalIdentity(client) &&
+    ENTERPRISE_AUTOMATION_CAPABILITY_METHODS.has(method)
+  ) {
     return null;
   }
   const registeredScope = methodRegistry.getScope(method);

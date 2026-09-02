@@ -2,6 +2,7 @@
 import { html, nothing } from "lit";
 import type { GatewaySessionRow, SessionsListResult } from "../../../api/types.ts";
 import "../../../components/openclaw-mascot.ts";
+import { enterpriseUserChatCopy } from "../../../i18n/enterprise-user-chat.ts";
 import { t } from "../../../i18n/index.ts";
 import { resolveAssistantTextAvatar, resolveChatAvatarRenderUrl } from "../../../lib/avatar.ts";
 import { formatRelativeTimestamp } from "../../../lib/format.ts";
@@ -30,6 +31,8 @@ type ChatWelcomeProps = {
   sessionKey?: string;
   sessionHost?: UiSessionDefaultsHost | null;
   modelSetupRequired?: boolean;
+  enterpriseUserPresentation?: boolean;
+  enterpriseUserUnavailable?: boolean;
   onModelSetup?: () => void;
   onDraftChange: (next: string) => void;
   onSend: () => void;
@@ -126,10 +129,21 @@ function renderWelcomeRecentSessions(
   `;
 }
 
-function renderWelcomeSuggestions(props: Pick<ChatWelcomeProps, "onDraftChange" | "onSend">) {
+function renderWelcomeSuggestions(
+  props: Pick<
+    ChatWelcomeProps,
+    "enterpriseUserPresentation" | "enterpriseUserUnavailable" | "onDraftChange" | "onSend"
+  >,
+) {
+  if (props.enterpriseUserUnavailable) {
+    return nothing;
+  }
+  const keys = props.enterpriseUserPresentation
+    ? WELCOME_SUGGESTION_KEYS.slice(0, 2)
+    : WELCOME_SUGGESTION_KEYS;
   return html`
     <div class="agent-chat__suggestions">
-      ${WELCOME_SUGGESTION_KEYS.map((key) => {
+      ${keys.map((key) => {
         const text = t(key);
         return html`
           <button
@@ -231,9 +245,11 @@ export function renderWelcomeState(props: ChatWelcomeProps) {
         assistantAvatarUrl: props.assistantAvatarUrl,
         hint:
           props.hint ??
-          html`${t("chat.welcome.hintBeforeShortcut")} <kbd>/</kbd> ${t(
-              "chat.welcome.hintAfterShortcut",
-            )}`,
+          (props.enterpriseUserPresentation
+            ? enterpriseUserChatCopy("welcomeHint")
+            : html`${t("chat.welcome.hintBeforeShortcut")} <kbd>/</kbd> ${t(
+                  "chat.welcome.hintAfterShortcut",
+                )}`),
       })}
       ${props.composer ?? nothing}
       ${recentSessions.length > 0

@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import fsSync from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
 
@@ -47,5 +48,45 @@ async function collectEntries(root: string, relativeDir = ""): Promise<SkillTree
 /** Digests every installed skill file except OpenClaw's own provenance metadata. */
 export async function digestClawHubSkillTree(skillDir: string): Promise<string> {
   const entries = await collectEntries(skillDir);
+  return `sha256:${createHash("sha256").update(JSON.stringify(entries)).digest("hex")}`;
+}
+
+function collectEntriesSync(root: string, relativeDir = ""): SkillTreeEntry[] {
+  const absoluteDir = path.join(root, relativeDir);
+  const entries = fsSync.readdirSync(absoluteDir, { withFileTypes: true });
+  const collected: SkillTreeEntry[] = [];
+  for (const entry of entries.toSorted((left, right) =>
+    left.name < right.name ? -1 : left.name > right.name ? 1 : 0,
+  )) {
+    if (!relativeDir && EXCLUDED_METADATA_DIRS.has(entry.name)) {
+      continue;
+    }
+    const relativePath = path.join(relativeDir, entry.name);
+    const portablePath = relativePath.split(path.sep).join("/");
+    const stat = fsSync.lstatSync(path.join(root, relativePath));
+    if (stat.isSymbolicLink() || (!stat.isDirectory() && !stat.isFile())) {
+      throw new Error(`Skill tree contains unsupported entry ${JSON.stringify(portablePath)}.`);
+    }
+    if (stat.isDirectory()) {
+      collected.push({ path: portablePath, type: "directory" });
+      collected.push(...collectEntriesSync(root, relativePath));
+      continue;
+    }
+    if (stat.nlink > 1) {
+      throw new Error(`Skill tree contains hard-linked file ${JSON.stringify(portablePath)}.`);
+    }
+    const content = fsSync.readFileSync(path.join(root, relativePath));
+    collected.push({
+      path: portablePath,
+      type: "file",
+      sha256: createHash("sha256").update(content).digest("hex"),
+    });
+  }
+  return collected;
+}
+
+/** Synchronous variant for the request-config admission boundary. */
+export function digestClawHubSkillTreeSync(skillDir: string): string {
+  const entries = collectEntriesSync(skillDir);
   return `sha256:${createHash("sha256").update(JSON.stringify(entries)).digest("hex")}`;
 }

@@ -59,6 +59,7 @@ import { resolveOpenClawStateSqlitePath } from "../../state/openclaw-state-db.pa
 import { withEnvAsync } from "../../test-utils/env.js";
 import { normalizeSessionDeliveryState } from "../../utils/delivery-context.shared.js";
 import { consumeCronCreatorAuthorityGrant } from "../cron-creator-authority-grant.js";
+import { markGatewayRequestScopedRuntimeConfig } from "../request-runtime-config.js";
 import { createChatRunState } from "../server-chat-state.js";
 import { STALE_WORKER_BUILD_REASON } from "../worker-environments/admission.js";
 import { handleChatSend, handleChatSendWithRuntimeTools } from "./chat-send-handler.js";
@@ -1385,6 +1386,30 @@ describe("chat directive tag stripping for non-streaming final payloads", () => 
 
     expect(dispatchInboundMessageMock).toHaveBeenLastCalledWith(
       expect.objectContaining({ toolsAllow: ["read"] }),
+    );
+  });
+
+  it("preserves request-scoped config through chat session lookup and runtime dispatch", async () => {
+    await createGatewayUserTurnSqliteFixture("openclaw-chat-send-request-config-");
+    mockState.config = {
+      agents: { entries: { main: { workspace: "/tmp/global-main-workspace" } } },
+    };
+    const scopedConfig = markGatewayRequestScopedRuntimeConfig({
+      agents: { entries: { main: { workspace: "/tmp/enterprise-main-workspace" } } },
+    });
+    const context = createChatContext();
+    context.getRuntimeConfig = () => scopedConfig;
+
+    await runNonStreamingChatSend({
+      context,
+      respond: vi.fn(),
+      idempotencyKey: "idem-request-scoped-config",
+      expectBroadcast: false,
+      waitFor: "dedupe",
+    });
+
+    expect(dispatchInboundMessageMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({ cfg: scopedConfig }),
     );
   });
 
@@ -7297,6 +7322,8 @@ describe("chat directive tag stripping for non-streaming final payloads", () => 
       },
     ];
     mockState.savedMediaResults = [{ path: "/tmp/offloaded-big.png", contentType: "image/png" }];
+    mockState.sandboxWorkspace = { workspaceDir: "/sandbox/workspace" };
+    mockState.stagedRelativePaths = ["media/inbound/offloaded-big.png"];
     const { send } = createChatRequestFixture();
     const bigPng = Buffer.alloc(2_100_000);
     bigPng.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a], 0);
@@ -7322,6 +7349,13 @@ describe("chat directive tag stripping for non-streaming final payloads", () => 
 
     expect(mockState.lastDispatchImages).toHaveLength(1);
     expect(mockState.lastDispatchImageOrder).toEqual(["inline", "offloaded"]);
+    expect(mockState.lastDispatchCtx?.media).toEqual([
+      {
+        path: "media/inbound/offloaded-big.png",
+        contentType: "image/png",
+        workspaceDir: "/sandbox/workspace",
+      },
+    ]);
   });
 
   it("maps media offload failures to UNAVAILABLE in chat.send", async () => {

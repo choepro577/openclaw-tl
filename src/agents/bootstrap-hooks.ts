@@ -2,6 +2,7 @@
  * Applies internal agent bootstrap hooks before workspace context is injected.
  */
 import type { OpenClawConfig } from "../config/types.openclaw.js";
+import { appendEnterpriseUserAgentBootstrap } from "../enterprise/user/personal-agent-bootstrap.js";
 import type { AgentBootstrapHookContext } from "../hooks/internal-hooks.js";
 import { createInternalHookEvent, triggerInternalHook } from "../hooks/internal-hooks.js";
 import { resolveAgentIdFromSessionKey } from "../routing/session-key.js";
@@ -20,9 +21,15 @@ export async function applyBootstrapHookOverrides(params: {
   const agentId =
     params.agentId ??
     (params.sessionKey ? resolveAgentIdFromSessionKey(params.sessionKey) : undefined);
+  const enterpriseFiles = appendEnterpriseUserAgentBootstrap({
+    files: params.files,
+    workspaceDir: params.workspaceDir,
+    config: params.config,
+    agentId,
+  });
   const context: AgentBootstrapHookContext = {
     workspaceDir: params.workspaceDir,
-    bootstrapFiles: params.files,
+    bootstrapFiles: enterpriseFiles,
     cfg: params.config,
     sessionKey: params.sessionKey,
     sessionId: params.sessionId,
@@ -31,5 +38,5 @@ export async function applyBootstrapHookOverrides(params: {
   const event = createInternalHookEvent("agent", "bootstrap", sessionKey, context);
   await triggerInternalHook(event);
   const updated = (event.context as AgentBootstrapHookContext).bootstrapFiles;
-  return Array.isArray(updated) ? updated : params.files;
+  return Array.isArray(updated) ? updated : enterpriseFiles;
 }

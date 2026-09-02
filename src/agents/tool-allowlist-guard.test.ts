@@ -57,6 +57,17 @@ describe("tool allowlist guard", () => {
     ).toBeNull();
   });
 
+  it("allows a server-scoped text-only fallback without granting unavailable tools", () => {
+    expect(
+      buildEmptyExplicitToolAllowlistError({
+        sources: [{ label: "agents.main.tools.allow", entries: ["read", "exec"] }],
+        callableToolNames: [],
+        toolsEnabled: true,
+        allowTextOnlyFallback: true,
+      }),
+    ).toBeNull();
+  });
+
   it("still enforces command-time allowlists for explicitly tool-less runs", () => {
     const error = buildEmptyExplicitToolAllowlistError({
       sources: [

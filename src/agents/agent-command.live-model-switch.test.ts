@@ -1163,6 +1163,29 @@ describe("agentCommand – LiveSessionModelSwitchError retry", () => {
     expect(state.resolvePluginMetadataSnapshotMock).not.toHaveBeenCalled();
   });
 
+  it("uses the request-scoped Gateway config for command preparation", async () => {
+    const scopedConfig = {
+      agents: {
+        defaults: {
+          models: { "openai/gpt-5.4": {} },
+        },
+      },
+    };
+
+    const prepared = await prepareAgentCommandExecution(
+      { message: "/demo", to: "+1234567890" },
+      {} as never,
+      {
+        config: scopedConfig,
+        pluginGeneration: {
+          pluginMetadataSnapshot: state.manifestMetadataSnapshot,
+        } as never,
+      },
+    );
+
+    expect(prepared.cfg).toBe(scopedConfig);
+  });
+
   it("retries with the switched provider/model when LiveSessionModelSwitchError is thrown", async () => {
     setupModelSwitchRetry({
       provider: "openai",

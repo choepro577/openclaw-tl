@@ -74,7 +74,7 @@ export function createReplyMediaPathNormalizer(params: {
   let sandboxRootPromise: Promise<string | undefined> | undefined = explicitSandboxRoot
     ? Promise.resolve(explicitSandboxRoot)
     : undefined;
-  const persistedMediaBySource = new Map<string, Promise<string>>();
+  const persistedMediaBySource = new Map<string, Promise<{ path: string; newlyPersisted: true }>>();
 
   const resolveSandboxRoot = async (): Promise<string | undefined> => {
     if (!sandboxRootPromise) {
@@ -105,13 +105,15 @@ export function createReplyMediaPathNormalizer(params: {
       groupSpace: params.groupSpace,
     });
 
-  const persistLocalReplyMedia = async (media: string): Promise<string> => {
+  const persistLocalReplyMedia = async (
+    media: string,
+  ): Promise<{ path: string; newlyPersisted: boolean }> => {
     if (!isLikelyLocalMediaSource(media)) {
-      return media;
+      return { path: media, newlyPersisted: false };
     }
     const managedMediaPath = await resolveAllowedManagedMediaPath(media);
     if (managedMediaPath) {
-      return managedMediaPath;
+      return { path: managedMediaPath, newlyPersisted: false };
     }
     const cached = persistedMediaBySource.get(media);
     if (cached) {
@@ -120,7 +122,7 @@ export function createReplyMediaPathNormalizer(params: {
     const persistPromise = resolveOutboundAttachmentFromUrl(media, maxBytes, {
       mediaAccess: resolveMediaAccessForSource(media),
     })
-      .then((saved) => saved.path)
+      .then((saved) => ({ path: saved.path, newlyPersisted: true as const }))
       .catch((err: unknown) => {
         persistedMediaBySource.delete(media);
         throw err;
@@ -147,18 +149,21 @@ export function createReplyMediaPathNormalizer(params: {
     }
   };
 
-  const normalizeMediaSource = async (raw: string): Promise<string> => {
+  const normalizeMediaSource = async (
+    raw: string,
+  ): Promise<{ source: string; trustedLocalMedia: boolean }> => {
     const media = raw.trim();
     if (!media) {
-      return media;
+      return { source: media, trustedLocalMedia: false };
     }
     assertMediaNotDataUrl(media);
     if (isPassThroughRemoteMediaSource(media)) {
-      return media;
+      return { source: media, trustedLocalMedia: false };
     }
     const absoluteWorkspaceMedia = resolveAbsoluteWorkspaceMedia(media);
     if (absoluteWorkspaceMedia) {
-      return await persistLocalReplyMedia(absoluteWorkspaceMedia);
+      const persisted = await persistLocalReplyMedia(absoluteWorkspaceMedia);
+      return { source: persisted.path, trustedLocalMedia: persisted.newlyPersisted };
     }
     const isRelativeLocalMedia =
       isLikelyLocalMediaSource(media) &&
@@ -183,20 +188,23 @@ export function createReplyMediaPathNormalizer(params: {
         }
         throw err;
       }
-      return await persistLocalReplyMedia(sandboxResolvedMedia);
+      const persisted = await persistLocalReplyMedia(sandboxResolvedMedia);
+      return { source: persisted.path, trustedLocalMedia: persisted.newlyPersisted };
     }
     if (isRelativeLocalMedia) {
-      return await persistLocalReplyMedia(resolveWorkspaceRelativeMedia(media));
+      const persisted = await persistLocalReplyMedia(resolveWorkspaceRelativeMedia(media));
+      return { source: persisted.path, trustedLocalMedia: persisted.newlyPersisted };
     }
     if (!isLikelyLocalMediaSource(media)) {
-      return media;
+      return { source: media, trustedLocalMedia: false };
     }
     if (FILE_URL_RE.test(media)) {
       throw new Error(
         "Host-local MEDIA file URLs are blocked in normal replies. Use a safe path or the message tool.",
       );
     }
-    return await persistLocalReplyMedia(media);
+    const persisted = await persistLocalReplyMedia(media);
+    return { source: persisted.path, trustedLocalMedia: persisted.newlyPersisted };
   };
 
   return async (payload) => {
@@ -208,8 +216,10 @@ export function createReplyMediaPathNormalizer(params: {
     const normalizedMedia: string[] = [];
     const seen = new Set<string>();
     let firstMediaDropError: unknown;
+    let sawNormalizedLocalMedia = false;
+    let allNormalizedLocalMediaTrusted = true;
     for (const media of mediaList) {
-      let normalized: string;
+      let normalized: Awaited<ReturnType<typeof normalizeMediaSource>>;
       try {
         normalized = await normalizeMediaSource(media);
       } catch (err) {
@@ -217,11 +227,15 @@ export function createReplyMediaPathNormalizer(params: {
         logVerbose(`dropping blocked reply media ${media}: ${String(err)}`);
         continue;
       }
-      if (!normalized || seen.has(normalized)) {
+      if (!normalized.source || seen.has(normalized.source)) {
         continue;
       }
-      seen.add(normalized);
-      normalizedMedia.push(normalized);
+      seen.add(normalized.source);
+      normalizedMedia.push(normalized.source);
+      if (isLikelyLocalMediaSource(normalized.source)) {
+        sawNormalizedLocalMedia = true;
+        allNormalizedLocalMediaTrusted &&= normalized.trustedLocalMedia;
+      }
     }
 
     const text =
@@ -243,6 +257,10 @@ export function createReplyMediaPathNormalizer(params: {
       text,
       mediaUrl: normalizedMedia[0],
       mediaUrls: normalizedMedia,
+      ...(payload.trustedLocalMedia === true ||
+      (sawNormalizedLocalMedia && allNormalizedLocalMediaTrusted)
+        ? { trustedLocalMedia: true }
+        : {}),
     });
   };
 }

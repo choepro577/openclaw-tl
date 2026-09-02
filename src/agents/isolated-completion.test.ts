@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createDeferred } from "../../test/helpers/promise.js";
+import { markGatewayRequestScopedRuntimeConfig } from "../gateway/request-runtime-config.js";
 import {
   type AgentRunDelegatedAuthority,
   validateAgentRunDelegatedAuthority,
@@ -186,6 +187,39 @@ beforeEach(() => {
 });
 
 describe("runIsolatedCompletion", () => {
+  it("keeps a request-scoped runtime config at the isolated completion boundary", async () => {
+    const runIsolatedCompletionV2 = vi.fn(async () => ({
+      assistant: assistant([{ type: "text", text: "native result" }]),
+    }));
+    mocks.getRegisteredAgentHarness.mockReturnValue({
+      harness: {
+        id: "codex",
+        label: "Codex",
+        authBootstrap: "harness",
+        supports: () => ({ supported: true }),
+        runAttempt: vi.fn(),
+        runIsolatedCompletionV2,
+      } satisfies AgentHarness,
+    });
+    const config = markGatewayRequestScopedRuntimeConfig({});
+
+    await runIsolatedCompletion({
+      ...request(),
+      config,
+      agentId: "enterprise-personal-account",
+      agentHarnessRuntimeOverride: "codex",
+    });
+
+    expect(mocks.acquireAgentRunPreparedModelRuntime).toHaveBeenCalledWith(
+      expect.objectContaining({
+        config,
+        agentId: "enterprise-personal-account",
+        preserveConfigOnRefresh: true,
+      }),
+      { catalogMode: "static" },
+    );
+  });
+
   it("hands harness-owned authorization to the V2 owner without resolving a host key", async () => {
     const runIsolatedCompletionV2 = vi.fn(async () => ({
       assistant: assistant([{ type: "text", text: "native result" }]),
@@ -213,6 +247,37 @@ describe("runIsolatedCompletion", () => {
       expect.objectContaining({
         authorization: expect.objectContaining({ owner: "harness" }),
       }),
+    );
+  });
+
+  it("loads inherited credentials for harness-owned isolated authorization", async () => {
+    preparedModelRuntime = {
+      ...preparedModelRuntime,
+      inheritedAuthDir: "/tmp/inherited-agent",
+    };
+    mocks.acquireAgentRunPreparedModelRuntime.mockResolvedValueOnce({
+      snapshot: preparedModelRuntime,
+      release: releaseRuntimeLease,
+    });
+    const runIsolatedCompletionV2 = vi.fn(async () => ({
+      assistant: assistant([{ type: "text", text: "native result" }]),
+    }));
+    mocks.getRegisteredAgentHarness.mockReturnValue({
+      harness: {
+        id: "codex",
+        label: "Codex",
+        authBootstrap: "harness",
+        supports: () => ({ supported: true }),
+        runAttempt: vi.fn(),
+        runIsolatedCompletionV2,
+      } satisfies AgentHarness,
+    });
+
+    await runIsolatedCompletion(request());
+
+    expect(mocks.ensureAuthProfileStore).toHaveBeenCalledWith(
+      "/tmp/agent",
+      expect.objectContaining({ inheritedAuthDir: "/tmp/inherited-agent" }),
     );
   });
 

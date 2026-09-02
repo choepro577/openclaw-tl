@@ -7,6 +7,7 @@ import {
   setActiveEmbeddedRun,
 } from "../../agents/embedded-agent-runner/runs.js";
 import type { OpenClawConfig } from "../../config/config.js";
+import { markGatewayRequestScopedRuntimeConfig } from "../../gateway/request-runtime-config.js";
 import { setActivePluginRegistry } from "../../plugins/runtime.js";
 import {
   interruptSessionWorkAdmissions,
@@ -142,6 +143,63 @@ describe("dispatchReplyFromConfig", () => {
       ),
     );
     expect(replyResolver.mock.calls[0]?.[3]).toBeUndefined();
+  });
+
+  it("does not replace a request-scoped config with the published Gateway runtime", async () => {
+    setNoAbort();
+    const scopedWorkspace = "/tmp/enterprise-account-workspace";
+    const scopedCfg = markGatewayRequestScopedRuntimeConfig({
+      agents: { entries: { main: { workspace: scopedWorkspace } } },
+    } as OpenClawConfig);
+    const globalCfg = {
+      agents: { entries: { main: { workspace: "/tmp/global-workspace" } } },
+    } as OpenClawConfig;
+    const preparedRuntimeModule = await import("../../agents/prepared-model-runtime.js");
+    const preparedLookup = vi
+      .spyOn(preparedRuntimeModule, "loadPublishedGatewayReplyDispatchRuntime")
+      .mockResolvedValue(
+        Object.freeze({
+          agentId: "main",
+          agentDir: "/tmp/global-agent",
+          workspaceDir: "/tmp/global-workspace",
+          config: globalCfg,
+          modelCatalog: { entries: [], routeVariants: [] },
+          inboundPluginRegistry: createTestRegistry([]),
+          pluginGeneration: {} as never,
+        }),
+      );
+    let receivedCfg: OpenClawConfig | undefined;
+    let receivedPreparedRuntime: unknown;
+
+    try {
+      await dispatchReplyFromConfig({
+        ctx: buildTestCtx({
+          Provider: "webchat",
+          Surface: "webchat",
+          SessionKey: "agent:main:dashboard:enterprise-account",
+        }),
+        cfg: scopedCfg,
+        dispatcher: createDispatcher(),
+        usePublishedModelRuntime: true,
+        replyResolver: async (_ctx, _opts, cfgArg) => {
+          receivedCfg = cfgArg;
+          receivedPreparedRuntime = getPreparedReplyDispatchRuntime();
+          return { text: "hi" };
+        },
+      });
+    } finally {
+      preparedLookup.mockRestore();
+    }
+
+    expect(preparedLookup).not.toHaveBeenCalled();
+    expect(receivedCfg).toBe(scopedCfg);
+    expect(receivedPreparedRuntime).toBeUndefined();
+    expect(runtimePluginMocks.loadAgentRuntimePluginRegistryHandle).toHaveBeenCalledWith(
+      expect.objectContaining({
+        config: scopedCfg,
+        workspaceDir: scopedWorkspace,
+      }),
+    );
   });
 
   it("keeps a raw three-argument resolver on one prepared generation across replacement", async () => {

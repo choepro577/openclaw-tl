@@ -35,6 +35,7 @@ import {
   type SessionTranscriptReadScope,
 } from "../session-transcript-readers.js";
 import { loadGatewaySessionEntryReadOnly } from "../session-utils.js";
+import { enterpriseUserPortalIdentity } from "./gateway-client-identity.js";
 import {
   execOpenPath,
   formatOpenPathError,
@@ -122,6 +123,29 @@ const SEARCH_SKIP_DIRS = new Set([
 const touchedFilesCache = new Map<string, TouchedFilesCacheEntry>();
 // Page yields let other requests interleave, so singleflight keeps one cache-mutating fold per key.
 const touchedFilesFolds = new Map<string, Promise<Map<string, TouchedFile>>>();
+
+function isManagedSkillsPath(value: string): boolean {
+  return value
+    .replaceAll("\\", "/")
+    .split("/")
+    .filter(Boolean)
+    .some((segment) => segment.toLowerCase() === "skills");
+}
+
+function hideManagedSkillsFromUserResult(result: Awaited<ReturnType<typeof buildListResult>>) {
+  return {
+    ...result,
+    files: result.files.filter((file) => !isManagedSkillsPath(file.path)),
+    ...(result.browser
+      ? {
+          browser: {
+            ...result.browser,
+            entries: result.browser.entries.filter((entry) => !isManagedSkillsPath(entry.path)),
+          },
+        }
+      : {}),
+  };
+}
 
 function readTouchedFilesCache(key: string): TouchedFilesCacheEntry | undefined {
   const cached = touchedFilesCache.get(key);
@@ -512,8 +536,15 @@ async function toSessionFileEntry(
   return entry;
 }
 
-function loadSessionFileRoot(params: { sessionKey: string; agentId?: string }) {
-  const loaded = loadGatewaySessionEntryReadOnly(params.sessionKey, { agentId: params.agentId });
+function loadSessionFileRoot(params: {
+  sessionKey: string;
+  agentId?: string;
+  cfg?: OpenClawConfig;
+}) {
+  const loaded = loadGatewaySessionEntryReadOnly(params.sessionKey, {
+    agentId: params.agentId,
+    ...(params.cfg ? { cfg: params.cfg } : {}),
+  });
   if (!loaded.entry?.sessionId) {
     return { ...loaded, agentId: undefined, root: undefined, fileRoot: undefined };
   }
@@ -555,6 +586,7 @@ function loadSessionFileRoot(params: { sessionKey: string; agentId?: string }) {
 export function resolveLocalSessionWorkspaceRoot(params: {
   sessionKey: string;
   agentId?: string;
+  cfg?: OpenClawConfig;
 }): string | undefined {
   const loaded = loadSessionFileRoot(params);
   return loaded.entry?.execNode ? undefined : loaded.root;
@@ -706,6 +738,7 @@ async function buildBrowserResult(params: {
 async function loadSessionFiles(params: {
   sessionKey: string;
   agentId?: string;
+  cfg?: OpenClawConfig;
 }): Promise<LoadedSessionFiles> {
   const loaded = loadSessionFileRoot(params);
   const { storePath, entry, canonicalKey, agentId } = loaded;
@@ -742,6 +775,7 @@ async function loadSessionFiles(params: {
 async function buildListResult(params: {
   sessionKey: string;
   agentId?: string;
+  cfg?: OpenClawConfig;
   path?: string;
   search?: string;
 }): Promise<{
@@ -785,7 +819,7 @@ async function buildListResult(params: {
 }
 
 async function findSessionFile(
-  params: SessionsFilesGetParams,
+  params: SessionsFilesGetParams & { cfg?: OpenClawConfig },
 ): Promise<{ root?: string; file?: SessionFileEntry }> {
   const loaded = await loadSessionFiles(params);
   const exactTouched = loaded.files.find((file) => file.path === params.path);
@@ -878,14 +912,15 @@ function requireSessionFilesAgentId(params: {
 
 /** Gateway handlers for session files and workspace browsing. */
 export const sessionsFilesHandlers: GatewayRequestHandlers = {
-  "sessions.files.list": async ({ params, respond, context }) => {
+  "sessions.files.list": async ({ params, respond, context, client }) => {
     if (
       !assertValidParams(params, validateSessionsFilesListParams, "sessions.files.list", respond)
     ) {
       return;
     }
+    const cfg = context.getRuntimeConfig();
     const agentId = requireSessionFilesAgentId({
-      cfg: context.getRuntimeConfig(),
+      cfg,
       sessionKey: params.sessionKey,
       agentId: params.agentId,
       respond,
@@ -893,18 +928,22 @@ export const sessionsFilesHandlers: GatewayRequestHandlers = {
     if (!agentId) {
       return;
     }
-    const result = await buildListResult({ ...params, agentId });
+    const rawResult = await buildListResult({ ...params, agentId, cfg });
+    const result = enterpriseUserPortalIdentity(client)
+      ? hideManagedSkillsFromUserResult(rawResult)
+      : rawResult;
     respond(true, {
       sessionKey: params.sessionKey,
       ...result,
     });
   },
-  "sessions.files.get": async ({ params, respond, context }) => {
+  "sessions.files.get": async ({ params, respond, context, client }) => {
     if (!assertValidParams(params, validateSessionsFilesGetParams, "sessions.files.get", respond)) {
       return;
     }
+    const cfg = context.getRuntimeConfig();
     const agentId = requireSessionFilesAgentId({
-      cfg: context.getRuntimeConfig(),
+      cfg,
       sessionKey: params.sessionKey,
       agentId: params.agentId,
       respond,
@@ -912,7 +951,11 @@ export const sessionsFilesHandlers: GatewayRequestHandlers = {
     if (!agentId) {
       return;
     }
-    const result = await findSessionFile({ ...params, agentId });
+    if (enterpriseUserPortalIdentity(client) && isManagedSkillsPath(params.path)) {
+      respondSessionFileNotFound(respond, params.path);
+      return;
+    }
+    const result = await findSessionFile({ ...params, agentId, cfg });
     if (!result.file || result.file.missing) {
       respondSessionFileNotFound(respond, params.path);
       return;
@@ -930,8 +973,9 @@ export const sessionsFilesHandlers: GatewayRequestHandlers = {
     if (!assertValidParams(params, validateSessionsFilesSetParams, "sessions.files.set", respond)) {
       return;
     }
+    const cfg = context.getRuntimeConfig();
     const agentId = requireSessionFilesAgentId({
-      cfg: context.getRuntimeConfig(),
+      cfg,
       sessionKey: params.sessionKey,
       agentId: params.agentId,
       respond,
@@ -966,7 +1010,7 @@ export const sessionsFilesHandlers: GatewayRequestHandlers = {
       respondSessionFileUnsafe(respond, params.path);
       return;
     }
-    const loaded = loadSessionFileRoot({ ...params, agentId });
+    const loaded = loadSessionFileRoot({ ...params, agentId, cfg });
     if (!loaded.root) {
       respondSessionFileNotFound(respond, params.path);
       return;
@@ -1048,8 +1092,9 @@ export const sessionsFilesHandlers: GatewayRequestHandlers = {
     ) {
       return;
     }
+    const cfg = context.getRuntimeConfig();
     const agentId = requireSessionFilesAgentId({
-      cfg: context.getRuntimeConfig(),
+      cfg,
       sessionKey: params.key,
       agentId: params.agentId,
       respond,
@@ -1057,7 +1102,7 @@ export const sessionsFilesHandlers: GatewayRequestHandlers = {
     if (!agentId) {
       return;
     }
-    const loaded = loadSessionFileRoot({ sessionKey: params.key, agentId });
+    const loaded = loadSessionFileRoot({ sessionKey: params.key, agentId, cfg });
     const workspaceRoot = loaded.root;
     if (!workspaceRoot) {
       respond(true, {

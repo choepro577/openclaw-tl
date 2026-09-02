@@ -52,6 +52,9 @@ describe("resolveDynamicSessionMutationRequiredScope", () => {
   it.each([
     { name: "model set", patch: { model: "openai/gpt-5.6-luna" } },
     { name: "model reset", patch: { model: null } },
+    { name: "thinking level", patch: { thinkingLevel: "high" } },
+    { name: "fast mode", patch: { fastMode: true } },
+    { name: "context window", patch: { contextWindow: "128k" } },
     { name: "icon set", patch: { icon: "🦞" } },
     { name: "icon reset", patch: { icon: null } },
     {
@@ -100,11 +103,9 @@ describe("resolveDynamicSessionMutationRequiredScope", () => {
   });
 
   it.each([
-    { thinkingLevel: "high" },
-    { fastMode: true },
     { verboseLevel: "full" },
     { reasoningLevel: "high" },
-    { model: "openai/gpt-5.6-luna", thinkingLevel: "high" },
+    { model: "openai/gpt-5.6-luna", verboseLevel: "full" },
     { model: null, futureField: true },
   ])("keeps privileged or unknown patch fields admin-scoped %#", (patch) => {
     expect(
@@ -132,6 +133,9 @@ describe("resolveDynamicSessionMutationRequiredScope", () => {
           archived: true,
           unread: false,
           model: "openai/gpt-5.6-luna",
+          thinkingLevel: "high",
+          fastMode: true,
+          contextWindow: "128k",
         },
       }),
     ).toBe("operator.write");
@@ -141,12 +145,7 @@ describe("resolveDynamicSessionMutationRequiredScope", () => {
         patch: { model: null },
       }),
     ).toBe("operator.write");
-    for (const patch of [
-      { statusNote: "Working" },
-      { thinkingLevel: "high" },
-      { model: "openai/gpt-5.6-luna", fastMode: true },
-      { futureField: true },
-    ]) {
+    for (const patch of [{ statusNote: "Working" }, { futureField: true }]) {
       expect(
         resolveDynamicSessionMutationRequiredScope("sessions.patchMany", {
           targets: [{ key: "agent:main:thread" }],

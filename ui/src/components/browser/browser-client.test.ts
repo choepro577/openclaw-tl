@@ -1,12 +1,36 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import type { GatewayBrowserClient } from "../../api/gateway.ts";
 import { i18n } from "../../i18n/index.ts";
-import { fetchBrowserScreenshotDataUrl } from "./browser-client.ts";
+import { captureBrowserScreenshot, fetchBrowserScreenshotDataUrl } from "./browser-client.ts";
 
 afterEach(async () => {
   vi.useRealTimers();
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
   await i18n.setLocale("en");
+});
+
+describe("captureBrowserScreenshot", () => {
+  it("requests a bounded inline image so Enterprise Browser does not read shared media paths", async () => {
+    const request = vi.fn(async () => ({
+      path: "/tmp/browser-shot.png",
+      dataUrl: "data:image/png;base64,cG5n",
+      targetId: "target-1",
+      url: "https://example.test/",
+    }));
+
+    await expect(
+      captureBrowserScreenshot({ request } as unknown as GatewayBrowserClient, "target-1"),
+    ).resolves.toMatchObject({
+      dataUrl: "data:image/png;base64,cG5n",
+      targetId: "target-1",
+    });
+    expect(request).toHaveBeenCalledWith("browser.request", {
+      method: "POST",
+      path: "/screenshot",
+      body: { targetId: "target-1", type: "png", includeDataUrl: true },
+    });
+  });
 });
 
 describe("fetchBrowserScreenshotDataUrl", () => {

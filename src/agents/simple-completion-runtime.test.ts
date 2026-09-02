@@ -10,6 +10,7 @@ import {
 } from "../secrets/sentinel.js";
 import type { resolveModelAsync } from "./embedded-agent-runner/model.js";
 import { fingerprintResolvedProviderAuth } from "./execution-auth-binding.js";
+import type { PreparedModelRuntimeSnapshot } from "./prepared-model-runtime.js";
 
 // Hoisted mocks keep Vitest module replacement stable while the implementation
 // under test imports auth, model resolution, and transport helpers at module load.
@@ -266,6 +267,33 @@ describe("prepareSimpleCompletionModel", () => {
         lockedProfile: true,
         store,
       }),
+    );
+  });
+
+  it("loads inherited credentials owned by the prepared runtime", async () => {
+    const preparedModelRuntime = {
+      agentDir: "/tmp/account-agent",
+      inheritedAuthDir: "/tmp/main-agent",
+      workspaceDir: "/tmp/account-workspace",
+      createStores: () => ({
+        authStorage: { setRuntimeApiKey: hoisted.setRuntimeApiKeyMock },
+        modelRegistry: {},
+      }),
+    } as unknown as PreparedModelRuntimeSnapshot;
+
+    await prepareSimpleCompletionModel({
+      cfg: {},
+      provider: "anthropic",
+      modelId: "claude-opus-4-6",
+      agentDir: "/tmp/account-agent",
+      bindAuthOwner: true,
+      modelResolver: hoisted.resolveModelAsyncMock as typeof resolveModelAsync,
+      preparedModelRuntime,
+    });
+
+    expect(hoisted.ensureAuthProfileStoreMock).toHaveBeenCalledWith(
+      "/tmp/account-agent",
+      expect.objectContaining({ inheritedAuthDir: "/tmp/main-agent" }),
     );
   });
 

@@ -2,6 +2,7 @@
 import { OPENCLAW_EMBEDDED_CONTEXT_ENGINE_HOST } from "../../context-engine/host-compat.js";
 import { resolveContextEngineOwnerPluginId } from "../../context-engine/registry.js";
 import { buildContextEngineRuntimeSettings } from "../../context-engine/runtime-settings.js";
+import { readGatewayRequestRuntimeMetadata } from "../../gateway/request-runtime-config.js";
 import { formatErrorMessage } from "../../infra/errors.js";
 import {
   retireSessionMcpRuntime,
@@ -607,6 +608,18 @@ export async function runPreparedEmbeddedLoop(
       });
       if (terminalTimeoutResult) {
         return terminalTimeoutResult;
+      }
+
+      const knowledgeGrounding = readGatewayRequestRuntimeMetadata(params.config)
+        ?.enterpriseKnowledge?.createAuthority(sessionAgentId)
+        .evaluateGrounding(finalAssistantVisibleText ?? finalAssistantRawText ?? "");
+      if (knowledgeGrounding?.action === "revise") {
+        sessionPromptState.activateInternalPrompt(knowledgeGrounding.instruction);
+        log.warn(
+          `enterprise knowledge grounding requested one more pass: ` +
+            `runId=${params.runId} sessionId=${params.sessionId}`,
+        );
+        continue;
       }
 
       const terminalAuthPlan = preparedRuntime.snapshot().activePreparedAuthPlan;

@@ -198,6 +198,29 @@ describe("AppSidebar footer identity menu", () => {
     expect(sidebar.querySelector(".sidebar-identity-menu")).toBeNull();
   });
 
+  it("offers logout when the authenticated account provides it", async () => {
+    const { sidebar } = await mountSidebar(
+      createGatewayHarness({ instanceId: "self-instance" } as GatewayBrowserClient).gateway,
+      createSessions("main", ["agent:main:main"]),
+    );
+    const onLogout = vi.fn();
+    sidebar.onLogout = onLogout;
+    await sidebar.updateComplete;
+
+    sidebar.querySelector<HTMLButtonElement>(".sidebar-identity-card")?.click();
+    await sidebar.updateComplete;
+
+    const menu = sidebar.querySelector<HTMLElement>(".sidebar-identity-menu");
+    const logout = menu?.querySelector<HTMLElement>('wa-dropdown-item[value="command:logout"]');
+    expect(logout?.textContent?.trim()).toBe("Logout");
+
+    menu?.dispatchEvent(new CustomEvent("wa-select", { detail: { item: logout }, bubbles: true }));
+    await sidebar.updateComplete;
+
+    expect(onLogout).toHaveBeenCalledOnce();
+    expect(sidebar.querySelector(".sidebar-identity-menu")).toBeNull();
+  });
+
   it.each([false, true])(
     "traverses footer controls without losing the active menu item (offline: %s)",
     async (offline) => {

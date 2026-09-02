@@ -89,6 +89,7 @@ class FakeGatewayClient {
 function createStore(
   params: {
     settings?: ReturnType<typeof loadSettings>;
+    enableCanvasSurfaceLease?: boolean;
     persistDefaultConnectionSettings?: boolean;
     resourceBasePath?: string;
   } = {},
@@ -104,6 +105,7 @@ function createStore(
       return client as unknown as GatewayBrowserClient;
     },
     {
+      enableCanvasSurfaceLease: params.enableCanvasSurfaceLease,
       persistDefaultConnectionSettings: params.persistDefaultConnectionSettings,
       resourceBasePath: params.resourceBasePath,
     },
@@ -174,6 +176,20 @@ describe("createApplicationGateway connection phase", () => {
 
     current().opts.onClose?.({ code: 4008, reason: "connect failed", willRetry: false });
     expect(gateway.snapshot.phase).toBe("offline");
+  });
+
+  it("does not expose or refresh the operator canvas surface when disabled", async () => {
+    const { gateway, current } = createStore({ enableCanvasSurfaceLease: false });
+    gateway.start();
+
+    current().opts.onHello?.({
+      ...HELLO,
+      pluginSurfaceUrls: { canvas: "http://127.0.0.1:18789/plugins/canvas" },
+    });
+    await Promise.resolve();
+
+    expect(gateway.snapshot.canvasPluginSurfaceUrl).toBeNull();
+    expect(current().request).not.toHaveBeenCalled();
   });
 
   it("keeps legacy version fallback on reconnect instead of first admission", () => {

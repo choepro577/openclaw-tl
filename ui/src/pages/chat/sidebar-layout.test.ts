@@ -6,6 +6,7 @@ import {
   fitSidebarLayout,
   normalizeSidebarLayout,
   openSlot,
+  retainSidebarSlots,
   reorderPanel,
   resizeSidebarPanel,
   setSidebarDock,
@@ -74,6 +75,20 @@ describe("sidebar layout", () => {
   it("keeps the panel open as a type selector after its final tab closes", () => {
     const closed = closeSlot(openSlot({ columns: [] }, "detail"), "detail");
     expect(closed).toEqual({ columns: [], open: true });
+  });
+
+  it("retains only presentation-safe slots without mutating the persisted layout", () => {
+    const layout = openSlot(openSlot(openSlot({ columns: [] }, "terminal"), "workspace"), "detail");
+    const retained = retainSidebarSlots(layout, ["workspace", "detail"]);
+
+    expect(retained.columns[0]?.panels.map((panel) => panel.slot)).toEqual(["workspace", "detail"]);
+    expect(retained.columns[0]?.activePanelId).toBe("detail");
+    expect(layout.columns[0]?.panels.map((panel) => panel.slot)).toEqual([
+      "terminal",
+      "workspace",
+      "detail",
+    ]);
+    expect(retainSidebarSlots(layout, [])).toMatchObject({ columns: [], open: true });
   });
 
   it("minimizes and expands without discarding tabs", () => {

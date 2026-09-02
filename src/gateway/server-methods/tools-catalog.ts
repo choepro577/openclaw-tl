@@ -190,7 +190,7 @@ function buildPluginGroups(params: {
 }
 
 /** Build the merged core/plugin tool catalog for one agent. */
-function buildToolsCatalogResult(params: {
+export function buildToolsCatalogResult(params: {
   cfg: OpenClawConfig;
   agentId: string;
   includePlugins?: boolean;

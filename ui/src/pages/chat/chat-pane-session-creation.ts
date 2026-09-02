@@ -1,3 +1,4 @@
+import { enterpriseUserChatCopy } from "../../i18n/enterprise-user-chat.ts";
 import { t } from "../../i18n/index.ts";
 import { formatUiError } from "../../lib/format-error.ts";
 import {
@@ -32,6 +33,7 @@ export abstract class ChatPaneSessionCreation extends ChatPaneRetainedPresentati
   protected sessionDisabledBanner(params: {
     catalogDisabledReason: string | null | undefined;
     modelSetupRequired: boolean;
+    enterpriseUserUnavailable: boolean;
     restartRecoveryTombstoned: boolean;
     selectedSessionArchived: boolean;
     selectedSessionId: string | undefined;
@@ -59,6 +61,18 @@ export abstract class ChatPaneSessionCreation extends ChatPaneRetainedPresentati
             void this.restoreArchivedSession(params.sessionKey, params.selectedSessionId);
           }
         },
+      };
+    }
+    if (params.enterpriseUserUnavailable) {
+      return {
+        kind: "composer-replacement" as const,
+        title: enterpriseUserChatCopy("runtimeUnavailableTitle"),
+        text: enterpriseUserChatCopy("runtimeUnavailable"),
+        tone: "neutral" as const,
+        icon: "warning" as const,
+        actionLabel: enterpriseUserChatCopy("agentLibraryBack"),
+        actionStyle: "primary" as const,
+        onAction: () => this.context.navigate("enterprise"),
       };
     }
     return params.modelSetupRequired

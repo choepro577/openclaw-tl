@@ -53,6 +53,13 @@ export type GatewayWsClient = PluginNodeCapabilityClient & {
     agentRuntimeIdentity?: AgentRuntimeIdentity;
     /** Server-attested role-policy actor; never accepted from WebSocket wire params. */
     operatorRoleActor?: GatewayOperatorRoleActor;
+    /** Server-verified Enterprise user session; never accepted from WebSocket wire params. */
+    enterpriseSession?: {
+      sessionId: string;
+      audience: "user";
+      accountId: string;
+      accountRole: "administrator" | "employee";
+    };
   };
   canvasHostUrl?: string;
   canvasCapability?: string;

@@ -5,15 +5,7 @@ import {
 import type { RouteLocation } from "@openclaw/uirouter";
 import type { GatewayBrowserClient } from "../api/gateway.ts";
 import { sessionRouteNamespaceFromPath } from "../app-route-paths.ts";
-import {
-  createApplicationRouter,
-  locationForRoute,
-  routeIdFromPath,
-  sameRouteLocation,
-  startApplicationRouter,
-  type ApplicationRouter,
-  type RouteId,
-} from "../app-routes.ts";
+import type { ApplicationRouter, RouteId } from "../app-routes.ts";
 import { setSessionPathBuilder } from "../app-session-path-builder.ts";
 import {
   SIDEBAR_SESSION_NAV_COLLAPSE_QUERY,
@@ -54,6 +46,8 @@ import { createNativeChatDrafts } from "./native-bridge.ts";
 import { startNativeLinkRouting } from "./native-link-routing.ts";
 import { createNativeNotificationsCapability } from "./native-notifications.ts";
 import { createApplicationOverlays } from "./overlays.ts";
+import { sameRouteLocation } from "./routing/route-location.ts";
+import type { ApplicationRoutingProfile } from "./routing/routing-profile.ts";
 import { createApplicationPlacementStartup } from "./session-placement-startup.ts";
 import {
   loadSettings,
@@ -247,6 +241,8 @@ export type ApplicationRuntime = {
 
 type BootstrapApplicationDependencies = {
   sessionPathBuilderReady?: Promise<void>;
+  basePathOverride?: string;
+  routingProfile: ApplicationRoutingProfile;
 };
 
 type PendingRouterStartNavigation = {
@@ -256,13 +252,16 @@ type PendingRouterStartNavigation = {
 };
 
 export function bootstrapApplication(
-  dependencies: BootstrapApplicationDependencies = {},
+  dependencies: BootstrapApplicationDependencies,
 ): ApplicationRuntime {
+  const routingProfile = dependencies.routingProfile;
+  const operatorBootstrapEnabled = routingProfile.presentation !== "enterprise-user";
   const history = createBrowserHistory();
   const startupLocation = history.location();
-  const [basePath, resourceBasePath] = resolveControlUiPaths(
+  const [resolvedBasePath, resourceBasePath] = resolveControlUiPaths(
     startupLocation.pathname || globalThis.location?.pathname || "/",
   );
+  const basePath = dependencies.basePathOverride ?? resolvedBasePath;
   const documentMode = resolveApprovalDocumentMode(startupLocation.pathname, basePath);
   const persistedSettings = loadSettings();
   const initialSettings = documentMode
@@ -302,8 +301,8 @@ export function bootstrapApplication(
   const firstRunDefaultLanding =
     documentMode === null &&
     focusLocation === null &&
-    isDefaultChatLanding(applicationLocation, basePath, routeIdFromPath);
-  const firstRunRedirectEnabled = firstRunDefaultLanding;
+    isDefaultChatLanding(applicationLocation, basePath, routingProfile.routeIdFromPath);
+  const firstRunRedirectEnabled = firstRunDefaultLanding && operatorBootstrapEnabled;
   const sessionPathBuilderReady =
     dependencies.sessionPathBuilderReady ??
     (documentMode ||
@@ -320,6 +319,7 @@ export function bootstrapApplication(
     startup.pendingBootstrapToken ?? "",
     undefined,
     {
+      enableCanvasSurfaceLease: operatorBootstrapEnabled,
       persistDefaultConnectionSettings: documentMode === null,
       resourceBasePath,
       ...(startup.pendingBootstrapProfile
@@ -329,7 +329,7 @@ export function bootstrapApplication(
   );
   const agents = createAgentCapability(gateway);
   const startupLifecycle = createStartupLifecycle();
-  const startupRouteId = routeIdFromPath(applicationLocation.pathname, basePath);
+  const startupRouteId = routingProfile.routeIdFromPath(applicationLocation.pathname, basePath);
   const releasedSessionQuery =
     (startupRouteId === "chat" || startupRouteId === "dashboard") &&
     sessionRouteNamespaceFromPath(applicationLocation.pathname, basePath) === null &&
@@ -377,9 +377,13 @@ export function bootstrapApplication(
       password: startup.password ?? "",
     },
   });
-  const sessions = createSessionCapability(gateway);
+  const sessions = createSessionCapability(gateway, {
+    autoHydrateOnConnect: operatorBootstrapEnabled,
+  });
   const workboard = createWorkboardCapability();
-  const runtimeConfig = createRuntimeConfigCapability(gateway);
+  const runtimeConfig = createRuntimeConfigCapability(gateway, {
+    autoLoadOnConnect: operatorBootstrapEnabled,
+  });
   const overlays = createApplicationOverlays(gateway, {
     drainConfigWrites: () => runtimeConfig.waitForPendingWrites(),
   });
@@ -416,7 +420,7 @@ export function bootstrapApplication(
   });
   const chatAttachmentHandoff = createChatAttachmentHandoff();
   applyThemePresentation(settings);
-  const router = createApplicationRouter();
+  const router = routingProfile.createRouter();
   // Focus documents render before the shell; starting the application router
   // would rewrite their reserved presentation route into an ordinary page.
   const startsApplicationRouter = documentMode === null && focusLocation === null;
@@ -445,13 +449,15 @@ export function bootstrapApplication(
     }
     if (lastPostConnectClient !== snapshot.client) {
       lastPostConnectClient = snapshot.client;
-      void config.refresh({
-        auth: {
-          hello: snapshot.hello,
-          settings: { token: gateway.connection.token },
-          password: gateway.connection.password,
-        },
-      });
+      if (operatorBootstrapEnabled) {
+        void config.refresh({
+          auth: {
+            hello: snapshot.hello,
+            settings: { token: gateway.connection.token },
+            password: gateway.connection.password,
+          },
+        });
+      }
       void sendSessionObserverVisibility(
         snapshot.client,
         loadChatObserverDisplayPreference() !== "off",
@@ -465,7 +471,7 @@ export function bootstrapApplication(
     placementStartup.resumeRecovery();
   });
   const routeLocation = (routeId: RouteId, options?: ApplicationNavigationOptions) => {
-    const location = locationForRoute(routeId, basePath);
+    const location = routingProfile.locationForRoute(routeId, basePath);
     const activeMatch = router.getState().matches[0];
     const activeDynamicPath =
       activeMatch?.routeId === routeId && routeId === "workboard"
@@ -524,6 +530,7 @@ export function bootstrapApplication(
   const navigateAndWait = (routeId: RouteId, options?: ApplicationNavigationOptions) =>
     navigateWithMode(routeId, options, "push");
   const context: ApplicationContext<RouteId> = {
+    presentation: routingProfile.presentation ?? "control",
     basePath,
     resourceBasePath,
     gateway,
@@ -591,7 +598,7 @@ export function bootstrapApplication(
             ? {
                 redirect: () =>
                   history.replace({
-                    ...locationForRoute("model-setup", basePath),
+                    ...routingProfile.locationForRoute("model-setup", basePath),
                     search: "?firstRun=1",
                   }),
                 onInitialDecision: () => resolveInitialFirstRunDecision?.(),
@@ -599,9 +606,11 @@ export function bootstrapApplication(
             : {}),
         }),
       );
-      steps.push(() => {
-        void config.refresh({ skipWithoutAuthCandidate: true });
-      });
+      if (operatorBootstrapEnabled) {
+        steps.push(() => {
+          void config.refresh({ skipWithoutAuthCandidate: true });
+        });
+      }
       if (startsApplicationRouter) {
         if (initialFirstRunDecision) {
           steps.push(() => initialFirstRunDecision);
@@ -613,7 +622,7 @@ export function bootstrapApplication(
           if (pendingNavigation) {
             history[pendingNavigation.mode](pendingNavigation.location);
           }
-          await startApplicationRouter(router, history, basePath, context);
+          await routingProfile.startRouter(router, history, basePath, context);
           return stopRouter;
         });
       }
@@ -628,7 +637,7 @@ export function bootstrapApplication(
               history,
               initialLocationReady,
               installLocation: async (location) => {
-                const routeId = routeIdFromPath(location.pathname, basePath);
+                const routeId = routingProfile.routeIdFromPath(location.pathname, basePath);
                 if (routeId) {
                   await router.navigate(routeId, context, { history: "replace" }, location);
                 } else {
@@ -636,7 +645,7 @@ export function bootstrapApplication(
                 }
               },
               shouldInstallLocation: () =>
-                isDefaultChatLanding(history.location(), basePath, routeIdFromPath),
+                isDefaultChatLanding(history.location(), basePath, routingProfile.routeIdFromPath),
             }),
             (error) => {
               console.error("[openclaw] initial session location failed", error);

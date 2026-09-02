@@ -109,6 +109,7 @@ import {
   isConfiguredAgent,
   updateAgentConfigEntry,
 } from "./agents-config-mutations.js";
+import { enterpriseUserPortalIdentity } from "./gateway-client-identity.js";
 import { readPreparedServerMethodModelCatalog } from "./optional-model-catalog.js";
 import type { GatewayRequestHandlers, RespondFn } from "./types.js";
 
@@ -899,12 +900,22 @@ export const agentsHandlers: GatewayRequestHandlers = {
         ),
       ),
     );
+    const result = listAgentsForGateway(cfg, undefined, {
+      modelCatalogByAgentId,
+      includeSystem: hasGatewayClientCap(client?.connect.caps, GATEWAY_CLIENT_CAPS.AGENT_KIND),
+    });
     respond(
       true,
-      listAgentsForGateway(cfg, undefined, {
-        modelCatalogByAgentId,
-        includeSystem: hasGatewayClientCap(client?.connect.caps, GATEWAY_CLIENT_CAPS.AGENT_KIND),
-      }),
+      enterpriseUserPortalIdentity(client)
+        ? {
+            ...result,
+            agents: result.agents.map((agent) => ({
+              id: agent.id,
+              ...(agent.name ? { name: agent.name } : {}),
+              ...(agent.identity ? { identity: agent.identity } : {}),
+            })),
+          }
+        : result,
       undefined,
     );
   },

@@ -101,6 +101,7 @@ type RenderMessageGroupOptions = {
   localMediaPreviewRoots?: readonly string[];
   assistantAttachmentAuthToken?: string | null;
   resolveArtifactDownload?: ArtifactDownloadResolver;
+  onOpenArtifact?: (artifactId: string) => void;
   canvasPluginSurfaceUrl?: string | null;
   embedSandboxMode?: EmbedSandboxMode;
   allowExternalEmbedUrls?: boolean;
@@ -184,6 +185,7 @@ function buildGroupedMessageRenderOptions(
     localMediaPreviewRoots: opts.localMediaPreviewRoots,
     assistantAttachmentAuthToken: opts.assistantAttachmentAuthToken,
     resolveArtifactDownload: opts.resolveArtifactDownload,
+    onOpenArtifact: opts.onOpenArtifact,
     embedSandboxMode: opts.embedSandboxMode,
     allowExternalEmbedUrls: opts.allowExternalEmbedUrls,
     fetchLinkFavicon: opts.fetchLinkFavicon,

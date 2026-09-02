@@ -657,6 +657,36 @@ describe("applySystemAgentModelSelection", () => {
 });
 
 describe("detectSetupInference", () => {
+  it("runs optional CLI probes alongside the main backend detection", async () => {
+    let releaseBackend: (() => void) | undefined;
+    let backendStarted: (() => void) | undefined;
+    const backendReady = new Promise<void>((resolve) => {
+      backendStarted = resolve;
+    });
+    const backendGate = new Promise<void>((resolve) => {
+      releaseBackend = resolve;
+    });
+    const probeLocalCommand = vi.fn(async (command: string) => ({ command, found: false }));
+    const pending = detectSetupInference({
+      detectInferenceBackends: async () => {
+        backendStarted?.();
+        await backendGate;
+        return [];
+      },
+      resolveManifestProviderAuthChoices: () => [],
+      probeLocalCommand,
+    });
+
+    await backendReady;
+    await vi.waitFor(() => {
+      expect(probeLocalCommand).toHaveBeenCalledWith("pi");
+      expect(probeLocalCommand).toHaveBeenCalledWith("opencode");
+    });
+    releaseBackend?.();
+
+    await expect(pending).resolves.toMatchObject({ candidates: [] });
+  });
+
   it("preserves the shared inference candidate order", async () => {
     const resolveManifestProviderAuthChoices = vi.fn(() => [
       {

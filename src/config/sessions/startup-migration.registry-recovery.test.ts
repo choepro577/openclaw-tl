@@ -161,6 +161,50 @@ it("re-registers durable lineage children before configured-only runtime reads",
   });
 });
 
+it("can restrict user-portal combined reads to configured Agent stores before loading rows", async () => {
+  const root = fs.realpathSync.native(tempDirs.make("openclaw-strict-configured-stores-"));
+  const stateDir = path.join(root, "state");
+  await withEnvAsync({ OPENCLAW_STATE_DIR: stateDir }, async () => {
+    const env = { ...process.env };
+    const storeTemplate = path.join(stateDir, "agents", "{agentId}", "sessions", "sessions.json");
+    const cfg: OpenClawConfig = {
+      agents: { entries: { personal: { default: true } } },
+      session: { store: storeTemplate },
+    };
+    const storePathFor = (agentId: string) => storeTemplate.replace("{agentId}", agentId);
+
+    await replaceSessionEntry(
+      {
+        agentId: "personal",
+        env,
+        sessionKey: "agent:personal:dashboard:user-session",
+        storePath: storePathFor("personal"),
+      },
+      { sessionId: "personal-session", updatedAt: 20 },
+    );
+    await replaceSessionEntry(
+      {
+        agentId: "retired",
+        env,
+        sessionKey: "agent:retired:dashboard:operator-session",
+        storePath: storePathFor("retired"),
+      },
+      { sessionId: "retired-session", updatedAt: 10 },
+    );
+
+    const combined = loadCombinedSessionStoreForGatewayCore(cfg, {
+      configuredAgentsOnly: true,
+      strictConfiguredAgentStoresOnly: true,
+    });
+
+    expect(combined.durableTargets.map((target) => target.agentId)).toEqual(["personal"]);
+    expect(combined.store["agent:personal:dashboard:user-session"]?.sessionId).toBe(
+      "personal-session",
+    );
+    expect(combined.store["agent:retired:dashboard:operator-session"]).toBeUndefined();
+  });
+});
+
 it("keeps copied state directories self-contained for combined gateway reads", async () => {
   const root = fs.realpathSync.native(tempDirs.make("openclaw-copied-state-registry-"));
   const sourceStateDir = path.join(root, "source");

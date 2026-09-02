@@ -5,6 +5,7 @@
   "description": "OpenClaw persistent wiki plugin",
   "type": "module",
   "dependencies": {
+    "@openclaw/knowledge-graph-core": "workspace:*",
     "mdast-util-from-markdown": "2.0.3",
     "typebox": "1.3.14",
     "yaml": "2.9.0",

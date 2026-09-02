@@ -4065,6 +4065,54 @@ describe("grouped chat rendering", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it("opens a managed file artifact in Review and keeps a ticketed download action", async () => {
+    const attachmentId = crypto.randomUUID();
+    const artifactId = `artifact_managed_media_${attachmentId}`;
+    const source = `/api/chat/media/outgoing/agent%3Amain%3Amain/${attachmentId}/full`;
+    const ticketedUrl = `${source}?mediaTicket=document-ticket`;
+    const resolveArtifactDownload = vi.fn(async () => ({ url: ticketedUrl }));
+    const onOpenArtifact = vi.fn();
+    const container = document.createElement("div");
+    const message = createAssistantMessage(
+      [
+        {
+          type: "file",
+          artifactId,
+          url: source,
+          fileName: "Nội quy công ty.docx",
+          mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          sizeBytes: 7_698,
+        },
+      ],
+      { id: "assistant-managed-document-card" },
+    );
+    const rerender = () =>
+      renderAssistantMessage(container, message, {
+        showToolCalls: false,
+        resolveArtifactDownload,
+        onOpenArtifact,
+        onRequestUpdate: rerender,
+      });
+
+    rerender();
+    await vi.waitFor(() =>
+      expect(container.querySelector(".chat-assistant-attachment-card__download")).not.toBeNull(),
+    );
+    expect(resolveArtifactDownload).toHaveBeenCalledWith({
+      sessionKey: "agent:main:main",
+      artifactId,
+    });
+    expectElement(container, ".chat-assistant-attachment-card__link", HTMLButtonElement).click();
+    expect(onOpenArtifact).toHaveBeenCalledWith(artifactId);
+    expect(
+      expectElement(
+        container,
+        ".chat-assistant-attachment-card__download",
+        HTMLAnchorElement,
+      ).getAttribute("href"),
+    ).toBe(ticketedUrl);
+  });
+
   it("does not fetch a preview for an oversized text document", () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
@@ -4283,6 +4331,58 @@ describe("grouped chat rendering", () => {
     expect(
       container.querySelector<HTMLImageElement>(".chat-message-image")?.getAttribute("src"),
     ).toBe(expectedMetaUrl.replace("&meta=1", "&mediaTicket=ticket-local"));
+  });
+
+  it("binds legacy workspace documents to the session and opens their Review path", async () => {
+    const source = "/workspace/Nội quy công ty.docx";
+    const sessionKey = "agent:main:dashboard:owned-session";
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url.includes("meta=1")) {
+        return {
+          ok: true,
+          json: async () => ({
+            available: true,
+            mediaTicket: "ticket-workspace-doc",
+            mediaTicketExpiresAt: new Date(Date.now() + 5 * 60_000).toISOString(),
+            workspacePath: "Nội quy công ty.docx",
+          }),
+        };
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
+    const onOpenWorkspaceFile = vi.fn();
+    const container = document.createElement("div");
+    const message = createAssistantMessage(`Document\nMEDIA:${source}`, {
+      id: "assistant-legacy-workspace-document",
+    });
+    const rerender = () =>
+      renderAssistantMessage(container, message, {
+        showToolCalls: false,
+        resourceBasePath: "/openclaw",
+        sessionKey,
+        onOpenWorkspaceFile,
+        onRequestUpdate: rerender,
+      });
+
+    rerender();
+    await flushAssistantAttachmentAvailabilityChecks();
+    const metaCall = fetchMock.mock.calls.find(([url]) => String(url).includes("meta=1"));
+    expect(metaCall).toBeDefined();
+    const metaUrl = new URL(String(metaCall?.[0]), "http://control.test");
+    expect(metaUrl.searchParams.get("sessionKey")).toBe(sessionKey);
+    expect(metaUrl.searchParams.get("source")).toBe(source);
+
+    expectElement(container, ".chat-assistant-attachment-card__link", HTMLButtonElement).click();
+    expect(onOpenWorkspaceFile).toHaveBeenCalledWith({ path: "Nội quy công ty.docx" });
+    const download = expectElement(
+      container,
+      ".chat-assistant-attachment-card__download",
+      HTMLAnchorElement,
+    );
+    const downloadUrl = new URL(download.href);
+    expect(downloadUrl.searchParams.get("sessionKey")).toBe(sessionKey);
+    expect(downloadUrl.searchParams.get("mediaTicket")).toBe("ticket-workspace-doc");
   });
 
   it("stops checking when local assistant attachment metadata fetch stalls", async () => {

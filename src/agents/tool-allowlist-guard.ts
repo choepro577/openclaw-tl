@@ -38,7 +38,13 @@ export function buildEmptyExplicitToolAllowlistError(params: {
   toolsEnabled: boolean;
   disableTools?: boolean;
   toolsAllowExplicitlyEmpty?: boolean;
+  allowTextOnlyFallback?: boolean;
 }): Error | null {
+  // A server-projected policy may intentionally grant tools that the selected runtime does not
+  // expose. Continuing with zero tools cannot widen authority and still permits a text response.
+  if (params.allowTextOnlyFallback === true) {
+    return null;
+  }
   const toolsIntentionallyDisabled =
     params.disableTools === true || params.toolsAllowExplicitlyEmpty === true;
   const sources = toolsIntentionallyDisabled

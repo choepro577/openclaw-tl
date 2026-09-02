@@ -1,3 +1,4 @@
+import { DatabaseSync } from "node:sqlite";
 import { describe, expect, it } from "vitest";
 import { getOpenClawStateRuntimeSchema } from "./openclaw-state-schema-compatibility.js";
 
@@ -17,5 +18,15 @@ describe("OpenClaw state runtime schema projection", () => {
     expect(schema).not.toContain("CREATE TABLE IF NOT EXISTS github_publication_requests");
     expect(schema).not.toContain("idx_github_publication_requests_pending");
     expect(schema).not.toContain("CREATE TABLE IF NOT EXISTS config_revision_keys");
+    expect(schema).not.toContain("CREATE TABLE IF NOT EXISTS enterprise_knowledge_zones");
+    expect(schema).not.toContain("idx_enterprise_knowledge_zones_status");
+    expect(schema).not.toContain("idx_enterprise_knowledge_idempotency_expiry");
+
+    const database = new DatabaseSync(":memory:");
+    try {
+      expect(() => database.exec(schema)).not.toThrow();
+    } finally {
+      database.close();
+    }
   });
 });

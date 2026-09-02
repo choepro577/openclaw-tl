@@ -41,6 +41,7 @@ import {
 const CONFIG_FORM_AUTO_SAVE_DEBOUNCE_MS = 800;
 
 type ConfigWriteCoordinatorContext = {
+  autoLoadOnConnect: boolean;
   state: RuntimeConfigState;
   gateway: RuntimeConfigGateway;
   publish: () => void;
@@ -61,6 +62,7 @@ type ConfigWriteCoordinatorContext = {
 };
 
 export function createConfigWriteCoordinator({
+  autoLoadOnConnect,
   state,
   gateway,
   publish,
@@ -517,7 +519,7 @@ export function createConfigWriteCoordinator({
             publish();
             reconcileAppliedRefresh();
           });
-        } else {
+        } else if (autoLoadOnConnect) {
           void refreshDraft(state, refreshConnectionState, publish, reconcileAppliedRefresh);
         }
       }

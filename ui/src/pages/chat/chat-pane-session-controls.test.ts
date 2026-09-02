@@ -4,6 +4,7 @@ import { render } from "lit";
 import { describe, expect, it, vi } from "vitest";
 import {
   renderChatPaneComposerControls,
+  resolveChatPaneComposerControlPolicy,
   resolveChatModelCatalogState,
 } from "./chat-pane-session-controls.ts";
 import type { ChatPageHost } from "./chat-state-host.ts";
@@ -70,6 +71,25 @@ describe("chat model catalog state", () => {
 });
 
 describe("chat pane composer controls", () => {
+  it("keeps original model, reasoning, and fast controls in Enterprise User Chat", () => {
+    expect(
+      resolveChatPaneComposerControlPolicy({
+        catalog: false,
+        enterpriseUserPresentation: true,
+      }),
+    ).toEqual({
+      renderModelControls: true,
+      renderModelSetup: false,
+      renderPermissionPicker: false,
+    });
+    expect(
+      resolveChatPaneComposerControlPolicy({
+        catalog: true,
+        enterpriseUserPresentation: true,
+      }).renderModelControls,
+    ).toBe(false);
+  });
+
   it("assembles model and permission controls as separate footer inputs", () => {
     const container = document.createElement("div");
     const state = {

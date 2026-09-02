@@ -166,6 +166,7 @@ export function renderSidebarIdentityMenuForController(controller: SidebarMenusC
       controller.closeIdentityMenu({ restoreFocus });
     },
     onNavigate: (routeId, options) => host.onNavigate?.(routeId, options),
+    onLogout: host.onLogout,
     onPairMobile: () => host.onPairMobile?.(),
     onRetryConnect: host.onRetryConnect,
   });

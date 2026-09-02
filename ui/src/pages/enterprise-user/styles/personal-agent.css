@@ -1,0 +1,78 @@
+.eu-personal-agent__editor {
+  display: grid;
+  gap: var(--space-5);
+  min-width: 0;
+}
+
+.eu-personal-agent__panel {
+  min-width: 0;
+}
+
+.eu-personal-agent__avatar-option {
+  display: inline-grid;
+  min-width: 22px;
+  place-items: center;
+  font-size: var(--control-ui-text-md);
+  line-height: 1;
+}
+
+.eu-personal-agent__textarea {
+  width: 100%;
+  min-height: 112px;
+  font-family: var(--font-body);
+  font-size: var(--control-ui-input-text-size);
+  line-height: 1.5;
+}
+
+.eu-personal-agent__textarea--greeting {
+  min-height: 88px;
+}
+
+.eu-personal-agent__textarea--instructions {
+  min-height: 220px;
+}
+
+.eu-personal-agent__preview {
+  display: grid;
+  width: 100%;
+  grid-template-columns: 48px minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-3);
+  padding-block: var(--space-1);
+}
+
+.eu-personal-agent__preview-avatar {
+  display: inline-flex;
+  width: 48px;
+  height: 48px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  background: var(--bg-elevated);
+  font-size: var(--control-ui-text-lg);
+}
+
+.eu-personal-agent__preview strong,
+.eu-personal-agent__preview p {
+  margin: 0;
+}
+
+.eu-personal-agent__preview p {
+  margin-top: var(--space-1);
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.eu-personal-agent__knowledge-editor {
+  display: grid;
+  width: 100%;
+  gap: var(--space-3);
+}
+
+.eu-personal-agent__conflict {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}

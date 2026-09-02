@@ -12,11 +12,15 @@ import type { CronRuntimeAuthority } from "../../cron/runtime-authority.js";
 import { CronService, type CronEvent } from "../../cron/service.js";
 import { createCronStoreHarness, createNoopLogger } from "../../cron/service.test-harness.js";
 import type { CronDelivery, CronJob } from "../../cron/types.js";
+import { createEnterpriseAccount } from "../../enterprise/accounts/account-store.js";
+import type { EnterpriseAccount } from "../../enterprise/accounts/account-types.js";
+import { enterpriseCronOwnerSessionKey } from "../../enterprise/automations/enterprise-cron-owner.js";
 import { resetPluginRuntimeStateForTest, setActivePluginRegistry } from "../../plugins/runtime.js";
 import {
   createChannelTestPluginBase,
   createTestRegistry,
 } from "../../test-utils/channel-plugins.js";
+import { withOpenClawTestState } from "../../test-utils/openclaw-test-state.js";
 import {
   createCronCreatorAuthorityRunScope,
   mintCronCreatorAuthorityGrant,
@@ -412,6 +416,32 @@ function callerClientWithCronCreatorAuthority(grant: CronCreatorAuthorityGrant):
   return client;
 }
 
+function enterpriseCronClient(account: EnterpriseAccount): GatewayClient {
+  return {
+    connect: {
+      minProtocol: 1,
+      maxProtocol: 1,
+      client: { id: "openclaw-control-ui", version: "test", platform: "test", mode: "webchat" },
+      role: "operator",
+      scopes: ["operator.read", "operator.write"],
+    },
+    authenticatedUserProfile: {
+      profileId: account.profileId,
+      displayName: account.displayName,
+      hasAvatar: false,
+      updatedAt: 1,
+    },
+    internal: {
+      enterpriseSession: {
+        sessionId: `session-${account.id}`,
+        audience: "user",
+        accountId: account.id,
+        accountRole: account.role,
+      },
+    },
+  } as GatewayClient;
+}
+
 function telegramDeliveryWithSlackFailure(overrides: Partial<CronDelivery> = {}): CronDelivery {
   return {
     mode: "announce",
@@ -615,6 +645,103 @@ describe("cron method validation", () => {
 
   afterEach(() => {
     resetPluginRuntimeStateForTest();
+  });
+
+  it("isolates Enterprise list, direct access, mutations, runs, and owner stamping", async () => {
+    await withOpenClawTestState({ scenario: "minimal", applyEnv: true }, async () => {
+      const owner = createEnterpriseAccount({
+        username: "cron.integration.owner",
+        displayName: "Cron Owner",
+        passwordHash: "test-password-hash",
+        role: "employee",
+        mustChangePassword: false,
+      });
+      const foreign = createEnterpriseAccount({
+        username: "cron.integration.foreign",
+        displayName: "Cron Foreign",
+        passwordHash: "test-password-hash",
+        role: "employee",
+        mustChangePassword: false,
+      });
+      const ownerJob = createCronJob({
+        id: "owner-job",
+        agentId: "main",
+        owner: {
+          accountId: owner.id,
+          agentId: "main",
+          sessionKey: enterpriseCronOwnerSessionKey(owner.id),
+        },
+      });
+      const foreignJob = createCronJob({
+        id: "foreign-job",
+        agentId: "main",
+        owner: {
+          accountId: foreign.id,
+          agentId: "main",
+          sessionKey: enterpriseCronOwnerSessionKey(foreign.id),
+        },
+      });
+      const ownerlessJob = createCronJob({ id: "ownerless-job", agentId: "main" });
+      const context = createCronContext([ownerJob, foreignJob, ownerlessJob]);
+      const client = enterpriseCronClient(owner);
+      setRuntimeConfig({ agents: { entries: { main: {}, finance: {} } } });
+
+      const listed = await invokeCron("cron.list", {}, { context, client });
+      expect(listed.respond).toHaveBeenCalledWith(
+        true,
+        expect.objectContaining({
+          jobs: [expect.objectContaining({ id: "owner-job" })],
+          total: 1,
+        }),
+        undefined,
+      );
+
+      for (const [method, params] of [
+        ["cron.get", { id: "foreign-job" }],
+        ["cron.update", { id: "foreign-job", patch: { name: "stolen" } }],
+        ["cron.remove", { id: "foreign-job" }],
+        ["cron.run", { id: "foreign-job" }],
+        ["cron.runs", { scope: "job", id: "foreign-job" }],
+        ["cron.scratch.get", { id: "foreign-job" }],
+        ["cron.scratch.set", { id: "foreign-job", content: "stolen" }],
+      ] as const) {
+        const result = await invokeCron(method, params, { context, client });
+        expectResponseError(result.respond, {
+          code: "INVALID_REQUEST",
+          messageIncludes: "not found",
+        });
+      }
+      expect(context.cron.update).not.toHaveBeenCalled();
+      expect(context.cron.remove).not.toHaveBeenCalled();
+      expect(context.cron.enqueueRun).not.toHaveBeenCalled();
+      expect(context.cron.readScratch).not.toHaveBeenCalled();
+      expect(context.cron.writeScratch).not.toHaveBeenCalled();
+
+      const added = await invokeCron(
+        "cron.add",
+        agentTurnCronParams({
+          agentId: "main",
+          owner: { accountId: foreign.id, agentId: "finance" },
+        }),
+        { context, client },
+      );
+      expectCronSuccess(added.respond);
+      expect(requireCronAddPayload(context).owner).toEqual({
+        accountId: owner.id,
+        agentId: "main",
+        sessionKey: enterpriseCronOwnerSessionKey(owner.id),
+      });
+
+      const deniedAgent = await invokeCron(
+        "cron.update",
+        { id: "owner-job", patch: { agentId: "finance" } },
+        { context, client },
+      );
+      expectResponseError(deniedAgent.respond, {
+        code: "INVALID_REQUEST",
+        messageIncludes: "agentId cannot be changed",
+      });
+    });
   });
 
   it("accepts threadId on announce delivery add params", async () => {

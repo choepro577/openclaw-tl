@@ -8,6 +8,7 @@ import {
   resolveSessionAgentId,
 } from "../../agents/agent-scope.js";
 import { normalizeExplicitSessionKey } from "../../config/sessions/explicit-session-key-normalization.js";
+import { isGatewayRequestScopedRuntimeConfig } from "../../gateway/request-runtime-config.js";
 import {
   deriveInboundMessageHookContext,
   toPluginInboundClaimPair,
@@ -358,14 +359,15 @@ export async function gatherDispatchRequest(
   const preparedReplyDispatchAgentId = boundAcpDispatchSessionKey
     ? resolveSessionAgentId({ sessionKey, config: cfg, fallbackAgentId: ctx.AgentId })
     : sessionAgentId;
-  const preparedReplyDispatchRuntime = params.usePublishedModelRuntime
-    ? await traceReplyPhase("reply.load_prepared_dispatch_runtime", async () => {
-        const { loadPublishedGatewayReplyDispatchRuntime } = await loadPreparedModelRuntime();
-        return await loadPublishedGatewayReplyDispatchRuntime({
-          agentId: preparedReplyDispatchAgentId,
-        });
-      })
-    : undefined;
+  const preparedReplyDispatchRuntime =
+    params.usePublishedModelRuntime && !isGatewayRequestScopedRuntimeConfig(cfg)
+      ? await traceReplyPhase("reply.load_prepared_dispatch_runtime", async () => {
+          const { loadPublishedGatewayReplyDispatchRuntime } = await loadPreparedModelRuntime();
+          return await loadPublishedGatewayReplyDispatchRuntime({
+            agentId: preparedReplyDispatchAgentId,
+          });
+        })
+      : undefined;
   const workspaceDir =
     preparedReplyDispatchRuntime?.workspaceDir ?? resolveAgentWorkspaceDir(cfg, sessionAgentId);
   const replyOperationCoordinator = createDispatchReplyOperationCoordinator({

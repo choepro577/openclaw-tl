@@ -1,7 +1,6 @@
 import { createRouter } from "@openclaw/uirouter";
 import type {
   PageDefinition,
-  RouteLocation,
   RouteMatch,
   RouteNotFound,
   Router,
@@ -24,6 +23,7 @@ import {
   type RouteId,
 } from "./app-route-paths.ts";
 import type { ApplicationContext } from "./app/context.ts";
+import { sameRouteLocation } from "./app/routing/route-location.ts";
 import { page as aboutPage } from "./pages/about/route.ts";
 import { page as activityPage } from "./pages/activity/route.ts";
 import { page as agentsPage } from "./pages/agents/route.ts";
@@ -39,6 +39,8 @@ import { page as custodianPage } from "./pages/custodian/route.ts";
 import { page as dashboardsPage } from "./pages/dashboards/route.ts";
 import { page as debugPage } from "./pages/debug/route.ts";
 import { page as devicesPage } from "./pages/devices/route.ts";
+import { page as enterprisePage } from "./pages/enterprise/route.ts";
+import { page as knowledgePage } from "./pages/knowledge/route.ts";
 import { page as labsPage } from "./pages/labs/route.ts";
 import { page as lobsterdexPage } from "./pages/lobsterdex/route.ts";
 import { page as logsPage } from "./pages/logs/route.ts";
@@ -59,7 +61,7 @@ import { page as usagePage } from "./pages/usage/route.ts";
 import { page as workboardPage } from "./pages/workboard/route.ts";
 import { page as worktreesPage } from "./pages/worktrees/route.ts";
 
-type AppRouteModule = {
+export type AppRouteModule = {
   render: (data: unknown) => unknown;
   renderOwnerKey?: (
     match: Pick<RouteMatch, "data" | "location">,
@@ -83,6 +85,8 @@ const APP_ROUTE_TREE = [
   dashboardsPage,
   appsPage,
   portalsPage,
+  enterprisePage,
+  knowledgePage,
   agentsPage,
   approvalsPage,
   channelsPage,
@@ -162,12 +166,6 @@ function routerHistoryLocation(location: ReturnType<RouterHistory["location"]>, 
     pathname: pathForRoute(routeId, basePath),
     search: `?${search.toString()}`,
   };
-}
-
-export function sameRouteLocation(left: RouteLocation, right: RouteLocation): boolean {
-  return (
-    left.pathname === right.pathname && left.search === right.search && left.hash === right.hash
-  );
 }
 
 function isRouteNotFound(error: unknown): error is RouteNotFound {

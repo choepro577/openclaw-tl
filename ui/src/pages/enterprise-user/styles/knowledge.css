@@ -1,0 +1,151 @@
+.eu-knowledge-page {
+  container-type: inline-size;
+  width: min(1320px, 100%);
+  box-sizing: border-box;
+  margin-inline: auto;
+  padding: clamp(var(--space-4), 4vw, var(--space-8));
+}
+
+.eu-knowledge-layout {
+  display: grid;
+  grid-template-columns: minmax(220px, 280px) minmax(0, 1fr);
+  gap: var(--space-4);
+}
+
+.eu-zone-list {
+  display: grid;
+  align-content: start;
+  gap: var(--space-1);
+  padding: var(--space-2);
+}
+
+.eu-zone-list button {
+  display: grid;
+  gap: var(--space-1);
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--text);
+  padding: var(--space-3);
+  text-align: start;
+}
+
+.eu-zone-list button:hover,
+.eu-zone-list button.active {
+  background: var(--bg-hover);
+}
+
+.eu-zone-list span,
+.eu-source-list span {
+  color: var(--muted);
+  font-size: var(--control-ui-text-xs);
+}
+
+.eu-knowledge-summary {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  padding: var(--space-4);
+}
+
+.eu-knowledge-summary > div {
+  min-width: min(100%, 280px);
+  flex: 1;
+}
+
+.eu-knowledge-summary h2,
+.eu-knowledge-summary p,
+.eu-knowledge-ingest h3 {
+  margin: 0;
+}
+
+.eu-knowledge-tabs {
+  display: flex;
+  gap: var(--space-2);
+  overflow-x: auto;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: var(--space-2);
+}
+
+.eu-knowledge-tabs button {
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--muted);
+  padding: var(--space-2) var(--space-3);
+  white-space: nowrap;
+}
+
+.eu-knowledge-tabs button.active {
+  border-color: color-mix(in srgb, var(--accent) 42%, var(--border));
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  color: var(--text);
+}
+
+.eu-knowledge-ingest {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+.eu-knowledge-ingest .card,
+.eu-knowledge-page main > .card {
+  padding: var(--space-4);
+}
+
+.eu-knowledge-ingest label,
+.eu-upload,
+.eu-source-list,
+.eu-source-list article {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.eu-upload progress {
+  width: 100%;
+  accent-color: var(--accent);
+}
+
+.eu-source-list article {
+  border-bottom: 1px solid var(--border);
+  padding-block: var(--space-3);
+}
+
+.eu-hit {
+  border-top: 1px solid var(--border);
+  padding-block: var(--space-3);
+}
+
+.eu-knowledge-job-steps {
+  display: grid;
+  gap: var(--space-1);
+  margin-block: var(--space-2);
+  border-left: 2px solid color-mix(in srgb, var(--accent) 46%, var(--border));
+  padding-left: var(--space-3);
+  color: var(--muted);
+}
+
+@container (max-width: 1100px) {
+  .eu-knowledge-ingest {
+    grid-template-columns: 1fr;
+  }
+}
+
+@container (max-width: 768px) {
+  .eu-knowledge-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .eu-zone-list {
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(180px, 70vw);
+    overflow-x: auto;
+  }
+}
+
+@container (max-width: 400px) {
+  .eu-knowledge-page {
+    padding-inline: var(--space-3);
+  }
+}

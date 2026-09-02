@@ -150,6 +150,7 @@
       "@openclaw/markdown-core/tables": ["./packages/markdown-core/src/tables.ts"],
       "@openclaw/markdown-core/types": ["./packages/markdown-core/src/types.ts"],
       "@openclaw/markdown-core/*": ["./packages/markdown-core/src/*"],
+      "@openclaw/knowledge-graph-core": ["./packages/knowledge-graph-core/src/index.ts"],
       "@openclaw/normalization-core": ["./packages/normalization-core/src/index.ts"],
       "@openclaw/normalization-core/agent-id": [
         "./packages/normalization-core/src/agent-id.ts"

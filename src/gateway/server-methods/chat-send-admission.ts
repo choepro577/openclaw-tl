@@ -21,6 +21,7 @@ import {
 } from "../../sessions/session-lifecycle-admission.js";
 import { setGatewayDedupeEntry } from "../agent-turn/agent-job.js";
 import { registerChatAbortController, resolveChatRunExpiresAtMs } from "../chat-abort.js";
+import { preserveGatewayRequestScopedRuntimeConfig } from "../request-runtime-config.js";
 import { PENDING_CHAT_SEND_DEDUPE_PREFIX, type DedupeEntry } from "../server-shared.js";
 import { loadSessionEntry } from "../session-utils.js";
 import { formatForLog } from "../ws-log.js";
@@ -196,7 +197,8 @@ export async function admitChatSend(params: {
       return;
     }
     const latestSession = loadSessionEntry(sessionLoadKey, sessionLoadOptions);
-    if (sessionRoutingChanged(latestSession.cfg)) {
+    const latestConfig = preserveGatewayRequestScopedRuntimeConfig(cfg, latestSession.cfg);
+    if (sessionRoutingChanged(latestConfig)) {
       throw new Error(SESSION_ROUTING_CHANGED_ERROR_REASON);
     }
     const latestEntry = latestSession.entry;
@@ -287,7 +289,7 @@ export async function admitChatSend(params: {
     admittedSessionId = latestEntry?.sessionId ?? backingSessionId ?? clientRunId;
     restartSafeAdmission = resolveRestartSafeChatAdmission({
       agentId,
-      cfg: latestSession.cfg,
+      cfg: latestConfig,
       clientRunId,
       context,
       entry: latestEntry,

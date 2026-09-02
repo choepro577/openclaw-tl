@@ -3,8 +3,17 @@ import {
   SIDEBAR_SESSION_NAV_COLLAPSE_QUERY,
   withSidebarNavCollapseIntent,
 } from "../app-session-route-paths.ts";
-import { bootstrapApplication } from "./bootstrap.ts";
+import {
+  bootstrapApplication as bootstrapApplicationWithProfile,
+  type ApplicationRuntime,
+} from "./bootstrap.ts";
+import { controlRoutingProfile } from "./routing/control-routing-profile.ts";
 import { loadSettings, saveSettings } from "./settings.ts";
+
+const bootstrapApplication = (
+  dependencies: Omit<Parameters<typeof bootstrapApplicationWithProfile>[0], "routingProfile">,
+): ApplicationRuntime =>
+  bootstrapApplicationWithProfile({ ...dependencies, routingProfile: controlRoutingProfile });
 
 const SIDEBAR_COLLAPSE_SEARCH = new URLSearchParams({
   [SIDEBAR_SESSION_NAV_COLLAPSE_QUERY.name]: SIDEBAR_SESSION_NAV_COLLAPSE_QUERY.value,

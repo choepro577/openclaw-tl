@@ -219,6 +219,7 @@ export async function prepareCronRunContext(params: {
     nowMs: now,
     forceNew: usesDetachedRunSession,
     hookExternalContentSource,
+    createdActor: input.createdActor,
   });
   const reservedKey = isAgentHarnessSessionKey(agentSessionKey);
   if (cronSession.initialSessionEntry?.modelSelectionLocked === true) {

@@ -27,6 +27,8 @@ function createCronViewProps(overrides: Partial<CronProps> = {}): CronProps {
     agentId: "main",
     loading: false,
     canManage: true,
+    enterpriseRestricted: false,
+    enterpriseAgentOptions: [],
     jobsLoadingMore: false,
     status: {
       enabled: true,

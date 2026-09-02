@@ -718,4 +718,33 @@ describe("cron view editor", () => {
     expect(inheritText).toContain("Default");
     expect(inheritText).not.toContain("common.default");
   });
+
+  it("limits Enterprise authoring to entitled agents and safe agent turns", () => {
+    const container = renderView({
+      createOpen: true,
+      enterpriseRestricted: true,
+      enterpriseAgentOptions: [
+        { value: "personal-1", label: "Personal Agent" },
+        { value: "shared-1", label: "Shared Writer" },
+      ],
+      form: {
+        ...DEFAULT_CRON_FORM,
+        agentId: "personal-1",
+        payloadKind: "agentTurn",
+        sessionTarget: "isolated",
+      },
+    });
+
+    expect(container.querySelector('wa-option[value="personal-1"]')?.textContent).toContain(
+      "Personal Agent",
+    );
+    expect(container.querySelector('wa-option[value="shared-1"]')?.textContent).toContain(
+      "Shared Writer",
+    );
+    expect(container.querySelector("#cron-agent-suggestions")).toBeNull();
+    expect(container.querySelector<HTMLInputElement>("#cron-payload-kind")?.readOnly).toBe(true);
+    expect(container.querySelector<HTMLInputElement>("#cron-session-target")?.readOnly).toBe(true);
+    expect(container.querySelector("#cron-session-key")).toBeNull();
+    expect(findToggleByLabel(container, "Condition trigger")).toBeNull();
+  });
 });

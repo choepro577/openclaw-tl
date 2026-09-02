@@ -27,6 +27,7 @@ import {
   respondDeletedAgentSession,
   type RestoredCronContinuation,
 } from "../agent-turn/agent-handler-helpers.js";
+import { preserveGatewayRequestScopedRuntimeConfig } from "../request-runtime-config.js";
 import { resolveRequestedSessionAgentId } from "../session-request-agent.js";
 import { loadSessionEntry } from "../session-utils.js";
 import type { AgentRunRequest } from "./agent-request-types.js";
@@ -84,10 +85,15 @@ export function prepareAgentSession(params: {
     return undefined;
   }
   const requestedAgentId = requestedSessionAgent.agentId;
-  const { cfg, storePath, entry, canonicalKey, legacyKey, storeKeys } = loadSessionEntry(
-    params.requestedSessionKey,
-    { agentId: requestedAgentId, clone: false },
-  );
+  const {
+    cfg: loadedCfg,
+    storePath,
+    entry,
+    canonicalKey,
+    legacyKey,
+    storeKeys,
+  } = loadSessionEntry(params.requestedSessionKey, { agentId: requestedAgentId, clone: false });
+  const cfg = preserveGatewayRequestScopedRuntimeConfig(params.cfg, loadedCfg);
   if (params.expectedExistingSessionId && entry?.sessionId !== params.expectedExistingSessionId) {
     params.respond(
       false,

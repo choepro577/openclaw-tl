@@ -1,5 +1,5 @@
 import { consume } from "@lit/context";
-import { html } from "lit";
+import { html, nothing } from "lit";
 import { state } from "lit/decorators.js";
 import type { AgentsListResult, CronJob } from "../../api/types.ts";
 import { titleForRoute } from "../../app-navigation.ts";
@@ -43,8 +43,37 @@ import {
 import { GatewayPageController } from "../../lit/gateway-page-controller.ts";
 import { OpenClawLightDomElement } from "../../lit/openclaw-element.ts";
 import { SubscriptionsController } from "../../lit/subscriptions-controller.ts";
+import {
+  loadEnterpriseUserCapabilities,
+  type EnterpriseUserCapabilities,
+} from "../enterprise/services/enterprise-api.ts";
+import { isEnterpriseUiActive } from "../enterprise/state/enterprise-ui-access.ts";
 import { buildCronSuggestions, THINKING_SUGGESTIONS } from "./form-suggestions.ts";
 import { renderCron, type CronDetailTab, type CronListTab } from "./view.ts";
+
+export type EnterpriseCronAgentOption = { value: string; label: string };
+
+export function buildEnterpriseCronAgentOptions(
+  capabilities: EnterpriseUserCapabilities,
+): EnterpriseCronAgentOption[] {
+  const options: EnterpriseCronAgentOption[] = [];
+  const seen = new Set<string>();
+  const add = (value: string | null | undefined, label: string) => {
+    const normalized = value?.trim();
+    if (!normalized || seen.has(normalized)) {
+      return;
+    }
+    seen.add(normalized);
+    options.push({ value: normalized, label });
+  };
+  if (capabilities.actions.canUsePersonalAgent) {
+    add(capabilities.defaultAgentId, "Personal Agent");
+  }
+  for (const agent of capabilities.sharedAgents) {
+    add(agent.agentId, agent.name || agent.agentId);
+  }
+  return options;
+}
 
 class CronPage extends OpenClawLightDomElement {
   @consume({ context: applicationContext, subscribe: true })
@@ -53,10 +82,12 @@ class CronPage extends OpenClawLightDomElement {
   @state() private cron = createInitialCronState();
   @state() private agentsList: AgentsListResult | null = null;
   @state() private cronModelSuggestions: string[] = [];
+  @state() private enterpriseAgentOptions: EnterpriseCronAgentOption[] | null = null;
   @state() private listTab: CronListTab = "tasks";
   @state() private detailTab: CronDetailTab = "settings";
 
   private modelSuggestionsState: CronState | null = null;
+  private enterpriseCapabilitiesRequest: Promise<void> | null = null;
   private readonly gateway = new GatewayPageController(this, {
     getGateway: () => this.context?.gateway,
     invalidateRequests: (change) => this.resetGatewayState(change.snapshot),
@@ -78,7 +109,9 @@ class CronPage extends OpenClawLightDomElement {
     this.requestUpdate();
   });
   private get canManageCron(): boolean {
-    return readGatewayOperatorAccess(this.context.gateway.snapshot).canAdmin;
+    return (
+      readGatewayOperatorAccess(this.context.gateway.snapshot).canAdmin || isEnterpriseUiActive()
+    );
   }
 
   private readonly subscriptions = new SubscriptionsController(this)
@@ -130,6 +163,8 @@ class CronPage extends OpenClawLightDomElement {
     this.agentsList = connected ? this.context.agents.state.agentsList : null;
     this.cronModelSuggestions = [];
     this.modelSuggestionsState = null;
+    this.enterpriseAgentOptions = null;
+    this.enterpriseCapabilitiesRequest = null;
   }
 
   private syncAgentsState() {
@@ -148,11 +183,79 @@ class CronPage extends OpenClawLightDomElement {
     } else if (!this.cron.cronRuns.length && !this.cron.cronRunsLoadingMore) {
       void this.loadRuns(this.cron.cronRunsScope === "all" ? null : this.cron.cronRunsJobId);
     }
+    this.ensureEnterpriseCapabilities();
     if (this.modelSuggestionsState !== this.cron) {
       const cronState = this.cron;
       this.modelSuggestionsState = cronState;
       void this.loadModelSuggestions(cronState);
     }
+  }
+
+  private ensureEnterpriseCapabilities() {
+    if (
+      !isEnterpriseUiActive() ||
+      this.enterpriseAgentOptions !== null ||
+      this.enterpriseCapabilitiesRequest
+    ) {
+      return;
+    }
+    const cronState = this.cron;
+    const request = loadEnterpriseUserCapabilities()
+      .then((capabilities) => {
+        if (this.cron !== cronState || !cronState.connected) {
+          return;
+        }
+        this.enterpriseAgentOptions = buildEnterpriseCronAgentOptions(capabilities);
+        this.applyEnterpriseFormPolicy();
+        this.requestUpdate();
+      })
+      .catch((error: unknown) => {
+        if (this.cron !== cronState) {
+          return;
+        }
+        this.enterpriseAgentOptions = [];
+        cronState.cronError =
+          error instanceof Error
+            ? error.message
+            : "Không thể tải danh sách agent được phép cho Automation.";
+        this.requestUpdate();
+      })
+      .finally(() => {
+        if (this.enterpriseCapabilitiesRequest === request) {
+          this.enterpriseCapabilitiesRequest = null;
+        }
+      });
+    this.enterpriseCapabilitiesRequest = request;
+  }
+
+  private applyEnterpriseFormPolicy() {
+    if (!isEnterpriseUiActive()) {
+      return;
+    }
+    const allowed = this.enterpriseAgentOptions ?? [];
+    const currentAgentId = this.cron.cronForm.agentId.trim();
+    const selectedAgentId = this.cron.cronEditingJob
+      ? currentAgentId
+      : allowed.some((option) => option.value === currentAgentId)
+        ? currentAgentId
+        : (allowed[0]?.value ?? "");
+    this.cron.cronForm = normalizeCronFormState({
+      ...this.cron.cronForm,
+      agentId: selectedAgentId,
+      clearAgent: false,
+      sessionKey: "",
+      sessionTarget: "isolated",
+      payloadKind: "agentTurn",
+      payloadLocked: false,
+      triggerEnabled: false,
+      triggerScript: "",
+      triggerOnce: false,
+      ...(this.cron.cronForm.scheduleKind === "on-exit" ||
+      this.cron.cronForm.scheduleKind === "stream"
+        ? { scheduleKind: "every" as const }
+        : {}),
+    });
+    this.cron.cronFieldErrors = validateCronForm(this.cron.cronForm);
   }
 
   private requestCronUpdate(cronState: CronState = this.cron) {
@@ -244,6 +347,7 @@ class CronPage extends OpenClawLightDomElement {
       return;
     }
     this.cron.cronForm = normalizeCronFormState({ ...this.cron.cronForm, ...patch });
+    this.applyEnterpriseFormPolicy();
     this.cron.cronFieldErrors = validateCronForm(this.cron.cronForm);
     this.requestCronUpdate();
   }
@@ -251,6 +355,7 @@ class CronPage extends OpenClawLightDomElement {
   private selectJob(job: CronJob) {
     this.cron.cronCreateOpen = false;
     startCronEdit(this.cron, job);
+    this.applyEnterpriseFormPolicy();
     this.requestCronUpdate();
     void this.runCronTask(async (cronState) => {
       updateCronRunsFilter(cronState, { cronRunsScope: "job" });
@@ -267,6 +372,7 @@ class CronPage extends OpenClawLightDomElement {
       return;
     }
     cancelCronEdit(this.cron, this.context.agentSelection.state.selectedId);
+    this.applyEnterpriseFormPolicy();
     this.cron.cronCreateOpen = true;
     if (patch) {
       this.patchForm(patch);
@@ -281,6 +387,7 @@ class CronPage extends OpenClawLightDomElement {
     }
     // A clone is a prefilled create: the editor submits cron.add, not update.
     startCronClone(this.cron, job);
+    this.applyEnterpriseFormPolicy();
     this.cron.cronCreateOpen = true;
     this.requestCronUpdate();
   }
@@ -383,15 +490,18 @@ class CronPage extends OpenClawLightDomElement {
       modelSuggestions: this.cronModelSuggestions,
     });
     const canManage = this.canManageCron;
+    const enterpriseRestricted = isEnterpriseUiActive();
     return html`
       <section class="content-header">
         <div>
           <div class="page-title">${titleForRoute("cron")}</div>
         </div>
-        ${renderAgentScopeControl({
-          agents: this.agentsList?.agents ?? [],
-          selection: this.context.agentSelection,
-        })}
+        ${enterpriseRestricted
+          ? nothing
+          : renderAgentScopeControl({
+              agents: this.agentsList?.agents ?? [],
+              selection: this.context.agentSelection,
+            })}
       </section>
       ${renderSettingsWorkspace(
         renderCron({
@@ -399,6 +509,8 @@ class CronPage extends OpenClawLightDomElement {
           agentId: fallbackAgentId,
           loading: this.cron.cronLoading,
           canManage,
+          enterpriseRestricted,
+          enterpriseAgentOptions: this.enterpriseAgentOptions ?? [],
           status: this.cron.cronStatus,
           failingCount: this.cron.cronFailingCount,
           agentScoped: this.cron.cronAgentId !== null,
@@ -436,7 +548,12 @@ class CronPage extends OpenClawLightDomElement {
           runsQuery: this.cron.cronRunsQuery,
           runsSortDir: this.cron.cronRunsSortDir,
           fieldErrors: this.cron.cronFieldErrors,
-          canSubmit: !hasCronFormErrors(this.cron.cronFieldErrors),
+          canSubmit:
+            !hasCronFormErrors(this.cron.cronFieldErrors) &&
+            (!enterpriseRestricted ||
+              (this.enterpriseAgentOptions ?? []).some(
+                (option) => option.value === this.cron.cronForm.agentId,
+              )),
           agentSuggestions: suggestions.agentSuggestions,
           modelSuggestions: suggestions.modelSuggestions,
           thinkingSuggestions: THINKING_SUGGESTIONS,

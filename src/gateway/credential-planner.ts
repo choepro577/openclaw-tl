@@ -151,12 +151,15 @@ export function createGatewayCredentialPlan(params: {
   // The local token surface is disabled by password/none/trusted-proxy modes so
   // token refs do not get resolved for auth modes that cannot consume them.
   const localTokenCanWin =
-    authMode !== "password" && authMode !== "none" && authMode !== "trusted-proxy";
+    authMode !== "password" &&
+    authMode !== "none" &&
+    authMode !== "trusted-proxy" &&
+    authMode !== "accounts";
   const tokenCanWin = Boolean(envToken || localToken.configured || remoteToken.configured);
   const passwordCanWin =
     authMode === "password" ||
     authMode === "trusted-proxy" ||
-    (authMode !== "token" && authMode !== "none" && !tokenCanWin);
+    (authMode !== "token" && authMode !== "none" && authMode !== "accounts" && !tokenCanWin);
   const localTokenSurfaceActive =
     localTokenCanWin &&
     (authMode === "token" ||

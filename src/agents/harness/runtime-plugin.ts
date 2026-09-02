@@ -133,9 +133,20 @@ export async function ensureSelectedAgentHarnessPlugin(params: {
     return;
   }
 
-  if (!params.pluginRegistry?.agentHarnesses.some((entry) => entry.harness.id === runtime)) {
-    throw new Error(
-      `Agent harness runtime "${runtime}" is unavailable because its plugin registration is missing from this prepared run. Enable or reinstall the plugin that provides this runtime, restart the Gateway, then retry.`,
-    );
+  if (params.pluginRegistry?.agentHarnesses.some((entry) => entry.harness.id === runtime)) {
+    return;
   }
+  if (
+    runtime === "codex" &&
+    policy.runtimeSource === "implicit" &&
+    isDefaultAgentRuntimeId(requestedRuntime)
+  ) {
+    // Selection already defines missing implicit Codex as a lossless OpenClaw fallback. Keep the
+    // preparation guard aligned so an operator's explicit Codex-plugin disable cannot fail a turn
+    // before selection reaches that fallback.
+    return;
+  }
+  throw new Error(
+    `Agent harness runtime "${runtime}" is unavailable because its plugin registration is missing from this prepared run. Enable or reinstall the plugin that provides this runtime, restart the Gateway, then retry.`,
+  );
 }

@@ -115,6 +115,19 @@ describe("normalizeChatSendRequest", () => {
     });
   });
 
+  it("accepts a server-owned command suppression for a trusted user-portal request", () => {
+    const result = normalizeChatSendRequest({
+      params: validParams({ suppressCommandInterpretation: true }),
+      client: null,
+      trustedSystemInput: true,
+    });
+
+    expect(result).toMatchObject({
+      ok: true,
+      value: { suppressCommandInterpretation: true },
+    });
+  });
+
   it("requires capable copilot runs to carry explicit tool bindings", () => {
     expect(normalizeChatSendRequest({ params: validParams(), client: copilotClient() })).toEqual({
       ok: false,

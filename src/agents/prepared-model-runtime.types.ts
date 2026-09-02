@@ -88,6 +88,8 @@ export type PreparedModelRuntimeInput = {
   inheritedAuthDir?: string;
   workspaceDir?: string;
   preserveWorkspaceDirOnRefresh?: boolean;
+  /** Keep an explicitly projected config instead of rebinding it to the Gateway owner. */
+  preserveConfigOnRefresh?: boolean;
   readOnly?: boolean;
   /** Load the exact runtime plugin generation for an isolated executable probe. */
   loadRuntimePlugins?: boolean;

@@ -2585,6 +2585,52 @@ describe("refreshChatMetadata", () => {
     ]);
   });
 
+  it("ignores a prepared catalog fallback after switching agents", async () => {
+    const workModels = createDeferred<{
+      models: Array<{ id: string; name: string; provider: string }>;
+    }>();
+    const request = vi.fn(async (method: string, params?: { agentId?: string }) => {
+      if (method === "chat.metadata") {
+        return { swarmEnabled: false };
+      }
+      if (method === "models.list" && params?.agentId === "work") {
+        return await workModels.promise;
+      }
+      if (method === "models.list") {
+        return {
+          models: [{ id: "other-model", name: "Other Model", provider: "openai" }],
+        };
+      }
+      throw new Error(`Unexpected request: ${method}`);
+    });
+    const state = createMetadataState(request, {
+      sessions: { refresh: vi.fn().mockResolvedValue(undefined) } as never,
+    });
+
+    const workRefresh = refreshChatMetadata(state, {
+      preparedModelCatalogFallback: true,
+    });
+    await vi.waitFor(() =>
+      expect(request).toHaveBeenCalledWith("models.list", {
+        agentId: "work",
+        preparedOnly: true,
+        view: "configured",
+      }),
+    );
+
+    state.sessionKey = "agent:other:main";
+    await refreshChatMetadata(state, { preparedModelCatalogFallback: true });
+    workModels.resolve({
+      models: [{ id: "work-model", name: "Work Model", provider: "openai" }],
+    });
+    await workRefresh;
+
+    expect(state.chatModelCatalog).toEqual([
+      { id: "other-model", name: "Other Model", provider: "openai" },
+    ]);
+    expect(state.chatModelsLoading).toBe(false);
+  });
+
   it("does not publish metadata after the pane retires its request owner", async () => {
     let resolveMetadata: (value: {
       commands: never[];

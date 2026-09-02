@@ -279,6 +279,9 @@ async function prepareSimpleCompletionModelCore(
         readOnly: true,
         allowKeychainPrompt: false,
         config: params.cfg,
+        ...(context.preparedModelRuntime.inheritedAuthDir
+          ? { inheritedAuthDir: context.preparedModelRuntime.inheritedAuthDir }
+          : {}),
       })
     : undefined;
   try {

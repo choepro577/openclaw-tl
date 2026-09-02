@@ -5,6 +5,7 @@ import type { AmbientEnvTriggerPolicy } from "../channels/config-presence.js";
 import type { CliDeps } from "../cli/deps.types.js";
 import { resolveStateDir } from "../config/paths.js";
 import type { OpenClawConfig } from "../config/types.openclaw.js";
+import { isEnterpriseEnabled } from "../enterprise/enterprise-config.js";
 import { hasConfiguredInternalHooks } from "../hooks/configured.js";
 import { isTruthyEnvValue } from "../infra/env.js";
 import type { GatewayActiveWorkInspectors } from "../infra/gateway-active-work.js";
@@ -803,6 +804,50 @@ export async function startGatewaySidecars(params: {
     internalHooksConfigured || (await hasGatewayStartupInternalHookListeners());
   if (params.shouldCreatePostReadySidecars?.() === false) {
     return { pluginServices, postReadySidecars };
+  }
+  let enterpriseKnowledgeWorker: { stop(): Promise<void> } | undefined;
+  if (isEnterpriseEnabled(params.cfg)) {
+    postReadySidecars.push(
+      schedulePostReadySidecarTask({
+        startupTrace: params.startupTrace,
+        name: "sidecars.enterprise-knowledge",
+        log: params.log,
+        waitForPostReadyWork: params.waitForPostReadyWork,
+        run: async (isStopped) => {
+          const { startEnterpriseKnowledgeWorker } =
+            await import("../enterprise/knowledge/worker.js");
+          if (!isStopped()) {
+            enterpriseKnowledgeWorker = startEnterpriseKnowledgeWorker();
+          }
+        },
+        stop: async () => {
+          await enterpriseKnowledgeWorker?.stop();
+        },
+      }),
+    );
+  }
+  if (params.cfg.enterprise?.userExtensions?.enabled === true) {
+    postReadySidecars.push(
+      schedulePostReadySidecarTask({
+        startupTrace: params.startupTrace,
+        name: "sidecars.enterprise-extension-reconciliation",
+        log: params.log,
+        waitForPostReadyWork: params.waitForPostReadyWork,
+        run: async (isStopped) => {
+          const { reconcileApprovingEnterprisePluginRequests } =
+            await import("../enterprise/extensions/plugin-approval-service.js");
+          if (isStopped()) {
+            return;
+          }
+          const outcome = reconcileApprovingEnterprisePluginRequests(params.pluginRegistry);
+          if (outcome.failed > 0) {
+            params.log.warn(
+              `enterprise plugin request reconciliation failed for ${outcome.failed} request(s)`,
+            );
+          }
+        },
+      }),
+    );
   }
   if (shouldDispatchGatewayStartupInternalHook) {
     params.startupOutcomes?.record({

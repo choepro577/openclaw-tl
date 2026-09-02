@@ -13,7 +13,7 @@ import { createGatewayCredentialPlan } from "./credential-planner.js";
 import { resolveGatewayCredentialsFromValues } from "./credentials.js";
 
 /** Authentication modes after config, override, and credential inputs are combined. */
-type ResolvedGatewayAuthMode = "none" | "token" | "password" | "trusted-proxy";
+type ResolvedGatewayAuthMode = "none" | "token" | "password" | "trusted-proxy" | "accounts";
 
 /** Records which input selected the effective Gateway auth mode. */
 type ResolvedGatewayAuthModeSource = "override" | "config" | "password" | "token" | "default";
@@ -84,7 +84,10 @@ function finalizeResolvedGatewayAuth(params: {
     password,
     allowTailscale:
       authConfig.allowTailscale ??
-      (params.tailscaleMode === "serve" && mode !== "password" && mode !== "trusted-proxy"),
+      (params.tailscaleMode === "serve" &&
+        mode !== "password" &&
+        mode !== "trusted-proxy" &&
+        mode !== "accounts"),
     trustedProxy: authConfig.trustedProxy,
   };
 }

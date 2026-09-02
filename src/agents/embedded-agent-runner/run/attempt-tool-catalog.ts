@@ -1,3 +1,4 @@
+import { isGatewayRequestScopedRuntimeConfig } from "../../../gateway/request-runtime-config.js";
 /**
  * Prepares the attempt-local tool catalog, schema projection, and diagnostics.
  */
@@ -183,6 +184,8 @@ export function prepareEmbeddedAttemptToolCatalog(input: {
         toolsEnabled,
         disableTools: attempt.disableTools,
         toolsAllowExplicitlyEmpty: preparedToolBase.effectiveToolsAllow?.length === 0,
+        allowTextOnlyFallback:
+          attempt.config !== undefined && isGatewayRequestScopedRuntimeConfig(attempt.config),
       });
   logAgentRuntimeToolDiagnostics({
     runtimePlan: attempt.runtimePlan,

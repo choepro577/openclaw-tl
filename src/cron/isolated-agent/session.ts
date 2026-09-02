@@ -147,6 +147,7 @@ export function resolveCronSession(params: {
   forceNew?: boolean;
   hookExternalContentSource?: SessionEntry["hookExternalContentSource"];
   store?: Record<string, SessionEntry>;
+  createdActor?: SessionEntry["createdActor"];
 }) {
   const sessionCfg = params.cfg.session;
   const storePath = resolveSessionStorePathCore(sessionCfg?.store, {
@@ -256,6 +257,7 @@ export function resolveCronSession(params: {
       ? { hookExternalContentSource: params.hookExternalContentSource }
       : {}),
     systemSent,
+    ...(params.createdActor ? { createdActor: params.createdActor } : {}),
   };
   if (resetBoundaryPending) {
     clearAllCliSessions(sessionEntry);

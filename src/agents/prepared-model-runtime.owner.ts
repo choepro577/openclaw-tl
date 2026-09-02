@@ -171,6 +171,12 @@ export function rebindInputToCommittedConfiguredOwner(
   rawInput: PreparedModelRuntimeInput,
 ): PreparedModelRuntimeInput {
   const input = normalizePreparedModelRuntimeInput(rawInput);
+  // Request-scoped projections are complete runtime ownership boundaries. Rebinding one by its
+  // shared agent id (for example `main`) would replace its account config and canonical workspace
+  // with the process-wide configured owner.
+  if (input.preserveConfigOnRefresh === true) {
+    return input;
+  }
   const owner = resolveCommittedConfiguredOwner(owners, rawInput);
   if (!owner) {
     throw new PreparedModelRuntimeOwnerNotPublishedError(
@@ -276,7 +282,10 @@ export function ownerKey(input: PreparedModelRuntimeInput): string {
     env: environmentFingerprint(input.env),
     allowGatewaySubagentBinding: input.allowGatewaySubagentBinding === true,
     runtimePluginSelections: input.runtimePluginSelections,
-    config: input.readOnly ? hashRuntimeConfigValue(input.config) : undefined,
+    config:
+      input.readOnly || input.preserveConfigOnRefresh
+        ? hashRuntimeConfigValue(input.config)
+        : undefined,
   });
 }
 

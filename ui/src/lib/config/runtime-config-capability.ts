@@ -70,6 +70,7 @@ export type RuntimeConfigCapability = {
 
 export function createRuntimeConfigCapability(
   gateway: RuntimeConfigGateway,
+  options: { autoLoadOnConnect?: boolean } = {},
 ): RuntimeConfigCapability {
   const state = createInitialConfigState(gateway.snapshot);
   const listeners = new Set<(state: RuntimeConfigState) => void>();
@@ -157,6 +158,7 @@ export function createRuntimeConfigCapability(
   };
 
   const writes: ConfigWriteCoordinator = createConfigWriteCoordinator({
+    autoLoadOnConnect: options.autoLoadOnConnect !== false,
     state,
     gateway,
     publish,

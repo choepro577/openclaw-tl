@@ -84,7 +84,10 @@ function isSessionStateEvent(event: GatewayEventFrame): boolean {
   return event.event === "sessions.changed" || event.event === "session.message";
 }
 
-export function createSessionCapability(gateway: SessionGateway): SessionCapability {
+export function createSessionCapability(
+  gateway: SessionGateway,
+  options: { autoHydrateOnConnect?: boolean } = {},
+): SessionCapability {
   let state: SessionState = {
     result: null,
     agentId: null,
@@ -381,7 +384,7 @@ export function createSessionCapability(gateway: SessionGateway): SessionCapabil
       hydratedClient = scope.client;
       void (async () => {
         await sessionEventSubscription.ensure(scope);
-        if (connection.isCurrent(scope)) {
+        if (connection.isCurrent(scope) && options.autoHydrateOnConnect !== false) {
           const sessionKey = gateway.snapshot.sessionKey?.trim();
           const agentScope = sessionKey
             ? scopedAgentListParamsForSession(gateway.snapshot, sessionKey)

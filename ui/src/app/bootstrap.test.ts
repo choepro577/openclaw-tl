@@ -12,10 +12,19 @@ import {
   normalizeInitialApplicationLocation,
   resolveInitialApplicationLocation,
 } from "./bootstrap-location.ts";
-import { bootstrapApplication } from "./bootstrap.ts";
+import {
+  bootstrapApplication as bootstrapApplicationWithProfile,
+  type ApplicationRuntime,
+} from "./bootstrap.ts";
 import type { ApplicationContext } from "./context.ts";
+import { controlRoutingProfile } from "./routing/control-routing-profile.ts";
 import { loadSettings, saveSettings } from "./settings.ts";
 import { normalizeLegacyTerminalViewLocation } from "./startup-settings.ts";
+
+const bootstrapApplication = (
+  dependencies: Omit<Parameters<typeof bootstrapApplicationWithProfile>[0], "routingProfile">,
+): ApplicationRuntime =>
+  bootstrapApplicationWithProfile({ ...dependencies, routingProfile: controlRoutingProfile });
 
 // Startup progress (dynamic imports, gateway subscribe, router start) is not a
 // performance assertion, so these waits must not inherit vi.waitFor's 1s default:

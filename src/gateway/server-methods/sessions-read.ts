@@ -67,7 +67,10 @@ import {
   type SessionsPreviewResult,
 } from "../session-utils.js";
 import { resolveSessionKeyFromResolveParams } from "../sessions-resolve.js";
-import { gatewayClientSessionCreator } from "./gateway-client-identity.js";
+import {
+  enterpriseUserPortalIdentity,
+  gatewayClientSessionCreator,
+} from "./gateway-client-identity.js";
 import { readPreparedServerMethodModelCatalog } from "./optional-model-catalog.js";
 import {
   collectTrackedActiveSessionRuns,
@@ -274,6 +277,8 @@ export const sessionReadHandlers: GatewayRequestHandlers = {
                 loadCombinedSessionStoreForGatewayCore(cfg, {
                   agentId: p.agentId,
                   configuredAgentsOnly,
+                  strictConfiguredAgentStoresOnly:
+                    enterpriseUserPortalIdentity(client) !== undefined,
                   projection: "list",
                 }),
               {
@@ -611,7 +616,7 @@ export const sessionReadHandlers: GatewayRequestHandlers = {
 
     respond(true, { ts: Date.now(), previews } satisfies SessionsPreviewResult, undefined);
   },
-  "sessions.describe": ({ params, respond, context }) => {
+  "sessions.describe": ({ params, respond, context, client }) => {
     if (!assertValidParams(params, validateSessionsDescribeParams, "sessions.describe", respond)) {
       return;
     }
@@ -630,7 +635,8 @@ export const sessionReadHandlers: GatewayRequestHandlers = {
       cfg,
       ...(requestedAgent.agentId ? { agentId: requestedAgent.agentId } : {}),
     });
-    if (!entry) {
+    const visibilityFilter = createSessionListEntryFilter({ client, cfg });
+    if (!entry || visibilityFilter?.(target.canonicalKey, entry) === false) {
       respond(true, { session: null }, undefined);
       return;
     }

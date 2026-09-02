@@ -5,7 +5,7 @@ import type { GatewayBrowserClient, GatewayEventListener } from "../../api/gatew
 import type { CronJob, CronJobsListResult } from "../../api/types.ts";
 import type { ApplicationContext, ApplicationGatewaySnapshot } from "../../app/context.ts";
 import type { CronState } from "../../lib/cron/index.ts";
-import "./cron-page.ts";
+import { buildEnterpriseCronAgentOptions } from "./cron-page.ts";
 
 type CronTestPage = HTMLElement & {
   context: ApplicationContext;
@@ -175,6 +175,25 @@ function createRequest(
 afterEach(() => {
   document.body.replaceChildren();
   vi.restoreAllMocks();
+});
+
+describe("Enterprise Automation agent options", () => {
+  it("lists Personal Agent first and removes duplicate shared agent ids", () => {
+    expect(
+      buildEnterpriseCronAgentOptions({
+        actions: { canUsePersonalAgent: true },
+        defaultAgentId: "personal-1",
+        sharedAgents: [
+          { agentId: "personal-1", name: "Duplicate personal" },
+          { agentId: "shared-1", name: "Shared Writer" },
+          { agentId: "shared-1", name: "Duplicate writer" },
+        ],
+      } as never),
+    ).toEqual([
+      { value: "personal-1", label: "Personal Agent" },
+      { value: "shared-1", label: "Shared Writer" },
+    ]);
+  });
 });
 
 describe("CronPage editor state sync", () => {
