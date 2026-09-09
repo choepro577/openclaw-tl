@@ -27,6 +27,7 @@ import {
 import { normalizeAgentId, parseAgentSessionKey } from "../../routing/session-key.js";
 import { prepareWorktreeSessionTitle } from "../dashboard-session-title.js";
 import { ADMIN_SCOPE, authorizeOperatorScopesForRequiredScope } from "../method-scopes.js";
+import { loadGatewayModelCatalogForRequest } from "../server-model-catalog-auth.js";
 import {
   buildDashboardSessionKey,
   createGatewaySession,
@@ -562,7 +563,7 @@ export const sessionCreateHandlers: GatewayRequestHandlers = {
       authorizedPluginId: normalizeOptionalString(client?.internal?.pluginRuntimeOwnerId),
       armSessionDiffBaselineCapture: true,
       loadGatewayModelCatalog: () =>
-        context.loadGatewayModelCatalog({ agentId: modelCatalogAgentId }),
+        loadGatewayModelCatalogForRequest(context, modelCatalogAgentId),
       ...(commitGuard ? { commitGuard } : {}),
       afterCreate: async ({ key, agentId, entry, storePath }) => {
         if (!authority.hasActive()) {

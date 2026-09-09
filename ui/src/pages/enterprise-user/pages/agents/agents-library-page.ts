@@ -9,7 +9,11 @@ import { OpenClawLightDomElement } from "../../../../lit/openclaw-element.ts";
 import { openUserAgentConversation } from "../../adapters/chat-route-adapter.ts";
 import "../../components/user-agent-card.ts";
 import "./shared-agent-detail-page.ts";
-import type { EnterpriseUserAgent } from "../../contracts/user-agent.ts";
+import { canRequestUserAgentAccess, type EnterpriseUserAgent } from "../../contracts/user-agent.ts";
+import {
+  cancelEnterpriseUserAgentAccessRequest,
+  requestEnterpriseUserAgentAccess,
+} from "../../services/user-enterprise-api.ts";
 import { userAgentCatalogStore } from "../../state/user-agent-catalog-store.ts";
 import { userBootstrapStore } from "../../state/user-bootstrap-store.ts";
 import "../../styles/agents-library.css";
@@ -19,8 +23,13 @@ export class UserAgentsLibraryPage extends OpenClawLightDomElement {
   private context!: ApplicationContext;
   @state() private query = "";
   @state() private busyKey = "";
+  @state() private requestBusyKey = "";
   @state() private error = "";
   private unsubscribers: Array<() => void> = [];
+
+  private readonly refreshOnFocus = () => {
+    this.refreshCatalog();
+  };
 
   override connectedCallback(): void {
     super.connectedCallback();
@@ -28,7 +37,8 @@ export class UserAgentsLibraryPage extends OpenClawLightDomElement {
       userBootstrapStore.subscribe(() => this.requestUpdate()),
       userAgentCatalogStore.subscribe(() => this.requestUpdate()),
     ];
-    void userAgentCatalogStore.load();
+    window.addEventListener("focus", this.refreshOnFocus);
+    this.refreshCatalog();
   }
 
   override disconnectedCallback(): void {
@@ -36,10 +46,21 @@ export class UserAgentsLibraryPage extends OpenClawLightDomElement {
       unsubscribe();
     }
     this.unsubscribers = [];
+    window.removeEventListener("focus", this.refreshOnFocus);
     super.disconnectedCallback();
   }
 
+  private refreshCatalog(): void {
+    if (userBootstrapStore.state.phase === "loading") {
+      return;
+    }
+    void userAgentCatalogStore.load(true);
+  }
+
   private async start(agent: EnterpriseUserAgent): Promise<void> {
+    if (!agent.actions.canChat || this.busyKey || this.requestBusyKey) {
+      return;
+    }
     this.busyKey = agent.key;
     this.error = "";
     try {
@@ -48,6 +69,39 @@ export class UserAgentsLibraryPage extends OpenClawLightDomElement {
       this.error = error instanceof Error ? error.message : eu("agentOpenFailed");
     } finally {
       this.busyKey = "";
+    }
+  }
+
+  private async requestAccess(agent: EnterpriseUserAgent): Promise<void> {
+    if (!canRequestUserAgentAccess(agent) || this.busyKey || this.requestBusyKey) {
+      return;
+    }
+    this.requestBusyKey = agent.key;
+    this.error = "";
+    try {
+      const request = await requestEnterpriseUserAgentAccess(agent.key);
+      userBootstrapStore.applyAgentAccessRequest(request);
+    } catch (error) {
+      this.error = error instanceof Error ? error.message : eu("agentAccessRequestFailed");
+    } finally {
+      this.requestBusyKey = "";
+    }
+  }
+
+  private async cancelAccess(agent: EnterpriseUserAgent): Promise<void> {
+    const request = agent.access?.request;
+    if (!request || request.state !== "pending" || this.busyKey || this.requestBusyKey) {
+      return;
+    }
+    this.requestBusyKey = agent.key;
+    this.error = "";
+    try {
+      const cancelled = await cancelEnterpriseUserAgentAccessRequest(request);
+      userBootstrapStore.applyAgentAccessRequest(cancelled);
+    } catch (error) {
+      this.error = error instanceof Error ? error.message : eu("agentAccessCancelFailed");
+    } finally {
+      this.requestBusyKey = "";
     }
   }
 
@@ -100,10 +154,18 @@ export class UserAgentsLibraryPage extends OpenClawLightDomElement {
                     (agent) => agent.kind === "shared" && agent.key === selectedKey,
                   );
                   return selected
-                    ? html`<openclaw-user-shared-agent-detail-page
-                        .agent=${selected}
-                        @shared-agent-detail-close=${() => this.requestUpdate()}
-                      ></openclaw-user-shared-agent-detail-page>`
+                    ? html`${bootstrapState.refreshError
+                          ? html`<div class="callout danger" role="alert">
+                              ${bootstrapState.refreshError}
+                            </div>`
+                          : nothing}
+                        <openclaw-user-shared-agent-detail-page
+                          .agent=${selected}
+                          @shared-agent-detail-close=${() => {
+                            this.refreshCatalog();
+                            this.requestUpdate();
+                          }}
+                        ></openclaw-user-shared-agent-detail-page>`
                     : html`<div class="callout warn" role="status">
                         ${eu("agentNoAccess")}
                         <button
@@ -128,12 +190,17 @@ export class UserAgentsLibraryPage extends OpenClawLightDomElement {
                 ).length;
                 return renderSettingsPage(
                   html`
-                    <header class="eu-page-header">
+                    <header class="eu-page-header eu-agent-library-header">
                       <div>
                         <h1>${eu("agentLibrary")}</h1>
                         <p>${eu("agentLibraryDescription")}</p>
                       </div>
                     </header>
+                    ${bootstrapState.refreshError
+                      ? html`<div class="callout danger" role="alert">
+                          ${bootstrapState.refreshError}
+                        </div>`
+                      : nothing}
                     ${bootstrapState.data.agents.length > 6
                       ? html`<label class="field eu-agent-search">
                           <span>${eu("agentSearch")}</span>
@@ -154,8 +221,12 @@ export class UserAgentsLibraryPage extends OpenClawLightDomElement {
                       ${agents.map(
                         (agent) => html`<openclaw-user-agent-card
                           .agent=${agent}
-                          .busy=${this.busyKey === agent.key}
+                          .busy=${this.busyKey === agent.key || this.requestBusyKey === agent.key}
                           .onStart=${(selected: EnterpriseUserAgent) => void this.start(selected)}
+                          .onRequestAccess=${(selected: EnterpriseUserAgent) =>
+                            void this.requestAccess(selected)}
+                          .onCancelAccess=${(selected: EnterpriseUserAgent) =>
+                            void this.cancelAccess(selected)}
                           .onEdit=${() => this.context.navigate("agents")}
                           .onDetail=${(selected: EnterpriseUserAgent) => this.showDetail(selected)}
                         ></openclaw-user-agent-card>`,

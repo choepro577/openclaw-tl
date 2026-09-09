@@ -539,6 +539,27 @@ function registerTestCompactor(
 }
 
 describe("runAgentHarnessAttempt", () => {
+  it("fails closed before plugin invocation for host-only private model context", async () => {
+    const runAttempt = vi.fn(async () => createAttemptResult("codex"));
+    registerAgentHarness(
+      {
+        id: "codex",
+        label: "Codex",
+        supports: () => ({ supported: true, priority: 100 }),
+        runAttempt,
+      },
+      { ownerPluginId: "codex" },
+    );
+    const params = createAttemptParams(providerRuntimeConfig("codex", "codex"));
+    const resolve = vi.fn(async () => "PRIVATE EXCERPT");
+    params.resolvePrivateModelContext = resolve;
+    await expect(runAgentHarnessAttempt(params)).rejects.toThrow(
+      "PRIVATE_MODEL_CONTEXT_UNAVAILABLE",
+    );
+    expect(runAttempt).not.toHaveBeenCalled();
+    expect(resolve).not.toHaveBeenCalled();
+  });
+
   it("uses registry ownership rather than declared harness metadata for approvals", async () => {
     let observedApprovalOwner: string | undefined;
     mockCallGatewayTool.mockImplementationOnce(async () => {

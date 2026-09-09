@@ -26,13 +26,17 @@ export class CodexReasoningProjection {
   private readonly reasoningItemOrder = new Map<string, number>();
   private readonly planTextByItem = new Map<string, string>();
   private turnPlanText: string | undefined;
+  private persistedPlanText: string | undefined;
+  private planUpdateVersion = 0;
   private reasoningStarted = false;
   private reasoningEnded = false;
 
   constructor(
     private readonly params: EmbeddedRunAttemptParams,
     private readonly emitAgentEvent: (event: AgentEvent) => void,
-    private readonly onNativePlanUpdate?: (update: NativePlanUpdate) => void | Promise<void>,
+    private readonly onNativePlanUpdate?: (
+      update: NativePlanUpdate,
+    ) => boolean | void | Promise<boolean | void>,
   ) {}
 
   async handleReasoningDelta(method: ReasoningDeltaMethod, params: JsonObject): Promise<void> {
@@ -70,6 +74,8 @@ export class CodexReasoningProjection {
     if (!delta) {
       return;
     }
+    this.planUpdateVersion += 1;
+    this.persistedPlanText = undefined;
     const text = `${this.planTextByItem.get(itemId) ?? ""}${delta}`;
     this.planTextByItem.set(itemId, text);
     this.emitPlanUpdate({
@@ -107,11 +113,26 @@ export class CodexReasoningProjection {
       // non-empty update so the terminal transcript proves planning occurred.
       this.turnPlanText = planText;
     }
-    if (source === "codex-app-server" && plan) {
-      await this.onNativePlanUpdate?.({
-        ...(typeof explanation === "string" ? { markdown: explanation } : {}),
-        steps: plan,
-      });
+    const hasPersistablePlan = Boolean(plan?.length && planText.trim());
+    const updateVersion = ++this.planUpdateVersion;
+    this.persistedPlanText = undefined;
+    if (source === "codex-app-server") {
+      // A new native update is untrusted until its progress card write settles.
+      // A void callback means the caller cannot prove that the card was saved.
+      if (plan) {
+        const persisted = await this.onNativePlanUpdate?.({
+          ...(typeof explanation === "string" ? { markdown: explanation } : {}),
+          steps: plan,
+        });
+        if (updateVersion === this.planUpdateVersion && persisted === true && hasPersistablePlan) {
+          this.persistedPlanText = planText;
+        }
+      }
+    } else if (source === "openclaw" && plan) {
+      // OpenClaw reaches this source only after a successful progress_card call.
+      if (hasPersistablePlan) {
+        this.persistedPlanText = planText;
+      }
     }
     this.emitPlanUpdate(
       {
@@ -150,6 +171,15 @@ export class CodexReasoningProjection {
     return (
       this.turnPlanText ??
       [...this.planTextByItem.values()].filter((text) => text.trim().length > 0).join("\n\n")
+    );
+  }
+
+  isCurrentPlanPersisted(): boolean {
+    const currentPlanText = this.planText();
+    return Boolean(
+      this.persistedPlanText &&
+      this.persistedPlanText === currentPlanText &&
+      currentPlanText.trim().length > 0,
     );
   }
 

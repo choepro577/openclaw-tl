@@ -56,6 +56,11 @@ const mocks = vi.hoisted(() => ({
   resolveAgentExplicitRecipientSession: vi.fn(async () => ({})),
   readAcpSessionMeta: vi.fn<typeof readAcpSessionMeta>(() => undefined),
   listAgentIds: vi.fn(() => ["main"]),
+  loadPublishedGatewayReplyDispatchRuntime: vi.fn(async ({ agentId }: { agentId: string }) => ({
+    agentId,
+    config: {},
+    pluginGeneration: { pluginMetadataSnapshot: {} },
+  })),
   loadConfigReturn: {} as Record<string, unknown>,
   loadVoiceWakeRoutingConfig: vi.fn(),
   resolveVoiceWakeRouteByTrigger: vi.fn(),
@@ -154,11 +159,7 @@ vi.mock("../../commands/agent.js", () => ({
 vi.mock("../../agents/prepared-model-runtime.js", () => ({
   // Direct handler tests bypass Gateway startup, so provide the lifecycle fact
   // that production publishes before admitting agent RPCs.
-  loadPublishedGatewayReplyDispatchRuntime: async ({ agentId }: { agentId: string }) => ({
-    agentId,
-    config: mocks.loadConfigReturn,
-    pluginGeneration: { pluginMetadataSnapshot: {} },
-  }),
+  loadPublishedGatewayReplyDispatchRuntime: mocks.loadPublishedGatewayReplyDispatchRuntime,
 }));
 
 vi.mock("../../acp/runtime/session-meta.js", async () => {
@@ -1037,6 +1038,7 @@ export const describe0AfterEach0 = () => {
   mocks.resolveAgentExplicitRecipientSession.mockReset().mockResolvedValue({});
   mocks.readAcpSessionMeta.mockReset().mockReturnValue(undefined);
   mocks.listAgentIds.mockReset().mockReturnValue(["main"]);
+  mocks.loadPublishedGatewayReplyDispatchRuntime.mockClear();
   mocks.getChannelPlugin.mockReset();
   mocks.sendDurableMessageBatch.mockReset();
   mocks.resolveSendPolicy.mockReset().mockReturnValue("allow");
@@ -1070,6 +1072,7 @@ function resetIntegrationState() {
   mocks.resolveExplicitAgentSessionKey.mockReset().mockReturnValue(undefined);
   mocks.readAcpSessionMeta.mockReset().mockReturnValue(undefined);
   mocks.listAgentIds.mockReset().mockReturnValue(["main"]);
+  mocks.loadPublishedGatewayReplyDispatchRuntime.mockClear();
   mocks.getChannelPlugin.mockReset();
   mocks.sendDurableMessageBatch.mockReset();
   mocks.loadVoiceWakeRoutingConfig.mockReset();

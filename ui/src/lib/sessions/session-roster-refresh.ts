@@ -4,6 +4,7 @@ import { createSessionEventRefreshCoordinator } from "./event-refresh-coordinato
 import { appendSessionResults, reconcileRosterPresentationMetadata } from "./reconcile.ts";
 import type {
   SessionConnectionOwner,
+  SessionConnectionScope,
   SessionGateway,
   SessionListOptions,
   SessionListScope,
@@ -21,7 +22,6 @@ import {
 import {
   buildSessionListParams,
   DEFAULT_SESSION_LIST_QUERY,
-  requestSessionList,
   requestSessionListParams,
 } from "./session-requests.ts";
 
@@ -33,6 +33,7 @@ type SessionRosterRefreshHost = {
   observerError: () => string | null;
   decorate: (result: SessionsListResult | null) => SessionsListResult | null;
   onCanonicalList: (result: SessionsListResult | null) => void;
+  canonicalListRevision: () => number;
 };
 
 type ManagedSessionListRefresh = {
@@ -87,6 +88,21 @@ function isPrimarySessionListQuery(options: SessionListScope): boolean {
   );
 }
 
+type SharedSessionListRequest = {
+  scope: SessionConnectionScope;
+  revision: number;
+  promise: Promise<SessionsListResult | null>;
+  trailing?: Promise<SessionsListResult | null>;
+};
+
+function sessionListParamsKey(params: Readonly<Record<string, unknown>>): string {
+  return JSON.stringify(
+    Object.keys(params)
+      .toSorted()
+      .map((key) => [key, params[key]]),
+  );
+}
+
 export function createSessionRosterRefresh(host: SessionRosterRefreshHost) {
   let inFlight: Promise<void> | null = null;
   let queuedExplicitRefresh: SessionRefreshOptions | null = null;
@@ -98,6 +114,80 @@ export function createSessionRosterRefresh(host: SessionRosterRefreshHost) {
     typeof document !== "undefined" && typeof globalThis.addEventListener === "function";
   let pageActive = !observesPageLifecycle || document.visibilityState !== "hidden";
   const managedLists = new Map<string, ManagedSessionList>();
+  // One request owner for every exact wire query. This intentionally shares
+  // only pending work: callers still receive their own decorated result and
+  // no completed-response cache can leak rows across a connection epoch.
+  const sharedSessionListRequests = new Map<string, SharedSessionListRequest>();
+  let sharedRequestGeneration = 0;
+
+  const startSharedSessionListRequest = (
+    key: string,
+    scope: SessionConnectionScope,
+    params: Readonly<Record<string, unknown>>,
+    revision: number,
+  ): Promise<SessionsListResult | null> => {
+    const operation: SharedSessionListRequest = {
+      scope,
+      revision,
+      promise: requestSessionListParams(scope.client, params),
+    };
+    sharedSessionListRequests.set(key, operation);
+    void operation.promise.then(
+      () => {
+        if (sharedSessionListRequests.get(key) === operation) {
+          sharedSessionListRequests.delete(key);
+        }
+      },
+      () => {
+        if (sharedSessionListRequests.get(key) === operation) {
+          sharedSessionListRequests.delete(key);
+        }
+      },
+    );
+    return operation.promise;
+  };
+
+  const requestSharedSessionList = (
+    scope: SessionConnectionScope,
+    params: Readonly<Record<string, unknown>>,
+    options: { force?: boolean } = {},
+  ): Promise<SessionsListResult | null> => {
+    const key = sessionListParamsKey(params);
+    const revision = host.canonicalListRevision();
+    const pending = sharedSessionListRequests.get(key);
+    const sameScope =
+      pending?.scope.client === scope.client &&
+      pending.scope.epoch === scope.epoch &&
+      pending.revision === revision;
+    if (!pending || !sameScope) {
+      return startSharedSessionListRequest(key, scope, params, revision);
+    }
+    if (!options.force) {
+      return pending.promise;
+    }
+    if (pending.trailing) {
+      return pending.trailing;
+    }
+    const generation = sharedRequestGeneration;
+    const afterPending = () => {
+      if (generation !== sharedRequestGeneration) {
+        return null;
+      }
+      if (!host.connection.isCurrent(scope)) {
+        return null;
+      }
+      const current = sharedSessionListRequests.get(key);
+      if (current && current !== pending) {
+        return current.promise;
+      }
+      if (current === pending) {
+        sharedSessionListRequests.delete(key);
+      }
+      return startSharedSessionListRequest(key, scope, params, host.canonicalListRevision());
+    };
+    const trailing = (pending.trailing = pending.promise.then(afterPending, afterPending));
+    return trailing;
+  };
 
   const publishManagedList = (entry: ManagedSessionList, snapshot: SessionListSnapshot): void => {
     entry.snapshot = snapshot;
@@ -161,7 +251,9 @@ export function createSessionRosterRefresh(host: SessionRosterRefreshHost) {
         };
         publishManagedList(entry, { ...entry.snapshot, loading: true, error: null });
         try {
-          const result = await requestSessionListParams(scope.client, requestParams);
+          const result = await requestSharedSessionList(scope, requestParams, {
+            force: next.invalidated === true,
+          });
           if (!isCurrent()) {
             return;
           }
@@ -214,7 +306,7 @@ export function createSessionRosterRefresh(host: SessionRosterRefreshHost) {
       return null;
     }
     try {
-      const result = await requestSessionList(scope.client, options);
+      const result = await requestSharedSessionList(scope, buildSessionListParams(options));
       return host.connection.isCurrent(scope) ? host.decorate(result ?? null) : null;
     } catch (error) {
       if (!host.connection.isCurrent(scope)) {
@@ -229,7 +321,7 @@ export function createSessionRosterRefresh(host: SessionRosterRefreshHost) {
     if (!scope) {
       return;
     }
-    const { append = false, force: _force, backgroundHydrate = false, ...requestOptions } = options;
+    const { append = false, force = false, backgroundHydrate = false, ...requestOptions } = options;
     // Every canonical roster replaces visible session names, so omitted title
     // enrichment must inherit the UI default instead of publishing fallback ids.
     requestOptions.includeDerivedTitles ??= true;
@@ -251,7 +343,9 @@ export function createSessionRosterRefresh(host: SessionRosterRefreshHost) {
       );
     }
     try {
-      const result = await requestSessionList(scope.client, requestOptions);
+      const result = await requestSharedSessionList(scope, buildSessionListParams(requestOptions), {
+        force,
+      });
       if (!host.connection.isCurrent(scope)) {
         return;
       }
@@ -497,6 +591,7 @@ export function createSessionRosterRefresh(host: SessionRosterRefreshHost) {
       return refreshManagedList(entry, {
         append: options.append === true,
         ...(options.offset !== undefined ? { offset: options.offset } : {}),
+        ...(options.force === true ? { invalidated: true } : {}),
       });
     },
     isPrimaryList: isPrimarySessionListQuery,
@@ -580,6 +675,8 @@ export function createSessionRosterRefresh(host: SessionRosterRefreshHost) {
     },
     reset() {
       eventRefreshCoordinator.reset();
+      sharedRequestGeneration += 1;
+      sharedSessionListRequests.clear();
       inFlight = null;
       queuedExplicitRefresh = null;
       eventRefreshQueued = false;
@@ -598,6 +695,8 @@ export function createSessionRosterRefresh(host: SessionRosterRefreshHost) {
     },
     dispose() {
       eventRefreshCoordinator.dispose();
+      sharedRequestGeneration += 1;
+      sharedSessionListRequests.clear();
       if (observesPageLifecycle) {
         updatePageLifecycleListeners(false);
       }

@@ -4,6 +4,7 @@ import type { ErrorShape } from "../../../packages/gateway-protocol/src/schema/f
 import { listAgentEntries, tryResolveDefaultAgentId } from "../../agents/agent-scope.js";
 import type { OpenClawConfig } from "../../config/types.openclaw.js";
 import { configHandlers } from "../../gateway/server-methods/config.js";
+import { readUsageStatusStaleWhileRevalidate } from "../../gateway/server-methods/models-auth-status-usage-cache.js";
 import { modelsAuthStatusHandlers } from "../../gateway/server-methods/models-auth-status.js";
 import { modelsProbeHandlers } from "../../gateway/server-methods/models-probe.js";
 import { modelsHandlers } from "../../gateway/server-methods/models.js";
@@ -56,12 +57,20 @@ const MUTATING_METHODS = new Set<EnterpriseAdminModelMethod>([
   "wizard.cancel",
 ]);
 
+const enterpriseAdminUsageStatusHandler: GatewayRequestHandler = ({ respond, context }) => {
+  respond(
+    true,
+    readUsageStatusStaleWhileRevalidate({ config: context.getRuntimeConfig() }),
+    undefined,
+  );
+};
+
 const HANDLERS: Record<EnterpriseAdminModelMethod, GatewayRequestHandler | undefined> = {
   "models.list": modelsHandlers["models.list"],
   "models.authStatus": modelsAuthStatusHandlers["models.authStatus"],
   "models.authLogout": modelsAuthStatusHandlers["models.authLogout"],
   "models.probe": modelsProbeHandlers["models.probe"],
-  "usage.status": usageHandlers["usage.status"],
+  "usage.status": enterpriseAdminUsageStatusHandler,
   "sessions.usage": usageHandlers["sessions.usage"],
   "config.get": configHandlers["config.get"],
   "config.schema": configHandlers["config.schema"],

@@ -168,6 +168,23 @@ export async function executeJobCore(
     };
   }
   if (effectiveJob.payload.kind === "heartbeat") {
+    if (effectiveJob.owner?.accountId) {
+      if (!state.deps.runHeartbeatOnce) {
+        return { status: "error", error: "Account heartbeat runtime unavailable" };
+      }
+      const result = await state.deps.runHeartbeatOnce({
+        job: effectiveJob,
+        agentId: effectiveJob.agentId,
+        source: "interval",
+        intent: "scheduled",
+        reason: `cron:${effectiveJob.id}`,
+        owningCronJobMarker: options?.activeJobMarker,
+        owningCronLaneTaskMarker: options?.owningCronLaneTaskMarker,
+      });
+      return result.status === "ran"
+        ? { status: "ok", summary: "heartbeat completed" }
+        : { status: result.status === "failed" ? "error" : "skipped", error: result.reason };
+    }
     // The monitor only pokes the wake queue: coalescing, busy-retry, and the
     // quiet-hours guard all live in the heartbeat runner, exactly as they did
     // for the dedicated interval timer this job replaces.

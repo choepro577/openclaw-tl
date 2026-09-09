@@ -10,7 +10,11 @@ import type {
   NativeHookRelayRegistrationHandle,
   registerNativeHookRelay,
 } from "openclaw/plugin-sdk/agent-harness-runtime";
-import { emitTrustedDiagnosticEvent } from "openclaw/plugin-sdk/diagnostic-runtime";
+import {
+  bindPrivateRunObservationScope,
+  emitTrustedDiagnosticEvent,
+  isPrivateRunObservationScope,
+} from "openclaw/plugin-sdk/diagnostic-runtime";
 import { createDeferred } from "openclaw/plugin-sdk/extension-shared";
 import { registerRetainedNativeHookRelayForBundledRuntime } from "openclaw/plugin-sdk/native-hook-relay-runtime";
 import {
@@ -21,6 +25,13 @@ import type { PluginHookToolContext } from "openclaw/plugin-sdk/types";
 import type { CodexAppServerRuntimeOptions } from "./config.js";
 import { resolveCodexToolAbortTerminalReason } from "./dynamic-tool-execution.js";
 import { nativeHookRelayUnregisterQueue } from "./native-hook-relay-state.js";
+import {
+  assertCodexNativePluginGrant,
+  assertCodexNativePluginToolGrant,
+  createCodexNativePluginMcpServerOwnerResolver,
+  type CodexNativePluginMcpToolOwnerResolver,
+  type CodexNativePluginMcpServerOwners,
+} from "./native-plugin-grants.js";
 import { isJsonObject, type JsonObject, type JsonValue } from "./protocol.js";
 
 /** Codex hook events that can be registered through OpenClaw's native relay. */
@@ -66,6 +77,47 @@ export type CodexNativeHookRelay = NativeHookRelayRegistrationHandle & {
   claimDirectChild: (threadId: string) => () => void;
   rejectPendingDirectChild: (threadId: string, reason: string) => void;
 };
+
+/**
+ * Adds the live enterprise plugin grant check around the host hook callback.
+ * Ownership comes only from the trusted plugin inventory snapshot; an MCP
+ * tool with no exact owner is denied when grants are active.
+ */
+export function createCodexNativeHookRelayRunBeforeToolCall(params: {
+  hostCapabilities: EmbeddedRunAttemptParams["hostCapabilities"];
+  nativePluginMcpServerOwners?: CodexNativePluginMcpServerOwners;
+  resolveNativePluginMcpToolOwner?: CodexNativePluginMcpToolOwnerResolver;
+}): EmbeddedRunAttemptParams["hostCapabilities"]["runBeforeToolCall"] {
+  const grants = params.hostCapabilities.nativePluginGrants;
+  if (!grants) {
+    return params.hostCapabilities.runBeforeToolCall;
+  }
+  const ownership = createCodexNativePluginMcpServerOwnerResolver(
+    params.nativePluginMcpServerOwners,
+  );
+  const assertCurrentPluginGrant = async (toolName: string | undefined) => {
+    if (!grants) {
+      return;
+    }
+    const dynamicOwner = await params.resolveNativePluginMcpToolOwner?.(toolName);
+    if (dynamicOwner) {
+      assertCodexNativePluginGrant(
+        grants,
+        `${dynamicOwner.pluginName}@${dynamicOwner.marketplaceName}`,
+      );
+      return;
+    }
+    assertCodexNativePluginToolGrant({ grants, ownership, toolName });
+  };
+  return async (request) => {
+    params.hostCapabilities.assertActive();
+    await assertCurrentPluginGrant(request.toolName);
+    const outcome = await params.hostCapabilities.runBeforeToolCall(request);
+    params.hostCapabilities.assertActive();
+    await assertCurrentPluginGrant(request.toolName);
+    return outcome;
+  };
+}
 
 /** Defers relay unregister so late native hook subprocesses can still resolve. */
 export function scheduleCodexNativeHookRelayUnregister(params: {
@@ -161,6 +213,10 @@ export function createCodexNativeHookRelay(params: {
   loopDetectionPreToolUseRelay: boolean;
   signal: AbortSignal;
   hostCapabilities: EmbeddedRunAttemptParams["hostCapabilities"];
+  /** Trusted plugin MCP ownership from the startup inventory snapshot. */
+  nativePluginMcpServerOwners?: CodexNativePluginMcpServerOwners;
+  /** Live connector/server owner lookup for shared Codex MCP surfaces. */
+  resolveNativePluginMcpToolOwner?: CodexNativePluginMcpToolOwnerResolver;
   onPreToolUseFailure: (failure: CodexNativePreToolUseFailure) => void | Promise<void>;
 }): CodexNativeHookRelay | undefined {
   if (params.options?.enabled === false) {
@@ -213,7 +269,13 @@ export function createCodexNativeHookRelay(params: {
       turnStartTimeoutMs: params.turnStartTimeoutMs,
     }),
     signal: params.signal,
-    runBeforeToolCall: params.hostCapabilities.runBeforeToolCall,
+    runBeforeToolCall: bindPrivateRunObservationScope(
+      createCodexNativeHookRelayRunBeforeToolCall({
+        hostCapabilities: params.hostCapabilities,
+        nativePluginMcpServerOwners: params.nativePluginMcpServerOwners,
+        resolveNativePluginMcpToolOwner: params.resolveNativePluginMcpToolOwner,
+      }),
+    ),
     assertActive: params.hostCapabilities.assertActive,
     retention: {
       readClaim: readCodexNativeChildThreadId,
@@ -252,7 +314,7 @@ export function createCodexNativeHookRelay(params: {
         rejectPendingAdmissions("native hook relay registration closed");
       },
     },
-    onPreToolUseFailure: params.onPreToolUseFailure,
+    onPreToolUseFailure: bindPrivateRunObservationScope(params.onPreToolUseFailure),
     command: {
       // Hook relay subprocesses are observational for most tool events; keep
       // them lower priority so they do not compete with the active reply turn.
@@ -326,6 +388,16 @@ export function resolveCodexNativeHookRelayEvents(params: {
   configuredEvents?: readonly NativeHookRelayEvent[];
   appServer: Pick<CodexAppServerRuntimeOptions, "approvalPolicy">;
 }): readonly NativeHookRelayEvent[] {
+  if (isPrivateRunObservationScope()) {
+    // Keep pre-tool and approval authority, but never send private output to
+    // native post-tool or Stop subprocess observers.
+    const events = params.configuredEvents?.length
+      ? params.configuredEvents
+      : params.appServer.approvalPolicy === "never"
+        ? CODEX_NATIVE_HOOK_RELAY_EVENTS
+        : CODEX_NATIVE_HOOK_RELAY_EVENTS_WITH_APP_SERVER_APPROVALS;
+    return events.filter((event) => event === "pre_tool_use" || event === "permission_request");
+  }
   if (params.configuredEvents?.length) {
     return params.configuredEvents;
   }

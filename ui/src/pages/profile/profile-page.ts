@@ -23,7 +23,6 @@ import type { AuthenticatedUser } from "../../app/user-profile.ts";
 import { resolveCurrentSelfUser } from "../../app/user-profile.ts";
 import { icons } from "../../components/icons.ts";
 import {
-  renderDocsLink,
   renderSettingsEmpty,
   renderSettingsGroup,
   renderSettingsNavRow,
@@ -41,8 +40,6 @@ import { processProfileAvatar, ProfileAvatarError } from "./avatar-processing.ts
 import "../../styles/profile.css";
 import { renderIdentitySection } from "./identity-section.ts";
 import { userProfileAvatarUrl } from "./profile-avatar-url.ts";
-
-const PROFILE_DOCS_URL = "https://docs.openclaw.ai/concepts/user-model";
 
 function toIdentityErrorMessage(error: unknown): string {
   return formatUiError(error, t("profilePage.identity.profileUnavailable"));
@@ -463,7 +460,7 @@ export class ProfilePage extends OpenClawLightDomElement {
         <div class="profile-hero__name">${name}</div>
         <div class="profile-hero__handle">
           <span>@${agentId}</span>
-          <span class="profile-hero__badge">OpenClaw</span>
+          <span class="profile-hero__badge">MAAP</span>
         </div>
       </section>
     `);
@@ -494,10 +491,7 @@ export class ProfilePage extends OpenClawLightDomElement {
       <section class="content-header">
         <div>
           <div class="page-title">${titleForRoute("profile")}</div>
-          <div class="page-subtitle">
-            ${subtitleForRoute("profile")}
-            ${renderDocsLink(PROFILE_DOCS_URL, t("common.learnMore"))}
-          </div>
+          <div class="page-subtitle">${subtitleForRoute("profile")}</div>
         </div>
         ${this.selfUser
           ? html`<button

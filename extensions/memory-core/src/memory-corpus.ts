@@ -110,17 +110,21 @@ export function composeMemoryCorpusMetadata(
     return [
       attempt.outcome === "not-registered"
         ? `${label} corpus is not registered; results do not cover that requested corpus.`
-        : `${label} corpus unavailable: ${attempt.error}`,
+        : `${label} corpus unavailable. Memory recall is temporarily unavailable; results do not cover that requested corpus.`,
     ];
   });
   warnings.push(...extraWarnings);
   const errors = ordered.flatMap((attempt) =>
-    attempt.outcome === "unavailable" ? [attempt.error] : [],
+    attempt.outcome === "unavailable" ? [`${attempt.corpus}_recall_unavailable`] : [],
   );
   return {
     corpora: ordered.map((attempt) =>
       attempt.outcome === "unavailable"
-        ? { corpus: attempt.corpus, outcome: attempt.outcome, error: attempt.error }
+        ? {
+            corpus: attempt.corpus,
+            outcome: attempt.outcome,
+            error: `${attempt.corpus}_recall_unavailable`,
+          }
         : { corpus: attempt.corpus, outcome: attempt.outcome },
     ),
     ...(warnings.length > 0 ? { warning: warnings.join(" ") } : {}),

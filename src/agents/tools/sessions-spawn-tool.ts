@@ -594,6 +594,7 @@ export function createSessionsSpawnTool(
         },
         withParentExecutionIdentity(
           {
+            config: opts?.config,
             agentSessionKey: opts?.agentSessionKey,
             requesterTurnRunId: opts?.requesterTurnRunId,
             completionOwnerKey: opts?.completionOwnerKey,

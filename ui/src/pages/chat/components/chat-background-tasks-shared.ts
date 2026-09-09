@@ -1,3 +1,4 @@
+import { enterpriseUserChatCardCopy } from "../../../i18n/enterprise-user-chat.ts";
 import { t } from "../../../i18n/index.ts";
 import { isActiveTask, taskStatusLabel } from "../../../lib/tasks/data.ts";
 import type { TaskSummary } from "../../../lib/tasks/task-summary.ts";
@@ -16,7 +17,59 @@ export const STATUS_TONES = {
   timed_out: "danger",
 } as const satisfies Record<TaskSummary["status"], string>;
 
-export function backgroundTaskStatusLabel(task: TaskSummary): string {
+export type BackgroundTaskStatusOptions = {
+  subagentsOnly?: boolean;
+};
+
+type DelegationStatusKey =
+  | "running"
+  | "failed"
+  | "cancelled"
+  | "timed_out"
+  | "blocked"
+  | "returned"
+  | "returning"
+  | "returnFailed";
+
+function enterpriseSubagentStatusLabel(task: TaskSummary): string {
+  if (task.status === "queued") {
+    return enterpriseUserChatCardCopy("chat.toolCards.delegation.queued");
+  }
+  if (task.status === "running") {
+    return enterpriseUserChatCardCopy("chat.toolCards.delegation.running");
+  }
+  if (task.terminalOutcome === "blocked") {
+    return enterpriseUserChatCardCopy("chat.toolCards.delegation.blocked");
+  }
+  if (task.status === "completed") {
+    if (task.deliveryStatus === "delivered") {
+      return enterpriseUserChatCardCopy("chat.toolCards.delegation.returned");
+    }
+    if (
+      task.deliveryStatus === "failed" ||
+      task.deliveryStatus === "parent_missing" ||
+      task.deliveryStatus === "dismissed"
+    ) {
+      return enterpriseUserChatCardCopy("chat.toolCards.delegation.returnFailed");
+    }
+    return enterpriseUserChatCardCopy("chat.toolCards.delegation.returning");
+  }
+  const key: DelegationStatusKey =
+    task.status === "timed_out"
+      ? "timed_out"
+      : task.status === "cancelled"
+        ? "cancelled"
+        : "failed";
+  return enterpriseUserChatCardCopy(`chat.toolCards.delegation.${key}`);
+}
+
+export function backgroundTaskStatusLabel(
+  task: TaskSummary,
+  options: BackgroundTaskStatusOptions = {},
+): string {
+  if (options.subagentsOnly && task.runtime === "subagent") {
+    return enterpriseSubagentStatusLabel(task);
+  }
   if (isActiveTask(task)) {
     return taskStatusLabel(task.status);
   }
@@ -25,4 +78,30 @@ export function backgroundTaskStatusLabel(task: TaskSummary): string {
   return task.status === "completed"
     ? t("tasksPage.status.completed")
     : t("tasksPage.status.failed");
+}
+
+export function backgroundTaskStatusTone(
+  task: TaskSummary,
+  options: BackgroundTaskStatusOptions = {},
+): string {
+  if (options.subagentsOnly && task.runtime === "subagent") {
+    if (isActiveTask(task)) {
+      return "warn";
+    }
+    if (task.status === "completed" && task.terminalOutcome !== "blocked") {
+      if (task.deliveryStatus === "delivered") {
+        return "ok";
+      }
+      if (
+        task.deliveryStatus === "failed" ||
+        task.deliveryStatus === "parent_missing" ||
+        task.deliveryStatus === "dismissed"
+      ) {
+        return "danger";
+      }
+      return "warn";
+    }
+    return "danger";
+  }
+  return STATUS_TONES[task.status];
 }

@@ -124,6 +124,56 @@ describe("streamOpenAICodexResponses transport", () => {
     messages: [{ role: "user", content: "hi", timestamp: 1 }],
   } satisfies Context;
 
+  describe.each([
+    ["direct", streamOpenAICodexResponses],
+    ["simple", streamSimpleOpenAICodexResponses],
+  ] as const)("%s structured response transport", (_label, streamResponse) => {
+    const format = {
+      type: "json_schema",
+      name: "route_decision",
+      strict: true,
+      schema: {
+        type: "object",
+        properties: { route: { type: "string" } },
+        required: ["route"],
+        additionalProperties: false,
+      },
+    };
+
+    it.each([
+      ["nested schema", { type: "json_schema", json_schema: format }, format],
+      ["Responses schema", format, format],
+      ["JSON object", { type: "json_object" }, { type: "json_object" }],
+      ["omitted", undefined, undefined],
+    ] as const)("sends %s in the serialized SSE body", async (_name, responseFormat, expected) => {
+      let body: Record<string, unknown> | undefined;
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async (_input, init) => {
+          const raw = init?.body;
+          body = JSON.parse(
+            typeof raw === "string"
+              ? raw
+              : Buffer.from(zstdDecompressSync(raw as Uint8Array)).toString("utf8"),
+          ) as Record<string, unknown>;
+          return completedSseResponse();
+        }),
+      );
+
+      const result = await streamResponse(model, context, {
+        apiKey: createJwt({
+          "https://api.openai.com/auth": { chatgpt_account_id: "acct-format" },
+        }),
+        transport: "sse",
+        responseFormat,
+      }).result();
+
+      expect(result.stopReason).toBe("stop");
+      expect(body?.text).toEqual({ verbosity: "low", ...(expected ? { format: expected } : {}) });
+      expect(body).not.toHaveProperty("response_format");
+    });
+  });
+
   it("unwraps sentinels before constructing ChatGPT SSE auth headers", async () => {
     const realToken = createJwt({
       "https://api.openai.com/auth": { chatgpt_account_id: "acct-sentinel" },
@@ -549,6 +599,49 @@ describe("streamOpenAICodexResponses transport", () => {
       call_id: "call_abc",
     });
     expect(functionCall).not.toHaveProperty("id");
+  });
+
+  it("preserves optional read windows in the serialized ChatGPT tool contract", async () => {
+    let body: Record<string, unknown> | undefined;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_input, init) => {
+        const raw = init?.body;
+        body = JSON.parse(
+          typeof raw === "string"
+            ? raw
+            : Buffer.from(zstdDecompressSync(raw as Uint8Array)).toString("utf8"),
+        ) as Record<string, unknown>;
+        return completedSseResponse();
+      }),
+    );
+    const parameters = {
+      type: "object",
+      properties: {
+        path: { type: "string" },
+        offset: { type: "integer", minimum: 1 },
+        limit: { type: "number" },
+        cursor: { type: "integer", minimum: 0 },
+        optional: { type: "boolean", const: true },
+      },
+      required: ["path"],
+    };
+    const result = await streamOpenAICodexResponses(
+      model,
+      { ...context, tools: [{ name: "read", description: "Read a file.", parameters }] },
+      {
+        apiKey: createJwt({
+          "https://api.openai.com/auth": { chatgpt_account_id: "acct-read-contract" },
+        }),
+        transport: "sse",
+      },
+    ).result();
+
+    expect(result.stopReason).toBe("stop");
+    expect(body?.tools).toEqual([
+      expect.objectContaining({ name: "read", strict: false, parameters }),
+    ]);
+    expect(parameters.required).toEqual(["path"]);
   });
 
   it("omits ChatGPT tool controls when every tool schema is unreadable", async () => {

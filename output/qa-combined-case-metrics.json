@@ -1,0 +1,226 @@
+{
+  "capturedAt": "2026-09-04T08:10:16.241Z",
+  "cases": [
+    {
+      "id": "C01",
+      "start": 1,
+      "end": 4,
+      "humanMessages": 1,
+      "firstAt": "2026-09-04T07:46:31.182Z",
+      "lastAt": "2026-09-04T07:46:44.164Z",
+      "toolCalls": {},
+      "childRuns": [],
+      "prompts": [
+        {
+          "seq": 1,
+          "at": "2026-09-04T07:46:31.182Z",
+          "text": "Mình đặt 27 phần nước, mỗi phần 14 nghìn thì hết bao nhiêu nhỉ?"
+        }
+      ]
+    },
+    {
+      "id": "C02",
+      "start": 5,
+      "end": 19,
+      "humanMessages": 2,
+      "firstAt": "2026-09-04T07:47:06.587Z",
+      "lastAt": "2026-09-04T07:49:39.790Z",
+      "toolCalls": {
+        "enterprise_delegate": 1,
+        "enterprise_knowledge_search": 4,
+        "enterprise_knowledge_get": 1
+      },
+      "childRuns": [
+        "02c8ddfb-a50e-4a35-8af4-dcfd8af5c72f"
+      ],
+      "prompts": [
+        {
+          "seq": 5,
+          "at": "2026-09-04T07:47:06.587Z",
+          "text": "Tuần tới nhóm mình có 3 người đi công tác 3 ngày 2 đêm. Khách sạn báo 900 nghìn một người mỗi đêm, còn tiền ăn dự tính 240 nghìn một người mỗi ngày. Theo mức của công ty thì phần ăn ở được tính tối đa bao nhiêu, vượt bao nhiêu và về rồi bao lâu phải nộp chứng từ?"
+        },
+        {
+          "seq": 7,
+          "at": "2026-09-04T07:47:36.820Z",
+          "text": "Ừ, bạn làm giúp mình nhé."
+        }
+      ]
+    },
+    {
+      "id": "C03",
+      "start": 20,
+      "end": 25,
+      "humanMessages": 2,
+      "firstAt": "2026-09-04T07:50:11.582Z",
+      "lastAt": "2026-09-04T07:51:45.460Z",
+      "toolCalls": {
+        "exec": 1
+      },
+      "childRuns": [],
+      "prompts": [
+        {
+          "seq": 20,
+          "at": "2026-09-04T07:50:11.582Z",
+          "text": "Mình đang cân nhắc một điểm bán nhỏ: vốn 540 triệu, sửa sang 240 triệu, cọc 60 triệu. Mỗi tháng tiền thuê 18 triệu, lương 42 triệu, chi khác 12 triệu; giá vốn bằng 40% doanh thu. Nếu doanh thu chỉ 100 triệu hoặc đạt 150 triệu một tháng thì sau 3 tháng còn bao nhiêu tiền, mức hòa vốn ở đâu và nên điều chỉnh gì trước khi quyết định?"
+        },
+        {
+          "seq": 22,
+          "at": "2026-09-04T07:51:09.394Z",
+          "text": "Ừ, bạn làm giúp mình nhé."
+        }
+      ]
+    },
+    {
+      "id": "C04",
+      "start": 26,
+      "end": 47,
+      "humanMessages": 4,
+      "firstAt": "2026-09-04T07:52:16.906Z",
+      "lastAt": "2026-09-04T07:58:07.098Z",
+      "toolCalls": {
+        "enterprise_knowledge_search": 5,
+        "enterprise_knowledge_get": 6
+      },
+      "childRuns": [],
+      "prompts": [
+        {
+          "seq": 26,
+          "at": "2026-09-04T07:52:16.906Z",
+          "text": "Mình quay lại việc triển khai cho chi nhánh Bến Tre, lần này đủ 30 người. Tổng ngân sách dự kiến 60 triệu, bên cung cấp báo dịch vụ 48 triệu trước thuế và sẽ xem dữ liệu khách hàng; nhóm mình vẫn đi 3 người, 3 ngày 2 đêm như trên. Bản dự thảo BT-0904 ghi trả trước 80%, không có hạn xử lý khi họ chậm tiến độ và trách nhiệm của họ tối đa 2 triệu. Bạn giúp mình cân đối khoản còn dư và rủi ro tiền ứng, góp ý các điều khoản cần sửa, đồng thời cho biết bên mình phải hoàn tất những việc gì trước khi triển khai, sắp lịch đào tạo và bàn giao thế nào. Với những điểm đó thì đã nên chốt chưa?"
+        },
+        {
+          "seq": 28,
+          "at": "2026-09-04T07:53:16.520Z",
+          "text": "Ừ, bạn xem giúp mình cả các phần đó nhé."
+        },
+        {
+          "seq": 30,
+          "at": "2026-09-04T07:54:02.885Z",
+          "text": "Bản BT-0904 đó bạn."
+        },
+        {
+          "seq": 32,
+          "at": "2026-09-04T07:54:35.965Z",
+          "text": "Ừ, mình đồng ý, bạn xem giúp nhé."
+        }
+      ]
+    },
+    {
+      "id": "C05",
+      "start": 48,
+      "end": 51,
+      "humanMessages": 1,
+      "firstAt": "2026-09-04T07:58:34.680Z",
+      "lastAt": "2026-09-04T07:59:55.534Z",
+      "toolCalls": {
+        "memory_search": 1
+      },
+      "childRuns": [],
+      "prompts": [
+        {
+          "seq": 48,
+          "at": "2026-09-04T07:58:34.680Z",
+          "text": "Bạn rút lại thành 5 việc ưu tiên cho mình mang vào cuộc họp nhé, tách rõ việc nào chắc chắn và việc nào còn phải xác nhận."
+        }
+      ]
+    },
+    {
+      "id": "C06",
+      "start": 52,
+      "end": 53,
+      "humanMessages": 1,
+      "firstAt": "2026-09-04T08:00:15.226Z",
+      "lastAt": "2026-09-04T08:00:29.877Z",
+      "toolCalls": {},
+      "childRuns": [],
+      "prompts": [
+        {
+          "seq": 52,
+          "at": "2026-09-04T08:00:15.226Z",
+          "text": "Tiêu đề slide ‘Phân tích ngân sách và rủi ro hợp đồng’ viết tiếng Anh thế nào cho gọn?"
+        }
+      ]
+    },
+    {
+      "id": "C07",
+      "start": 54,
+      "end": 66,
+      "humanMessages": 1,
+      "firstAt": "2026-09-04T08:01:20.804Z",
+      "lastAt": "2026-09-04T08:02:26.398Z",
+      "toolCalls": {
+        "enterprise_knowledge_search": 5,
+        "enterprise_knowledge_get": 2
+      },
+      "childRuns": [],
+      "prompts": [
+        {
+          "seq": 54,
+          "at": "2026-09-04T08:01:20.804Z",
+          "text": "À, công ty mình hỗ trợ bao nhiêu tiền khi nhân viên sinh con thứ hai, và hạn nộp hồ sơ là mấy ngày?"
+        }
+      ]
+    },
+    {
+      "id": "C08",
+      "start": 67,
+      "end": 68,
+      "humanMessages": 1,
+      "firstAt": "2026-09-04T08:02:55.876Z",
+      "lastAt": "2026-09-04T08:02:55.884Z",
+      "toolCalls": {},
+      "childRuns": [],
+      "prompts": [
+        {
+          "seq": 67,
+          "at": "2026-09-04T08:02:55.876Z",
+          "text": "Mình còn một hợp đồng thuê kho khác, bạn xem điều khoản phạt trong đó có ổn không?"
+        }
+      ]
+    },
+    {
+      "id": "C09",
+      "start": 69,
+      "end": 74,
+      "humanMessages": 1,
+      "firstAt": "2026-09-04T08:03:31.364Z",
+      "lastAt": "2026-09-04T08:03:57.714Z",
+      "toolCalls": {
+        "enterprise_knowledge_search": 1,
+        "enterprise_knowledge_get": 1
+      },
+      "childRuns": [],
+      "prompts": [
+        {
+          "seq": 69,
+          "at": "2026-09-04T08:03:31.364Z",
+          "text": "Thôi để hợp đồng kho sau nhé. Giờ mình cần biết dữ liệu bị xóa nhầm 31 ngày trước thì còn trong thời gian lưu bản sao của bên mình không?"
+        }
+      ]
+    },
+    {
+      "id": "C10",
+      "start": 75,
+      "end": 84,
+      "humanMessages": 1,
+      "firstAt": "2026-09-04T08:04:30.159Z",
+      "lastAt": "2026-09-04T08:06:15.213Z",
+      "toolCalls": {
+        "enterprise_knowledge_search": 3,
+        "enterprise_knowledge_get": 3
+      },
+      "childRuns": [],
+      "prompts": [
+        {
+          "seq": 75,
+          "at": "2026-09-04T08:04:30.159Z",
+          "text": "Tháng tới có hai bạn mới vào nhóm, một bạn muốn làm ở nhà cả tuần. Mình nên chuẩn bị máy tính, tài khoản và người hướng dẫn từ lúc nào, theo dõi tuần đầu ra sao, còn chuyện làm ở nhà như vậy có phù hợp không?"
+        }
+      ]
+    }
+  ],
+  "totalHumanMessages": 15,
+  "totalChildRuns": 1,
+  "totalRoutingEvents": 14,
+  "parentStatus": "done"
+}

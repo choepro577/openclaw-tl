@@ -38,6 +38,7 @@ export function buildCodexMessagesSnapshot(params: {
   upstreamUserText: string | undefined;
   reasoningText: string | undefined;
   planText: string | undefined;
+  planMirrorPersisted?: boolean;
   commentaryMessages: ReadonlyArray<{ itemId: string; message: AssistantMessage }>;
   toolMessages: readonly AgentMessage[];
   lastAssistant: AssistantMessage | undefined;
@@ -53,11 +54,15 @@ export function buildCodexMessagesSnapshot(params: {
     );
   }
   if (params.planText) {
+    const planMirror = attachCodexMirrorIdentity(
+      params.createAssistantMirrorMessage("Codex plan", params.planText),
+      `${params.turnId}:plan`,
+    );
     messages.push(
-      attachCodexMirrorIdentity(
-        params.createAssistantMirrorMessage("Codex plan", params.planText),
-        `${params.turnId}:plan`,
-      ),
+      projectAgentHarnessTranscriptMessageForDisplay({
+        hidden: params.planMirrorPersisted === true,
+        message: planMirror,
+      }),
     );
   }
   const commentaryMessages =

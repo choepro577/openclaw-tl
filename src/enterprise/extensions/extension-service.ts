@@ -12,9 +12,14 @@ import {
   fetchClawHubPackageDetail,
   fetchClawHubPackageVersion,
   searchClawHubPackages,
+  listClawHubPackages,
   type ClawHubPackageArtifactResolverResponse,
 } from "../../infra/clawhub-packages.js";
-import { fetchClawHubSkillDetail, searchClawHubSkills } from "../../infra/clawhub-skills.js";
+import {
+  fetchClawHubSkillDetail,
+  searchClawHubSkills,
+  type ClawHubSkillSearchResult,
+} from "../../infra/clawhub-skills.js";
 import { sha256Hex } from "../../infra/crypto-digest.js";
 import { loadInstalledPluginIndexInstallRecordsSync } from "../../plugins/installed-plugin-index-records.js";
 import { buildWorkspaceSkillStatus } from "../../skills/discovery/status.js";
@@ -36,11 +41,13 @@ import {
   createEnterprisePluginRequest,
   deleteEnterpriseUserSkillInstallRecord,
   getEnterpriseUserSkillInstall,
+  listEnterpriseAccountPluginGrants,
   listEnterprisePluginRequests,
   listEnterpriseUserSkillInstalls,
   writeEnterpriseUserSkillInstall,
 } from "./extension-store.js";
 import type {
+  EnterpriseAccountPluginGrant,
   EnterpriseExtensionCatalogItem,
   EnterpriseExtensionKind,
   EnterpriseExtensionTrust,
@@ -303,7 +310,7 @@ async function inspectStagedSkill(input: {
       throw new EnterpriseExtensionError("SKILL_IDENTITY_INVALID", 409);
     }
     const parsed = parseRequestedClawHubSkillRef(input.ref);
-    if (skill.skillKey !== parsed.slug) {
+    if (clawhub.slug !== parsed.slug) {
       throw new EnterpriseExtensionError("SKILL_IDENTITY_MISMATCH", 409);
     }
     return {
@@ -318,14 +325,116 @@ async function inspectStagedSkill(input: {
 
 function requestStateFor(
   requests: readonly EnterprisePluginRequest[],
+  grants: readonly EnterpriseAccountPluginGrant[],
   packageName: string,
   version: string | undefined,
 ): EnterprisePluginRequest["state"] | null {
-  return (
-    requests.find(
-      (request) => request.packageName === packageName && request.exactVersion === version,
-    )?.state ?? null
+  const matching = requests.filter(
+    (request) => request.packageName === packageName && request.exactVersion === version,
   );
+  const pending = matching.find(
+    (request) => request.state === "pending" || request.state === "approving",
+  );
+  if (pending) {
+    return pending.state;
+  }
+  if (
+    matching.some(
+      (request) =>
+        request.state === "available" &&
+        grants.some(
+          (grant) =>
+            grant.sourceRequestId === request.id &&
+            grant.state === "active" &&
+            grant.exactVersion === request.exactVersion &&
+            grant.integrity === request.integrity,
+        ),
+    )
+  ) {
+    return "available";
+  }
+  // Approval history is immutable; only a current grant can make it available.
+  const latest = matching[0];
+  return latest?.state === "available" ? null : (latest?.state ?? null);
+}
+
+// Cache discovery only; account access and request/grant state are resolved on every read.
+const catalogPages = new Map<
+  string,
+  {
+    expiresAt: number;
+    pending: Promise<EnterpriseExtensionCatalogItem[]>;
+  }
+>();
+const CATALOG_TTL_MS = 60_000;
+
+async function discoverExtensionCatalog(query: string): Promise<EnterpriseExtensionCatalogItem[]> {
+  const [skillResults, pluginResults] = query
+    ? await Promise.all([
+        searchClawHubSkills({ query, limit: 12 }),
+        searchClawHubPackages({ query, limit: 12 }),
+      ])
+    : await Promise.all([
+        listClawHubPackages({ family: "skill", limit: 12 }).then((items) =>
+          items.flatMap((item): ClawHubSkillSearchResult[] =>
+            item.ownerHandle
+              ? [
+                  {
+                    score: 0,
+                    slug: item.name,
+                    installRef: `@${item.ownerHandle}/${item.name}`,
+                    ownerHandle: item.ownerHandle,
+                    displayName: item.displayName,
+                    summary: item.summary ?? undefined,
+                    version: item.latestVersion ?? undefined,
+                  },
+                ]
+              : [],
+          ),
+        ),
+        Promise.all([
+          listClawHubPackages({ family: "code-plugin", limit: 6 }),
+          listClawHubPackages({ family: "bundle-plugin", limit: 6 }),
+        ]).then((pages) => pages.flat().map((item) => ({ score: 0, package: item }))),
+      ]);
+  return [
+    ...skillResults.map(
+      (result): EnterpriseExtensionCatalogItem => ({
+        catalogKey: result.installRef,
+        kind: "skill",
+        name: result.displayName,
+        description: result.summary ?? null,
+        publisher: result.ownerHandle ?? null,
+        version: result.version ?? null,
+        integrity: null,
+        trust: null,
+        allowedAction: "none",
+        reasonCodes: [result.trustState ? "ALTERNATE_REGISTRY_DENIED" : "REVIEW_REQUIRED"],
+        requirements: [],
+        requestState: null,
+      }),
+    ),
+    ...pluginResults
+      .filter(
+        ({ package: item }) => item.family === "code-plugin" || item.family === "bundle-plugin",
+      )
+      .map(
+        ({ package: item }): EnterpriseExtensionCatalogItem => ({
+          catalogKey: item.name,
+          kind: item.family === "code-plugin" ? "code_plugin" : "bundle_plugin",
+          name: item.displayName,
+          description: item.summary ?? null,
+          publisher: item.ownerHandle ?? null,
+          version: item.latestVersion ?? null,
+          integrity: null,
+          trust: null,
+          allowedAction: "none",
+          reasonCodes: ["REVIEW_REQUIRED"],
+          requirements: item.environmentFlags ?? [],
+          requestState: null,
+        }),
+      ),
+  ];
 }
 
 export async function searchEnterpriseExtensions(input: {
@@ -334,102 +443,50 @@ export async function searchEnterpriseExtensions(input: {
   agentKey: AgentKey;
   query: string;
 }): Promise<{ items: EnterpriseExtensionCatalogItem[] }> {
-  const { workspaceDir } = resolveAccountAgentWorkspace(input);
-  const [skillResults, pluginResults] = await Promise.all([
-    searchClawHubSkills({ query: input.query, limit: 12 }),
-    searchClawHubPackages({ query: input.query, limit: 12 }),
+  resolveAccountAgentWorkspace(input);
+  const query = input.query.trim();
+  // Discovery may use registry credentials: never share a cached page across accounts.
+  const key = JSON.stringify([
+    input.account.id,
+    process.env.OPENCLAW_CLAWHUB_URL,
+    process.env.CLAWHUB_URL,
+    query,
   ]);
+  let page = catalogPages.get(key);
+  if (!page || page.expiresAt <= Date.now()) {
+    page = { expiresAt: Infinity, pending: discoverExtensionCatalog(query) };
+    catalogPages.delete(key);
+    catalogPages.set(key, page);
+    while (catalogPages.size > 32) {
+      catalogPages.delete(catalogPages.keys().next().value!);
+    }
+    const current = page;
+    void page.pending.then(
+      () => {
+        current.expiresAt = Date.now() + CATALOG_TTL_MS;
+      },
+      () => {
+        if (catalogPages.get(key) === current) {
+          catalogPages.delete(key);
+        }
+      },
+    );
+  }
+  const items = structuredClone(await page.pending);
   const requests = listEnterprisePluginRequests({ accountId: input.account.id });
-  const skills = await Promise.all(
-    skillResults.map(async (result): Promise<EnterpriseExtensionCatalogItem> => {
-      const version = result.version;
-      let trust: EnterpriseExtensionTrust | null = null;
-      if (version && !result.trustState) {
-        try {
-          trust = await requireCleanTrust({
-            kind: "skill",
-            packageName: result.slug,
-            version,
-            workspaceDir,
-            ...(result.ownerHandle ? { ownerHandle: result.ownerHandle } : {}),
-          });
-        } catch {
-          trust = {
-            disposition: "unscanned",
-            scanStatus: null,
-            moderationState: null,
-            checkedAt: new Date().toISOString(),
-          };
-        }
-      }
-      const clean = trust?.disposition === "clean";
-      return {
-        catalogKey: result.installRef,
-        kind: "skill",
-        name: result.displayName,
-        description: result.summary ?? null,
-        publisher: result.ownerHandle ?? null,
-        version: version ?? null,
-        integrity: null,
-        trust,
-        allowedAction: clean ? "install_skill" : "none",
-        reasonCodes: clean
-          ? []
-          : [result.trustState ? "ALTERNATE_REGISTRY_DENIED" : "TRUST_NOT_CLEAN"],
-        requirements: [],
-        requestState: null,
-      };
-    }),
-  );
-  const plugins = await Promise.all(
-    pluginResults
-      .filter(
-        (result) =>
-          result.package.family === "code-plugin" || result.package.family === "bundle-plugin",
-      )
-      .map(async (result): Promise<EnterpriseExtensionCatalogItem> => {
-        const version = result.package.latestVersion ?? undefined;
-        let trust: EnterpriseExtensionTrust | null = null;
-        let integrity: string | null = null;
-        if (version) {
-          try {
-            const [resolvedTrust, artifact] = await Promise.all([
-              requireCleanTrust({
-                kind: "plugin",
-                packageName: result.package.name,
-                version,
-              }),
-              fetchClawHubPackageArtifact({ name: result.package.name, version }),
-            ]);
-            trust = resolvedTrust;
-            integrity = artifactIntegrity(artifact);
-          } catch {
-            trust = {
-              disposition: "unscanned",
-              scanStatus: null,
-              moderationState: null,
-              checkedAt: new Date().toISOString(),
-            };
-          }
-        }
-        const clean = trust?.disposition === "clean" && Boolean(integrity);
-        return {
-          catalogKey: result.package.name,
-          kind: result.package.family === "code-plugin" ? "code_plugin" : "bundle_plugin",
-          name: result.package.displayName,
-          description: result.package.summary ?? null,
-          publisher: result.package.ownerHandle ?? null,
-          version: version ?? null,
-          integrity,
-          trust,
-          allowedAction: clean ? "request_admin" : "none",
-          reasonCodes: clean ? ["NATIVE_PLUGIN_REQUIRES_ADMIN"] : ["TRUST_NOT_CLEAN"],
-          requirements: result.package.environmentFlags ?? [],
-          requestState: requestStateFor(requests, result.package.name, version),
-        };
-      }),
-  );
-  return { items: [...skills, ...plugins] };
+  const grants = listEnterpriseAccountPluginGrants(input.account.id);
+  for (const item of items) {
+    if (item.kind === "skill") {
+      continue;
+    }
+    item.requestState = requestStateFor(
+      requests,
+      grants,
+      item.catalogKey,
+      item.version ?? undefined,
+    );
+  }
+  return { items };
 }
 
 export async function reviewEnterpriseExtension(input: {
@@ -571,6 +628,7 @@ export async function reviewEnterpriseExtension(input: {
       requirements: [],
       requestState: requestStateFor(
         listEnterprisePluginRequests({ accountId: input.account.id }),
+        listEnterpriseAccountPluginGrants(input.account.id),
         input.catalogKey,
         exactVersion,
       ),
@@ -789,13 +847,14 @@ export async function updateEnterpriseUserSkill(input: {
         throw new EnterpriseExtensionError("SKILL_COMMIT_VERIFICATION_FAILED", 500);
       }
       try {
+        const eligibleState = current.enabled ? "ready" : "disabled";
         return writeEnterpriseUserSkillInstall({
           ...current,
           exactVersion: review.exactVersion,
           integrity: review.integrity,
           treeHash: nextPlan.plan.fileTreeSha256,
-          enabled: review.requirements.length === 0,
-          state: review.requirements.length === 0 ? "ready" : "needs_setup",
+          enabled: current.enabled && review.requirements.length === 0,
+          state: review.requirements.length === 0 ? eligibleState : "needs_setup",
           safeErrorCode: review.requirements.length === 0 ? null : "DEPENDENCY_SETUP_REQUIRED",
           baseRevision: input.baseRevision,
         });
@@ -942,7 +1001,7 @@ export async function requestEnterpriseNativePlugin(input: {
       (record) =>
         record.source === "clawhub" &&
         record.clawhubPackage === review.catalogKey &&
-        record.version === review.exactVersion &&
+        (record.clawhubVersion ?? record.version) === review.exactVersion &&
         (record.integrity ?? record.npmIntegrity) === review.integrity,
     )
       ? "access"

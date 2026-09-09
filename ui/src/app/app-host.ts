@@ -1,17 +1,18 @@
 import { property, query, state } from "lit/decorators.js";
 import type { GatewayBrowserClient, GatewayEventFrame } from "../api/gateway.ts";
-import "../components/app-topbar.ts";
-import "../components/macos-titlebar-controls.ts";
-import "../components/modal-dialog.ts";
 import {
   formatDocumentTitle,
   isSettingsNavigationRoute,
   titleForRoute,
 } from "../app-navigation.ts";
+import "../components/app-topbar.ts";
+import "../components/macos-titlebar-controls.ts";
+import "../components/modal-dialog.ts";
+import { isSessionRouteId } from "../app-route-paths.ts";
 import "../components/resizable-divider.ts";
 import "../components/update-banner.ts";
-import { isSessionRouteId } from "../app-route-paths.ts";
 import { APP_ROUTE_IDS, type RouteId } from "../app-routes.ts";
+import { maskEngineName } from "../branding/display-brand.ts";
 import {
   EMPTY_SIDEBAR_WORKBOARD_SNAPSHOT,
   type SidebarWorkboardRenderers,
@@ -650,7 +651,7 @@ export class OpenClawShell
     });
     const environment = context.config?.current.environment;
     if (environment) {
-      title += ` · ${environment.label}`;
+      title += ` · ${maskEngineName(environment.label)}`;
     }
     if (document.title !== title) {
       document.title = title;

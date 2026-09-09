@@ -2,6 +2,12 @@ import type { ForceGraph3DInstance } from "3d-force-graph";
 import type { Group } from "three";
 import type SpriteText from "three-spritetext";
 import {
+  enterpriseKnowledgeGraphCopy as gk,
+  graphEdgeLabel,
+  graphNodeLabel,
+  graphReviewLabel,
+} from "../../i18n/enterprise-knowledge-graph.ts";
+import {
   graphSelectionNeighborhood,
   type GraphRendererAdapter,
   type GraphRendererOptions,
@@ -33,33 +39,6 @@ type ChargeForce = {
 
 type ClusterForce = ((alpha: number) => void) & {
   initialize: (nodes: ForceNode[]) => void;
-};
-
-const NODE_KIND_LABELS: Record<GraphVisualNode["kind"], string> = {
-  source: "Nguồn",
-  section: "Mục",
-  entity: "Thực thể",
-  concept: "Khái niệm",
-  claim: "Nhận định",
-};
-
-const EDGE_KIND_LABELS: Record<GraphVisualLink["kind"], string> = {
-  contains: "chứa",
-  references: "tham chiếu",
-  mentions: "đề cập",
-  similar: "tương tự",
-  supports: "hỗ trợ",
-  contradicts: "mâu thuẫn",
-  supersedes: "thay thế",
-  depends_on: "phụ thuộc",
-  applies_to: "áp dụng cho",
-  custom: "tùy chỉnh",
-};
-
-const REVIEW_LABELS: Record<GraphVisualLink["reviewStatus"], string> = {
-  accepted: "Đã duyệt",
-  proposed: "Chờ duyệt",
-  rejected: "Đã từ chối",
 };
 
 function linkColor(link: ForceLink, palette: GraphThemePalette): string {
@@ -215,7 +194,7 @@ export async function createKnowledgeGraph3dRenderer(
       labelObject(node, palette, selection, GroupConstructor, SpriteTextConstructor),
     )
     .nodeThreeObjectExtend(true)
-    .nodeLabel((node) => tooltip(node.label, NODE_KIND_LABELS[node.kind]))
+    .nodeLabel((node) => tooltip(node.label, graphNodeLabel(node.kind)))
     .linkColor(activeLinkColor)
     .linkOpacity(0.58)
     .linkWidth((link) => {
@@ -225,8 +204,11 @@ export async function createKnowledgeGraph3dRenderer(
     })
     .linkLabel((link) =>
       tooltip(
-        EDGE_KIND_LABELS[link.kind],
-        `${REVIEW_LABELS[link.reviewStatus]} · confidence ${link.confidence.toFixed(2)}`,
+        graphEdgeLabel(link.kind),
+        `${graphReviewLabel(link.reviewStatus)} · ${
+          // Resolve the metric label at callback time so locale changes are reflected in tooltips.
+          gk("confidenceMetric")
+        } ${link.confidence.toFixed(2)}`,
       ),
     )
     .linkDirectionalArrowLength((link) => Math.max(2.5, link.confidence * 4.5))

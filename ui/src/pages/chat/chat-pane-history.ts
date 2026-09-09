@@ -47,6 +47,28 @@ export abstract class ChatPaneHistory extends ChatPaneReplyNavigation {
   private activeCatalogContinuation: symbol | null = null;
   private activeOlderLoad: Promise<boolean> | null = null;
 
+  /**
+   * Prefetch must wait until the pane the user can see has committed its first
+   * authoritative history snapshot. The public getter keeps that readiness
+   * signal available to the page controller without exposing pane state.
+   */
+  get sessionHistoryReady(): boolean {
+    const state = this.state;
+    if (
+      !state ||
+      !state.connected ||
+      !this.presented ||
+      !this.visuallyPresented ||
+      !areUiSessionKeysEquivalent(state.sessionKey, this.sessionKey)
+    ) {
+      return false;
+    }
+    return (
+      this.sessionHistoryCommittedKey === state.sessionKey &&
+      (parseCatalogSessionKey(state.sessionKey) ? !this.catalogLoading : !state.chatLoading)
+    );
+  }
+
   protected hasOlderMessages(): boolean {
     const state = this.state;
     if (!state) {

@@ -91,7 +91,7 @@ describe("completeWithPreparedSimpleCompletionModel", () => {
   );
 
   it.each(["max", "ultra"] as const)(
-    "uses max for GPT-5.6 simple completions requested with %s",
+    "uses max for GPT-5.6 requested with %s without dropping the response schema",
     async (reasoning) => {
       const model = {
         provider: "openai",
@@ -106,16 +106,30 @@ describe("completeWithPreparedSimpleCompletionModel", () => {
         maxTokens: 128_000,
         thinkingLevelMap: { xhigh: "xhigh", max: "max" },
       } satisfies Model<"openai-responses">;
+      const responseFormat = {
+        type: "json_schema",
+        json_schema: {
+          name: "decision",
+          strict: true,
+          schema: {
+            type: "object",
+            properties: { outcome: { type: "string" } },
+            required: ["outcome"],
+            additionalProperties: false,
+          },
+        },
+      };
 
       await completeWithPreparedSimpleCompletionModel({
         model,
         auth: { apiKey: "sk-test", source: "env:OPENAI_API_KEY", mode: "api-key" },
         context,
-        options: { reasoning },
+        options: { reasoning, responseFormat },
       });
 
       expect(mocks.complete).toHaveBeenCalledWith(model, context, {
         reasoning: "max",
+        responseFormat,
         apiKey: "sk-test",
       });
     },

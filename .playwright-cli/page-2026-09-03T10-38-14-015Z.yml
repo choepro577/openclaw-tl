@@ -1,0 +1,161 @@
+- main [ref=f4e5]:
+  - complementary [ref=f4e6]:
+    - generic [ref=f4e19]:
+      - strong [ref=f4e20]: OpenClaw
+      - generic [ref=f4e21]: Enterprise Admin
+    - navigation "Quản trị Enterprise" [ref=f4e22]:
+      - button "Quản lý tài khoản" [ref=f4e23]
+      - button "Quản lý agent" [ref=f4e31]
+      - button "Tri thức doanh nghiệp" [ref=f4e37]
+      - button "Quản lý skill" [ref=f4e42]
+      - button "Plugins" [ref=f4e50]
+      - button "Config" [ref=f4e56]
+    - generic [ref=f4e62]:
+      - generic [ref=f4e63]:
+        - generic [ref=f4e64]: Q
+        - generic [ref=f4e65]:
+          - strong [ref=f4e66]: QA Admin
+          - generic [ref=f4e67]: "@qaadmin"
+      - button "Đổi mật khẩu" [ref=f4e68]
+      - button "Đăng xuất" [ref=f4e75]
+  - generic [ref=f4e263]:
+    - generic [ref=f4e264]:
+      - generic [ref=f4e265]:
+        - generic [ref=f4e266]:
+          - heading "Quản lý tài khoản" [level=1] [ref=f4e267]
+          - paragraph [ref=f4e268]: 2 tài khoản · quyền truy cập và phiên đăng nhập Enterprise
+        - button "Tạo tài khoản" [ref=f4e269]
+      - generic [ref=f4e271]:
+        - searchbox "Tìm tài khoản" [ref=f4e272]
+        - combobox "Lọc role" [ref=f4e273]:
+          - option "Tất cả role" [selected]
+          - option "Administrator"
+          - option "Employee"
+        - combobox "Lọc trạng thái" [ref=f4e274]:
+          - option "Tất cả trạng thái" [selected]
+          - option "Đang hoạt động"
+          - option "Đã khóa"
+        - combobox "Lọc preset" [ref=f4e275]:
+          - option "Tất cả preset" [selected]
+          - option "Lập trình tiêu chuẩn"
+          - option "Không có preset"
+        - combobox "Lọc personal agent" [ref=f4e276]:
+          - option "Tất cả personal agent" [selected]
+          - option "Đã bật personal agent"
+          - option "Không có personal agent"
+        - combobox "Sắp xếp" [ref=f4e277]:
+          - option "Username A–Z" [selected]
+          - option "Mới cập nhật"
+          - option "Đăng nhập gần nhất"
+      - table [ref=f4e860]:
+        - rowgroup [ref=f4e861]:
+          - row [ref=f4e862]:
+            - columnheader [ref=f4e863]:
+              - checkbox "Chọn tất cả" [ref=f4e864]
+            - columnheader "Tài khoản" [ref=f4e865]
+            - columnheader "Role" [ref=f4e866]
+            - columnheader "Trạng thái" [ref=f4e867]
+            - columnheader "Agent" [ref=f4e868]
+            - columnheader "Access preset" [ref=f4e869]
+            - columnheader "Đăng nhập cuối" [ref=f4e870]
+            - columnheader "Cập nhật" [ref=f4e871]
+            - columnheader "Thao tác" [ref=f4e872]
+        - rowgroup [ref=f4e873]:
+          - row [ref=f4e874]:
+            - cell [ref=f4e875]:
+              - checkbox "Chọn pilot.contract" [ref=f4e876]
+            - cell "Pilot Hợp đồng @pilot.contract" [ref=f4e877]:
+              - strong [ref=f4e878]: Pilot Hợp đồng
+              - generic [ref=f4e879]: "@pilot.contract"
+            - cell "employee" [ref=f4e880]
+            - cell "Hoạt động" [ref=f4e881]
+            - cell "Personal" [ref=f4e883]
+            - cell "Lập trình tiêu chuẩn" [ref=f4e884]
+            - cell "—" [ref=f4e886]
+            - cell "17:37 3 thg 9, 2026" [ref=f4e887]
+            - cell [ref=f4e888]:
+              - button "Xem" [ref=f4e889]
+          - row [ref=f4e890]:
+            - cell [ref=f4e891]:
+              - checkbox "Chọn qaadmin" [ref=f4e892]
+            - cell "QA Admin @qaadmin" [ref=f4e893]:
+              - strong [ref=f4e894]: QA Admin
+              - generic [ref=f4e895]: "@qaadmin"
+            - cell "administrator" [ref=f4e896]
+            - cell "Hoạt động" [ref=f4e897]
+            - cell "—" [ref=f4e899]
+            - cell "Không cấp sẵn công cụ" [ref=f4e900]
+            - cell "17:26 3 thg 9, 2026" [ref=f4e902]
+            - cell "17:26 3 thg 9, 2026" [ref=f4e903]
+            - cell [ref=f4e904]:
+              - button "Xem" [ref=f4e905]
+      - generic [ref=f4e309]:
+        - generic [ref=f4e310]: Trang 1
+        - button "Trước" [disabled] [ref=f4e311]
+        - button "Sau" [disabled] [ref=f4e312]
+    - dialog "Pilot Hợp đồng" [ref=f4e907]:
+      - generic [ref=f4e909]:
+        - generic [ref=f4e910]:
+          - generic [ref=f4e911]:
+            - heading "Pilot Hợp đồng" [level=2] [ref=f4e912]
+            - paragraph [ref=f4e913]: "@pilot.contract · username không thể thay đổi"
+          - button "Đóng" [ref=f4e914]
+        - generic [ref=f4e919]:
+          - navigation "Chi tiết tài khoản" [ref=f4e920]:
+            - button "Thông tin" [ref=f4e921]
+            - button "Agent & chuyên gia" [active] [ref=f4e922]
+            - button "Phiên đăng nhập" [ref=f4e923]
+            - button "Quyền nâng cao" [ref=f4e924]
+          - generic [ref=f4e944]:
+            - generic [ref=f4e945]:
+              - generic [ref=f4e946]:
+                - generic [ref=f4e947]: Personal Agent
+                - strong [ref=f4e948]: Enabled
+              - generic [ref=f4e949]:
+                - generic [ref=f4e950]: Automatic delegation
+                - strong [ref=f4e951]: Not activated
+              - generic [ref=f4e952]:
+                - generic [ref=f4e953]: Assigned
+                - strong [ref=f4e954]: "0"
+              - generic [ref=f4e955]:
+                - generic [ref=f4e956]: Eligible
+                - strong [ref=f4e957]: "0"
+            - searchbox "Specialist Agents" [ref=f4e958]
+            - generic [ref=f4e959]:
+              - article [ref=f4e960]:
+                - generic [ref=f4e961]:
+                  - generic [ref=f4e962]:
+                    - strong [ref=f4e963]: main
+                    - paragraph [ref=f4e964]: No specialist description yet.
+                  - generic [ref=f4e965]: Not configured
+                - generic [ref=f4e966]:
+                  - generic [ref=f4e967]: Not assigned
+                  - checkbox "Not assigned" [disabled] [ref=f4e968]
+                - generic [ref=f4e969]:
+                  - text: Delegation behavior for this user
+                  - combobox "Delegation behavior for this user" [disabled] [ref=f4e970]:
+                    - option "Use Agent setting" [selected]
+                    - option "Always ask before delegating" [disabled]
+                    - option "Only when the user names the Agent"
+                    - option "Do not delegate automatically"
+              - article [ref=f4e971]:
+                - generic [ref=f4e972]:
+                  - generic [ref=f4e973]:
+                    - strong [ref=f4e974]: Agent Hợp đồng
+                    - paragraph [ref=f4e975]: Chuyên kiểm tra hợp đồng và phân tích các điều khoản pháp lý.
+                  - generic [ref=f4e976]: Not configured
+                - generic [ref=f4e977]:
+                  - generic [ref=f4e978]: Not assigned
+                  - checkbox "Not assigned" [disabled] [ref=f4e979]
+                - generic [ref=f4e980]:
+                  - text: Delegation behavior for this user
+                  - combobox "Delegation behavior for this user" [disabled] [ref=f4e981]:
+                    - option "Use Agent setting" [selected]
+                    - option "Always ask before delegating" [disabled]
+                    - option "Only when the user names the Agent"
+                    - option "Do not delegate automatically"
+            - generic [ref=f4e982]:
+              - generic [ref=f4e983]: Add 0, remove 0 · Applies from the next request
+              - generic [ref=f4e984]:
+                - button "Cancel" [ref=f4e985]
+                - button "Save changes" [disabled] [ref=f4e986]

@@ -1,3 +1,4 @@
+import { withEnterpriseDelegationEvidence } from "../../enterprise-delegation-evidence.js";
 /**
  * Dispatches embedded attempts to native harness or OpenClaw backend execution.
  */
@@ -7,6 +8,7 @@ import {
 } from "../../harness/selection.js";
 import type { AgentHarness } from "../../harness/types.js";
 import { settleRequesterAfterSessionSpawns } from "../../subagents/registry/subagent-registry.js";
+import { withEnterpriseDelegationTools } from "./enterprise-delegation-tools.js";
 import type { EmbeddedRunAttemptParams, EmbeddedRunAttemptResult } from "./types.js";
 
 /**
@@ -15,7 +17,9 @@ import type { EmbeddedRunAttemptParams, EmbeddedRunAttemptResult } from "./types
 export async function runEmbeddedAttemptWithBackend(
   params: EmbeddedRunAttemptParams,
 ): Promise<EmbeddedRunAttemptResult> {
-  const result = await runAgentHarnessAttempt(params);
+  const result = await withEnterpriseDelegationTools(params, async () =>
+    runAgentHarnessAttempt(await withEnterpriseDelegationEvidence(params)),
+  );
   if (
     result.agentHarnessId !== "openclaw" &&
     params.sessionKey &&

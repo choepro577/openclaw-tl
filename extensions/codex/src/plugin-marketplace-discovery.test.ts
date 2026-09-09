@@ -104,6 +104,22 @@ describe("Codex marketplace plugin discovery", () => {
     const result = await discoverCodexMarketplacePlugins({ request, workspaceDir: "/repo" });
 
     expect(result.plugins[0]?.id).toBe("security-review@workspace-directory");
+    expect(result.plugins[0]?.name).toBe("Security Review");
+  });
+
+  it("retains marketplace display names without replacing installation identities", async () => {
+    const listed = catalog("openai-curated-remote", "app-example");
+    listed.marketplaces[0]!.plugins[0]!.interface = { displayName: "Example App" };
+    const result = await discoverCodexMarketplacePlugins({
+      request: vi.fn(async () => listed),
+      workspaceDir: "/repo",
+      includeSupplemental: false,
+    });
+    expect(result.plugins[0]).toMatchObject({
+      id: "app-example@openai-curated-remote",
+      pluginName: "app-example",
+      name: "Example App",
+    });
   });
 
   it("refuses ambiguous equal identifiers from different marketplace paths", async () => {

@@ -22,6 +22,7 @@ import {
   isToolCardError,
   resolveCollapsedToolArgumentPreview as toolArgumentPreview,
   resolveToolCardOutcome,
+  toolCardSkippedLabel,
   type ToolPreview,
 } from "../../../lib/chat/tool-cards.ts";
 import {
@@ -31,7 +32,17 @@ import {
 } from "../../../lib/chat/tool-display.ts";
 import { copyToClipboard } from "../../../lib/clipboard.ts";
 import { getToolCallTitle } from "../tool-titles.ts";
+import {
+  delegationSummary,
+  renderDelegationCard,
+  type DelegationCardContext,
+} from "./chat-delegation-card.ts";
 import { renderDiffBlock, renderDiffStatChips } from "./chat-diff-render.ts";
+import {
+  enterpriseKnowledgeSummary,
+  isEnterpriseKnowledgeTool,
+  renderKnowledgeCard,
+} from "./chat-knowledge-card.ts";
 import type { SidebarContent } from "./chat-sidebar.ts";
 import { renderToolPreview } from "./widget-card.ts";
 
@@ -97,6 +108,9 @@ ${text}
 }
 
 function buildToolCardSidebarContent(card: ToolCard): string {
+  if (resolveToolCardOutcome(card, false) === "skipped") {
+    return toolCardSkippedLabel(card);
+  }
   const display = resolveToolDisplay({ name: card.name, args: card.args });
   const detail = formatToolDetail(display);
   const isError = isToolCardError(card);
@@ -402,7 +416,10 @@ function renderProgressCardReceipt(card: ToolCard, outcome: ToolCardOutcome) {
   // The label already names the running/failed state, so the row stays neutral
   // like every other transcript activity row instead of adding its own chrome.
   return html`<div class="chat-tool-msg-collapse chat-progress-card-receipt">
-    <div class="chat-tool-msg-summary chat-tool-row" role="status">
+    <div
+      class="chat-tool-msg-summary chat-tool-row chat-progress-card-receipt__summary"
+      role="status"
+    >
       <span class="chat-tool-msg-summary__icon">${renderToolIcon("listChecks")}</span>
       <span class="chat-tool-msg-summary__label">${label}</span>
     </div>
@@ -748,6 +765,15 @@ export function isRunningToolCard(card: ToolCard, runActive: boolean | undefined
 }
 
 export function resolveToolRowText(card: ToolCard, runActive?: boolean): string {
+  if (resolveToolCardOutcome(card, runActive) === "skipped") {
+    return toolCardSkippedLabel(card);
+  }
+  if (isEnterpriseKnowledgeTool(card.name)) {
+    return enterpriseKnowledgeSummary(card, runActive);
+  }
+  if (card.name === "enterprise_delegate") {
+    return delegationSummary(card, { runActive });
+  }
   const view = resolveToolCallView({ name: card.name, args: card.args, details: card.details });
   if (view.kind === "command" && view.command) {
     return `$ ${firstCommandLine(view.command)}`;
@@ -813,7 +839,7 @@ export function renderToolApprovalReviews(card: ToolCard) {
 
 export function renderToolCard(
   card: ToolCard,
-  opts: {
+  opts: DelegationCardContext & {
     expanded: boolean;
     onToggleExpanded: (id: string) => void;
     runActive?: boolean;
@@ -828,6 +854,22 @@ export function renderToolCard(
   },
 ) {
   const outcome = resolveToolCardOutcome(card, opts.runActive);
+  if (isEnterpriseKnowledgeTool(card.name)) {
+    return renderKnowledgeCard(card, opts);
+  }
+  if (outcome === "skipped") {
+    return html`<div class="chat-tool-msg-collapse" role="status">
+      ${toolCardSkippedLabel(card)}
+    </div>`;
+  }
+  if (card.name === "enterprise_delegate") {
+    return renderDelegationCard(card, {
+      ...opts,
+      onOpenTaskDetail: opts.onOpenSidebar
+        ? (task) => opts.onOpenSidebar?.({ kind: "task", taskId: task.id })
+        : undefined,
+    });
+  }
   const progressReceipt = renderProgressCardReceipt(card, outcome);
   if (progressReceipt) {
     return progressReceipt;
@@ -923,6 +965,17 @@ export function renderExpandedToolCardContent(
   runActive?: boolean,
   onOpenWorkspaceFile?: (target: { path: string; line?: number | null }) => void,
 ) {
+  if (resolveToolCardOutcome(card, runActive) === "skipped") {
+    return html`<div class="chat-tool-card__outcome" role="status">
+      ${toolCardSkippedLabel(card)}
+    </div>`;
+  }
+  if (isEnterpriseKnowledgeTool(card.name)) {
+    return renderKnowledgeCard(card, { expanded: true, runActive });
+  }
+  if (card.name === "enterprise_delegate") {
+    return renderDelegationCard(card, { sessionKey, runActive });
+  }
   const view = resolveToolCallView({ name: card.name, args: card.args, details: card.details });
   const display = resolveToolDisplay({ name: card.name, args: card.args });
   // File/search rows already carry their target; the "with …" connector only

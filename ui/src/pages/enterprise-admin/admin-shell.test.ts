@@ -2,12 +2,14 @@
 
 import { render, type TemplateResult } from "lit";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { i18n } from "../../i18n/index.ts";
 import { EnterpriseAdminShell } from "./admin-shell.ts";
 
 describe("Enterprise Admin Config sidebar", () => {
   let container: HTMLDivElement;
 
-  beforeEach(() => {
+  beforeEach(async () => {
+    await i18n.setLocale("en");
     history.replaceState({}, "", "/admin/config/models/setup");
     container = document.createElement("div");
     document.body.append(container);

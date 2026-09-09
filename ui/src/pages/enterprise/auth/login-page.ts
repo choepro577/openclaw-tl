@@ -1,6 +1,9 @@
 import { html } from "lit";
 import { property, state } from "lit/decorators.js";
+import { renderEnterpriseLanguagePicker } from "../../../i18n/enterprise-language-picker.ts";
+import { eu } from "../../../i18n/enterprise-user.ts";
 import { OpenClawLightDomElement } from "../../../lit/openclaw-element.ts";
+import { enterpriseCopy } from "../enterprise-copy.ts";
 import { loginEnterprise, type EnterpriseAccount } from "../services/enterprise-api.ts";
 import { readEnterpriseFormString } from "../services/form-data.ts";
 
@@ -23,7 +26,7 @@ export class EnterpriseLoginPage extends OpenClawLightDomElement {
       );
       this.onAuthenticated?.(result.account);
     } catch (error) {
-      this.error = error instanceof Error ? error.message : "Đăng nhập thất bại.";
+      this.error = error instanceof Error ? error.message : eu("loginFailed");
     } finally {
       this.busy = false;
     }
@@ -33,8 +36,9 @@ export class EnterpriseLoginPage extends OpenClawLightDomElement {
     return html`
       <main class="enterprise-auth-screen">
         <section class="enterprise-card">
-          <h1 class="enterprise-title">OpenClaw Enterprise</h1>
-          <p class="enterprise-muted">Đăng nhập bằng tài khoản nội bộ OpenClaw.</p>
+          ${renderEnterpriseLanguagePicker("enterprise-select")}
+          <h1 class="enterprise-title">${eu("productName")}</h1>
+          <p class="enterprise-muted">${eu("loginDescription")}</p>
           ${this.bootstrapped
             ? html`
                 <form
@@ -42,7 +46,7 @@ export class EnterpriseLoginPage extends OpenClawLightDomElement {
                   @submit=${(event: SubmitEvent) => void this.submit(event)}
                 >
                   <label class="enterprise-field">
-                    Username
+                    ${eu("username")}
                     <input
                       class="enterprise-input"
                       name="username"
@@ -52,7 +56,7 @@ export class EnterpriseLoginPage extends OpenClawLightDomElement {
                     />
                   </label>
                   <label class="enterprise-field">
-                    Mật khẩu
+                    ${eu("password")}
                     <input
                       class="enterprise-input"
                       name="password"
@@ -62,7 +66,7 @@ export class EnterpriseLoginPage extends OpenClawLightDomElement {
                     />
                   </label>
                   <button class="enterprise-button" type="submit" ?disabled=${this.busy}>
-                    ${this.busy ? "Đang đăng nhập…" : "Đăng nhập"}
+                    ${this.busy ? eu("loginBusy") : eu("login")}
                   </button>
                   ${this.error
                     ? html`<p class="enterprise-error" role="alert">${this.error}</p>`
@@ -70,8 +74,8 @@ export class EnterpriseLoginPage extends OpenClawLightDomElement {
                 </form>
               `
             : html`
-                <p class="enterprise-error">Chưa có tài khoản quản trị đầu tiên.</p>
-                <p class="enterprise-code">Hãy chạy: openclaw auth bootstrap-admin</p>
+                <p class="enterprise-error">${eu("noAdmin")}</p>
+                <p class="enterprise-code">${enterpriseCopy("bootstrapCommand")}</p>
               `}
         </section>
       </main>

@@ -176,7 +176,7 @@ export abstract class ChatPaneHeader extends ChatPaneDiscussion {
           class="btn btn--ghost btn--icon chat-icon-btn chat-workspace-panel-toggle"
           type="button"
           aria-label=${filesLabel}
-          aria-pressed=${String(!sessionWorkspace.collapsed)}
+          aria-pressed=${sessionWorkspace.collapsed ? "false" : "true"}
           @click=${sessionWorkspace.onToggleCollapsed}
         >
           ${icons.fileText}
@@ -194,13 +194,14 @@ export abstract class ChatPaneHeader extends ChatPaneDiscussion {
             </button>
           </openclaw-tooltip>`
         : nothing;
+      const subagentsAction = renderBackgroundTasksToggle(backgroundTasks, { subagents: true });
       const sidePanelLabel = t(sidePanelOpen ? "chat.sidePanel.minimize" : "chat.sidePanel.label");
       const sidePanelAction = html`<openclaw-tooltip .content=${sidePanelLabel}>
         <button
           class="btn btn--ghost btn--icon chat-icon-btn chat-side-panel-toggle"
           type="button"
           aria-label=${sidePanelLabel}
-          aria-expanded=${String(sidePanelOpen)}
+          aria-expanded=${sidePanelOpen ? "true" : "false"}
           @click=${() => this.setChatSidePanelOpen(!sidePanelOpen, sidebarLayout)}
         >
           ${sidePanelOpen ? icons.panelRightClose : icons.panelRightOpen}
@@ -229,7 +230,7 @@ export abstract class ChatPaneHeader extends ChatPaneDiscussion {
         canReveal: false,
         copiedAction: null,
         renameDisabledReason: " ",
-        panelActions: html`${filesAction}${browserAction}${sidePanelAction}`,
+        panelActions: html`${filesAction}${browserAction}${subagentsAction}${sidePanelAction}`,
         discussionAction: nothing,
         diffAction: nothing,
         backgroundTasksAction: nothing,
@@ -386,7 +387,7 @@ export abstract class ChatPaneHeader extends ChatPaneDiscussion {
         class="btn btn--ghost btn--icon chat-icon-btn chat-side-panel-toggle"
         type="button"
         aria-label=${t(sidePanelOpen ? "chat.sidePanel.minimize" : "chat.sidePanel.label")}
-        aria-expanded=${String(sidePanelOpen)}
+        aria-expanded=${sidePanelOpen ? "true" : "false"}
         @click=${toggleSidePanel}
       >
         ${sidePanelOpen ? icons.panelRightClose : icons.panelRightOpen}

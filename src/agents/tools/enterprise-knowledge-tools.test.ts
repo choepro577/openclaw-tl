@@ -5,9 +5,6 @@ import { createEnterpriseKnowledgeTools } from "./enterprise-knowledge-tools.js"
 describe("Enterprise Knowledge Agent tools", () => {
   it("keeps search reference-only so exact text enters context only through get", async () => {
     const authority = {
-      accountId: "account-1",
-      sessionId: "session-1",
-      agentResourceKey: "agent:shared:main",
       hasPublishedKnowledge: () => true,
       search: vi.fn(async () => ({
         hits: [
@@ -31,8 +28,7 @@ describe("Enterprise Knowledge Agent tools", () => {
         warnings: [],
       })),
       get: vi.fn(),
-      evaluateGrounding: () => ({ action: "accept" as const }),
-    } satisfies EnterpriseKnowledgeAuthority;
+    } satisfies Pick<EnterpriseKnowledgeAuthority, "hasPublishedKnowledge" | "search" | "get">;
     const search = createEnterpriseKnowledgeTools(authority).find(
       (tool) => tool.name === "enterprise_knowledge_search",
     )!;
@@ -42,5 +38,27 @@ describe("Enterprise Knowledge Agent tools", () => {
     expect(result.details).toMatchObject({
       hits: [expect.not.objectContaining({ excerpt: expect.anything() })],
     });
+    expect(authority.search).toHaveBeenLastCalledWith({ query: "nghỉ phép" });
+
+    await search.execute("call-null-zone", { query: "nghỉ phép", zoneSlug: null });
+    expect(authority.search).toHaveBeenLastCalledWith({ query: "nghỉ phép" });
+
+    await search.execute("call-exact-zone", { query: "nghỉ phép", zoneSlug: "human-resources" });
+    expect(authority.search).toHaveBeenLastCalledWith({
+      query: "nghỉ phép",
+      zoneSlug: "human-resources",
+    });
+    const evidence = createEnterpriseKnowledgeTools(authority).find(
+      (tool) => tool.name === "enterprise_knowledge_get",
+    )!;
+    expect(evidence.description).toContain(
+      "sourced company rules, calculations, proposals, and points needing confirmation",
+    );
+    expect(evidence.description).toContain("proposed schedule differs");
+    expect(evidence.description).toContain("Do not invent an exception");
+    // Explicit filters stay exact: an invented wildcard must never broaden access.
+    await search.execute("call-not-a-wildcard", { query: "nghỉ phép", zoneSlug: "all" });
+    expect(authority.search).toHaveBeenLastCalledWith({ query: "nghỉ phép", zoneSlug: "all" });
+    expect(JSON.stringify(search.parameters)).toContain('"type":"null"');
   });
 });

@@ -89,14 +89,14 @@ export function buildGatewaySessionSnapshot(params: {
   hasActiveRun?: boolean;
   activeRunIds?: string[] | null;
 }): Record<string, unknown> {
-  const { sessionRow } = params;
-  if (!sessionRow) {
+  if (!params.sessionRow) {
     return {};
   }
+  const sessionRow = buildGatewaySessionEventRow(params.sessionRow);
   // Nested snapshots are the UI merge source, so preserve explicit clear semantics there too.
   const session: Record<string, unknown> | undefined = params.includeSession
     ? {
-        ...buildGatewaySessionEventRow(sessionRow),
+        ...sessionRow,
         createdActor: sessionRow.createdActor ?? null,
         thinkingLevel: sessionRow.thinkingLevel ?? null,
       }

@@ -5,7 +5,7 @@ import {
   type AgentInternalEvent,
 } from "./internal-events.js";
 
-const MAX_CHILD_RESULT_CHARS = 6_000;
+const MAX_CHILD_RESULT_CHARS = 32_768;
 const CHILD_RESULT_TRUNCATION_NOTICE = "\n[child result truncated]";
 const MAX_STATUS_LABEL_CHARS = 500;
 const STATUS_LABEL_TRUNCATION_MARKER = "…[truncated]";
@@ -61,6 +61,14 @@ describe("agent internal events", () => {
     expect(
       extractChildResult(formatAgentInternalEventsForPrompt([taskCompletionEvent(result)])),
     ).toBe(result);
+  });
+
+  it("keeps a complete specialist roster available to the parent", () => {
+    const result = `${"employee row\n".repeat(1_800)}complete-tail`;
+
+    expect(
+      extractChildResult(formatAgentInternalEventsForPrompt([taskCompletionEvent(result)])),
+    ).toBe(result.trim());
   });
 
   it("bounds status labels carrying caller-supplied error text", () => {

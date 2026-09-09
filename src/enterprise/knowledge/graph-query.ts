@@ -2,6 +2,7 @@ import { DatabaseSync } from "node:sqlite";
 import type { OpenClawStateDatabaseOptions } from "../../state/openclaw-state-db.js";
 import { issueEnterpriseOpaqueReference, verifyEnterpriseOpaqueReference } from "../auth/jwt.js";
 import { resolveKnowledgeGenerationDatabasePath } from "./artifact-store.js";
+import { ensureKnowledgeGraphGenerationGraph } from "./knowledge-graph-backfill.js";
 import { EnterpriseKnowledgeError } from "./knowledge-types.js";
 import type {
   KnowledgeGraphDiff,
@@ -42,24 +43,40 @@ function graphUnavailable(): never {
   );
 }
 
-function openGraphDatabase(context: KnowledgeGraphSnapshotContext): DatabaseSync {
+export function openKnowledgeGraphDatabase(context: KnowledgeGraphSnapshotContext): DatabaseSync {
+  const generationPath = resolveKnowledgeGenerationDatabasePath(
+    context.zoneId,
+    context.generationId,
+    context.env,
+  );
   let db: DatabaseSync;
   try {
-    db = new DatabaseSync(
-      resolveKnowledgeGenerationDatabasePath(context.zoneId, context.generationId, context.env),
-      { readOnly: true },
-    );
+    db = new DatabaseSync(generationPath, { readOnly: true });
   } catch {
     return graphUnavailable();
   }
-  const table = db
-    .prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'graph_nodes'")
-    .get();
-  if (!table) {
-    db.close();
-    return graphUnavailable();
+  if (
+    db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'graph_nodes'").get()
+  ) {
+    return db;
   }
-  return db;
+  db.close();
+  const graphPath = ensureKnowledgeGraphGenerationGraph({
+    zoneId: context.zoneId,
+    generationId: context.generationId,
+    options: context.databaseOptions,
+    env: context.env,
+  });
+  db = new DatabaseSync(graphPath, { readOnly: true });
+  try {
+    // Queries join graph evidence to the unchanged generation, not a newer source.
+    db.prepare("ATTACH DATABASE ? AS source_index").run(generationPath);
+    db.exec("CREATE TEMP VIEW chunks AS SELECT * FROM source_index.chunks");
+    return db;
+  } catch (error) {
+    db.close();
+    throw error;
+  }
 }
 
 function issueNodeRef(context: KnowledgeGraphSnapshotContext, nodeId: string): string {
@@ -160,7 +177,7 @@ function buildSummary(
 export function readKnowledgeGraphSummary(
   context: KnowledgeGraphSnapshotContext,
 ): KnowledgeGraphSummary {
-  const db = openGraphDatabase(context);
+  const db = openKnowledgeGraphDatabase(context);
   try {
     return buildSummary(context, db);
   } finally {
@@ -181,7 +198,7 @@ export function readKnowledgeGraphAnalysisSummary(context: KnowledgeGraphSnapsho
   diagnosis: "relational" | "mostly_structural" | "ai_degraded";
   degradationReasons: string[];
 } {
-  const db = openGraphDatabase(context);
+  const db = openKnowledgeGraphDatabase(context);
   try {
     const meta = metadata(db);
     const values = stats(db);
@@ -298,7 +315,7 @@ export function searchKnowledgeGraphNodes(
   input: { query: string; limit?: number; kinds?: KnowledgeGraphNodeKind[] },
 ): KnowledgeGraphNodeSummary[] {
   const limit = Math.max(1, Math.min(input.limit ?? 100, 200));
-  const db = openGraphDatabase(context);
+  const db = openKnowledgeGraphDatabase(context);
   try {
     const terms = input.query
       .normalize("NFC")
@@ -353,7 +370,7 @@ export function readKnowledgeGraphNeighborhood(
   const depth = input.depth === 2 ? 2 : 1;
   const nodeLimit = Math.max(1, Math.min(input.nodeLimit ?? 100, 200));
   const edgeLimit = Math.max(1, Math.min(input.edgeLimit ?? 300, 600));
-  const db = openGraphDatabase(context);
+  const db = openKnowledgeGraphDatabase(context);
   try {
     const rootId = input.nodeRef ? resolveNodeId(context, input.nodeRef) : undefined;
     const visited = new Set<string>();
@@ -471,7 +488,7 @@ export function readKnowledgeGraphNodeDetail(
   nodeRef: string,
 ): KnowledgeGraphNodeDetail {
   const nodeId = resolveNodeId(context, nodeRef);
-  const db = openGraphDatabase(context);
+  const db = openKnowledgeGraphDatabase(context);
   try {
     const row = db
       .prepare(
@@ -541,7 +558,7 @@ export function resolveKnowledgeGraphEdgeForReview(
   ) {
     throw new EnterpriseKnowledgeError("GRAPH_EDGE_NOT_FOUND", 404, "Graph edge not found.");
   }
-  const db = openGraphDatabase(context);
+  const db = openKnowledgeGraphDatabase(context);
   try {
     const row = db
       .prepare("SELECT fingerprint, evidence_hash, kind FROM graph_edges WHERE id = ?")
@@ -564,7 +581,7 @@ export function resolveKnowledgeGraphNodeCanonicalKey(
   nodeRef: string,
 ): string {
   const nodeId = resolveNodeId(context, nodeRef);
-  const db = openGraphDatabase(context);
+  const db = openKnowledgeGraphDatabase(context);
   try {
     const row = db.prepare("SELECT canonical_key FROM graph_nodes WHERE id = ?").get(nodeId) as
       | { canonical_key: string }
@@ -585,8 +602,8 @@ export function compareKnowledgeGraphs(
 ): KnowledgeGraphDiff {
   const nodeLimit = Math.max(1, Math.min(limits.nodeLimit ?? 200, 200));
   const edgeLimit = Math.max(1, Math.min(limits.edgeLimit ?? 600, 600));
-  const activeDb = openGraphDatabase(active);
-  const candidateDb = openGraphDatabase(candidate);
+  const activeDb = openKnowledgeGraphDatabase(active);
+  const candidateDb = openKnowledgeGraphDatabase(candidate);
   try {
     const activeNodes = activeDb
       .prepare("SELECT canonical_key, label, kind FROM graph_nodes")

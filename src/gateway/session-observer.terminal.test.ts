@@ -359,8 +359,8 @@ describe("session observer terminal, persistence, synthesis, and races", () => {
     await handleLifecycle(harness, { phase: "end", startedAt: 0, endedAt: 30_000 });
 
     expect(completeModel).toHaveBeenCalledTimes(2);
-    expect(harness.broadcastToConnIds).not.toHaveBeenCalled();
     const synthesized = persistedDigest(harness);
+    expect(broadcastDigest(harness)).toEqual(synthesized);
     expect(synthesized).toMatchObject({
       headline: storedDigest.headline,
       assessment: storedDigest.assessment,

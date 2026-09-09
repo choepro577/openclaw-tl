@@ -1,5 +1,6 @@
 // Verifies agent-end side effects keep plugin hooks independent from experience review.
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { runWithPrivateRunObservationScope } from "../../infra/private-run-observations.js";
 import { recordRunSkillUsage } from "../../skills/runtime/run-usage.js";
 import { scheduleSkillExperienceReview } from "../../skills/workshop/experience-review-default.js";
 import { awaitAgentEndSideEffects, runAgentEndSideEffects } from "./agent-end-side-effects.js";
@@ -26,6 +27,31 @@ describe("agent end side effects", () => {
     mockExperienceReview.mockReset();
     mockAwaitAgentEndHook.mockReset();
     mockRunAgentEndHook.mockReset();
+  });
+
+  it("does not schedule skill memory or consume the parent's usage during private preparation", async () => {
+    recordRunSkillUsage({
+      runId: "parent-private-preparation",
+      name: "company-policy",
+      source: "workspace",
+      activation: "read",
+    });
+    const params = {
+      event: {
+        messages: [{ role: "assistant", content: "PRIVATE-EVIDENCE-MARKER" }],
+        success: true,
+      },
+      ctx: { runId: "parent-private-preparation", workspaceDir: "/workspace" },
+    };
+    await runWithPrivateRunObservationScope(() => awaitAgentEndSideEffects(params));
+    expect(mockExperienceReview).not.toHaveBeenCalled();
+    expect(mockAwaitAgentEndHook).not.toHaveBeenCalled();
+    await awaitAgentEndSideEffects({ ...params, event: { messages: [], success: true } });
+    expect(mockExperienceReview).toHaveBeenCalledWith(
+      expect.objectContaining({
+        usedSkills: [{ name: "company-policy", source: "workspace", activation: "read" }],
+      }),
+    );
   });
 
   it("fires plugin agent_end hooks alongside experience review scheduling", async () => {

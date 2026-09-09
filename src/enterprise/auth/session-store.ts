@@ -10,7 +10,12 @@ import { ensureEnterpriseSchema } from "../database/enterprise-schema.js";
 
 export const ENTERPRISE_SESSION_TTL_MS = 8 * 60 * 60 * 1000;
 export const ENTERPRISE_SESSION_IDLE_TTL_MS = 2 * 60 * 60 * 1000;
+/** Avoid a SQLite write for every authenticated request while keeping the read authoritative. */
+export const ENTERPRISE_SESSION_TOUCH_INTERVAL_MS = 30_000;
 export type EnterprisePortalAudience = "admin" | "user";
+
+const MAX_TRACKED_SESSION_TOUCHES = 10_000;
+const lastSessionTouchAt = new Map<string, number>();
 
 type SessionRow = {
   id: string;
@@ -99,15 +104,35 @@ export function touchEnterpriseSession(
 ): void {
   ensureEnterpriseSchema(options);
   const now = Date.now();
+  const storageId = sessionStorageId(sessionId);
+  const previousTouchAt = lastSessionTouchAt.get(storageId);
+  // getActiveEnterpriseSession() still runs before this function on every
+  // authenticated request, so revocation/expiry checks remain authoritative.
+  // This local gate only coalesces repeated last_seen writes in this process.
+  if (
+    previousTouchAt !== undefined &&
+    now >= previousTouchAt &&
+    now - previousTouchAt < ENTERPRISE_SESSION_TOUCH_INTERVAL_MS
+  ) {
+    return;
+  }
   runOpenClawStateWriteTransaction(
     ({ db }) => {
       db.prepare(
         "UPDATE enterprise_auth_sessions SET last_seen_at = ? WHERE id = ? AND revoked_at IS NULL AND expires_at > ?",
-      ).run(now, sessionStorageId(sessionId), now); // sqlite-allow-raw -- Fixed feature-local update.
+      ).run(now, storageId, now); // sqlite-allow-raw -- Fixed feature-local update.
     },
     options,
     { operationLabel: "enterprise.sessions.touch" },
   );
+  lastSessionTouchAt.delete(storageId);
+  lastSessionTouchAt.set(storageId, now);
+  if (lastSessionTouchAt.size > MAX_TRACKED_SESSION_TOUCHES) {
+    const oldest = lastSessionTouchAt.keys().next().value;
+    if (oldest !== undefined) {
+      lastSessionTouchAt.delete(oldest);
+    }
+  }
 }
 
 export function revokeEnterpriseSession(

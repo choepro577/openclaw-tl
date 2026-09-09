@@ -3,7 +3,7 @@ import { normalizeOptionalString } from "@openclaw/normalization-core/string-coe
 import { z } from "zod";
 import { isBlockedObjectKey } from "../infra/prototype-keys.js";
 import { AgentDefaultsSchema } from "./zod-schema.agent-defaults.js";
-import { AgentEntrySchema } from "./zod-schema.agent-runtime.js";
+import { AgentEntryBaseSchema, validateAgentDelegationTarget } from "./zod-schema.agent-runtime.js";
 
 const AgentEntryConfigSchema = z.preprocess(
   (value, ctx) => {
@@ -22,7 +22,9 @@ const AgentEntryConfigSchema = z.preprocess(
     }
     return value;
   },
-  AgentEntrySchema.omit({ id: true }).extend({ default: z.boolean().optional() }),
+  AgentEntryBaseSchema.omit({ id: true })
+    .extend({ default: z.boolean().optional() })
+    .superRefine(validateAgentDelegationTarget),
 );
 
 export const AgentsSchema = z

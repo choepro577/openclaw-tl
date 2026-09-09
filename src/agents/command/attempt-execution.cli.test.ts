@@ -246,22 +246,7 @@ const SUBAGENT_ANNOUNCE_DELIVERY_CASES: readonly SubagentAnnounceDeliveryCase[] 
 ];
 
 const SUBAGENT_ANNOUNCE_EMBEDDED_DELIVERY_CASES: readonly SubagentAnnounceDeliveryCase[] = [
-  ...SUBAGENT_ANNOUNCE_DELIVERY_CASES.map((testCase) => {
-    if (testCase.name === "automatic source replies") {
-      return {
-        ...testCase,
-        expectedDisableTools: false,
-        expectedToolsAllow: SUBAGENT_ANNOUNCE_REQUESTER_TOOLS,
-      };
-    }
-    if (!testCase.expectedDisableTools) {
-      return {
-        ...testCase,
-        expectedToolsAllow: testCase.runtimeToolsAllow ?? SUBAGENT_ANNOUNCE_REQUESTER_TOOLS,
-      };
-    }
-    return testCase;
-  }),
+  ...SUBAGENT_ANNOUNCE_DELIVERY_CASES,
   {
     name: "a raw model run despite message-tool-only delivery",
     sourceReplyDeliveryMode: "message_tool_only",
@@ -3031,7 +3016,7 @@ describe("CLI attempt execution", () => {
     expect(embeddedArg.suppressLiveStreamOutput).toBe(true);
   });
 
-  it("preserves embedded OpenAI-compatible tools for the exact trusted completion", async () => {
+  it("keeps the exact trusted embedded completion tool-free", async () => {
     const runId = "trusted-glm-completion";
     const childSessionKey = "agent:main:subagent:glm-child";
     const sessionKey = `agent:main:direct:${runId}`;
@@ -3083,11 +3068,11 @@ describe("CLI attempt execution", () => {
       },
     });
 
-    expect(embeddedArg.disableTools).toBe(false);
+    expect(embeddedArg.disableTools).toBe(true);
     expect(embeddedArg.trustedInternalHandoff).toEqual(trustedInternalHandoff);
   });
 
-  it("preserves embedded tools for a verified nested subagent completion", async () => {
+  it("keeps a verified nested subagent completion tool-free", async () => {
     const runId = "trusted-nested-glm-completion";
     const requesterSessionKey = "agent:main:subagent:parent-child";
     const childSessionKey = "agent:main:subagent:leaf";
@@ -3151,7 +3136,7 @@ describe("CLI attempt execution", () => {
       },
     });
 
-    expect(embeddedArg.disableTools).toBe(false);
+    expect(embeddedArg.disableTools).toBe(true);
     expect(embeddedArg.trustedInternalHandoff).toEqual(trustedInternalHandoff);
   });
 

@@ -52,6 +52,7 @@ describe("showInputDialog", () => {
   afterEach(() => {
     document.body.replaceChildren();
     restoreDialogPolyfill();
+    vi.unstubAllGlobals();
   });
 
   it("renders accessible copy and resolves the submitted value", async () => {
@@ -76,6 +77,27 @@ describe("showInputDialog", () => {
 
     await expect(result).resolves.toBe("Renamed session");
     expect(document.body.querySelector("openclaw-modal-dialog")).toBeNull();
+  });
+
+  it("keeps an exact copy source out of the input value while exposing a copy affordance", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal("navigator", { clipboard: { writeText } });
+    const result = showInputDialog({
+      title: "Purge zone",
+      label: "Enter the exact slug",
+      requireValue: true,
+      copyValue: "openclaw-zone",
+      copyLabel: "Copy original slug",
+    });
+    await getRenderedModalDialog(document.body);
+
+    expect(dialogInput().value).toBe("");
+    findButton("Copy original slug").click();
+    await vi.waitFor(() => expect(writeText).toHaveBeenCalledWith("openclaw-zone"));
+    expect(dialogInput().value).toBe("");
+
+    findButton("Cancel").click();
+    await expect(result).resolves.toBeNull();
   });
 
   it("treats modal dismissal as cancellation", async () => {

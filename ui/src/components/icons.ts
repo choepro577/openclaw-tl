@@ -153,9 +153,16 @@ export const icons = {
     <path d="M19 17V5a2 2 0 0 0-2-2H4" />
     <path d="M15 8h-5" />
     <path d="M15 12h-5" />`),
+  logOut: strokeIcon(svg`
+    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+    <path d="m16 17 5-5-5-5M21 12H9" />
+  `),
   folder: strokeIcon(svg` <path
     d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"
   />`),
+  folderOpen: strokeIcon(svg`
+    <path d="m6 14 1.5-3a2 2 0 0 1 1.79-1.1H20a2 2 0 0 1 1.94 2.5l-1.55 6A2 2 0 0 1 18.45 20H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.93a2 2 0 0 1 1.67.9l.81 1.2a2 2 0 0 0 1.69.9H20a2 2 0 0 1 2 2v2" />
+  `),
   kanban: strokeIcon(svg` <rect width="18" height="18" x="3" y="3" rx="2" />
     <path d="M8 7v7" />
     <path d="M12 7v4" />

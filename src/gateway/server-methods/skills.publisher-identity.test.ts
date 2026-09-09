@@ -4,6 +4,7 @@
 
 import { expectDefined } from "@openclaw/normalization-core";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { CONFIG_DIR } from "../../utils.js";
 
 const installSkillFromClawHubMock = vi.fn();
 
@@ -152,22 +153,39 @@ describe("ClawHub publisher identity across skills.search, skills.detail, and sk
     expect(requestedUrls.some((url) => url.includes("/api/v1/skills/"))).toBe(false);
   });
 
-  it("forwards the selected publisher reference to the install lifecycle unchanged", async () => {
-    installSkillFromClawHubMock.mockResolvedValue({
-      ok: true,
-      slug: SLUG,
-      version: "1.0.0",
-      targetDir: `/tmp/workspace/skills/${SLUG}`,
-    });
+  it.each([
+    { scope: undefined, workspaceDir: "/tmp/workspace" },
+    { scope: "global", workspaceDir: CONFIG_DIR },
+  ])(
+    "forwards the selected publisher reference to $scope install scope",
+    async ({ scope, workspaceDir }) => {
+      installSkillFromClawHubMock.mockResolvedValue({
+        ok: true,
+        slug: SLUG,
+        version: "1.0.0",
+        targetDir: `/tmp/workspace/skills/${SLUG}`,
+      });
 
+      const { ok } = await callSkillsHandler("skills.install", {
+        source: "clawhub",
+        slug: `@wangchenyu8/${SLUG}`,
+        ...(scope ? { scope } : {}),
+      });
+
+      expect(ok).toBe(true);
+      expect(installSkillFromClawHubMock).toHaveBeenCalledWith(
+        expect.objectContaining({ slug: `@wangchenyu8/${SLUG}`, workspaceDir }),
+      );
+    },
+  );
+  it("rejects an agent combined with global install scope", async () => {
     const { ok } = await callSkillsHandler("skills.install", {
       source: "clawhub",
-      slug: `@wangchenyu8/${SLUG}`,
+      slug: SLUG,
+      scope: "global",
+      agentId: "main",
     });
-
-    expect(ok).toBe(true);
-    expect(installSkillFromClawHubMock).toHaveBeenCalledWith(
-      expect.objectContaining({ slug: `@wangchenyu8/${SLUG}` }),
-    );
+    expect(ok).toBe(false);
+    expect(installSkillFromClawHubMock).not.toHaveBeenCalled();
   });
 });

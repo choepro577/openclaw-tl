@@ -29,10 +29,7 @@ import {
   type MemoryCorpusAttempt,
 } from "./memory-corpus.js";
 import { executeMemoryReadResult, executeWikiMemoryReadResult } from "./memory-read-tool.js";
-import {
-  buildPausedMemoryIndexUnavailableResult,
-  executeMemorySearchToolQuery,
-} from "./memory-search-tool-query.js";
+import { executeMemorySearchToolQuery } from "./memory-search-tool-query.js";
 import {
   MEMORY_GET_TOOL_CONTRACT,
   MEMORY_SEARCH_TOOL_CONTRACT,
@@ -54,6 +51,7 @@ import {
   createMemoryTool,
   getMemoryManagerContextWithPurpose,
   loadMemoryToolRuntime,
+  MEMORY_RECALL_RECOVERY_GUIDANCE,
 } from "./tools.shared.js";
 
 type MemorySearchToolResult =
@@ -69,11 +67,10 @@ type PrimaryMemorySearchValue = {
   rawResults: MemorySearchResult[];
   provider?: string;
   model?: string;
-  fallback?: unknown;
+  fallback?: { from: string };
   mode?: string;
   staleness?: Exclude<ReturnType<typeof resolveMemorySearchStaleness>, null>;
   debug?: MemorySearchToolQueryDebug & { toolMs?: number; outsideSearchMs?: number };
-  unavailableResult?: ReturnType<typeof buildPausedMemoryIndexUnavailableResult>;
 };
 
 const MEMORY_SEARCH_TOOL_COOLDOWN_MS = 60_000;
@@ -390,16 +387,7 @@ export function createMemorySearchTool(options: MemoryToolOptions) {
           }
           const executed = attempted.value!;
           if (executed.pausedIndexIdentityReason) {
-            const reason = executed.pausedIndexIdentityReason;
-            return unavailableMemoryCorpus(
-              "memory",
-              {
-                results: [],
-                rawResults: [],
-                unavailableResult: buildPausedMemoryIndexUnavailableResult(reason),
-              },
-              reason,
-            );
+            return unavailableMemoryCorpus("memory", null, executed.pausedIndexIdentityReason);
           }
           const citationsMode = resolveMemoryCitationsMode(cfg);
           const includeCitations = shouldIncludeCitations({
@@ -442,7 +430,7 @@ export function createMemorySearchTool(options: MemoryToolOptions) {
               rawResults,
               provider: status.provider,
               model: status.model,
-              fallback: status.fallback,
+              fallback: status.fallback ? { from: status.fallback.from } : undefined,
               mode: executed.searchMode,
               staleness: resolveMemorySearchStaleness(status, agentId) ?? undefined,
               debug: executed.debug,
@@ -469,10 +457,7 @@ export function createMemorySearchTool(options: MemoryToolOptions) {
               ]);
               const memoryValue = memory?.outcome === "not-registered" ? null : memory?.value;
               if (searchesMemory && !searchesWiki && memory?.outcome === "unavailable") {
-                return jsonResult(
-                  memoryValue?.unavailableResult ??
-                    buildMemorySearchUnavailableResult(memory.error),
-                );
+                return jsonResult(buildMemorySearchUnavailableResult());
               }
               const wikiResults = wiki?.outcome === "not-registered" ? [] : (wiki?.value ?? []);
               const results = mergeMemorySearchCorpusResults({
@@ -485,7 +470,14 @@ export function createMemorySearchTool(options: MemoryToolOptions) {
                 ...(requestedCorpus === "all" && memory ? [memory] : []),
                 ...(wiki ? [wiki] : []),
               ];
-              const staleness = memoryValue?.staleness;
+              const staleness = memoryValue?.staleness
+                ? {
+                    stale: true,
+                    warning:
+                      "Recalled information may be incomplete; confirm missing facts before relying on it.",
+                    action: MEMORY_RECALL_RECOVERY_GUIDANCE,
+                  }
+                : undefined;
               const metadata = composeMemoryCorpusMetadata(
                 attempts,
                 staleness?.warning ? [staleness.warning] : [],
@@ -519,7 +511,7 @@ export function createMemorySearchTool(options: MemoryToolOptions) {
           if (requestedCorpus !== "wiki") {
             recordMemorySearchToolCooldown(cooldownKey, message);
           }
-          return jsonResult(buildMemorySearchUnavailableResult(message));
+          return jsonResult(buildMemorySearchUnavailableResult());
         } finally {
           cleanupStarted = true;
           await closeMemoryManagers(memoryManagersToClose, callerSignal);

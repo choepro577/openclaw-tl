@@ -3,6 +3,7 @@ import { toStringifiedError } from "@openclaw/normalization-core/error-coercion"
 import { tryResolveLegacyCompatibilityAgentId } from "../config/legacy.default-agent-owner.js";
 import { hashRuntimeConfigValue } from "../config/runtime-snapshot.js";
 import type { OpenClawConfig } from "../config/types.openclaw.js";
+import { getGatewayRequestRuntimeConfigIdentity } from "../gateway/request-runtime-config.js";
 import { isReservedSystemAgentId } from "../system-agent/agent-id.js";
 import {
   listAgentIds,
@@ -211,6 +212,12 @@ export function preparedModelRuntimeConfigsMatch(
   if (left === right) {
     return true;
   }
+  if (
+    getGatewayRequestRuntimeConfigIdentity(left) ||
+    getGatewayRequestRuntimeConfigIdentity(right)
+  ) {
+    return false;
+  }
   try {
     return hashRuntimeConfigValue(left) === hashRuntimeConfigValue(right);
   } catch {
@@ -282,6 +289,7 @@ export function ownerKey(input: PreparedModelRuntimeInput): string {
     env: environmentFingerprint(input.env),
     allowGatewaySubagentBinding: input.allowGatewaySubagentBinding === true,
     runtimePluginSelections: input.runtimePluginSelections,
+    requestScope: getGatewayRequestRuntimeConfigIdentity(input.config),
     config:
       input.readOnly || input.preserveConfigOnRefresh
         ? hashRuntimeConfigValue(input.config)

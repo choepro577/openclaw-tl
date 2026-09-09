@@ -246,6 +246,123 @@ describe("Enterprise User conversation organizer", () => {
     }
   });
 
+  it("shows five sessions per group and reveals five more only in the selected group", () => {
+    const organizer =
+      new EnterpriseUserConversationOrganizer() as unknown as MutableConversationOrganizer;
+    const planned = Array.from({ length: 11 }, (_, i) => session(`planned-${i}`));
+    const other = Array.from({ length: 5 }, (_, i) => session(`other-${i}`));
+    const recent = Array.from({ length: 6 }, (_, i) => session(`recent-${i}`));
+    const pinned = Array.from({ length: 6 }, (_, i) => session(`pinned-${i}`, { pinned: true }));
+    organizer.sessions = [...planned, ...other, ...recent, ...pinned];
+    organizer.projects = [
+      project(
+        "planning",
+        "Planning",
+        planned.map((row) => row.key),
+      ),
+      project(
+        "other",
+        "Other",
+        other.map((row) => row.key),
+      ),
+    ];
+    organizer.loading = false;
+    const refresh = () => render(organizer.render(), container);
+    const counts = () =>
+      [...container.querySelectorAll(".eu-session-section")].map(
+        (section) => section.querySelectorAll(".eu-session-row").length,
+      );
+    refresh();
+    expect(counts()).toEqual([5, 5, 5, 5]);
+    expect(container.querySelector('[data-project-id="other"] .eu-session-show-more')).toBeNull();
+    const more = () =>
+      container.querySelector<HTMLButtonElement>(
+        '[data-project-id="planning"] .eu-session-show-more',
+      );
+    more()!.click();
+    refresh();
+    expect(counts()).toEqual([5, 10, 5, 5]);
+    more()!.click();
+    refresh();
+    expect(counts()).toEqual([5, 11, 5, 5]);
+    expect(more()).toBeNull();
+    container.querySelector<HTMLButtonElement>(".eu-session-recent .eu-session-show-more")!.click();
+    refresh();
+    expect(counts()).toEqual([5, 11, 5, 6]);
+    expect(container.querySelector(".eu-session-recent .eu-session-show-more")).toBeNull();
+    expect(organizer.sessions).toHaveLength(28);
+  });
+
+  it("toggles Projects and Recent independently without losing their children", () => {
+    const organizer =
+      new EnterpriseUserConversationOrganizer() as unknown as MutableConversationOrganizer;
+    organizer.sessions = [
+      session("planned"),
+      ...Array.from({ length: 6 }, (_, i) => session(`recent-${i}`)),
+    ];
+    organizer.projects = [project("planning", "Planning", ["planned"])];
+    organizer.loading = false;
+    const refresh = () => render(organizer.render(), container);
+    const projectsToggle = () =>
+      container.querySelector<HTMLButtonElement>(
+        ".eu-session-organizer__toolbar > .eu-session-heading-toggle",
+      )!;
+    const recentToggle = () =>
+      container.querySelector<HTMLButtonElement>(
+        ".eu-session-recent > .eu-session-heading-toggle",
+      )!;
+    refresh();
+    expect(container.querySelectorAll(".eu-session-organizer__toolbar > div button")).toHaveLength(
+      1,
+    );
+    expect(projectsToggle().getAttribute("aria-expanded")).toBe("true");
+    expect(projectsToggle().querySelector("svg")).toBeNull();
+    expect(recentToggle().querySelector("svg")).toBeNull();
+    projectsToggle().click();
+    refresh();
+    expect(projectsToggle().getAttribute("aria-expanded")).toBe("false");
+    expect(projectsToggle().querySelector("svg")).not.toBeNull();
+    expect(container.querySelector(".eu-session-project")).toBeNull();
+    expect(container.querySelectorAll(".eu-session-recent .eu-session-row")).toHaveLength(5);
+    recentToggle().click();
+    refresh();
+    expect(recentToggle().getAttribute("aria-expanded")).toBe("false");
+    expect(recentToggle().querySelector("svg")).not.toBeNull();
+    expect(container.querySelector(".eu-session-recent .eu-session-show-more")).toBeNull();
+    expect(container.querySelector(".eu-session-recent .eu-session-row")).toBeNull();
+    projectsToggle().click();
+    recentToggle().click();
+    refresh();
+    expect(container.querySelector('[data-session-key="planned"]')).not.toBeNull();
+    expect(container.querySelectorAll(".eu-session-recent .eu-session-row")).toHaveLength(5);
+    expect(container.querySelector(".eu-session-recent .eu-session-show-more")).not.toBeNull();
+    expect(organizer.sessions).toHaveLength(7);
+    expect(projectsToggle().querySelector("svg")).toBeNull();
+    expect(recentToggle().querySelector("svg")).toBeNull();
+  });
+
+  it("changes the folder icon when a Project is collapsed and expanded", () => {
+    const organizer =
+      new EnterpriseUserConversationOrganizer() as unknown as MutableConversationOrganizer;
+    organizer.sessions = [];
+    organizer.projects = [project("project-1", "Planning", [])];
+    organizer.loading = false;
+    render(organizer.render(), container);
+    const toggle = () => container.querySelector<HTMLButtonElement>(".eu-session-section__toggle")!;
+    const icon = () => toggle().querySelector("svg")!.innerHTML;
+    const openIcon = icon();
+    expect(toggle().getAttribute("aria-expanded")).toBe("true");
+    expect(toggle().querySelectorAll("svg")).toHaveLength(1);
+    toggle().click();
+    render(organizer.render(), container);
+    expect(toggle().getAttribute("aria-expanded")).toBe("false");
+    expect(icon()).not.toBe(openIcon);
+    toggle().click();
+    render(organizer.render(), container);
+    expect(toggle().getAttribute("aria-expanded")).toBe("true");
+    expect(icon()).toBe(openIcon);
+  });
+
   it("elevates a Project header while its actions menu is open", () => {
     const organizer =
       new EnterpriseUserConversationOrganizer() as unknown as MutableConversationOrganizer;
@@ -254,6 +371,9 @@ describe("Enterprise User conversation organizer", () => {
     organizer.loading = false;
 
     render(organizer.render(), container);
+    expect(
+      container.querySelector(".eu-session-project .eu-session-section__folder-icon > svg"),
+    ).not.toBeNull();
     container
       .querySelector<HTMLButtonElement>(
         ".eu-session-project .eu-session-actions > .eu-session-actions__trigger",

@@ -10,7 +10,11 @@ import {
   INTERNAL_RUNTIME_CONTEXT_BEGIN,
   INTERNAL_RUNTIME_CONTEXT_END,
 } from "../../agents/internal-runtime-context.js";
-import { upsertSessionEntryCore } from "../../config/sessions/session-accessor.js";
+import { resolveSessionStorePathCore } from "../../config/sessions/paths.js";
+import {
+  appendTranscriptMessage,
+  upsertSessionEntryCore,
+} from "../../config/sessions/session-accessor.js";
 import { addSessionMember } from "../../config/sessions/session-sharing-store.js";
 import type { GatewayOperatorRoleDefinition } from "../../config/types.gateway.js";
 import type { OpenClawConfig } from "../../config/types.openclaw.js";
@@ -43,6 +47,7 @@ const killSubagentRunAdminMock = vi.fn();
 type TaskResponsePayload = {
   tasks?: Array<Record<string, unknown>>;
   task?: Record<string, unknown>;
+  toolMessages?: unknown[];
   found?: boolean;
   cancelled?: boolean;
   nextCursor?: string;
@@ -167,6 +172,51 @@ async function getTaskPayload(taskId: string) {
 }
 
 describe("tasks gateway handlers", () => {
+  it("returns tool-bearing messages from an authorized subagent transcript", async () => {
+    const childSessionKey = "agent:worker:subagent:tool-history";
+    const sessionId = "tool-history";
+    const storePath = resolveSessionStorePathCore(undefined, { agentId: "worker" });
+    await upsertSessionEntryCore(
+      { agentId: "worker", sessionKey: childSessionKey, storePath },
+      { sessionId, updatedAt: 1 },
+    );
+    const scope = { agentId: "worker", sessionKey: childSessionKey, sessionId, storePath };
+    await appendTranscriptMessage(scope, {
+      message: {
+        role: "assistant",
+        content: [
+          { type: "text", text: "private narration" },
+          { type: "tool_use", id: "read-1", name: "read", input: { path: "staff.csv" } },
+        ],
+      },
+    });
+    await appendTranscriptMessage(scope, {
+      message: {
+        role: "tool",
+        name: "read",
+        tool_call_id: "read-1",
+        content: [{ type: "tool_result", id: "read-1", name: "read", text: "one row" }],
+      },
+    });
+    const task = createTaskRecord({
+      runtime: "subagent",
+      requesterSessionKey: "agent:main:main",
+      ownerKey: "agent:main:main",
+      scopeKind: "session",
+      childSessionKey,
+      agentId: "worker",
+      task: "Read staff",
+      status: "running",
+      deliveryStatus: "pending",
+    });
+
+    const { calls, payload } = await runTaskHandler("tasks.get", { taskId: task.taskId });
+
+    expect(calls[0]?.[0]).toBe(true);
+    expect(payload?.toolMessages).toHaveLength(2);
+    expect(JSON.stringify(payload?.toolMessages)).toContain("staff.csv");
+  });
+
   it("lists task summaries with SDK-facing statuses and filters", async () => {
     const running = createTaskRecord({
       runtime: "subagent",
@@ -589,6 +639,75 @@ describe("tasks gateway handlers", () => {
     },
   );
 
+  it.each(["administrator", "employee"] as const)(
+    "isolates Enterprise %s task reads by session creator",
+    async (accountRole) => {
+      const ownKey = "agent:main:dashboard:enterprise-own";
+      const foreignKey = "agent:main:dashboard:enterprise-foreign";
+      const created: TaskRecord[] = [];
+      for (const [sessionKey, profileId] of [
+        [ownKey, "profile-a"],
+        [foreignKey, "profile-b"],
+      ]) {
+        await upsertSessionEntryCore(
+          { agentId: "main", sessionKey },
+          {
+            sessionId: sessionKey,
+            updatedAt: 1,
+            createdActor: { type: "human", id: profileId },
+            visibility: "shared",
+          },
+        );
+        created.push(
+          createTaskRecord({
+            runtime: "subagent",
+            requesterSessionKey: sessionKey,
+            requesterAgentId: "main",
+            ownerKey: sessionKey,
+            scopeKind: "session",
+            task: "Private work",
+            status: "running",
+            deliveryStatus: "pending",
+          }),
+        );
+      }
+      const global = createTaskRecord({
+        runtime: "cli",
+        ownerKey: "global",
+        scopeKind: "session",
+        task: "Global work",
+        status: "running",
+        deliveryStatus: "pending",
+      });
+      const portal: GatewayClient = {
+        ...identifiedClient(["operator.admin"], "profile-a"),
+        internal: {
+          enterpriseSession: {
+            sessionId: "enterprise-a",
+            audience: "user",
+            accountId: "a",
+            accountRole,
+          },
+        },
+      };
+      const list = await runTaskHandler("tasks.list", { sessionKey: ownKey }, {}, portal);
+      expect(list.payload?.tasks?.map((task) => task.taskId)).toEqual([created[0].taskId]);
+      for (const task of [created[1], global]) {
+        const get = await runTaskHandler("tasks.get", { taskId: task.taskId }, {}, portal);
+        expect(get.calls[0]?.[0]).toBe(false);
+      }
+      const foreignList = await runTaskHandler(
+        "tasks.list",
+        { sessionKey: foreignKey },
+        {},
+        portal,
+      );
+      expect(foreignList.payload?.tasks ?? []).toEqual([]);
+      const own = await runTaskHandler("tasks.get", { taskId: created[0].taskId }, {}, portal);
+      expect(own.payload?.task?.taskId).toBe(created[0].taskId);
+    },
+  );
+
   it("returns page records isolated from the registry", () => {
     const created = createTaskRecord({
       runtime: "cli",
@@ -860,6 +979,48 @@ describe("tasks gateway handlers", () => {
 
     expect(payload?.task?.toolUseCount).toBe(2);
     expect(payload?.task?.lastToolName).toBe("exec");
+  });
+
+  it("returns every live subagent tool as an expandable tool message", async () => {
+    const task = createTaskRecord({
+      runtime: "subagent",
+      requesterSessionKey: "agent:main:main",
+      ownerKey: "agent:main:main",
+      scopeKind: "session",
+      childSessionKey: "agent:worker:subagent:live-tools",
+      runId: "run-live-tools",
+      task: "Inspect staff",
+      status: "running",
+      deliveryStatus: "pending",
+    });
+    emitAgentEvent({
+      runId: task.runId!,
+      stream: "tool",
+      data: { phase: "start", name: "read", toolCallId: "read-live", args: { path: "staff.csv" } },
+    });
+    emitAgentEvent({
+      runId: task.runId!,
+      stream: "tool",
+      data: { phase: "start", name: "search", toolCallId: "search-live", args: { query: "HRM" } },
+    });
+
+    const { payload } = await getTaskPayload(task.taskId);
+
+    expect(payload?.toolMessages).toHaveLength(2);
+    expect(payload?.toolMessages).toEqual([
+      expect.objectContaining({
+        toolCallId: "read-live",
+        __openclawToolStreamLive: true,
+        __openclawToolStreamResultReceived: false,
+      }),
+      expect.objectContaining({
+        toolCallId: "search-live",
+        __openclawToolStreamLive: true,
+        __openclawToolStreamResultReceived: false,
+      }),
+    ]);
+    expect(JSON.stringify(payload?.toolMessages)).toContain("staff.csv");
+    expect(JSON.stringify(payload?.toolMessages)).toContain("HRM");
   });
 
   it("projects isolated live subagent activity and best-effort diff stats", async () => {

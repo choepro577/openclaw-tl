@@ -4504,10 +4504,13 @@ describe("requester settle wake trigger", () => {
 
     await completeRun(controller, entry, {
       triggerCleanup: true,
-      terminalReply: { disposition: "empty" },
+      terminalReply: { disposition: "visible", text: "final completion reply" },
     });
     await waitForLifecycleState(() =>
       expect(maybeWakeRequesterAfterAllChildrenSettled).toHaveBeenCalledOnce(),
+    );
+    expect(gatewayMocks.callGateway).not.toHaveBeenCalledWith(
+      expect.objectContaining({ method: "chat.history" }),
     );
     expect(entry.delivery).toMatchObject({
       status: "pending",

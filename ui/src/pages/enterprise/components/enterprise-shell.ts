@@ -1,7 +1,10 @@
 import { html } from "lit";
 import { property, state } from "lit/decorators.js";
 import { inferBasePathFromPathname } from "../../../app-route-paths.ts";
+import { renderEnterpriseLanguagePicker } from "../../../i18n/enterprise-language-picker.ts";
+import { eu } from "../../../i18n/enterprise-user.ts";
 import { OpenClawLightDomElement } from "../../../lit/openclaw-element.ts";
+import { enterpriseCopy } from "../enterprise-copy.ts";
 import type { EnterpriseAccount, EnterpriseEffectivePolicy } from "../services/enterprise-api.ts";
 import { resolveEnterpriseTab, type EnterpriseTab } from "../state/enterprise-shell-state.ts";
 import "../admin/account-details-page.ts";
@@ -34,15 +37,18 @@ export class EnterpriseShell extends OpenClawLightDomElement {
     return html`
       <div class="enterprise-page">
         <header>
-          <h1 class="enterprise-title">OpenClaw Enterprise</h1>
-          <p class="enterprise-muted">Xin chào ${this.account?.displayName}.</p>
+          ${renderEnterpriseLanguagePicker("enterprise-select")}
+          <h1 class="enterprise-title">${eu("productName")}</h1>
+          <p class="enterprise-muted">
+            ${enterpriseCopy("greeting", { name: this.account?.displayName ?? "" })}
+          </p>
         </header>
-        <nav class="enterprise-tabs" aria-label="Enterprise navigation">
-          ${this.tab("personal", "Personal Agent", activeTab)}
-          ${this.tab("agents", "Agent được cấp", activeTab)}
-          ${this.tab("profile", "Hồ sơ", activeTab)}
-          ${isAdmin ? this.tab("accounts", "Tài khoản", activeTab) : ""}
-          ${isAdmin ? this.tab("management", "Agent, Skill & Tool", activeTab) : ""}
+        <nav class="enterprise-tabs" aria-label=${eu("enterpriseNavigation")}>
+          ${this.tab("personal", eu("personalAgent"), activeTab)}
+          ${this.tab("agents", enterpriseCopy("assignedAgents"), activeTab)}
+          ${this.tab("profile", enterpriseCopy("profile"), activeTab)}
+          ${isAdmin ? this.tab("accounts", enterpriseCopy("accounts"), activeTab) : ""}
+          ${isAdmin ? this.tab("management", enterpriseCopy("management"), activeTab) : ""}
         </nav>
         ${activeTab === "personal"
           ? html`<openclaw-enterprise-personal-agent-page
@@ -71,20 +77,17 @@ export class EnterpriseShell extends OpenClawLightDomElement {
                 : isAdmin
                   ? html`
                       <section class="enterprise-panel enterprise-stack">
-                        <h2>Quản trị cấu hình OpenClaw</h2>
-                        <p class="enterprise-muted">
-                          Module Enterprise chỉ quản lý quyền tài khoản. Định nghĩa Agent, Skill và
-                          Tool vẫn dùng trang OpenClaw gốc.
-                        </p>
+                        <h2>${enterpriseCopy("managementTitle")}</h2>
+                        <p class="enterprise-muted">${enterpriseCopy("managementDescription")}</p>
                         <div class="enterprise-actions">
                           <a class="enterprise-button" href=${`${basePath}/settings/agents`}
-                            >Quản lý Agents</a
+                            >${enterpriseCopy("manageAgents")}</a
                           >
                           <a class="enterprise-button" href=${`${basePath}/skills`}
-                            >Quản lý Skills</a
+                            >${enterpriseCopy("manageSkills")}</a
                           >
                           <a class="enterprise-button" href=${`${basePath}/settings/general`}
-                            >Quản lý Tools & Config</a
+                            >${enterpriseCopy("manageTools")}</a
                           >
                         </div>
                       </section>

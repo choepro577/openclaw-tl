@@ -12,7 +12,7 @@ export class ModelSetupIconLoader {
   private readonly requests = new Map<string, IconRequest>();
 
   constructor(
-    private readonly getContext: () => ApplicationContext,
+    private readonly getContext: () => Pick<ApplicationContext, "resourceBasePath" | "gateway">,
     private readonly isEligible: (iconUrl: string) => boolean,
     private readonly onChange: (urls: Record<string, string>) => void,
   ) {}

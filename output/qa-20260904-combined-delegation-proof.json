@@ -1,0 +1,64 @@
+{
+  "capturedAt": "2026-09-04T17:23:58.554Z",
+  "sessionKey": "agent:enterprise-personal-2ae2cbc2deecdb86fe86:dashboard:e4bfd79e-6068-4ced-8ae2-5d126ce033ce",
+  "parentTranscriptId": "7c9fd715-70a5-43c5-8169-5a2833eb9f31",
+  "parentStatus": "done",
+  "childCount": 3,
+  "proof": [
+    {
+      "runId": "da566ce6-b197-4058-8d15-b36fa31e9aa9",
+      "agentId": "enterprise-finance-specialist",
+      "childTranscriptId": "22cbc9a9-0939-41d3-872c-c5151e31f22c",
+      "startedAt": 1788541990494,
+      "endedAt": 1788542013140,
+      "outcome": "ok",
+      "independentAssistantRun": true,
+      "models": [
+        "openai/gpt-5.6-luna"
+      ],
+      "capturedCharacters": 2179,
+      "capturedSha256": "df7fd8a6c599325225e4963e083e63996bb474f3f6620c60ffe959b1d744a011",
+      "fullChildProjectionReceivedByParent": true,
+      "parentReceiptSequence": 16,
+      "parentReceiptHasTruncation": false,
+      "completionAnnouncedAt": 1788542030283
+    },
+    {
+      "runId": "b66383cb-830d-429f-bbb8-c229ea3a417b",
+      "agentId": "enterprise-contract-specialist",
+      "childTranscriptId": "50ad9ce5-751c-4456-b9c0-7f678308a58b",
+      "startedAt": 1788542118139,
+      "endedAt": 1788542144751,
+      "outcome": "ok",
+      "independentAssistantRun": true,
+      "models": [
+        "openai/gpt-5.6-luna"
+      ],
+      "capturedCharacters": 3273,
+      "capturedSha256": "3624fdb6b12ef42c4586b00b4d661542a060de8219ef2b0098435fe314e2e4ca",
+      "fullChildProjectionReceivedByParent": false,
+      "parentReceiptSequence": 22,
+      "parentReceiptHasTruncation": true,
+      "completionAnnouncedAt": 1788542258039
+    },
+    {
+      "runId": "c11bbb3c-10ff-43ea-980e-763d12bd3240",
+      "agentId": "enterprise-finance-specialist",
+      "childTranscriptId": "9188a1aa-c7ed-4f3e-930b-3ab874e320c4",
+      "startedAt": 1788542118118,
+      "endedAt": 1788542142424,
+      "outcome": "ok",
+      "independentAssistantRun": true,
+      "models": [
+        "openai/gpt-5.6-luna"
+      ],
+      "capturedCharacters": 2246,
+      "capturedSha256": "14d38a4643761fba7c0ac4e8a40f8cdce8d5a1a69a36022033a4a6afc770fcb6",
+      "fullChildProjectionReceivedByParent": false,
+      "parentReceiptSequence": 22,
+      "parentReceiptHasTruncation": true,
+      "completionAnnouncedAt": 1788542258039
+    }
+  ],
+  "boundary": "Actual persisted QA run and parent receipt; no hidden reasoning, credentials or prompt bodies emitted"
+}

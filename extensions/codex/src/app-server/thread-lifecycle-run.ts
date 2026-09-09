@@ -5,6 +5,7 @@ import { resolveCodexAppServerClientInstanceId } from "./client.js";
 import { applyCodexNativeSkillIsolation } from "./native-skill-isolation.js";
 import { buildCodexAppServerConnectionFingerprint } from "./plugin-app-cache-key.js";
 import {
+  collectCodexPluginAppIdsFromPolicyContext,
   isCodexPluginThreadBindingStale,
   mergeCodexThreadConfigs,
   type CodexPluginThreadConfig,
@@ -152,7 +153,18 @@ export async function startOrResumeThread(
             params.pluginThreadConfig?.build(),
           )
         : undefined;
-      const finalConfigPatch = params.buildFinalConfigPatch?.({ action: "start" }) ?? {
+      const pluginAppPolicyContext = pluginThreadConfig?.policyContext;
+      const admittedCodexPluginAppIds =
+        collectCodexPluginAppIdsFromPolicyContext(pluginAppPolicyContext);
+      const admittedCodexPluginMcpServerNames =
+        pluginThreadConfig?.nativePluginMcpServerOwners?.map((owner) => owner.serverName);
+      const finalConfigPatch = params.buildFinalConfigPatch?.({
+        action: "start",
+        ...(pluginAppPolicyContext ? { pluginAppPolicyContext } : {}),
+        ...(pluginThreadConfig?.nativePluginMcpServerOwners
+          ? { nativePluginMcpServerOwners: pluginThreadConfig.nativePluginMcpServerOwners }
+          : {}),
+      }) ?? {
         configPatch: params.finalConfigPatch,
         nativeHookRelayGeneration: params.nativeHookRelayGeneration,
       };
@@ -191,6 +203,13 @@ export async function startOrResumeThread(
         disableLoginShell: params.disableLoginShell,
         environmentSelection: params.environmentSelection,
         provisionalAppIds: pluginThreadConfig?.provisionalAppIds,
+        ...(pluginAppPolicyContext
+          ? {
+              admittedCodexPluginAppIds,
+              admittedCodexPluginMcpServerNames,
+              nativeHookRelayConfig: finalConfigPatch.configPatch,
+            }
+          : {}),
         signal: params.signal,
         throwIfAborted,
         lifecycleTiming,
@@ -598,7 +617,13 @@ export async function startOrResumeThread(
       } else if (incognito) {
         if (binding.clientId && binding.clientId === clientId) {
           // Ephemeral threads have no cold-resume source; reuse only the live client that started it.
-          params.buildFinalConfigPatch?.({ action: "resume", binding });
+          params.buildFinalConfigPatch?.({
+            action: "resume",
+            binding,
+            ...(binding.pluginAppPolicyContext
+              ? { pluginAppPolicyContext: binding.pluginAppPolicyContext }
+              : {}),
+          });
           throwIfAborted();
           lifecycleTiming.mark("thread-ready");
           lifecycleTiming.logSummary({
@@ -637,6 +662,7 @@ export async function startOrResumeThread(
           startModelSelection,
           throwIfAborted,
           userMcpServersConfigPatch,
+          prebuiltPluginThreadConfig,
         });
         if (warmReuse.binding) {
           return warmReuse.binding;

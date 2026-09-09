@@ -2,6 +2,7 @@ import { css, html, nothing } from "lit";
 import { property } from "lit/decorators.js";
 import "../../../components/modal-dialog.ts";
 import { icons } from "../../../components/icons.ts";
+import { ea } from "../../../i18n/enterprise-admin.ts";
 import { OpenClawLitElement } from "../../../lit/openclaw-element.ts";
 
 export class EnterpriseAdminDialog extends OpenClawLitElement {
@@ -161,7 +162,7 @@ export class EnterpriseAdminDialog extends OpenClawLitElement {
             <button
               class="ea-icon-button"
               type="button"
-              aria-label="Đóng"
+              aria-label=${ea("Đóng")}
               @click=${() => this.requestClose()}
             >
               ${icons.x}

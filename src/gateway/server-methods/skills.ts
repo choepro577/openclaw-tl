@@ -46,6 +46,7 @@ import {
 import { installSkill } from "../../skills/lifecycle/install.js";
 import { installUploadedSkillArchive } from "../../skills/lifecycle/upload-install.js";
 import { loadWorkspaceSkills } from "../../skills/loading/workspace-skill-loader.js";
+import { bumpSkillsSnapshotVersion } from "../../skills/runtime/refresh-state.js";
 import { getRemoteSkillEligibility } from "../../skills/runtime/remote.js";
 import {
   collectClawHubVerdictTargets,
@@ -72,6 +73,7 @@ import {
 } from "../../skills/workshop/service.js";
 import { PROPOSAL_DRAFT_FILE } from "../../skills/workshop/store-record.js";
 import type { SkillProposalReadResult, SkillProposalRecord } from "../../skills/workshop/types.js";
+import { CONFIG_DIR } from "../../utils.js";
 import { skillProposalHistoryHandlers } from "./skills-proposal-history.js";
 import { skillsUploadHandlers } from "./skills-upload.js";
 import {
@@ -671,7 +673,19 @@ export const skillsHandlers: GatewayRequestHandlers = {
     if (!assertValidParams(params, validateSkillsInstallParams, "skills.install", respond)) {
       return;
     }
-    const resolved = resolveSkillsAgentWorkspace(params, context);
+    const globalInstall = "scope" in params && params.scope === "global";
+    if (globalInstall && params.agentId) {
+      respond(
+        false,
+        undefined,
+        errorShape(ErrorCodes.INVALID_REQUEST, "Use either global scope or agentId, not both."),
+      );
+      return;
+    }
+    // Match CLI --global without changing the default-agent contract of other RPC callers.
+    const resolved = globalInstall
+      ? { ok: true as const, cfg: context.getRuntimeConfig(), workspaceDir: CONFIG_DIR }
+      : resolveSkillsAgentWorkspace(params, context);
     if (!resolved.ok) {
       respond(false, undefined, resolved.error);
       return;
@@ -697,6 +711,9 @@ export const skillsHandlers: GatewayRequestHandlers = {
         logger: context.logGateway,
         config: cfg,
       });
+      if (result.ok) {
+        bumpSkillsSnapshotVersion({ workspaceDir: workspaceDirRaw, reason: "manual" });
+      }
       const errorDetails = result.ok ? undefined : buildClawHubTrustErrorDetails(result);
       respond(
         result.ok,
@@ -753,6 +770,9 @@ export const skillsHandlers: GatewayRequestHandlers = {
             error: result.error,
             errorCode,
           };
+      if (result.ok) {
+        bumpSkillsSnapshotVersion({ workspaceDir: workspaceDirRaw, reason: "manual" });
+      }
       respond(
         result.ok,
         responseResult,
@@ -772,6 +792,9 @@ export const skillsHandlers: GatewayRequestHandlers = {
       timeoutMs: p.timeoutMs,
       config: cfg,
     });
+    if (result.ok) {
+      bumpSkillsSnapshotVersion({ workspaceDir: workspaceDirRaw, reason: "manual" });
+    }
     respond(
       result.ok,
       result,
@@ -824,6 +847,9 @@ export const skillsHandlers: GatewayRequestHandlers = {
       });
       const errors = results.filter((result) => !result.ok);
       const warnings = collectClawHubTrustWarnings(results);
+      if (results.some((result) => result.ok)) {
+        bumpSkillsSnapshotVersion({ workspaceDir: resolved.workspaceDir, reason: "manual" });
+      }
       respond(
         errors.length === 0,
         {

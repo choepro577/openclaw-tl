@@ -16,6 +16,7 @@ import {
   MEMORY_DREAMING_SYSTEM_EVENT_TEXT as DREAMING_SYSTEM_EVENT_TEXT,
   resolveMemoryDeepDreamingConfig,
   resolveMemoryDreamingWorkspaces,
+  resolveMemoryDreamingRunConfig,
 } from "openclaw/plugin-sdk/memory-core-host-status";
 import type { OpenClawPluginApi } from "openclaw/plugin-sdk/plugin-entry";
 import {
@@ -69,6 +70,7 @@ type ManagedCronJobPatch = {
 };
 
 type ManagedCronJobLike = {
+  owner?: { accountId?: string };
   id: string;
   declarationKey?: string;
   name?: string;
@@ -210,6 +212,9 @@ function resolveManagedDreamingPayloadToken(
 }
 
 function isManagedDreamingJob(job: ManagedCronJobLike): boolean {
+  if (job.owner?.accountId) {
+    return false;
+  }
   if (normalizeOptionalString(job.declarationKey) === MANAGED_DREAMING_DECLARATION_KEY) {
     return true;
   }
@@ -1156,7 +1161,7 @@ export function registerShortTermPromotionDreaming(api: OpenClawPluginApi): void
           trigger: ctx.trigger,
           agentId: ctx.agentId,
           workspaceDir: ctx.workspaceDir,
-          cfg: currentConfig,
+          cfg: await resolveMemoryDreamingRunConfig(currentConfig, ctx),
           config,
           logger: api.logger,
           subagent: config.enabled ? api.runtime?.subagent : undefined,

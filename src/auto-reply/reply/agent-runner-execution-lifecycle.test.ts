@@ -498,45 +498,51 @@ describe("executeAgentTurn: run lifecycle and ownership", () => {
     });
   });
 
-  it("signals typing and records the execution boundary before assistant text", async () => {
-    const typingSignals = createMockTypingSignaler();
-    const onAgentRunStart = vi.fn();
-    const replyOperation = createReplyOperation({
-      sessionKey: "agent:main:execution-boundary",
-      sessionId: "execution-boundary",
-      resetTriggered: false,
-    });
-    state.runEmbeddedAgentMock.mockImplementationOnce(async (params: EmbeddedAgentParams) => {
-      expect(hasReplyOperationExecutionStarted(replyOperation)).toBe(false);
-      params.onExecutionPhase?.({
-        phase: "model_call_started",
-        provider: "openai",
-        model: "gpt-5.4",
+  it.each(["model_call_started", "turn_accepted"] as const)(
+    "records the %s execution boundary once before assistant text",
+    async (phase) => {
+      const typingSignals = createMockTypingSignaler();
+      const onAgentRunStart = vi.fn();
+      const replyOperation = createReplyOperation({
+        sessionKey: "agent:main:execution-boundary",
+        sessionId: "execution-boundary",
+        resetTriggered: false,
       });
-      expect(hasReplyOperationExecutionStarted(replyOperation)).toBe(true);
-      return { payloads: [{ text: "final" }], meta: {} };
-    });
-
-    try {
-      const executeAgentTurn = await getExecuteAgentTurnForTest();
-      const result = await executeAgentTurn({
-        ...createMinimalRunAgentTurnParams({
-          opts: {
-            onAgentRunStart,
-          } satisfies GetReplyOptions,
-        }),
-        replyOperation,
-        typingSignals,
+      state.runEmbeddedAgentMock.mockImplementationOnce(async (params: EmbeddedAgentParams) => {
+        expect(hasReplyOperationExecutionStarted(replyOperation)).toBe(false);
+        params.onExecutionPhase?.({
+          phase,
+          provider: "openai",
+          model: "gpt-5.4",
+        });
+        expect(hasReplyOperationExecutionStarted(replyOperation)).toBe(true);
+        expect(onAgentRunStart).toHaveBeenCalledOnce();
+        params.onExecutionPhase?.({ phase: "assistant_output_started" });
+        expect(onAgentRunStart).toHaveBeenCalledOnce();
+        return { payloads: [{ text: "final" }], meta: {} };
       });
 
-      expect(result.kind).toBe("success");
-      expect(typingSignals.signalExecutionActivity).toHaveBeenCalledOnce();
-      expect(typingSignals.signalRunStart).not.toHaveBeenCalled();
-      expect(onAgentRunStart).toHaveBeenCalledOnce();
-    } finally {
-      replyOperation.complete();
-    }
-  });
+      try {
+        const executeAgentTurn = await getExecuteAgentTurnForTest();
+        const result = await executeAgentTurn({
+          ...createMinimalRunAgentTurnParams({
+            opts: {
+              onAgentRunStart,
+            } satisfies GetReplyOptions,
+          }),
+          replyOperation,
+          typingSignals,
+        });
+
+        expect(result.kind).toBe("success");
+        expect(typingSignals.signalExecutionActivity).toHaveBeenCalledTimes(2);
+        expect(typingSignals.signalRunStart).not.toHaveBeenCalled();
+        expect(onAgentRunStart).toHaveBeenCalledOnce();
+      } finally {
+        replyOperation.complete();
+      }
+    },
+  );
 
   it("injects pending MCP App context exactly once without changing transcript text", async () => {
     const runtime = { sessionId: "session" } as SessionMcpRuntime;

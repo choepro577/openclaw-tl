@@ -591,15 +591,26 @@ describe("agent event handler", () => {
     nowSpy?.mockRestore();
   });
 
-  it("sanitizes only broadcasted assistant buffers while preserving cross-frame tags", () => {
+  it("holds split control markers while forwarding safe Control UI deltas immediately", () => {
+    vi.useFakeTimers();
     let now = 10_000;
     const nowSpy = vi.spyOn(Date, "now").mockImplementation(() => now);
     const { broadcast, chatRunState, handler } = createHarness();
     registerNamedChatRun(chatRunState, "lazy-sanitize");
 
+    emitAgentEvent(handler, "run-lazy-sanitize", "assistant", { delta: "Visible" }, { seq: 1 });
+    now += 1;
+    emitAgentEvent(
+      handler,
+      "run-lazy-sanitize",
+      "assistant",
+      { delta: `\n${INTERNAL_RUNTIME_CONTEXT_BEGIN.slice(0, 20)}` },
+      { seq: 2 },
+    );
+    vi.advanceTimersByTime(75);
+    expect(JSON.stringify(chatBroadcastCalls(broadcast))).not.toContain("BEGIN_OPENCLAW");
+
     const deltas = [
-      "Visible",
-      `\n${INTERNAL_RUNTIME_CONTEXT_BEGIN.slice(0, 20)}`,
       `${INTERNAL_RUNTIME_CONTEXT_BEGIN.slice(20)}\nprivate runtime detail\n`,
       ...Array.from({ length: 16 }, (_, index) => `private fragment ${index}\n`),
       INTERNAL_RUNTIME_CONTEXT_END.slice(0, 18),
@@ -607,12 +618,12 @@ describe("agent event handler", () => {
       "to_current]] done",
     ];
     deltas.forEach((delta, index) => {
-      now = 10_000 + index;
-      emitAgentEvent(handler, "run-lazy-sanitize", "assistant", { delta }, { seq: index + 1 });
+      now = 10_002 + index;
+      emitAgentEvent(handler, "run-lazy-sanitize", "assistant", { delta }, { seq: index + 3 });
     });
 
-    expect(normalizeLiveAssistantBufferedTextMock).toHaveBeenCalledTimes(1);
-    emitLifecycleEnd(handler, "run-lazy-sanitize", deltas.length + 1);
+    expect(normalizeLiveAssistantBufferedTextMock).toHaveBeenCalledTimes(2);
+    emitLifecycleEnd(handler, "run-lazy-sanitize", deltas.length + 3);
     expect(normalizeLiveAssistantBufferedTextMock).toHaveBeenCalledTimes(2);
 
     const payloads = chatBroadcastCalls(broadcast).map(([, payload]) => payload) as Array<{
@@ -717,7 +728,7 @@ describe("agent event handler", () => {
     expect(agentBroadcastCalls(broadcast)).toHaveLength(1);
   });
 
-  it("coalesces assistant agent events inside one live-text pacing window", () => {
+  it("paces agent events but forwards every Control UI chat delta", () => {
     let now = 10_000;
     const nowSpy = vi.spyOn(Date, "now").mockImplementation(() => now);
     const { broadcast, nodeSendToSession, chatRunState, handler } = createHarness();
@@ -737,8 +748,8 @@ describe("agent event handler", () => {
     const agentCalls = agentBroadcastCalls(broadcast);
     expect(agentCalls).toHaveLength(1);
     expect(sessionAgentCalls(nodeSendToSession)).toHaveLength(1);
-    expect(chatBroadcastCalls(broadcast)).toHaveLength(1);
-    expect(sessionChatCalls(nodeSendToSession)).toHaveLength(1);
+    expect(chatBroadcastCalls(broadcast)).toHaveLength(5);
+    expect(sessionChatCalls(nodeSendToSession)).toHaveLength(5);
     expect(
       (
         expectDefined(agentCalls[0], "agentCalls[0] test invariant")[1] as {
@@ -1490,7 +1501,7 @@ describe("agent event handler", () => {
     nowSpy.mockRestore();
   });
 
-  it("delivers a throttled delta when the window expires without another event", () => {
+  it("delivers every Control UI delta without a pacing delay", () => {
     vi.useFakeTimers();
     let now = 12_000;
     const nowSpy = vi.spyOn(Date, "now").mockImplementation(() => now);
@@ -1500,14 +1511,6 @@ describe("agent event handler", () => {
     emitAgentEvent(handler, "run-trailing", "assistant", { text: "Hello" });
     now = 12_020;
     emitAgentEvent(handler, "run-trailing", "assistant", { text: "Hello world" });
-
-    expect(chatDeltaTexts(broadcast)).toEqual(["Hello"]);
-    now = 12_074;
-    vi.advanceTimersByTime(54);
-    expect(chatDeltaTexts(broadcast)).toEqual(["Hello"]);
-
-    now = 12_075;
-    vi.advanceTimersByTime(1);
 
     expect(chatDeltaTexts(broadcast)).toEqual(["Hello", " world"]);
     expect(vi.getTimerCount()).toBe(0);
@@ -1533,7 +1536,7 @@ describe("agent event handler", () => {
       { text: "Hello world", delta: " world" },
       { seq: 2 },
     );
-    expect(vi.getTimerCount()).toBe(2);
+    expect(vi.getTimerCount()).toBe(1);
 
     emitLifecycleEnd(handler, "run-terminal-trailing", 3);
     expect(vi.getTimerCount()).toBe(0);
@@ -1570,13 +1573,13 @@ describe("agent event handler", () => {
       { text: "Hello world", delta: " world" },
       { seq: 2 },
     );
-    expect(vi.getTimerCount()).toBe(2);
+    expect(vi.getTimerCount()).toBe(1);
 
     chatRunState.clear();
     expect(vi.getTimerCount()).toBe(0);
     now = 14_500;
     vi.advanceTimersByTime(1_000);
-    expect(chatDeltaTexts(broadcast)).toEqual(["Hello"]);
+    expect(chatDeltaTexts(broadcast)).toEqual(["Hello", " world"]);
     expect(agentBroadcastCalls(broadcast)).toHaveLength(1);
     nowSpy.mockRestore();
   });
@@ -1951,7 +1954,6 @@ describe("agent event handler", () => {
       expect.objectContaining({
         sessionKey: "global",
         agentId: "work",
-        model: "work-model",
         goal: expect.objectContaining({
           objective: "ship scoped goals",
           status: "active",
@@ -3552,78 +3554,92 @@ describe("agent event handler", () => {
     expect(requireRecord(payload.session, "nested session")).not.toHaveProperty("goal");
   });
 
-  it("omits non-authoritative model, thinking, and usage from lifecycle snapshots", async () => {
-    vi.mocked(loadGatewaySessionRow).mockReturnValue({
-      key: "session-lightweight",
-      kind: "direct",
-      updatedAt: 1_650,
-      sessionId: "session-lightweight",
-      status: "running",
-      modelProvider: "custom-provider",
-      model: "custom-legacy-model",
-      agentRuntime: { id: "openclaw", source: "default" },
-      thinkingLevel: "high",
-      thinkingLevels: [{ id: "off", label: "off" }],
-      thinkingOptions: ["off"],
-      thinkingDefault: "off",
-      totalTokens: undefined,
-      totalTokensFresh: false,
-      contextTokens: 200_000,
-      estimatedCostUsd: undefined,
-      verboseLevel: "full",
-    });
+  it.each(["lifecycle", "tool"] as const)(
+    "omits non-authoritative selection from %s snapshots",
+    async (stream) => {
+      vi.mocked(loadGatewaySessionRow).mockReturnValue({
+        key: "session-lightweight",
+        kind: "direct",
+        updatedAt: 1_650,
+        sessionId: "session-lightweight",
+        status: "running",
+        modelProvider: "custom-provider",
+        model: "custom-legacy-model",
+        agentRuntime: { id: "openclaw", source: "default" },
+        thinkingLevel: "high",
+        thinkingLevels: [{ id: "off", label: "off" }],
+        thinkingOptions: ["off"],
+        thinkingDefault: "off",
+        totalTokens: undefined,
+        totalTokensFresh: false,
+        contextTokens: 200_000,
+        estimatedCostUsd: undefined,
+        verboseLevel: "full",
+      });
 
-    const { broadcastToConnIds, sessionEventSubscribers, handler } = createHarness({
-      resolveSessionKeyForRun: () => "session-lightweight",
-    });
-    sessionEventSubscribers.subscribe("conn-session");
+      const { broadcastToConnIds, sessionEventSubscribers, handler } = createHarness({
+        resolveSessionKeyForRun: () => "session-lightweight",
+      });
+      sessionEventSubscribers.subscribe("conn-session");
 
-    emitAgentEvent(
-      handler,
-      "run-lightweight",
-      "lifecycle",
-      { phase: "end", endedAt: 1_700 },
-      { seq: 2, ts: 1_800 },
-    );
+      emitAgentEvent(
+        handler,
+        "run-lightweight",
+        stream,
+        stream === "lifecycle"
+          ? { phase: "end", endedAt: 1_700 }
+          : { phase: "start", name: "exec", toolCallId: "tool-lightweight" },
+        { seq: 2, ts: 1_800 },
+      );
 
-    await waitForFast(() => {
-      expect(
-        broadcastToConnIds.mock.calls.filter(([event]) => event === "sessions.changed"),
-      ).toHaveLength(1);
-    });
-    const payload = requireRecord(
-      // oxlint-disable-next-line unicorn/prefer-structured-clone -- verify the gateway JSON wire shape
-      JSON.parse(
-        JSON.stringify(requireMockArg(broadcastToConnIds, 0, 1, "sessions changed payload")),
-      ),
-      "serialized sessions changed payload",
-    );
-    const session = requireRecord(payload.session, "nested session");
-    for (const field of [
-      "modelProvider",
-      "model",
-      "agentRuntime",
-      "thinkingLevels",
-      "thinkingOptions",
-      "thinkingDefault",
-      "totalTokens",
-      "totalTokensFresh",
-      "contextTokens",
-      "estimatedCostUsd",
-    ]) {
-      expect(payload).not.toHaveProperty(field);
-      expect(session).not.toHaveProperty(field);
-    }
-    expectPayloadFields(payload, {
-      sessionKey: "session-lightweight",
-      status: "running",
-    });
-    expectPayloadFields(session, {
-      thinkingLevel: "high",
-      verboseLevel: "full",
-      status: "running",
-    });
-  });
+      await waitForFast(() => {
+        expect(
+          broadcastToConnIds.mock.calls.filter(
+            ([event]) => event === (stream === "lifecycle" ? "sessions.changed" : "session.tool"),
+          ),
+        ).toHaveLength(1);
+      });
+      const payload = requireRecord(
+        // oxlint-disable-next-line unicorn/prefer-structured-clone -- verify the gateway JSON wire shape
+        JSON.parse(
+          JSON.stringify(requireMockArg(broadcastToConnIds, 0, 1, "sessions changed payload")),
+        ),
+        "serialized sessions changed payload",
+      );
+      const session = requireRecord(payload.session, "nested session");
+      for (const field of [
+        "modelProvider",
+        "model",
+        "agentRuntime",
+        "thinkingLevels",
+        "thinkingOptions",
+        "thinkingDefault",
+      ]) {
+        expect(payload).not.toHaveProperty(field);
+        expect(session).not.toHaveProperty(field);
+      }
+      if (stream === "lifecycle") {
+        for (const field of [
+          "totalTokens",
+          "totalTokensFresh",
+          "contextTokens",
+          "estimatedCostUsd",
+        ]) {
+          expect(payload).not.toHaveProperty(field);
+          expect(session).not.toHaveProperty(field);
+        }
+      }
+      expectPayloadFields(payload, {
+        sessionKey: "session-lightweight",
+        status: "running",
+      });
+      expectPayloadFields(session, {
+        thinkingLevel: "high",
+        verboseLevel: "full",
+        status: "running",
+      });
+    },
+  );
 
   it.each([
     {

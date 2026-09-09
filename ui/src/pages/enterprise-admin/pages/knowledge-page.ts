@@ -1,5 +1,9 @@
 import { html, nothing, type TemplateResult } from "lit";
 import { icons } from "../../../components/icons.ts";
+import { kak } from "../../../i18n/enterprise-admin-knowledge.ts";
+import { ea } from "../../../i18n/enterprise-admin.ts";
+import { enterpriseDomainCopy } from "../../../i18n/enterprise-domain.ts";
+import { t } from "../../../i18n/index.ts";
 import { formatDate } from "../utils.ts";
 import "../components/admin-dialog.ts";
 import {
@@ -27,29 +31,61 @@ export class EnterpriseAdminKnowledgePage extends EnterpriseAdminKnowledgeConten
   private renderAgents(): TemplateResult {
     const unchanged = sameKnowledgeBindings(this.bindings, this.bindingDraft);
     return html`<form
-      class="knowledge-access-form"
-      @submit=${(event: SubmitEvent) => void this.saveBindings(event)}
-    >
-      ${renderKnowledgeAgentChecklist({
-        catalog: this.agentCatalog,
-        selected: this.bindingDraft,
-        query: this.agentQuery,
-        loading: this.catalogsLoading,
-        error: this.catalogError,
-        disabled: this.busy,
-        onQuery: (query) => (this.agentQuery = query),
-        onToggle: (key, checked) => this.setAgentBinding(key, checked),
-      })}
-      <div class="knowledge-form-footer">
-        <span class="ea-muted"
-          >${unchanged
-            ? "Không có thay đổi."
-            : "Quyền truy cập Agent đã thay đổi nhưng chưa lưu."}</span
-        ><button class="ea-button ea-button--primary" ?disabled=${this.busy || unchanged}>
-          Lưu quyền Agent
-        </button>
-      </div>
-    </form>`;
+        class="knowledge-access-form"
+        @submit=${(event: SubmitEvent) => void this.saveBindings(event)}
+      >
+        ${renderKnowledgeAgentChecklist({
+          catalog: this.agentCatalog,
+          selected: this.bindingDraft,
+          query: this.agentQuery,
+          loading: this.catalogsLoading,
+          error: this.catalogError,
+          disabled: this.busy,
+          onQuery: (query) => (this.agentQuery = query),
+          onToggle: (key, checked) => this.setAgentBinding(key, checked),
+        })}
+        <div class="knowledge-form-footer">
+          <span class="ea-muted"
+            >${unchanged ? ea("Không có thay đổi.") : kak("bindingsChanged")}</span
+          ><button class="ea-button ea-button--primary" ?disabled=${this.busy || unchanged}>
+            ${kak("saveAgentAccess")}
+          </button>
+        </div>
+      </form>
+      <form
+        class="knowledge-access-form"
+        data-evidence-transfers
+        @submit=${(event: SubmitEvent) => void this.saveEvidenceTransfers(event)}
+      >
+        ${renderKnowledgeAgentChecklist({
+          catalog: {
+            shared: this.agentCatalog.shared.filter(
+              (agent) => agent.evidenceTransferEligible === true,
+            ),
+            personal: [],
+          },
+          selected: this.evidenceTransferDraft,
+          query: this.evidenceTransferQuery,
+          loading: this.catalogsLoading,
+          error: this.catalogError,
+          disabled: this.busy,
+          purpose: "evidence_transfer",
+          onQuery: (query) => (this.evidenceTransferQuery = query),
+          onToggle: (key, checked) => this.setEvidenceTransfer(key, checked),
+        })}
+        <div class="knowledge-form-footer">
+          <span class="ea-muted"
+            >${enterpriseDomainCopy("enterpriseKnowledge.evidenceTransferDefaultDeny")}</span
+          >
+          <button
+            class="ea-button ea-button--primary"
+            ?disabled=${this.busy ||
+            sameKnowledgeBindings(this.evidenceTransfers, this.evidenceTransferDraft)}
+          >
+            ${enterpriseDomainCopy("enterpriseKnowledge.evidenceTransferSave")}
+          </button>
+        </div>
+      </form>`;
   }
 
   private renderMembers(): TemplateResult {
@@ -68,8 +104,10 @@ export class EnterpriseAdminKnowledgePage extends EnterpriseAdminKnowledgeConten
         onRole: (id, role) => this.setMemberRole(id, role),
       })}
       <div class="knowledge-form-footer">
-        <span class="ea-muted">Quyền thành viên không thay thế binding của Agent.</span
-        ><button class="ea-button ea-button--primary" ?disabled=${this.busy}>Lưu thành viên</button>
+        <span class="ea-muted">${kak("memberAccessSeparate")}</span
+        ><button class="ea-button ea-button--primary" ?disabled=${this.busy}>
+          ${kak("saveMembers")}
+        </button>
       </div>
     </form>`;
   }
@@ -79,48 +117,48 @@ export class EnterpriseAdminKnowledgePage extends EnterpriseAdminKnowledgeConten
     return html`
       <section class="ea-card knowledge-candidate-card">
         <div>
-          <h3>Candidate index</h3>
-          <p>Mỗi candidate khóa source-set revision để kiểm thử trước khi publish.</p>
+          <h3>${kak("candidateIndex")}</h3>
+          <p>${kak("candidateDescription")}</p>
         </div>
         ${this.candidate
           ? html`<dl class="knowledge-facts">
               <div>
-                <dt>Generation</dt>
+                <dt>${kak("generation")}</dt>
                 <dd>${this.candidate.id}</dd>
               </div>
               <div>
-                <dt>Integrity</dt>
+                <dt>${kak("integrity")}</dt>
                 <dd>${this.candidate.integrityStatus}</dd>
               </div>
               <div>
-                <dt>FTS</dt>
+                <dt>${kak("fts")}</dt>
                 <dd>${this.candidate.lexicalStatus}</dd>
               </div>
               <div>
-                <dt>Vector</dt>
+                <dt>${kak("vector")}</dt>
                 <dd>${this.candidate.vectorStatus}</dd>
               </div>
               <div>
-                <dt>Artifact / AI</dt>
+                <dt>${kak("artifactAiShort")}</dt>
                 <dd>
                   V${this.candidate.artifactSchemaVersion} · ${this.candidate.aiAnalysisStatus}
                 </dd>
               </div>
               ${this.candidate.degradationReasons.length
                 ? html`<div>
-                    <dt>Degraded</dt>
+                    <dt>${kak("degraded")}</dt>
                     <dd>${this.candidate.degradationReasons.join(" · ")}</dd>
                   </div>`
                 : nothing}
             </dl>`
-          : html`<span class="ea-badge ea-badge--warn">Chưa có candidate</span>`}
+          : html`<span class="ea-badge ea-badge--warn">${kak("noCandidateYet")}</span>`}
         <button
           class="ea-button"
           type="button"
           ?disabled=${this.busy || !this.sources.length}
           @click=${() => void this.buildCandidate()}
         >
-          Tạo candidate mới
+          ${kak("createCandidate")}
         </button>
       </section>
       <form
@@ -128,25 +166,30 @@ export class EnterpriseAdminKnowledgePage extends EnterpriseAdminKnowledgeConten
         @submit=${(event: SubmitEvent) => void this.search(event)}
       >
         <div>
-          <h3>Kiểm thử truy xuất</h3>
-          <p>Chạy truy vấn trên candidate, không ảnh hưởng publication đang phục vụ Agent.</p>
+          <h3>${kak("retrievalTest")}</h3>
+          <p>${kak("retrievalDescription")}</p>
         </div>
         <div class="ea-toolbar">
           <input
             class="ea-input"
             name="query"
-            placeholder="Nhập câu hỏi hoặc từ khóa…"
+            placeholder=${kak("queryPlaceholder")}
             required
           /><button class="ea-button ea-button--primary" ?disabled=${!this.candidate || this.busy}>
-            Tìm thử
+            ${kak("search")}
           </button>
         </div>
       </form>
       <div class="knowledge-hit-list" aria-live="polite">
+        ${this.searchCompleted && this.candidate && !this.searchHits.length
+          ? html`<div class="ea-empty knowledge-empty-small" role="status">
+              ${enterpriseDomainCopy("enterpriseKnowledge.previewEmpty")}
+            </div>`
+          : nothing}
         ${this.searchHits.map(
           (hit) =>
             html`<article class="ea-card knowledge-hit">
-              <strong>${String(recordValue(hit.citation).sourceTitle ?? "Nguồn")}</strong>
+              <strong>${String(recordValue(hit.citation).sourceTitle ?? ea("Nguồn"))}</strong>
               <p>${String(hit.excerpt ?? "")}</p>
               <span class="ea-muted"
                 >${JSON.stringify(recordValue(hit.citation).locator ?? {})}</span
@@ -156,12 +199,12 @@ export class EnterpriseAdminKnowledgePage extends EnterpriseAdminKnowledgeConten
       </div>
       <section class="ea-card knowledge-publish-card">
         <div>
-          <h3>Publish cho Agent</h3>
-          <p>Khi publish, các Agent đã bind sẽ chuyển sang publication mới một cách nguyên tử.</p>
+          <h3>${kak("publishForAgents")}</h3>
+          <p>${kak("publishDescription")}</p>
         </div>
         ${needsOverride
           ? html`<label class="ea-field"
-              >Lý do phê duyệt FTS-only<textarea
+              >${kak("ftsOnlyReason")}<textarea
                 class="ea-textarea"
                 rows="3"
                 .value=${this.degradedReason}
@@ -175,7 +218,7 @@ export class EnterpriseAdminKnowledgePage extends EnterpriseAdminKnowledgeConten
           ?disabled=${!this.candidate || this.busy}
           @click=${() => void this.publish()}
         >
-          Publish candidate
+          ${kak("publishCandidate")}
         </button>
       </section>
     `;
@@ -185,15 +228,15 @@ export class EnterpriseAdminKnowledgePage extends EnterpriseAdminKnowledgeConten
     return html`
       <section class="knowledge-section-block">
         <div class="knowledge-section-heading">
-          <div><h3>Tác vụ xử lý</h3></div>
-          <p>Theo dõi tiến độ, hủy hoặc chạy lại tác vụ lỗi.</p>
+          <div><h3>${kak("activityJobs")}</h3></div>
+          <p>${kak("activityJobsDescription")}</p>
         </div>
         ${this.renderJobTable()}
       </section>
       <section class="knowledge-section-block">
         <div class="knowledge-section-heading">
-          <div><h3>Lịch sử publication</h3></div>
-          <p>Rollback tạo một publication mới từ generation đã chọn.</p>
+          <div><h3>${ea("Lịch sử publication")}</h3></div>
+          <p>${enterpriseDomainCopy("enterpriseKnowledge.publicationHistoryHint")}</p>
         </div>
         ${renderKnowledgePublicationRows(
           this.publications,
@@ -225,17 +268,17 @@ export class EnterpriseAdminKnowledgePage extends EnterpriseAdminKnowledgeConten
 
   private renderJobTable(): TemplateResult {
     if (!this.jobs.length) {
-      return html`<div class="ea-empty knowledge-empty-small">Chưa có job xử lý.</div>`;
+      return html`<div class="ea-empty knowledge-empty-small">${kak("jobEmpty")}</div>`;
     }
     return html`<div class="ea-card ea-table-wrap">
       <table class="ea-table">
         <thead>
           <tr>
-            <th>Tác vụ</th>
-            <th>Giai đoạn</th>
-            <th>Trạng thái</th>
-            <th>Tiến độ</th>
-            <th>Cập nhật</th>
+            <th>${kak("job")}</th>
+            <th>${kak("stage")}</th>
+            <th>${ea("Trạng thái")}</th>
+            <th>${kak("progress")}</th>
+            <th>${kak("updated")}</th>
             <th></th>
           </tr>
         </thead>
@@ -245,12 +288,12 @@ export class EnterpriseAdminKnowledgePage extends EnterpriseAdminKnowledgeConten
               html`<tr>
                 <td>
                   ${knowledgeJobKindLabel(job.kind)}
-                  <div class="ea-muted">Lần chạy ${job.attempt}</div>
+                  <div class="ea-muted">${kak("runNumber", { attempt: String(job.attempt) })}</div>
                 </td>
                 <td>
                   ${knowledgeJobStageLabel(job.stage)}
                   ${this.jobSteps[job.id]?.length
-                    ? html`<div class="knowledge-job-stepper" aria-label="Tiến độ pipeline">
+                    ? html`<div class="knowledge-job-stepper" aria-label=${kak("pipelineProgress")}>
                         ${this.jobSteps[job.id]!.map(
                           (step) => html`<span class="is-${step.status}">
                             <b>${knowledgeJobStageLabel(step.stage)}</b>
@@ -292,7 +335,7 @@ export class EnterpriseAdminKnowledgePage extends EnterpriseAdminKnowledgeConten
                         ?disabled=${this.busy}
                         @click=${() => void this.runJobAction(job, "cancel")}
                       >
-                        Hủy
+                        ${ea("Hủy")}
                       </button>`
                     : ["failed", "cancelled"].includes(job.status)
                       ? html`<button
@@ -301,7 +344,7 @@ export class EnterpriseAdminKnowledgePage extends EnterpriseAdminKnowledgeConten
                           ?disabled=${this.busy}
                           @click=${() => void this.runJobAction(job, "retry")}
                         >
-                          Chạy lại
+                          ${kak("runAgain")}
                         </button>`
                       : nothing}
                 </td>
@@ -314,7 +357,7 @@ export class EnterpriseAdminKnowledgePage extends EnterpriseAdminKnowledgeConten
 
   private renderTab(): TemplateResult | typeof nothing {
     if (this.detailLoading) {
-      return html`<div class="ea-loading">Đang tải vùng tri thức…</div>`;
+      return html`<div class="ea-loading">${kak("loadingZones")}</div>`;
     }
     switch (this.tab) {
       case "settings":
@@ -341,8 +384,8 @@ export class EnterpriseAdminKnowledgePage extends EnterpriseAdminKnowledgeConten
       id="knowledge-zone-create-drawer"
       .open=${this.createOpen}
       .drawer=${true}
-      heading="Tạo vùng tri thức"
-      description="Thiết lập ranh giới dữ liệu, OCR và Agent được phép truy cập ngay từ đầu."
+      heading=${kak("createZone")}
+      description=${kak("zoneDrawerDescription")}
       .canClose=${() => !this.busy}
       .onClose=${() => this.closeCreateDrawer()}
     >
@@ -389,9 +432,9 @@ export class EnterpriseAdminKnowledgePage extends EnterpriseAdminKnowledgeConten
                 ?disabled=${this.busy}
                 @click=${() => this.closeCreateDrawer()}
               >
-                Hủy</button
+                ${ea("Hủy")}</button
               ><button class="ea-button ea-button--primary" ?disabled=${this.busy}>
-                ${this.busy ? "Đang tạo…" : "Tạo vùng tri thức"}
+                ${this.busy ? kak("creatingZone") : kak("createZone")}
               </button>
             </div>
           </form>`
@@ -404,9 +447,13 @@ export class EnterpriseAdminKnowledgePage extends EnterpriseAdminKnowledgeConten
       .open=${Boolean(this.selected)}
       .wide=${true}
       .drawer=${true}
-      heading=${this.selected?.name ?? "Vùng tri thức"}
+      heading=${this.selected?.name ?? kak("zoneHeading")}
       description=${this.selected
-        ? `${this.selected.slug} · revision ${this.selected.revision} · ${this.selectedRole}`
+        ? kak("zoneRevisionDescription", {
+            slug: this.selected.slug,
+            revision: String(this.selected.revision),
+            role: this.selectedRole,
+          })
         : ""}
       .canClose=${() => this.canCloseZone()}
       .onClose=${() => this.closeZone()}
@@ -418,18 +465,18 @@ export class EnterpriseAdminKnowledgePage extends EnterpriseAdminKnowledgeConten
         : nothing}
       <div class="knowledge-drawer-toolbar">
         <span class="ea-badge ${knowledgeStatusClass(this.selected?.status ?? "archived")}"
-          >${this.selected?.status === "active" ? "Đang hoạt động" : "Đã archive"}</span
-        ><span>${this.selected?.activePublicationId ? "Đã publish" : "Chưa publish"}</span
+          >${this.selected?.status === "active" ? kak("active") : kak("archived")}</span
+        ><span>${this.selected?.activePublicationId ? ea("Đã publish") : ea("Chưa publish")}</span
         ><span class="ea-spacer"></span
         ><button
           class="ea-button ea-button--small"
           type="button"
           @click=${() => (this.tab = "settings")}
         >
-          ${icons.pencil} Sửa zone
+          ${icons.pencil} ${kak("editZone")}
         </button>
       </div>
-      <nav class="ea-knowledgeTabs knowledge-tabs" aria-label="Chi tiết vùng tri thức">
+      <nav class="ea-knowledgeTabs knowledge-tabs" aria-label=${kak("zoneDetails")}>
         ${knowledgeTabs.map(
           (item) =>
             html`<button
@@ -438,7 +485,7 @@ export class EnterpriseAdminKnowledgePage extends EnterpriseAdminKnowledgeConten
               aria-current=${this.tab === item.id ? "page" : "false"}
               @click=${() => (this.tab = item.id)}
             >
-              ${item.label}
+              ${kak(item.labelKey)}
             </button>`,
         )}
       </nav>
@@ -452,37 +499,44 @@ export class EnterpriseAdminKnowledgePage extends EnterpriseAdminKnowledgeConten
       .open=${this.operationsOpen}
       .wide=${true}
       .drawer=${true}
-      heading="Vận hành tri thức doanh nghiệp"
-      description="Readiness, integrity, hàng đợi và audit trail trên toàn hệ thống."
+      heading=${ea("Vận hành tri thức doanh nghiệp")}
+      description=${kak("operationsDescription")}
       .onClose=${() => (this.operationsOpen = false)}
     >
       ${this.operationsLoading
-        ? html`<div class="ea-loading">Đang chạy kiểm tra hệ thống…</div>`
+        ? html`<div class="ea-loading">${kak("operationsLoading")}</div>`
         : report
           ? html`<div class="ea-kpis">
                 <article class="ea-kpi">
-                  <span>Tổng thể</span><strong>${report.ok ? "Tốt" : "Cần xử lý"}</strong
+                  <span>${kak("overall")}</span
+                  ><strong>${report.ok ? kak("good") : kak("needsAction")}</strong
                   ><small>${formatDate(report.checkedAt)}</small>
                 </article>
                 <article class="ea-kpi">
-                  <span>Artifact lỗi</span
+                  <span>${kak("artifactErrors")}</span
                   ><strong>${report.artifacts.missing + report.artifacts.permissionErrors}</strong
-                  ><small>${report.artifacts.checked} đã kiểm tra</small>
+                  ><small
+                    >${kak("checkedCount", { count: String(report.artifacts.checked) })}</small
+                  >
                 </article>
                 <article class="ea-kpi">
-                  <span>Job lỗi 24h</span><strong>${report.jobs.failed24h}</strong
-                  ><small>${Math.round(report.jobs.failureRate24h * 100)}% failure</small>
+                  <span>${kak("failedJobs24h")}</span><strong>${report.jobs.failed24h}</strong
+                  ><small
+                    >${kak("failureRate", {
+                      rate: String(Math.round(report.jobs.failureRate24h * 100)),
+                    })}</small
+                  >
                 </article>
                 <article class="ea-kpi">
-                  <span>Search p95</span
+                  <span>${kak("searchP95")}</span
                   ><strong
                     >${report.search.p95Ms === null ? "—" : `${report.search.p95Ms} ms`}</strong
-                  ><small>${report.search.count} truy vấn</small>
+                  ><small>${kak("queryCount", { count: String(report.search.count) })}</small>
                 </article>
               </div>
               <div class="knowledge-ops-grid">
                 <section class="ea-card knowledge-panel">
-                  <h3>Integrity issues</h3>
+                  <h3>${kak("integrityIssues")}</h3>
                   ${[...report.artifacts.issues, ...report.indexes.issues].length
                     ? html`<div class="knowledge-issue-list">
                         ${report.artifacts.issues.map(
@@ -500,49 +554,49 @@ export class EnterpriseAdminKnowledgePage extends EnterpriseAdminKnowledgeConten
                         )}
                       </div>`
                     : html`<div class="ea-empty knowledge-empty-small">
-                        Không phát hiện vấn đề integrity.
+                        ${kak("noIntegrityIssues")}
                       </div>`}
                 </section>
                 <section class="ea-card knowledge-panel">
-                  <h3>Hàng đợi & lưu trữ</h3>
+                  <h3>${kak("queueStorage")}</h3>
                   <dl class="knowledge-facts">
                     <div>
-                      <dt>Queued</dt>
+                      <dt>${kak("queued")}</dt>
                       <dd>${report.jobs.queued}</dd>
                     </div>
                     <div>
-                      <dt>Running</dt>
+                      <dt>${kak("running")}</dt>
                       <dd>${report.jobs.running}</dd>
                     </div>
                     <div>
-                      <dt>Stuck &gt; 10m</dt>
+                      <dt>${kak("stuckOver10m")}</dt>
                       <dd>${report.jobs.stuckOver10m}</dd>
                     </div>
                     <div>
-                      <dt>Artifact storage</dt>
+                      <dt>${kak("artifactStorage")}</dt>
                       <dd>${formatKnowledgeBytes(report.storage.artifactBytes)}</dd>
                     </div>
                   </dl>
                 </section>
                 <section class="ea-card knowledge-panel">
-                  <h3>Graph health</h3>
+                  <h3>${kak("graphHealth")}</h3>
                   <dl class="knowledge-facts">
                     <div>
-                      <dt>Generation v2 ready/degraded</dt>
+                      <dt>${kak("generationReadyDegraded")}</dt>
                       <dd>${report.graph.ready}/${report.graph.degraded}</dd>
                     </div>
                     <div>
-                      <dt>Pending / orphan</dt>
+                      <dt>${kak("pendingOrphan")}</dt>
                       <dd>${report.graph.proposedEdges}/${report.graph.orphanNodes}</dd>
                     </div>
                     <div>
-                      <dt>Build p95</dt>
+                      <dt>${kak("buildP95")}</dt>
                       <dd>
                         ${report.graph.buildP95Ms === null ? "—" : `${report.graph.buildP95Ms} ms`}
                       </dd>
                     </div>
                     <div>
-                      <dt>Retrieval p95</dt>
+                      <dt>${kak("retrievalP95")}</dt>
                       <dd>
                         ${report.graph.retrievalP95Ms === null
                           ? "—"
@@ -550,28 +604,28 @@ export class EnterpriseAdminKnowledgePage extends EnterpriseAdminKnowledgeConten
                       </dd>
                     </div>
                     <div>
-                      <dt>Timeout / truncation</dt>
+                      <dt>${kak("timeoutTruncation")}</dt>
                       <dd>${report.graph.timeouts}/${report.graph.truncations}</dd>
                     </div>
                   </dl>
                 </section>
                 <section class="ea-card knowledge-panel">
-                  <h3>Obsidian export</h3>
+                  <h3>${kak("obsidianExport")}</h3>
                   <dl class="knowledge-facts">
                     <div>
-                      <dt>Running</dt>
+                      <dt>${kak("running")}</dt>
                       <dd>${report.exports.running}</dd>
                     </div>
                     <div>
-                      <dt>Complete 24h</dt>
+                      <dt>${kak("complete24h")}</dt>
                       <dd>${report.exports.complete}</dd>
                     </div>
                     <div>
-                      <dt>Failed / expired</dt>
+                      <dt>${kak("failedExpired")}</dt>
                       <dd>${report.exports.failed}/${report.exports.expired}</dd>
                     </div>
                     <div>
-                      <dt>Private storage</dt>
+                      <dt>${kak("privateStorage")}</dt>
                       <dd>${formatKnowledgeBytes(report.exports.storageBytes)}</dd>
                     </div>
                   </dl>
@@ -580,19 +634,19 @@ export class EnterpriseAdminKnowledgePage extends EnterpriseAdminKnowledgeConten
           : nothing}
       <section class="knowledge-section-block">
         <div class="knowledge-section-heading">
-          <div><h3>Audit trail</h3></div>
-          <p>200 sự kiện tri thức gần nhất.</p>
+          <div><h3>${kak("auditTrail")}</h3></div>
+          <p>${kak("auditDescription")}</p>
         </div>
         ${this.auditEvents.length
           ? html`<div class="ea-card ea-table-wrap">
               <table class="ea-table">
                 <thead>
                   <tr>
-                    <th>Hành động</th>
-                    <th>Đối tượng</th>
-                    <th>Kết quả</th>
-                    <th>Actor</th>
-                    <th>Thời gian</th>
+                    <th>${ea("Hành động")}</th>
+                    <th>${ea("Đối tượng")}</th>
+                    <th>${ea("Kết quả")}</th>
+                    <th>${ea("Actor")}</th>
+                    <th>${ea("Thời gian")}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -609,15 +663,63 @@ export class EnterpriseAdminKnowledgePage extends EnterpriseAdminKnowledgeConten
                             >${event.outcome}</span
                           >
                         </td>
-                        <td>${event.actorAccountId ?? "System"}</td>
+                        <td>${event.actorAccountId ?? kak("system")}</td>
                         <td>${formatDate(event.createdAt)}</td>
                       </tr>`,
                   )}
                 </tbody>
               </table>
             </div>`
-          : html`<div class="ea-empty">Chưa có sự kiện audit.</div>`}
+          : html`<div class="ea-empty">${ea("Chưa có sự kiện audit.")}</div>`}
       </section>
+    </openclaw-enterprise-admin-dialog>`;
+  }
+
+  private renderRollbackDialog(): TemplateResult | typeof nothing {
+    const target = this.rollbackTarget;
+    if (!target) {
+      return nothing;
+    }
+    return html`<openclaw-enterprise-admin-dialog
+      id="knowledge-rollback-dialog"
+      .open=${true}
+      heading=${enterpriseDomainCopy("enterpriseKnowledge.rollbackHeading")}
+      description=${enterpriseDomainCopy("enterpriseKnowledge.rollbackDescription", {
+        zone: target.zone.name,
+        number: String(target.publication.publicationNumber),
+      })}
+      .canClose=${() => !this.busy}
+      .onClose=${() => this.cancelRollback()}
+    >
+      <div aria-busy=${String(this.busy)}>
+        <p>${enterpriseDomainCopy("enterpriseKnowledge.rollbackWarning")}</p>
+        ${this.rollbackError
+          ? html`<div class="ea-banner ea-banner--error" role="alert">${this.rollbackError}</div>`
+          : nothing}
+        <div class="knowledge-form-footer">
+          <button
+            class="ea-button"
+            type="button"
+            autofocus
+            ?disabled=${this.busy}
+            @click=${() => this.cancelRollback()}
+          >
+            ${t("common.cancel")}</button
+          ><button
+            class="ea-button ea-button--primary"
+            type="button"
+            data-rollback-confirm
+            ?disabled=${this.busy}
+            @click=${() => void this.confirmRollback()}
+          >
+            ${enterpriseDomainCopy(
+              this.busy
+                ? "enterpriseKnowledge.rollbackWorking"
+                : "enterpriseKnowledge.rollbackConfirm",
+            )}
+          </button>
+        </div>
+      </div>
     </openclaw-enterprise-admin-dialog>`;
   }
 
@@ -626,49 +728,58 @@ export class EnterpriseAdminKnowledgePage extends EnterpriseAdminKnowledgeConten
     return html`<section class="ea-page knowledge-page">
       <header class="ea-page-header">
         <div>
-          <h1>Tri thức doanh nghiệp</h1>
+          <h1>${ea("Tri thức doanh nghiệp")}</h1>
           <p>
-            Quản lý nguồn, OCR, quyền Agent, phiên bản, kiểm thử và xuất bản theo từng vùng dữ liệu.
+            ${ea(
+              "Quản lý nguồn, OCR, quyền Agent, phiên bản, kiểm thử và xuất bản theo từng vùng dữ liệu.",
+            )}
           </p>
         </div>
         <div class="ea-row-actions">
           <button class="ea-button" type="button" @click=${() => void this.openOperations()}>
-            ${icons.activity} Kiểm tra hệ thống</button
+            ${icons.activity} ${kak("checkSystem")}</button
           ><button
             class="ea-button ea-button--primary"
             type="button"
             @click=${() => this.openCreateDrawer()}
           >
-            ${icons.plus} Tạo vùng tri thức
+            ${icons.plus} ${kak("createZone")}
           </button>
         </div>
       </header>
       <div class="ea-kpis knowledge-main-kpis">
         <article class="ea-kpi">
-          <span>Vùng tri thức</span><strong>${this.zones.length}</strong
-          ><small>Đang hoạt động và đã lưu trữ</small>
+          <span>${ea("Vùng tri thức")}</span><strong>${this.zones.length}</strong
+          ><small>${kak("activeArchived")}</small>
         </article>
         <article class="ea-kpi">
-          <span>Đã xuất bản</span><strong>${publishedZones}</strong
-          ><small>${this.zones.length - publishedZones} vùng chưa xuất bản</small>
-        </article>
-        <article class="ea-kpi">
-          <span>Chỉ mục</span
-          ><strong>${this.readiness?.vector.ready ? "Kết hợp" : "Toàn văn"}</strong
+          <span>${ea("Đã xuất bản")}</span><strong>${publishedZones}</strong
           ><small
-            >${this.readiness?.lexical.ready ? "Tìm kiếm toàn văn sẵn sàng" : "Cần kiểm tra"}</small
+            >${kak("unpublishedZones", {
+              count: String(this.zones.length - publishedZones),
+            })}</small
           >
         </article>
         <article class="ea-kpi">
-          <span>OCR tự động</span
-          ><strong>${this.readiness?.ocr.ready ? "Sẵn sàng" : "Cần cấu hình"}</strong
-          ><small>${this.readiness?.ocr.provider ?? "Chưa có provider"}</small>
+          <span>${kak("index")}</span
+          ><strong>${this.readiness?.vector.ready ? kak("combinedIndex") : kak("fullText")}</strong
+          ><small
+            >${this.readiness?.lexical.ready ? kak("fullTextReady") : kak("needsCheck")}</small
+          >
         </article>
         <article class="ea-kpi">
-          <span>Bản đồ tri thức</span><strong>${this.graphOverview?.totals.nodes ?? 0}</strong
+          <span>${kak("automaticOcr")}</span
+          ><strong>${this.readiness?.ocr.ready ? kak("ready") : ea("Cần cấu hình")}</strong
+          ><small>${this.readiness?.ocr.provider ?? kak("noProvider")}</small>
+        </article>
+        <article class="ea-kpi">
+          <span>${ea("Bản đồ tri thức")}</span
+          ><strong>${this.graphOverview?.totals.nodes ?? 0}</strong
           ><small
-            >${this.graphOverview?.totals.edges ?? 0} cạnh ·
-            ${this.graphOverview?.totals.zones ?? 0} vùng có graph đã xuất bản</small
+            >${kak("graphTotals", {
+              edges: String(this.graphOverview?.totals.edges ?? 0),
+              zones: String(this.graphOverview?.totals.zones ?? 0),
+            })}</small
           >
         </article>
       </div>
@@ -676,7 +787,7 @@ export class EnterpriseAdminKnowledgePage extends EnterpriseAdminKnowledgeConten
         <input
           class="ea-input"
           type="search"
-          placeholder="Tìm theo tên hoặc slug…"
+          placeholder=${kak("searchZonePlaceholder")}
           .value=${this.query}
           @input=${(event: Event) => {
             this.query = inputFromEvent(event)?.value ?? "";
@@ -689,36 +800,36 @@ export class EnterpriseAdminKnowledgePage extends EnterpriseAdminKnowledgeConten
           @click=${() =>
             void Promise.all([this.load(), this.loadReadiness(), this.loadGraphOverview()])}
         >
-          Làm mới
+          ${ea("Làm mới")}
         </button>
       </div>
       ${this.error && !this.selected
         ? html`<div class="ea-banner ea-banner--error" role="alert">${this.error}</div>`
         : nothing}
       ${this.loading
-        ? html`<div class="ea-loading">Đang tải vùng tri thức…</div>`
+        ? html`<div class="ea-loading">${kak("loadingZones")}</div>`
         : !this.zones.length
           ? html`<div class="ea-empty">
-              <strong>Chưa có vùng tri thức</strong>
-              <p>Tạo zone đầu tiên để nạp tài liệu, OCR và cấp quyền cho Agent.</p>
+              <strong>${ea("Chưa có vùng tri thức")}</strong>
+              <p>${ea("Tạo zone đầu tiên để nạp tài liệu, OCR và cấp quyền cho Agent.")}</p>
               <button
                 class="ea-button ea-button--primary"
                 type="button"
                 @click=${() => this.openCreateDrawer()}
               >
-                Tạo vùng tri thức
+                ${kak("createZone")}
               </button>
             </div>`
           : html`<div class="ea-card ea-table-wrap knowledge-zone-table">
                 <table class="ea-table">
                   <thead>
                     <tr>
-                      <th>Vùng</th>
-                      <th>Trạng thái</th>
-                      <th>Xuất bản</th>
-                      <th>Quyền Agent</th>
-                      <th>Chính sách</th>
-                      <th>Cập nhật</th>
+                      <th>${ea("Vùng")}</th>
+                      <th>${ea("Trạng thái")}</th>
+                      <th>${ea("Xuất bản")}</th>
+                      <th>${kak("agentAccess")}</th>
+                      <th>${ea("Chính sách")}</th>
+                      <th>${kak("updated")}</th>
                       <th></th>
                     </tr>
                   </thead>
@@ -738,15 +849,17 @@ export class EnterpriseAdminKnowledgePage extends EnterpriseAdminKnowledgeConten
                           </td>
                           <td>
                             <span class="ea-badge ${knowledgeStatusClass(zone.status)}"
-                              >${zone.status === "active" ? "Đang hoạt động" : "Đã lưu trữ"}</span
+                              >${zone.status === "active" ? kak("active") : kak("archived")}</span
                             >
                           </td>
-                          <td>${zone.activePublicationId ? "Đã xuất bản" : "Bản nháp"}</td>
-                          <td>Phiên bản ${zone.accessRevision}</td>
+                          <td>${zone.activePublicationId ? ea("Đã xuất bản") : kak("draft")}</td>
+                          <td>
+                            ${kak("accessRevision", { revision: String(zone.accessRevision) })}
+                          </td>
                           <td>
                             ${zone.egressPolicy === "local_only"
-                              ? "Chỉ nội bộ"
-                              : "Cho phép bên ngoài"}
+                              ? kak("internalOnly")
+                              : kak("externalAllowed")}
                           </td>
                           <td>${formatDate(zone.updatedAt)}</td>
                           <td>
@@ -756,17 +869,17 @@ export class EnterpriseAdminKnowledgePage extends EnterpriseAdminKnowledgeConten
                                 type="button"
                                 @click=${() => this.openZoneTab(zone, "graph")}
                               >
-                                Bản đồ</button
+                                ${kak("graph")}</button
                               ><button
                                 class="ea-button ea-button--small"
                                 type="button"
                                 @click=${() => this.openZoneTab(zone, "agents")}
                               >
-                                Agent</button
+                                ${kak("agent")}</button
                               ><button
                                 class="ea-button ea-button--small"
                                 type="button"
-                                aria-label=${`Sửa ${zone.name}`}
+                                aria-label=${kak("editZoneAria", { name: zone.name })}
                                 @click=${() => this.openZoneTab(zone, "settings")}
                               >
                                 ${icons.pencil}
@@ -785,18 +898,19 @@ export class EnterpriseAdminKnowledgePage extends EnterpriseAdminKnowledgeConten
                   ?disabled=${!this.previousCursors.length}
                   @click=${() => this.previousPage()}
                 >
-                  Trang trước</button
-                ><span class="ea-muted">Tối đa 50 zone mỗi trang</span
+                  ${ea("Trang trước")}</button
+                ><span class="ea-muted">${ea("Tối đa 50 zone mỗi trang")}</span
                 ><button
                   class="ea-button ea-button--small"
                   type="button"
                   ?disabled=${!this.nextCursor}
                   @click=${() => this.nextPage()}
                 >
-                  Trang sau
+                  ${ea("Sau")}
                 </button>
               </div>`}
       ${this.renderCreateDrawer()}${this.renderDetailDrawer()}${this.renderOperationsDrawer()}
+      ${this.renderRollbackDialog()}
     </section>`;
   }
 }

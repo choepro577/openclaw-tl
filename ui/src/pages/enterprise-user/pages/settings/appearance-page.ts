@@ -22,12 +22,13 @@ import {
   renderSettingsSegmented,
 } from "../../../../components/settings-ui.ts";
 import { renderSettingsWorkspace } from "../../../../components/settings-workspace.ts";
-import { eu } from "../../../../i18n/enterprise-user.ts";
-import { i18n, SUPPORTED_LOCALES, t, type Locale } from "../../../../i18n/index.ts";
+import { eu, type EnterpriseUserCopyKey } from "../../../../i18n/enterprise-user.ts";
+import { i18n, t, type Locale } from "../../../../i18n/index.ts";
 import { OpenClawLightDomElement } from "../../../../lit/openclaw-element.ts";
 import "../../../../styles/appearance-controls.css";
 
-const LOCALE_LABELS: Partial<Record<Locale, string>> = {
+const ENTERPRISE_LOCALES = ["en", "vi"] as const satisfies readonly Locale[];
+const LOCALE_LABELS: Record<(typeof ENTERPRISE_LOCALES)[number], string> = {
   en: "English",
   vi: "Tiếng Việt",
 };
@@ -55,16 +56,16 @@ const THEME_OPTIONS: Array<{
 ];
 
 const ACCENT_PRESETS = [
-  { id: "default", hex: undefined, labelKey: "configView.appearance.accents.default" },
-  { id: "claw", hex: "#ff5c5c", labelKey: "configView.appearance.accents.claw" },
-  { id: "coral", hex: "#ff8066", labelKey: "configView.appearance.accents.coral" },
-  { id: "amber", hex: "#f5b942", labelKey: "configView.appearance.accents.amber" },
-  { id: "mint", hex: "#52c99a", labelKey: "configView.appearance.accents.mint" },
-  { id: "teal", hex: "#35b9b0", labelKey: "configView.appearance.accents.teal" },
-  { id: "blue", hex: "#5b9cf6", labelKey: "configView.appearance.accents.blue" },
-  { id: "violet", hex: "#a78bfa", labelKey: "configView.appearance.accents.violet" },
-  { id: "pink", hex: "#f472b6", labelKey: "configView.appearance.accents.pink" },
-  { id: "slate", hex: "#8795a8", labelKey: "configView.appearance.accents.slate" },
+  { id: "default", hex: undefined, labelKey: "appearanceAccentDefault" },
+  { id: "claw", hex: "#ff5c5c", labelKey: "appearanceAccentClaw" },
+  { id: "coral", hex: "#ff8066", labelKey: "appearanceAccentCoral" },
+  { id: "amber", hex: "#f5b942", labelKey: "appearanceAccentAmber" },
+  { id: "mint", hex: "#52c99a", labelKey: "appearanceAccentMint" },
+  { id: "teal", hex: "#35b9b0", labelKey: "appearanceAccentTeal" },
+  { id: "blue", hex: "#5b9cf6", labelKey: "appearanceAccentBlue" },
+  { id: "violet", hex: "#a78bfa", labelKey: "appearanceAccentViolet" },
+  { id: "pink", hex: "#f472b6", labelKey: "appearanceAccentPink" },
+  { id: "slate", hex: "#8795a8", labelKey: "appearanceAccentSlate" },
 ] as const;
 
 const TEXT_SCALE_LABELS: Record<TextScaleStop, string> = {
@@ -90,7 +91,7 @@ export class UserAppearancePage extends OpenClawLightDomElement {
   @state() private mode: ThemeMode = loadSettings().themeMode;
   @state() private accent: string | undefined = loadSettings().accent;
   @state() private textScale: TextScaleStop = loadSettings().textScale ?? 100;
-  @state() private locale: Locale = i18n.getLocale();
+  @state() private localeError = "";
   private unsubscribe?: () => void;
 
   override connectedCallback(): void {
@@ -148,12 +149,20 @@ export class UserAppearancePage extends OpenClawLightDomElement {
   }
 
   private async setLocale(locale: Locale): Promise<void> {
-    this.locale = locale;
-    patchSettings({ locale });
+    this.localeError = "";
     await i18n.setLocale(locale);
+    // Persist the locale that actually became active. A disconnected or failed
+    // lazy chunk must not leave settings claiming a language the UI did not load.
+    patchSettings({ locale: i18n.getLocale() });
+    if (i18n.getLocale() !== locale) {
+      this.localeError = eu("languageLoadFailed");
+    }
   }
 
   override render() {
+    // Read from the shared manager so another picker cannot leave a stale
+    // selected option after changing locale while this page is mounted.
+    const activeLocale = i18n.getLocale() === "vi" ? "vi" : "en";
     const customAccentSelected = Boolean(
       this.accent && !ACCENT_PRESETS.some((preset) => preset.hex === this.accent),
     );
@@ -170,16 +179,20 @@ export class UserAppearancePage extends OpenClawLightDomElement {
           title: eu("displayLanguage"),
           control: html`<select
             class="settings-select"
-            .value=${this.locale}
+            aria-label=${eu("displayLanguage")}
+            .value=${activeLocale}
             @change=${(event: Event) =>
               void this.setLocale((event.currentTarget as HTMLSelectElement).value as Locale)}
           >
-            ${SUPPORTED_LOCALES.map(
-              (locale) => html`<option value=${locale}>${LOCALE_LABELS[locale] ?? locale}</option>`,
+            ${ENTERPRISE_LOCALES.map(
+              (locale) => html`<option value=${locale}>${LOCALE_LABELS[locale]}</option>`,
             )}
           </select>`,
         }),
       )}
+      ${this.localeError
+        ? html`<div class="callout danger" role="alert">${this.localeError}</div>`
+        : nothing}
       <section class="settings-section">
         <div class="settings-section__header">
           <h2 class="settings-section__heading">${t("configView.appearance.theme")}</h2>
@@ -230,15 +243,15 @@ export class UserAppearancePage extends OpenClawLightDomElement {
       </section>
       <section class="settings-section">
         <div class="settings-section__header">
-          <h2 class="settings-section__heading">${t("configView.appearance.accent")}</h2>
+          <h2 class="settings-section__heading">${eu("appearanceAccent")}</h2>
         </div>
-        <p class="settings-section__desc">${t("configView.appearance.accentHint")}</p>
+        <p class="settings-section__desc">${eu("appearanceAccentHint")}</p>
         <div class="settings-group">
           <div class="settings-row settings-row--stacked">
             <div class="settings-accent-swatches">
               ${ACCENT_PRESETS.map((preset) => {
                 const selected = preset.hex === this.accent;
-                const label = t(preset.labelKey);
+                const label = eu(preset.labelKey as EnterpriseUserCopyKey);
                 const themeClass = preset.hex ? "" : ` settings-accent-theme--${this.theme}`;
                 return html`<button
                   type="button"
@@ -267,8 +280,8 @@ export class UserAppearancePage extends OpenClawLightDomElement {
                 class="settings-accent-swatch settings-accent-swatch--custom ${customAccentSelected
                   ? "settings-accent-swatch--active"
                   : ""}"
-                aria-label=${t("configView.appearance.customAccent")}
-                title=${t("configView.appearance.customAccent")}
+                aria-label=${eu("appearanceCustomAccent")}
+                title=${eu("appearanceCustomAccent")}
                 .value=${this.accent ?? ACCENT_PRESETS[1].hex}
                 @input=${(event: Event & { currentTarget: HTMLInputElement }) =>
                   this.setAccent(event.currentTarget.value)}

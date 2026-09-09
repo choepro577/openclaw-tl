@@ -3,6 +3,15 @@ import { z } from "zod";
 export type EnterpriseConfig = {
   /** Enables the additive Enterprise account, policy, and UI module. Default false. */
   enabled?: boolean;
+  thienly?: {
+    enabled?: boolean;
+    webBaseUrl: string;
+    apiBaseUrl: string;
+    callbackUrl: string;
+    clientId: string;
+    /** Name of the server environment variable holding the client secret. */
+    clientSecretEnv: string;
+  };
   userPortal?: {
     /** Selects the canaryable User Portal implementation. Default legacy. */
     version?: "legacy" | "v2";
@@ -17,7 +26,7 @@ export type EnterpriseConfig = {
   };
   knowledge?: {
     graph?: {
-      /** Enables graph generation and Graph View. Existing Zones stay opt-in. */
+      /** Enables graph generation and Graph View by default. Explicit false disables generation. */
       enabled?: boolean;
       /** Controls graph expansion inside enterprise_knowledge_search. */
       agentExpansion?: "off" | "shadow" | "on";
@@ -46,6 +55,16 @@ export type EnterpriseConfig = {
 export const EnterpriseConfigSchema = z
   .strictObject({
     enabled: z.boolean().optional(),
+    thienly: z
+      .strictObject({
+        enabled: z.boolean().optional(),
+        webBaseUrl: z.string().url(),
+        apiBaseUrl: z.string().url(),
+        callbackUrl: z.string().url(),
+        clientId: z.string().min(1).max(120),
+        clientSecretEnv: z.string().regex(/^[A-Z][A-Z0-9_]*$/),
+      })
+      .optional(),
     userPortal: z
       .strictObject({
         version: z.enum(["legacy", "v2"]).optional(),

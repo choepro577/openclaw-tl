@@ -18,13 +18,13 @@ import {
   isHostScopedAgentToolActive,
   runWithAgentRingZeroTools,
 } from "../agent-tools.ring-zero-context.js";
-import { isHeartbeatLifecycleRunKind } from "../bootstrap-mode.js";
 import { resolveConversationCapabilityProfile } from "../conversation-capability-profile.js";
 import type {
   EmbeddedRunAttemptParams,
   EmbeddedRunAttemptResult,
 } from "../embedded-agent-runner/run/types.js";
 import { isCliRuntimeAliasForProvider } from "../model-runtime-aliases.js";
+import { privateModelContextUnavailable } from "../private-model-context.js";
 import {
   unwrapModelHeaderSentinelsForProviderEgress,
   unwrapSecretSentinelsForProviderEgress,
@@ -40,8 +40,6 @@ import {
 import type { SystemAgentToolOptions } from "../tools/system-agent-tool.js";
 import { resolveAgentHarnessAutoSelectionHint } from "./auto-selection.js";
 import { createOpenClawAgentHarness, isBuiltInOpenClawAgentHarness } from "./builtin-openclaw.js";
-import { selectContextEngineForTranscriptHost } from "./context-engine-logical-turn.js";
-import { drainPendingContextEngineTurnsBeforeRun } from "./context-engine-turn-attempt.js";
 import { AgentHarnessPreflightError, MissingAgentHarnessError } from "./errors.js";
 import { createAgentHarnessHostCapabilities } from "./host-capability.js";
 import {
@@ -63,6 +61,7 @@ import {
   resolveAgentHarnessPreparedAuthSupport,
   resolveAgentHarnessPreparedRouteSupport,
 } from "./support.js";
+import { finishHarnessTranscriptTurn, prepareHarnessTranscriptTurn } from "./transcript-turn.js";
 import type { AgentHarness, AgentHarnessSupport, AgentHarnessSupportContext } from "./types.js";
 
 const log = createSubsystemLogger("agents/harness");
@@ -533,30 +532,12 @@ async function runSelectedAgentHarnessAttempt(
   };
   const selection = selectPreparedAgentHarness(params);
   const harness = selection.harness;
-  if (internalParams.contextEngineLogicalTurnLease) {
-    selectContextEngineForTranscriptHost({
-      lease: internalParams.contextEngineLogicalTurnLease,
-      host: {
-        id: `agent-harness:${harness.id}`,
-        label: `agent harness "${harness.id}"`,
-        capabilities: harness.contextEngineHostCapabilities ?? [],
-      },
-      operation: "agent-run",
-      recorder: internalParams.userTurnTranscriptRecorder,
-    });
-    await drainPendingContextEngineTurnsBeforeRun({
-      admission: internalParams.userTurnTranscriptRecorder?.getAdmissionReceipt(),
-      isHeartbeat: isHeartbeatLifecycleRunKind(internalParams.bootstrapContextRunKind),
-      lease: internalParams.contextEngineLogicalTurnLease,
-      recorder: internalParams.userTurnTranscriptRecorder,
-      sessionTarget: internalParams.sessionTarget,
-    });
-    const effective = internalParams.contextEngineLogicalTurnLease.begin();
-    internalParams = {
-      ...internalParams,
-      contextEngine: effective.engine.info.id === "legacy" ? undefined : effective.engine,
-    };
+  if (params.resolvePrivateModelContext && !selection.builtIn) {
+    // No current plugin protocol can reauthorize every native sampling/retry request.
+    // Do not silently complete a private assignment without its evidence.
+    throw privateModelContextUnavailable();
   }
+  internalParams = await prepareHarnessTranscriptTurn(internalParams, harness);
   if (internalParams.systemAgentTool && !isSystemAgentOnlyAllowlist(internalParams.toolsAllow)) {
     throw new Error('OpenClaw host authority requires toolsAllow: ["openclaw"]');
   }
@@ -606,50 +587,10 @@ async function runSelectedAgentHarnessAttempt(
   } finally {
     pluginAttempt.closeHostCapabilities();
   }
-  const admission = internalParams.userTurnTranscriptRecorder?.getAdmissionReceipt();
-  if (
-    internalParams.onContextEngineTurnCandidate &&
-    admission &&
-    result.contextEngineTerminalAnchor
-  ) {
-    internalParams.onContextEngineTurnCandidate({
-      boundary: {
-        admission,
-        terminal: result.contextEngineTerminalAnchor,
-      },
-      sessionIdUsed: result.sessionIdUsed,
-      sessionKey: internalParams.sessionKey,
-      sessionTarget: internalParams.sessionTarget,
-      sessionFile: result.sessionFileUsed ?? internalParams.sessionFile,
-      promptError: result.terminal.kind === "failed",
-      aborted:
-        result.terminal.kind === "aborted" ||
-        (result.terminal.kind === "timeout" &&
-          "aborted" in result.terminal &&
-          result.terminal.aborted === true),
-      yieldAborted:
-        result.terminal.kind === "aborted" && result.terminal.source === "yield_cleanup",
-      isHeartbeat: isHeartbeatLifecycleRunKind(internalParams.bootstrapContextRunKind),
-      tokenBudget: internalParams.contextTokenBudget,
-      contextEngineHostSupport: {
-        id: `agent-harness:${harness.id}`,
-        label: `agent harness "${harness.id}"`,
-        capabilities: harness.contextEngineHostCapabilities ?? [],
-      },
-      harnessId: harness.id,
-      providerId: internalParams.provider,
-      requestedModelId: internalParams.requestedModelId,
-      modelId: internalParams.modelId,
-      fallbackReason: internalParams.fallbackReason,
-      degradedReason: internalParams.degradedReason,
-      config: internalParams.config,
-    });
-  }
-  const { contextEngineTerminalAnchor: _contextEngineTerminalAnchor, ...publicResult } = result;
-  return publicResult;
+  return finishHarnessTranscriptTurn(internalParams, harness, result);
 }
 
-function selectPreparedAgentHarness(
+export function selectPreparedAgentHarness(
   params: EmbeddedRunAttemptParams,
 ): AgentHarnessSelectionDecision {
   return selectAgentHarnessDecision({
@@ -752,6 +693,9 @@ function prepareHarnessFinalizationParams(
 ): import("./types.js").AgentHarnessSettledTurnFinalizationAttemptParams<
   import("./types.js").AgentHarnessAttemptParamsV2
 > {
+  if (params.resolvePrivateModelContext && !builtIn) {
+    throw privateModelContextUnavailable();
+  }
   const {
     hostCapabilities: _hostCapabilities,
     systemAgentTool: _systemAgentTool,
@@ -782,6 +726,7 @@ function withoutPluginHarnessPrivateState(
     hostCapabilities: _hostCapabilities,
     onContextEngineTurnCandidate: _onContextEngineTurnCandidate,
     trajectoryRecorder: _trajectoryRecorder,
+    resolvePrivateModelContext: _resolvePrivateModelContext,
     __openclawSourceReplyDeliveryRuntime: _sourceReplyDeliveryRuntime,
     ...pluginParams
   } = params as EmbeddedRunAttemptParams & {

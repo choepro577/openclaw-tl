@@ -181,6 +181,7 @@ async function executeAgentTurnInternalWithRetryState(
       sessionKey: params.sessionKey,
       ...(params.followupRun.run.sessionId ? { sessionId: params.followupRun.run.sessionId } : {}),
       agentId: params.followupRun.run.agentId,
+      runtimeConfig,
       lifecycleGeneration,
       verboseLevel: params.resolvedVerboseLevel,
       isHeartbeat: params.isHeartbeat,

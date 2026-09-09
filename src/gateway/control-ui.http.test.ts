@@ -12,7 +12,10 @@ import { useAutoCleanupTempDirTracker } from "../../test/helpers/temp-dir.js";
 import { normalizeAssistantIdentity } from "../../ui/src/lib/assistant-identity.ts";
 import * as configIo from "../config/io.js";
 import { resolveStateDir } from "../config/paths.js";
-import { replaceSessionEntry } from "../config/sessions/session-accessor.js";
+import {
+  persistSessionTranscriptTurn,
+  replaceSessionEntry,
+} from "../config/sessions/session-accessor.js";
 import type { OpenClawConfig } from "../config/types.openclaw.js";
 import {
   createEnterpriseAccount,
@@ -1297,7 +1300,7 @@ describe("handleControlUiHttpRequest", () => {
     });
   });
 
-  it("binds Enterprise assistant media to the authorized session workspace", async () => {
+  it.each([true, false])("scopes Enterprise media (pinned: %s)", async (pinnedWorkspace) => {
     await withOpenClawTestState({ scenario: "minimal", applyEnv: true }, async (state) => {
       const globalWorkspace = state.path("global-workspace");
       await fs.mkdir(globalWorkspace, { recursive: true });
@@ -1332,7 +1335,7 @@ describe("handleControlUiHttpRequest", () => {
           sessionId: chatSessionId,
           updatedAt: Date.now(),
           createdActor: { type: "human", id: account.profileId },
-          spawnedWorkspaceDir: accountWorkspace,
+          ...(pinnedWorkspace ? { spawnedWorkspaceDir: accountWorkspace } : {}),
         },
       );
       const otherAccount = createEnterpriseAccount({
@@ -1512,6 +1515,47 @@ describe("handleControlUiHttpRequest", () => {
         headers,
       });
       expect(responseJson(referencedInboundMeta.end)).toMatchObject({ available: true });
+      // User uploads are recovered from persisted media facts after a page reload.
+      for (const [mimeType, fileName, bytes] of [
+        ["image/png", "user-image.png", REAL_PNG],
+        ["application/pdf", "user-document.pdf", Buffer.from("%PDF-1.4\nattachment fixture\n")],
+      ] as const) {
+        const upload = await saveMediaBuffer(bytes, mimeType, "inbound", undefined, fileName);
+        const source = `media://inbound/${upload.id}`;
+        await persistSessionTranscriptTurn(
+          { sessionKey, sessionId: chatSessionId, storePath, agentId },
+          {
+            config,
+            messages: [
+              {
+                message: {
+                  role: "user",
+                  content: "Read this attachment",
+                  timestamp: Date.now(),
+                  __openclaw: { media: [{ url: source, contentType: mimeType, fileName }] },
+                },
+              },
+            ],
+          },
+        );
+        const meta = await runAssistantMediaRequest({
+          url: `/__openclaw__/assistant-media?meta=1&sessionKey=${encodeURIComponent(sessionKey)}&source=${encodeURIComponent(source)}`,
+          method: "GET",
+          auth,
+          config,
+          headers,
+        });
+        const payload = responseJson(meta.end) as { available: boolean; mediaTicket: string };
+        expect(payload.available).toBe(true);
+        const download = await runAssistantMediaRequest({
+          url: `/__openclaw__/assistant-media?sessionKey=${encodeURIComponent(sessionKey)}&source=${encodeURIComponent(source)}&mediaTicket=${encodeURIComponent(payload.mediaTicket)}`,
+          method: "HEAD",
+          auth,
+          config,
+        });
+        expect(download.res.statusCode).toBe(200);
+        expect(download.setHeader).toHaveBeenCalledWith("Content-Length", String(bytes.byteLength));
+      }
       for (const foreignSource of [foreignInboundUri, foreignInbound.path]) {
         const foreignMeta = await runAssistantMediaRequest({
           url: `/__openclaw__/assistant-media?meta=1&sessionKey=${encodeURIComponent(sessionKey)}&source=${encodeURIComponent(foreignSource)}`,

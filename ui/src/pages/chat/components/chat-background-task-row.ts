@@ -12,7 +12,10 @@ import {
   taskTitle,
 } from "../../../lib/tasks/data.ts";
 import type { TaskSummary } from "../../../lib/tasks/task-summary.ts";
-import { backgroundTaskStatusLabel, STATUS_TONES } from "./chat-background-tasks-shared.ts";
+import {
+  backgroundTaskStatusLabel,
+  backgroundTaskStatusTone,
+} from "./chat-background-tasks-shared.ts";
 import type { BackgroundTasksProps } from "./chat-background-tasks.types.ts";
 
 type TaskDisplayFacts = {
@@ -41,15 +44,21 @@ function taskDisplayFacts(task: TaskSummary): TaskDisplayFacts {
   };
 }
 
-function renderTaskMeta(task: TaskSummary, facts: TaskDisplayFacts): TemplateResult {
-  const tone = STATUS_TONES[task.status];
+function renderTaskMeta(
+  task: TaskSummary,
+  facts: TaskDisplayFacts,
+  subagentsOnly = false,
+): TemplateResult {
+  const tone = backgroundTaskStatusTone(task, { subagentsOnly });
   return html`
     <div class="chat-tasks-rail__task-meta">
       <span class="chat-tasks-rail__task-status chat-tasks-rail__task-status--${tone}"
-        >${backgroundTaskStatusLabel(task)}</span
+        >${backgroundTaskStatusLabel(task, { subagentsOnly })}</span
       >
-      <span class="chat-tasks-rail__task-sep" aria-hidden="true">·</span>
-      <span>${taskRuntimeLabel(task)}</span>
+      ${subagentsOnly
+        ? nothing
+        : html`<span class="chat-tasks-rail__task-sep" aria-hidden="true">·</span>
+            <span>${taskRuntimeLabel(task)}</span>`}
       ${facts.active && facts.startedMs > 0
         ? html`<span class="chat-tasks-rail__task-sep" aria-hidden="true">·</span>
             <span
@@ -94,7 +103,7 @@ export function renderTaskRow(task: TaskSummary, props: BackgroundTasksProps): T
       class="chat-tasks-rail__task ${open ? "chat-tasks-rail__task--open" : ""}"
       role="listitem"
       data-task-id=${task.id}
-      aria-current=${open ? "true" : nothing}
+      aria-current=${open ? "true" : "false"}
       @click=${(event: MouseEvent) => {
         const target = event.target;
         if (target instanceof Element && target.closest("button, a")) {
@@ -137,7 +146,7 @@ export function renderTaskRow(task: TaskSummary, props: BackgroundTasksProps): T
             `
           : nothing}
       </div>
-      ${renderTaskMeta(task, facts)}
+      ${renderTaskMeta(task, facts, props.subagentsOnly)}
       ${detail ? html`<div class="chat-tasks-rail__task-detail">${detail}</div>` : nothing}
     </div>
   `;

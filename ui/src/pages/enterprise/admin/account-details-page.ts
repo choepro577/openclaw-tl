@@ -1,6 +1,14 @@
 import { html } from "lit";
 import { property, state } from "lit/decorators.js";
+import { showNativePrompt } from "../../../branding/display-dialog.ts";
+import { eu } from "../../../i18n/enterprise-user.ts";
 import { OpenClawLightDomElement } from "../../../lit/openclaw-element.ts";
+import {
+  enterpriseCopy,
+  enterpriseEffectLabel,
+  enterpriseResourceTypeLabel,
+  enterpriseRoleLabel,
+} from "../enterprise-copy.ts";
 import {
   loadEnterpriseAccount,
   replaceEnterpriseEntitlements,
@@ -34,7 +42,7 @@ export class EnterpriseAccountDetailsPage extends OpenClawLightDomElement {
       this.entitlements = detail.entitlements;
       this.policy = detail.effectivePolicy;
     } catch (error) {
-      this.error = error instanceof Error ? error.message : "Không thể tải chi tiết.";
+      this.error = error instanceof Error ? error.message : enterpriseCopy("accountLoadFailed");
     }
   }
 
@@ -53,9 +61,9 @@ export class EnterpriseAccountDetailsPage extends OpenClawLightDomElement {
         defaultAgentId: readEnterpriseFormString(data, "defaultAgentId").trim() || null,
       });
       await this.load(this.current.id);
-      this.success = "Đã lưu tài khoản.";
+      this.success = enterpriseCopy("accountSaveSuccess");
     } catch (error) {
-      this.error = error instanceof Error ? error.message : "Không thể lưu.";
+      this.error = error instanceof Error ? error.message : enterpriseCopy("accountSaveFailed");
     }
   }
 
@@ -87,9 +95,10 @@ export class EnterpriseAccountDetailsPage extends OpenClawLightDomElement {
       this.entitlements = await replaceEnterpriseEntitlements(this.current.id, next);
       form.reset();
       await this.load(this.current.id);
-      this.success = "Đã cập nhật quyền.";
+      this.success = enterpriseCopy("entitlementUpdateSuccess");
     } catch (error) {
-      this.error = error instanceof Error ? error.message : "Không thể cập nhật quyền.";
+      this.error =
+        error instanceof Error ? error.message : enterpriseCopy("entitlementUpdateFailed");
     }
   }
 
@@ -108,22 +117,22 @@ export class EnterpriseAccountDetailsPage extends OpenClawLightDomElement {
     if (!this.current) {
       return;
     }
-    const password = globalThis.prompt("Nhập mật khẩu tạm mới (ít nhất 10 ký tự):");
+    const password = showNativePrompt(enterpriseCopy("resetPasswordPrompt"));
     if (!password) {
       return;
     }
     try {
       await resetEnterprisePassword(this.current.id, password);
-      this.success = "Đã reset mật khẩu và thu hồi toàn bộ session.";
+      this.success = enterpriseCopy("resetPasswordSuccess");
     } catch (error) {
-      this.error = error instanceof Error ? error.message : "Không thể reset mật khẩu.";
+      this.error = error instanceof Error ? error.message : enterpriseCopy("resetPasswordFailed");
     }
   }
 
   override render() {
     if (!this.current) {
       return html`<section class="enterprise-panel">
-        <p class="enterprise-muted">Chọn một tài khoản để quản lý.</p>
+        <p class="enterprise-muted">${enterpriseCopy("selectAccount")}</p>
       </section>`;
     }
     return html`
@@ -136,32 +145,32 @@ export class EnterpriseAccountDetailsPage extends OpenClawLightDomElement {
           @submit=${(event: SubmitEvent) => void this.saveAccount(event)}
         >
           <label class="enterprise-field"
-            >Tên hiển thị<input
+            >${enterpriseCopy("displayName")}<input
               class="enterprise-input"
               name="displayName"
               .value=${this.current.displayName}
               required
           /></label>
           <label class="enterprise-field"
-            >Role<select class="enterprise-select" name="role">
+            >${eu("role")}<select class="enterprise-select" name="role">
               <option value="employee" ?selected=${this.current.role === "employee"}>
-                Employee
+                ${enterpriseRoleLabel("employee")}
               </option>
               <option value="administrator" ?selected=${this.current.role === "administrator"}>
-                Administrator
+                ${enterpriseRoleLabel("administrator")}
               </option>
             </select></label
           >
           <label class="enterprise-field"
-            >Agent mặc định<input
+            >${enterpriseCopy("defaultAgent")}<input
               class="enterprise-input"
               name="defaultAgentId"
               .value=${this.current.defaultAgentId ?? ""}
               placeholder="main"
           /></label>
           <label
-            ><input name="enabled" type="checkbox" ?checked=${this.current.enabled} /> Tài khoản
-            hoạt động</label
+            ><input name="enabled" type="checkbox" ?checked=${this.current.enabled} />
+            ${enterpriseCopy("accountEnabled")}</label
           >
           <label
             ><input
@@ -169,44 +178,49 @@ export class EnterpriseAccountDetailsPage extends OpenClawLightDomElement {
               type="checkbox"
               ?checked=${this.current.personalAgentEnabled}
             />
-            Bật Personal Agent</label
+            ${enterpriseCopy("personalAgentEnabled")}</label
           >
           <div class="enterprise-actions">
-            <button class="enterprise-button" type="submit">Lưu tài khoản</button
+            <button class="enterprise-button" type="submit">${enterpriseCopy("saveAccount")}</button
             ><button
               class="enterprise-button enterprise-button--secondary"
               type="button"
               @click=${() => void this.resetPassword()}
             >
-              Reset mật khẩu
+              ${enterpriseCopy("resetPassword")}
             </button>
           </div>
         </form>
       </section>
       <section class="enterprise-panel enterprise-stack">
-        <h3>Cấp Agent, Skill và Tool</h3>
+        <h3>${enterpriseCopy("entitlementsTitle")}</h3>
         <form
           class="enterprise-row"
           @submit=${(event: SubmitEvent) => void this.addEntitlement(event)}
         >
           <select class="enterprise-select" name="resourceType">
-            <option value="agent">Agent</option>
-            <option value="skill">Skill</option>
-            <option value="tool">Tool</option>
+            <option value="agent">${enterpriseResourceTypeLabel("agent")}</option>
+            <option value="skill">${enterpriseResourceTypeLabel("skill")}</option>
+            <option value="tool">${enterpriseResourceTypeLabel("tool")}</option>
           </select>
-          <input class="enterprise-input" name="resourceId" placeholder="Resource ID" required />
+          <input
+            class="enterprise-input"
+            name="resourceId"
+            placeholder=${enterpriseCopy("resourceId")}
+            required
+          />
           <select class="enterprise-select" name="effect">
-            <option value="allow">Allow</option>
-            <option value="deny">Deny</option>
+            <option value="allow">${enterpriseCopy("allow")}</option>
+            <option value="deny">${enterpriseCopy("deny")}</option>
           </select>
-          <button class="enterprise-button" type="submit">Thêm / thay thế</button>
+          <button class="enterprise-button" type="submit">${enterpriseCopy("addOrReplace")}</button>
         </form>
         <table class="enterprise-table">
           <thead>
             <tr>
-              <th>Loại</th>
+              <th>${enterpriseCopy("resourceType")}</th>
               <th>ID</th>
-              <th>Quyền</th>
+              <th>${enterpriseCopy("permission")}</th>
               <th></th>
             </tr>
           </thead>
@@ -214,15 +228,15 @@ export class EnterpriseAccountDetailsPage extends OpenClawLightDomElement {
             ${this.entitlements.map(
               (item, index) =>
                 html`<tr>
-                  <td>${item.resourceType}</td>
+                  <td>${enterpriseResourceTypeLabel(item.resourceType)}</td>
                   <td class="enterprise-code">${item.resourceId}</td>
-                  <td>${item.effect}</td>
+                  <td>${enterpriseEffectLabel(item.effect)}</td>
                   <td>
                     <button
                       class="enterprise-button enterprise-button--secondary"
                       @click=${() => void this.removeEntitlement(index)}
                     >
-                      Xóa
+                      ${enterpriseCopy("remove")}
                     </button>
                   </td>
                 </tr>`,

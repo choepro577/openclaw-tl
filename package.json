@@ -778,6 +778,10 @@
       "types": "./dist/plugin-sdk/gateway-method-runtime.d.ts",
       "default": "./dist/plugin-sdk/gateway-method-runtime.js"
     },
+    "./plugin-sdk/gateway-config-runtime": {
+      "types": "./dist/plugin-sdk/gateway-config-runtime.d.ts",
+      "default": "./dist/plugin-sdk/gateway-config-runtime.js"
+    },
     "./plugin-sdk/gateway-runtime": {
       "types": "./dist/plugin-sdk/gateway-runtime.d.ts",
       "default": "./dist/plugin-sdk/gateway-runtime.js"

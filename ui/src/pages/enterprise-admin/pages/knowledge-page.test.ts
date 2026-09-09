@@ -2,6 +2,7 @@
 
 import { nothing, render } from "lit";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { i18n } from "../../../i18n/index.ts";
 import type {
   EnterpriseKnowledgeAgentCatalog,
   EnterpriseKnowledgePublication,
@@ -20,6 +21,8 @@ type MutablePage = {
   members: unknown[];
   bindings: string[];
   bindingDraft: string[];
+  evidenceTransfers: string[];
+  evidenceTransferDraft: string[];
   agentCatalog: EnterpriseKnowledgeAgentCatalog;
   createOpen: boolean;
   createErrors: Record<string, string>;
@@ -55,12 +58,14 @@ const zone: EnterpriseKnowledgeZone = {
 describe("Enterprise Admin Knowledge page", () => {
   let container: HTMLDivElement;
 
-  beforeEach(() => {
+  beforeEach(async () => {
+    await i18n.setLocale("vi");
     container = document.createElement("div");
     document.body.append(container);
   });
 
-  afterEach(() => {
+  afterEach(async () => {
+    await i18n.setLocale("en");
     render(nothing, container);
     container.remove();
   });
@@ -167,6 +172,50 @@ describe("Enterprise Admin Knowledge page", () => {
     expect(container.textContent).toContain("Main Agent");
   });
 
+  it("keeps excerpt-receiving permission separate and unchecked from direct Zone bindings", () => {
+    const page = new EnterpriseAdminKnowledgePage() as unknown as MutablePage;
+    page.zones = [zone];
+    page.selected = zone;
+    page.loading = false;
+    page.detailLoading = false;
+    page.sources = [];
+    page.jobs = [];
+    page.members = [];
+    page.publications = [];
+    page.bindings = ["agent:shared:contracts"];
+    page.bindingDraft = [...page.bindings];
+    page.evidenceTransfers = [];
+    page.evidenceTransferDraft = [];
+    page.agentCatalog = {
+      shared: [
+        {
+          kind: "shared",
+          agentId: "contracts",
+          resourceKey: "agent:shared:contracts",
+          name: "Contract Specialist",
+          model: null,
+          workspace: null,
+          runtimeType: "openclaw",
+          assignedUserCount: 1,
+          skillCount: 0,
+          toolCount: 0,
+          evidenceTransferEligible: true,
+        },
+      ],
+      personal: [],
+    } as EnterpriseKnowledgeAgentCatalog;
+    page.tab = "agents";
+    render(page.render(), container);
+
+    const section = container.querySelector("[data-evidence-transfers]");
+    expect(section).not.toBeNull();
+    const excerptCheckbox = section?.querySelector('input[type="checkbox"]') as HTMLInputElement;
+    expect(excerptCheckbox.checked).toBe(false);
+    excerptCheckbox.click();
+    expect(page.evidenceTransferDraft).toEqual(["agent:shared:contracts"]);
+    expect(page.bindingDraft).toEqual(["agent:shared:contracts"]);
+  });
+
   it("shows active publication history and a rollback action for an older generation", () => {
     const page = new EnterpriseAdminKnowledgePage() as unknown as MutablePage;
     page.zones = [zone];
@@ -209,11 +258,11 @@ describe("Enterprise Admin Knowledge page", () => {
       },
     ];
     render(page.render(), container);
-    expect(container.textContent).toContain("#2 · Active");
-    expect(container.textContent).toContain("Degraded override");
+    expect(container.textContent).toContain("#2 · Đang hoạt động");
+    expect(container.textContent).toContain("Ghi đè degraded");
     expect(
       Array.from(container.querySelectorAll("button")).some(
-        (button) => button.textContent?.trim() === "Rollback" && !button.hasAttribute("disabled"),
+        (button) => button.textContent?.trim() === "Hoàn tác" && !button.hasAttribute("disabled"),
       ),
     ).toBe(true);
   });
@@ -255,7 +304,7 @@ describe("Enterprise Admin Knowledge page", () => {
 
     page.tab = "overview";
     render(page.render(), container);
-    expect(container.textContent).toContain("Hợp lệ · Graph Chưa tạo");
+    expect(container.textContent).toContain("Hợp lệ · Đồ thị Chưa tạo");
     expect(container.textContent).toContain("Bản nháp");
 
     page.tab = "activity";

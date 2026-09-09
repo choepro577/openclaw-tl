@@ -1,7 +1,7 @@
 import { html, nothing } from "lit";
 import type { GatewayContextWindowOption } from "../../../api/types.ts";
 import { icons } from "../../../components/icons.ts";
-import { t } from "../../../i18n/index.ts";
+import { enterpriseUserChatCardCopy } from "../../../i18n/enterprise-user-chat.ts";
 
 export type ChatContextWindowControlParams = {
   options: readonly GatewayContextWindowOption[];
@@ -21,7 +21,7 @@ export function renderContextWindowControl(
   if (!selectedOption) {
     return nothing;
   }
-  const ariaLabel = t("chat.modelControls.contextWindowAria", {
+  const ariaLabel = enterpriseUserChatCardCopy("chat.modelControls.contextWindowAria", {
     state: selectedOption.label,
   });
   let control: ReturnType<typeof html>;
@@ -97,7 +97,7 @@ export function renderContextWindowControl(
       >
       <span class="chat-controls__fast-mode-copy">
         <span class="chat-controls__fast-mode-title">
-          ${t("chat.modelControls.contextWindow")}
+          ${enterpriseUserChatCardCopy("chat.modelControls.contextWindow")}
         </span>
         <span class="chat-controls__fast-mode-description">${selectedOption.label}</span>
       </span>

@@ -11,13 +11,19 @@ import {
   taskActivityByTaskId,
   tasks,
 } from "./task-registry-state.js";
-import type { TaskActivityOverlayState } from "./task-registry.process-state.js";
+import type {
+  TaskActivityOverlayState,
+  TaskLiveToolActivity,
+} from "./task-registry.process-state.js";
 import type { TaskRecord } from "./task-registry.types.js";
+import { sanitizeTaskStatusText } from "./task-status.js";
 
 const MAX_ACTIVITY_CHARS = 200;
 const STREAM_TEXT_BUFFER_CHARS = 4_000;
 const ACTIVITY_FLUSH_MS = 1_000;
 const MAX_PENDING_DIFFS = 64;
+const MAX_LIVE_TOOLS = 50;
+const MAX_LIVE_TOOL_PAYLOAD_CHARS = 8_000;
 
 type TaskActivitySnapshot = {
   lastActivity?: string;
@@ -28,6 +34,7 @@ function activityFor(task: TaskRecord): TaskActivityOverlayState {
   const runId = task.runId ?? "";
   const existing = taskActivityByTaskId.get(task.taskId);
   if (existing?.runId === runId) {
+    existing.liveToolsByCallId ??= new Map();
     return existing;
   }
   if (existing?.flushTimer) {
@@ -42,10 +49,70 @@ function activityFor(task: TaskRecord): TaskActivityOverlayState {
     added: 0,
     removed: 0,
     pendingDiffByToolCallId: new Map(),
+    liveToolsByCallId: new Map(),
     dirty: false,
   };
   taskActivityByTaskId.set(task.taskId, created);
   return created;
+}
+
+function boundedToolArgs(value: unknown): unknown {
+  const text = sanitizeTaskStatusText(value, { maxChars: MAX_LIVE_TOOL_PAYLOAD_CHARS });
+  if (!text) {
+    return undefined;
+  }
+  try {
+    return JSON.parse(text);
+  } catch {
+    return text;
+  }
+}
+
+function recordLiveTool(
+  task: TaskRecord,
+  event: AgentEventPayload,
+): { activity: TaskActivityOverlayState; changed: boolean } | undefined {
+  const phase = event.data.phase;
+  if (phase !== "start" && phase !== "result") {
+    return undefined;
+  }
+  const toolCallId = normalizeOptionalString(event.data.toolCallId);
+  const name = normalizeOptionalString(event.data.name);
+  if (!toolCallId || !name) {
+    return undefined;
+  }
+  const activity = activityFor(task);
+  const existing = activity.liveToolsByCallId.get(toolCallId);
+  if (phase === "start") {
+    if (!existing && activity.liveToolsByCallId.size >= MAX_LIVE_TOOLS) {
+      const oldest = activity.liveToolsByCallId.keys().next().value as string | undefined;
+      if (oldest) {
+        activity.liveToolsByCallId.delete(oldest);
+      }
+    }
+    activity.liveToolsByCallId.set(toolCallId, {
+      toolCallId,
+      name,
+      ...(event.data.args === undefined ? {} : { args: boundedToolArgs(event.data.args) }),
+      resultReceived: false,
+      startedAt: event.ts || Date.now(),
+    });
+    return { activity, changed: true };
+  }
+  const output = sanitizeTaskStatusText(event.data.result, {
+    errorContext: event.data.isError === true,
+    maxChars: MAX_LIVE_TOOL_PAYLOAD_CHARS,
+  });
+  activity.liveToolsByCallId.set(toolCallId, {
+    toolCallId,
+    name,
+    ...(existing?.args === undefined ? {} : { args: existing.args }),
+    ...(output ? { output } : {}),
+    ...(event.data.isError === undefined ? {} : { isError: event.data.isError === true }),
+    resultReceived: true,
+    startedAt: existing?.startedAt ?? event.ts ?? Date.now(),
+  });
+  return { activity, changed: true };
 }
 
 function lastLineSnippet(text: string): string | undefined {
@@ -125,6 +192,7 @@ export function recordTaskActivityEvent(task: TaskRecord, event: AgentEventPaylo
   if (event.stream !== "tool") {
     return false;
   }
+  const liveTool = recordLiveTool(task, event);
   const toolName = typeof event.data.name === "string" ? event.data.name : "";
   const kind = resolveFileMutationToolName(toolName);
   if (!kind) {
@@ -156,6 +224,9 @@ export function recordTaskActivityEvent(task: TaskRecord, event: AgentEventPaylo
     activity?.pendingDiffByToolCallId.delete(toolCallId);
   }
   if (event.data.isError === true || !delta || !activity) {
+    if (liveTool?.changed && event.data.isError !== true) {
+      markChanged(task.taskId, liveTool.activity);
+    }
     return event.data.isError !== true;
   }
   let changed = delta.added > 0 || delta.removed > 0;
@@ -167,9 +238,17 @@ export function recordTaskActivityEvent(task: TaskRecord, event: AgentEventPaylo
   if (changed) {
     activity.added += delta.added;
     activity.removed += delta.removed;
+  }
+  if (changed || liveTool?.changed) {
     markChanged(task.taskId, activity);
   }
   return true;
+}
+
+export function getTaskLiveToolActivitySnapshot(taskId: string): TaskLiveToolActivity[] {
+  return [...(taskActivityByTaskId.get(taskId)?.liveToolsByCallId.values() ?? [])].map((tool) => ({
+    ...tool,
+  }));
 }
 
 export function getTaskActivitySnapshot(taskId: string): TaskActivitySnapshot | undefined {

@@ -1,7 +1,11 @@
+import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { resetConfigRuntimeState, setRuntimeConfigSnapshot } from "../../config/config.js";
 import { retainLegacyDefaultAgentId } from "../../config/legacy.default-agent-owner.js";
+import { replaceSessionEntry } from "../../config/sessions/session-accessor.js";
 import type { OpenClawConfig } from "../../config/types.openclaw.js";
 import { clearAgentRunContext, registerAgentRunContext } from "../../infra/agent-run-registry.js";
+import { withStateDirEnv } from "../../test-helpers/state-dir-env.js";
 import type { ChatAbortControllerEntry } from "../chat-abort.js";
 import type { GatewayRequestContext } from "./types.js";
 
@@ -25,27 +29,6 @@ vi.mock("../session-utils.js", async (importOriginal) => {
       label: mocks.rowLabel,
       sessionId: `${key}-id`,
     })),
-  };
-});
-
-vi.mock("../session-event-payload.js", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../session-event-payload.js")>();
-  return {
-    ...actual,
-    buildGatewaySessionEventFields: ({
-      sessionRow,
-      hasActiveRun,
-      activeRunIds,
-    }: {
-      sessionRow: { key: string; label: string };
-      hasActiveRun?: boolean;
-      activeRunIds?: string[] | null;
-    }) => ({
-      key: sessionRow.key,
-      label: sessionRow.label,
-      ...(hasActiveRun === undefined ? {} : { hasActiveRun }),
-      ...(activeRunIds === undefined ? {} : { activeRunIds }),
-    }),
   };
 });
 
@@ -78,6 +61,63 @@ afterEach(() => {
 });
 
 describe("sessions.changed coalescing", () => {
+  it("keeps request-scoped selection on title events and publishes explicit override changes", async () => {
+    vi.useRealTimers();
+    const { loadGatewaySessionRow } =
+      await vi.importActual<typeof import("../session-utils.js")>("../session-utils.js");
+    await withStateDirEnv("session-event-scoped-selection-", async ({ stateDir }) => {
+      const agentId = "personal";
+      const sessionKey = `agent:${agentId}:dashboard`;
+      const storePath = path.join(stateDir, "agents", agentId, "agent", "openclaw-agent.sqlite");
+      const globalConfig: OpenClawConfig = {
+        agents: {
+          entries: { main: {} },
+          defaults: { model: { primary: "openai/gpt-5.6-luna" } },
+        },
+      };
+      const scopedConfig: OpenClawConfig = {
+        ...globalConfig,
+        agents: {
+          ...globalConfig.agents,
+          entries: { [agentId]: { model: "openai/gpt-5.6-sol" } },
+        },
+      };
+      const target = { agentId, sessionKey, storePath };
+      const entry = { sessionId: "scoped-session", updatedAt: Date.now(), label: "New title" };
+      const context = createContext(undefined, scopedConfig);
+      setRuntimeConfigSnapshot(globalConfig, globalConfig);
+      try {
+        await replaceSessionEntry(target, entry);
+        mocks.loadRow.mockImplementationOnce(loadGatewaySessionRow);
+        emitSessionsChanged(context, { reason: "chat.title", sessionKey, agentId });
+        expect(vi.mocked(context.broadcastToConnIds).mock.calls[0]?.[1]).toMatchObject({
+          label: "New title",
+          modelProvider: "openai",
+          model: "gpt-5.6-sol",
+          thinkingLevel: null,
+        });
+
+        await replaceSessionEntry(target, {
+          ...entry,
+          modelOverride: "gpt-5.6-terra",
+          providerOverride: "openai",
+          thinkingLevel: "high",
+        });
+        mocks.loadRow.mockImplementationOnce(loadGatewaySessionRow);
+        emitSessionsChanged(context, { reason: "patch", sessionKey, agentId });
+        flushPendingSessionsChangedEvents(context);
+        expect(vi.mocked(context.broadcastToConnIds).mock.calls.at(-1)?.[1]).toMatchObject({
+          modelProvider: "openai",
+          model: "gpt-5.6-terra",
+          thinkingLevel: "high",
+        });
+      } finally {
+        flushPendingSessionsChangedEvents(context);
+        resetConfigRuntimeState();
+      }
+    });
+  });
+
   it("emits a leading row and one trailing row with the latest state", () => {
     const context = createContext();
     const initialVersion = readSessionsMutationVersion(context);

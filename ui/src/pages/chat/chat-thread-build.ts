@@ -30,7 +30,11 @@ import {
   shouldRenderQueuedSendInThread,
 } from "./chat-progress.ts";
 import { chatMessagesContainQueuedSend } from "./chat-send-support.ts";
-import { coalesceToolActivityMessages, groupMessages } from "./chat-thread-grouping.ts";
+import {
+  coalesceToolActivityMessages,
+  groupMessages,
+  mergeToolCallResultPair,
+} from "./chat-thread-grouping.ts";
 import {
   appendCanvasBlockToAssistantMessage,
   buildMessageKeys,
@@ -61,6 +65,7 @@ import {
   optionalBoundaryIdentity,
   optionalRunIdentity,
   resolveRunInsertionBounds,
+  transcriptRunId,
 } from "./chat-thread-run-identity.ts";
 import { safeNormalizeMessage } from "./chat-turn-boundary.ts";
 import { resolveSystemNoticeKind } from "./system-notice-kinds.ts";
@@ -68,7 +73,9 @@ import { isLiveTerminalForRun } from "./terminal-message-identity.ts";
 import {
   buildLiveRenderedToolRefs,
   buildToolStreamIdentity,
+  prepareLiveToolMessageForPersistedResult,
   removeLiveToolBlocksFromHistory,
+  resolveMatchingLiveToolMessageIndex,
 } from "./tool-stream-identity.ts";
 
 export type BuildChatItemsProps = {
@@ -98,13 +105,68 @@ export type BuildChatItemsProps = {
   searchQuery?: string;
 };
 
+function canReconcileToolResultTurn(
+  messages: unknown[],
+  resultIndex: number,
+  liveMessage: unknown,
+): boolean {
+  const resultMessage = messages[resultIndex];
+  const resultPreview = extractChatMessagePreview(resultMessage);
+  const livePreview = extractChatMessagePreview(liveMessage);
+  const resultPreviewId = resultPreview && canvasPreviewBaseIdentity(resultMessage, resultPreview);
+  const livePreviewId = livePreview && canvasPreviewBaseIdentity(liveMessage, livePreview);
+  if (resultPreviewId && livePreviewId) {
+    // Each App invocation owns its view even when its tool call id is reused.
+    return resultPreviewId === livePreviewId;
+  }
+  const isUserTurn = (message: unknown) => {
+    const normalized = safeNormalizeMessage(message);
+    return normalized != null && normalizeRoleForGrouping(normalized.role) === "user";
+  };
+  if (!messages.slice(resultIndex + 1).some(isUserTurn)) {
+    return true;
+  }
+  const liveRunId = transcriptRunId(liveMessage);
+  const resultRunId = transcriptRunId(resultMessage);
+  if (liveRunId && resultRunId === liveRunId) {
+    return true;
+  }
+  const userTurn = messages.slice(0, resultIndex).findLast(isUserTurn);
+  // A cached older run can still reconcile in its own turn. Without positive
+  // ownership, an old unscoped result must not overwrite the newer live call.
+  return liveRunId != null && userTurnSendIdentity(userTurn) === `send:${liveRunId}`;
+}
+
 export function buildChatItems(props: BuildChatItemsProps): Array<ChatItem | MessageGroup> {
   let items: ChatItem[] = [];
   const tools = props.toolMessages.filter((message) => asRecord(message) !== null);
+  const reconciledResults = new Set<unknown>();
+  for (const [index, message] of props.messages.entries()) {
+    const liveIndex = resolveMatchingLiveToolMessageIndex(message, tools);
+    if (
+      liveIndex === undefined ||
+      !canReconcileToolResultTurn(props.messages, index, tools[liveIndex])
+    ) {
+      continue;
+    }
+    const merged = mergeToolCallResultPair(
+      {
+        kind: "message",
+        key: `live-tool:${liveIndex}`,
+        message: prepareLiveToolMessageForPersistedResult(tools[liveIndex], message),
+      },
+      { kind: "message", key: `persisted-tool:${index}`, message },
+    );
+    if (merged?.kind === "message") {
+      tools[liveIndex] = merged.message;
+      reconciledResults.add(message);
+    }
+  }
   const liveToolRefs = buildLiveRenderedToolRefs(tools);
   const history = props.messages
     .filter(
       (message) =>
+        !reconciledResults.has(message) &&
         !isAssistantHeartbeatAckForDisplay(message) &&
         (props.persistCommentary !== false || !isKeyedAssistantStreamFallbackMessage(message)),
     )

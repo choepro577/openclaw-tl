@@ -7,6 +7,7 @@ import {
 } from "../../config/config.js";
 import type { AgentDefaultsConfig } from "../../config/types.js";
 import type { OpenClawConfig } from "../../config/types.openclaw.js";
+import { inheritGatewayRequestScopedRuntimeConfig } from "../../gateway/request-runtime-config.js";
 
 type ResolvedAgentConfig = NonNullable<ReturnType<typeof resolveAgentConfig>>;
 
@@ -70,9 +71,9 @@ export function resolveCronAgentConfig(params: {
   return {
     runtimeConfig,
     agentDefaults,
-    cfgWithAgentDefaults: {
+    cfgWithAgentDefaults: inheritGatewayRequestScopedRuntimeConfig(runtimeConfig, {
       ...runtimeConfig,
       agents: Object.assign({}, runtimeConfig.agents, { defaults: agentDefaults }),
-    } satisfies OpenClawConfig,
+    } satisfies OpenClawConfig),
   };
 }

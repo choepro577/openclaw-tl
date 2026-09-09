@@ -6,6 +6,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { appendRegularFile } from "../infra/fs-safe.js";
+import { isPrivateRunObservationScope } from "../infra/private-run-observations.js";
 
 /**
  * Serializes append-only writes per file path.
@@ -78,6 +79,11 @@ export function getQueuedFileWriter(
   const writer: QueuedFileWriter = {
     filePath,
     write: (line: string) => {
+      // Check at enqueue time; a shared writer's promise queue may drain outside
+      // the originating async scope and must never retain the private line.
+      if (isPrivateRunObservationScope()) {
+        return "dropped";
+      }
       const lineBytes = Buffer.byteLength(line, "utf8");
       if (
         options.maxQueuedBytes !== undefined &&

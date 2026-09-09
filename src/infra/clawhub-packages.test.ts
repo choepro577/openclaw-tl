@@ -7,6 +7,38 @@ import {
 } from "./clawhub-packages.js";
 
 describe("clawhub packages", () => {
+  it.each([
+    { artifactKind: "legacy-zip", kind: "npm-pack" },
+    { artifactSha256: "a".repeat(64), sha256: "b".repeat(64) },
+  ])("rejects conflicting artifact identity %j", async (artifact) => {
+    await expect(
+      fetchClawHubPackageArtifact({
+        name: "@openclaw/diffs",
+        version: "2026.8.1",
+        fetchImpl: async () =>
+          new Response(JSON.stringify({ artifact }), {
+            headers: { "content-type": "application/json" },
+          }),
+      }),
+    ).rejects.toThrow("conflicting artifact identity");
+  });
+  it.each(["npm-pack", "legacy-zip"])(
+    "normalizes current %s artifact wire fields",
+    async (kind) => {
+      const result = await fetchClawHubPackageArtifact({
+        name: "@openclaw/diffs",
+        version: "2026.8.1",
+        fetchImpl: async () =>
+          new Response(
+            JSON.stringify({
+              artifact: { kind, sha256: "a".repeat(64), npmIntegrity: "sha512-example" },
+            }),
+            { headers: { "content-type": "application/json" } },
+          ),
+      });
+      expect(result.artifact).toMatchObject({ artifactKind: kind, artifactSha256: "a".repeat(64) });
+    },
+  );
   it("resolves latest versions from latestVersion before tags", () => {
     expect(
       resolveLatestVersionFromPackage({

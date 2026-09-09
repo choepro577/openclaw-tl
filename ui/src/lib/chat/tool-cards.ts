@@ -14,6 +14,7 @@ import {
   isToolResultContentType,
   resolveToolUseId,
 } from "../../../../src/chat/tool-content.js";
+import { enterpriseUserChatCopy } from "../../i18n/enterprise-user-chat.ts";
 import { redactToolPayloadText } from "../browser-redact.ts";
 import type { ToolCard, ToolCardOutcome } from "./chat-types.ts";
 import { extractTextCached } from "./message-extract.ts";
@@ -163,7 +164,14 @@ function isToolErrorOutput(outputText: string | undefined): boolean {
   return hasToolErrorStatus(obj.status);
 }
 
+export function isToolCardSkipped(card: Pick<ToolCard, "details">): boolean {
+  return asNullableRecord(card.details)?.status === "skipped";
+}
+
 export function isToolCardError(card: ToolCard): boolean {
+  if (isToolCardSkipped(card)) {
+    return false;
+  }
   if (card.isError !== undefined) {
     return card.isError;
   }
@@ -174,6 +182,11 @@ export function resolveToolCardOutcome(
   card: ToolCard,
   runActive: boolean | undefined,
 ): ToolCardOutcome {
+  // A skipped tool never ran. Runtime keeps isError for model control flow;
+  // presentation must use the recorded non-execution fact before that flag.
+  if (isToolCardSkipped(card)) {
+    return "skipped";
+  }
   if (isToolCardError(card)) {
     return "failed";
   }
@@ -184,6 +197,14 @@ export function resolveToolCardOutcome(
     return "succeeded";
   }
   return "unknown";
+}
+
+export function toolCardSkippedLabel(card: ToolCard): string {
+  return enterpriseUserChatCopy(
+    asNullableRecord(card.details)?.deniedReason === "steering"
+      ? "toolSkippedForUpdate"
+      : "toolSkipped",
+  );
 }
 
 export function extractToolPreview(

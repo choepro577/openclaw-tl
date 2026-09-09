@@ -13,6 +13,7 @@ import { formatForLog } from "../ws-log.js";
 import {
   clearProviderUsageRuntimeSnapshot,
   getProviderUsageRuntimeSnapshot,
+  readProviderUsageRuntimeSnapshot,
 } from "./provider-usage-runtime.js";
 
 const log = createSubsystemLogger("provider-usage-cache");
@@ -43,12 +44,14 @@ type ProviderUsageRefresh = {
 
 const usageCacheByAgentId = new Map<string, ProviderUsageCacheEntry>();
 const usageRefreshByAgentId = new Map<string, ProviderUsageRefresh>();
+const usageStatusRuntimeRefreshByConfig = new Map<OpenClawConfig, Promise<void>>();
 let cacheGeneration = 0;
 
 export function clearModelAuthStatusUsageCache(): void {
   cacheGeneration += 1;
   usageCacheByAgentId.clear();
   usageRefreshByAgentId.clear();
+  usageStatusRuntimeRefreshByConfig.clear();
   clearProviderUsageRuntimeSnapshot();
 }
 
@@ -292,4 +295,82 @@ export async function loadUsageStatusStaleWhileRevalidate(params: {
     providerIds: snapshot.providerIds,
     now: params.now ?? Date.now(),
   });
+}
+
+function scheduleUsageStatusRuntimeRefresh(config: OpenClawConfig): void {
+  if (usageStatusRuntimeRefreshByConfig.has(config)) {
+    return;
+  }
+  const scheduledGeneration = cacheGeneration;
+  const refresh = new Promise<void>((resolve) => {
+    // ponytail: let the cold HTTP response flush first; move refresh to a worker if it becomes heavier.
+    const handle = setTimeout(() => {
+      if (scheduledGeneration !== cacheGeneration) {
+        resolve();
+        return;
+      }
+      void loadUsageStatusStaleWhileRevalidate({ config }).then(
+        () => resolve(),
+        () => resolve(),
+      );
+    }, 50);
+    handle.unref?.();
+  }).finally(() => {
+    if (usageStatusRuntimeRefreshByConfig.get(config) === refresh) {
+      usageStatusRuntimeRefreshByConfig.delete(config);
+    }
+  });
+  usageStatusRuntimeRefreshByConfig.set(config, refresh);
+}
+
+/** Enterprise Admin reads immediately and lets its optional usage panel retry once. */
+export function readUsageStatusStaleWhileRevalidate(params: {
+  config: OpenClawConfig;
+  now?: number;
+}): UsageSummary {
+  const now = params.now ?? Date.now();
+  const snapshot = readProviderUsageRuntimeSnapshot({ config: params.config });
+  if (!snapshot) {
+    scheduleUsageStatusRuntimeRefresh(params.config);
+    return { updatedAt: now, providers: [], refreshing: true };
+  }
+  if (snapshot.providerIds.length === 0) {
+    usageCacheByAgentId.delete(snapshot.agentId);
+    return { updatedAt: now, providers: [] };
+  }
+  const { credentialKey, matching, needsRefresh, providerIds, providerKey } =
+    resolveProviderUsageCacheRead({
+      agentId: snapshot.agentId,
+      agentDir: snapshot.agentDir,
+      authStore: snapshot.store,
+      configRef: snapshot.configRef,
+      credentialKey: snapshot.credentialKey,
+      providerIds: snapshot.providerIds,
+      now,
+    });
+  if (matching) {
+    if (needsRefresh) {
+      void scheduleProviderUsageRefresh({
+        agentId: snapshot.agentId,
+        agentDir: snapshot.agentDir,
+        authStore: snapshot.store,
+        configRef: snapshot.configRef,
+        credentialKey,
+        providerIds,
+        providerKey,
+        lastGood: matching.summary,
+      }).catch(() => {});
+    }
+    return matching.summary;
+  }
+  void scheduleProviderUsageRefresh({
+    agentId: snapshot.agentId,
+    agentDir: snapshot.agentDir,
+    authStore: snapshot.store,
+    configRef: snapshot.configRef,
+    credentialKey,
+    providerIds,
+    providerKey,
+  }).catch(() => {});
+  return { updatedAt: now, providers: [], refreshing: true };
 }

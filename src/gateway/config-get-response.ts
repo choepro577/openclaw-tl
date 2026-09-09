@@ -40,10 +40,11 @@ function createConfigGetResponse(
 export async function readConfigGetResponse(params: {
   getHotReloadStatus?: () => GatewayHotReloadStatus | undefined;
   loadUiHints: () => Parameters<typeof redactConfigSnapshot>[1];
+  primeCache?: boolean;
   revisionProjector: GatewayConfigRevisionProjector;
 }): Promise<ConfigGetResponse> {
   const getHotReloadStatus = params.getHotReloadStatus;
-  if (!getHotReloadStatus || getHotReloadStatus() !== "active") {
+  if (!getHotReloadStatus || (!params.primeCache && getHotReloadStatus() !== "active")) {
     return createConfigGetResponse(
       await readConfigFileSnapshot(),
       params.loadUiHints(),
@@ -54,13 +55,14 @@ export async function readConfigGetResponse(params: {
   const pluginRegistryVersion = getActivePluginRegistryVersion();
   // With an active watcher, cache hits never re-read the file. External edits
   // become visible after its successful commit; the write path invalidates early.
+  const cached = configGetResponseCache;
   if (
-    configGetResponseCache?.getHotReloadStatus === getHotReloadStatus &&
-    configGetResponseCache.revisionProjector === params.revisionProjector &&
-    configGetResponseCache.appliedConfigHash === appliedConfigHash &&
-    configGetResponseCache.pluginRegistryVersion === pluginRegistryVersion
+    cached?.getHotReloadStatus === getHotReloadStatus &&
+    cached.revisionProjector === params.revisionProjector &&
+    cached.appliedConfigHash === appliedConfigHash &&
+    cached.pluginRegistryVersion === pluginRegistryVersion
   ) {
-    return await configGetResponseCache.promise;
+    return await cached.promise;
   }
 
   const promise = (async () =>

@@ -1,6 +1,8 @@
 import { html } from "lit";
 import { property, state } from "lit/decorators.js";
+import { eu } from "../../../i18n/enterprise-user.ts";
 import { OpenClawLightDomElement } from "../../../lit/openclaw-element.ts";
+import { enterpriseCopy, enterpriseRoleLabel, enterpriseStatusLabel } from "../enterprise-copy.ts";
 import {
   createEnterpriseAccount,
   listEnterpriseAccounts,
@@ -26,7 +28,7 @@ export class EnterpriseAccountsPage extends OpenClawLightDomElement {
     try {
       this.accounts = await listEnterpriseAccounts();
     } catch (error) {
-      this.error = error instanceof Error ? error.message : "Không thể tải tài khoản.";
+      this.error = error instanceof Error ? error.message : enterpriseCopy("accountsLoadFailed");
     } finally {
       this.loading = false;
     }
@@ -47,7 +49,7 @@ export class EnterpriseAccountsPage extends OpenClawLightDomElement {
       await this.load();
       this.onSelect?.(account);
     } catch (error) {
-      this.error = error instanceof Error ? error.message : "Không thể tạo tài khoản.";
+      this.error = error instanceof Error ? error.message : enterpriseCopy("accountsCreateFailed");
     }
   }
 
@@ -55,8 +57,8 @@ export class EnterpriseAccountsPage extends OpenClawLightDomElement {
     return html`
       <div class="enterprise-grid">
         <section class="enterprise-panel enterprise-stack">
-          <h2>Tài khoản</h2>
-          ${this.loading ? html`<p class="enterprise-muted">Đang tải…</p>` : ""}
+          <h2>${enterpriseCopy("accountList")}</h2>
+          ${this.loading ? html`<p class="enterprise-muted">${eu("loading")}</p>` : ""}
           ${this.error ? html`<p class="enterprise-error">${this.error}</p>` : ""}
           <div class="enterprise-list">
             ${this.accounts.map(
@@ -66,24 +68,24 @@ export class EnterpriseAccountsPage extends OpenClawLightDomElement {
                   @click=${() => this.onSelect?.(account)}
                 >
                   <strong>${account.displayName}</strong><br />
-                  <span class="enterprise-code">${account.username}</span> · ${account.role} ·
-                  ${account.enabled ? "active" : "locked"}
+                  <span class="enterprise-code">${account.username}</span> ·
+                  ${enterpriseRoleLabel(account.role)} · ${enterpriseStatusLabel(account.enabled)}
                 </button>
               `,
             )}
           </div>
         </section>
         <section class="enterprise-panel enterprise-stack">
-          <h2>Tạo tài khoản</h2>
+          <h2>${enterpriseCopy("createAccount")}</h2>
           <form class="enterprise-form" @submit=${(event: SubmitEvent) => void this.create(event)}>
             <label class="enterprise-field"
-              >Username<input class="enterprise-input" name="username" required
+              >${eu("username")}<input class="enterprise-input" name="username" required
             /></label>
             <label class="enterprise-field"
-              >Tên hiển thị<input class="enterprise-input" name="displayName" required
+              >${eu("displayName")}<input class="enterprise-input" name="displayName" required
             /></label>
             <label class="enterprise-field"
-              >Mật khẩu ban đầu<input
+              >${enterpriseCopy("initialPassword")}<input
                 class="enterprise-input"
                 name="initialPassword"
                 type="password"
@@ -91,12 +93,14 @@ export class EnterpriseAccountsPage extends OpenClawLightDomElement {
                 required
             /></label>
             <label class="enterprise-field"
-              >Role<select class="enterprise-select" name="role">
-                <option value="employee">Employee</option>
-                <option value="administrator">Administrator</option>
+              >${eu("role")}<select class="enterprise-select" name="role">
+                <option value="employee">${enterpriseCopy("employee")}</option>
+                <option value="administrator">${enterpriseCopy("administrator")}</option>
               </select></label
             >
-            <button class="enterprise-button" type="submit">Tạo tài khoản</button>
+            <button class="enterprise-button" type="submit">
+              ${enterpriseCopy("createAccount")}
+            </button>
           </form>
         </section>
       </div>

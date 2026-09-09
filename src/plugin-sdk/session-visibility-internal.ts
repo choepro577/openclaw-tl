@@ -1,6 +1,7 @@
 /** Core-private spawned-session ownership lookup; not a published plugin SDK subpath. */
 import { err, ok, type Result } from "@openclaw/normalization-core/result";
 import { normalizeTrimmedStringList } from "../../packages/normalization-core/src/string-normalization.js";
+import { callAgentToolGatewayRequest } from "../agents/tools/in-process-gateway.js";
 import {
   GatewayCredentialsRequiredError,
   GatewayExplicitAuthRequiredError,
@@ -101,9 +102,7 @@ export async function listSpawnedSessionKeysWithResult(params: {
       ? Math.max(1, Math.floor(params.limit))
       : undefined;
   try {
-    const list = await (params.callGateway ?? defaultCallGateway)<{
-      sessions: Array<{ key?: unknown }>;
-    }>({
+    const request = {
       method: "sessions.list",
       params: {
         includeGlobal: false,
@@ -111,7 +110,10 @@ export async function listSpawnedSessionKeysWithResult(params: {
         ...(limit !== undefined ? { limit } : {}),
         spawnedBy: params.requesterSessionKey,
       },
-    });
+    };
+    const list = await (params.callGateway
+      ? params.callGateway<{ sessions: Array<{ key?: unknown }> }>(request)
+      : callAgentToolGatewayRequest<{ sessions: Array<{ key?: unknown }> }>(request));
     if (!Array.isArray(list?.sessions)) {
       return err({
         kind: "unknown",

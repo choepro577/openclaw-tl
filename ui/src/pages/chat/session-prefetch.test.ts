@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { GatewayBrowserClient } from "../../api/gateway.ts";
 import type { GatewaySessionRow } from "../../api/types.ts";
 import type { ApplicationContext } from "../../app/context.ts";
+import { CHAT_HISTORY_COMMITTED_EVENT } from "./chat-pane-session.ts";
 import {
   appendChatMessageToCache,
   cacheChatSessionSnapshot,
@@ -23,6 +24,7 @@ const snapshotHost = { assistantAgentId: "main", agentsList: null, hello: null }
 
 type SessionPrefetchUpdate = {
   client: GatewayBrowserClient | null;
+  historyReady?: boolean;
   listRevision: number;
   openSessionKeys: readonly string[];
   rows: readonly GatewaySessionRow[] | null;
@@ -180,11 +182,22 @@ describe("recent session prefetch", () => {
 
   function updatePrefetch(update: SessionPrefetchUpdate): void {
     current = update;
-    host.replaceChildren(
-      ...update.openSessionKeys.map((sessionKey) =>
-        Object.assign(document.createElement("openclaw-chat-pane"), { sessionKey }),
-      ),
+    const panes = update.openSessionKeys.map((sessionKey) =>
+      Object.assign(document.createElement("openclaw-chat-pane"), {
+        sessionHistoryReady: update.historyReady ?? true,
+        sessionKey,
+        visuallyPresented: true,
+      }),
     );
+    if (panes.length === 0) {
+      panes.push(
+        Object.assign(document.createElement("openclaw-chat-pane"), {
+          sessionHistoryReady: update.historyReady ?? true,
+          visuallyPresented: true,
+        }),
+      );
+    }
+    host.replaceChildren(...panes);
     controller.hostUpdated?.();
   }
 
@@ -316,6 +329,33 @@ describe("recent session prefetch", () => {
     await vi.advanceTimersByTimeAsync(2_000);
     await settlePromises();
     expect(request).toHaveBeenCalledTimes(2);
+  });
+
+  it("waits for the visible history commit before starting prefetch", async () => {
+    const request = vi.fn(async (_method: string, params: unknown) =>
+      historyResult((params as { sessionKey: string }).sessionKey),
+    );
+    const base = {
+      client: { request } as unknown as GatewayBrowserClient,
+      listRevision: 1,
+      openSessionKeys: [],
+      rows: [row("agent:main:waiting", NOW - 1)],
+    };
+
+    updatePrefetch({ ...base, historyReady: false });
+    await vi.advanceTimersByTimeAsync(3_000);
+    await settlePromises();
+    expect(request).not.toHaveBeenCalled();
+
+    const pane = host.querySelector<HTMLElement>("openclaw-chat-pane");
+    if (!pane) {
+      throw new Error("missing visible chat pane");
+    }
+    (pane as HTMLElement & { sessionHistoryReady?: boolean }).sessionHistoryReady = true;
+    pane.dispatchEvent(new Event(CHAT_HISTORY_COMMITTED_EVENT, { bubbles: true, composed: true }));
+    await vi.advanceTimersByTimeAsync(500);
+    await settlePromises();
+    expect(request).toHaveBeenCalledOnce();
   });
 
   it("rewarms complete stored history after an interleaved append miss", async () => {

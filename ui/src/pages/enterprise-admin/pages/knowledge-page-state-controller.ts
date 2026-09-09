@@ -1,6 +1,8 @@
 import { consume } from "@lit/context";
 import { state } from "lit/decorators.js";
 import { applicationContext, type ApplicationContext } from "../../../app/context.ts";
+import { showNativeConfirm } from "../../../branding/display-dialog.ts";
+import { kak } from "../../../i18n/enterprise-admin-knowledge.ts";
 import { OpenClawLightDomElement } from "../../../lit/openclaw-element.ts";
 import {
   listAdminAccounts,
@@ -9,6 +11,7 @@ import {
 } from "../../enterprise/services/enterprise-api.ts";
 import {
   listEnterpriseKnowledgeAgentBindings,
+  listEnterpriseKnowledgeEvidenceTransfers,
   listEnterpriseKnowledgeJobs,
   listEnterpriseKnowledgeMembers,
   listEnterpriseKnowledgePublications,
@@ -68,39 +71,32 @@ export class EnterpriseAdminKnowledgeStateController extends OpenClawLightDomEle
   @state() protected jobs: EnterpriseKnowledgeJob[] = [];
   @state() protected jobSteps: Record<string, EnterpriseKnowledgeJobStep[]> = {};
   @state() protected publications: EnterpriseKnowledgePublication[] = [];
+  @state() protected rollbackTarget?: {
+    zone: EnterpriseKnowledgeZone;
+    publication: EnterpriseKnowledgePublication;
+  };
+  @state() protected rollbackError = "";
   @state() protected members: Array<{ accountId: string; role: EnterpriseKnowledgeZoneRole }> = [];
   @state() protected memberDraft: Record<string, EnterpriseKnowledgeZoneRole | "none"> = {};
   @state() protected memberQuery = "";
   @state() protected bindings: string[] = [];
   @state() protected bindingDraft: string[] = [];
   @state() protected agentQuery = "";
+  @state() protected evidenceTransfers: string[] = [];
+  @state() protected evidenceTransferDraft: string[] = [];
+  @state() protected evidenceTransferQuery = "";
   @state() protected agentCatalog: EnterpriseKnowledgeAgentCatalog = EMPTY_AGENT_CATALOG;
   @state() protected accounts: EnterpriseAccount[] = [];
   @state() protected catalogsLoading = false;
   @state() protected catalogError = "";
-  @state() protected candidate?: {
-    id: string;
-    sourceSetRevision: number;
-    buildRevision: number;
-    lexicalStatus: string;
-    vectorStatus: string;
-    integrityStatus: string;
-    graphStatus: "not_built" | "ready" | "degraded" | "error";
-    graphSchemaVersion: number;
-    graphNodeCount: number;
-    graphEdgeCount: number;
-    graphProposedCount: number;
-    graphOrphanCount: number;
-    snapshotRevision: number;
-    artifactSchemaVersion: 1 | 2 | 3;
-    aiAnalysisStatus: "off" | "ready" | "degraded";
-    degradationReasons: string[];
-    createdAt: number;
-  };
+  @state() protected candidate?: NonNullable<
+    Awaited<ReturnType<typeof loadEnterpriseKnowledgeZone>>["candidate"]
+  >;
   @state() protected graphSettings?: EnterpriseKnowledgeGraphSettings;
   @state() protected graphOverview?: EnterpriseKnowledgeGraphOverview;
   @state() protected readiness?: Awaited<ReturnType<typeof loadEnterpriseKnowledgeReadiness>>;
   @state() protected searchHits: Array<Record<string, unknown>> = [];
+  @state() protected searchCompleted = false;
   @state() protected degradedReason = "";
   @state() protected uploads: UploadProgress[] = [];
   @state() protected loading = true;
@@ -124,6 +120,8 @@ export class EnterpriseAdminKnowledgeStateController extends OpenClawLightDomEle
   private slugEdited = false;
   private reloadTimer?: ReturnType<typeof globalThis.setTimeout>;
   private stopRealtime?: () => void;
+  private realtimeGateway?: ApplicationContext["gateway"];
+  protected detailRequest = 0;
 
   override connectedCallback(): void {
     super.connectedCallback();
@@ -137,11 +135,13 @@ export class EnterpriseAdminKnowledgeStateController extends OpenClawLightDomEle
   }
 
   override disconnectedCallback(): void {
+    this.detailRequest++;
     if (this.reloadTimer) {
       globalThis.clearTimeout(this.reloadTimer);
     }
     this.stopRealtime?.();
     this.stopRealtime = undefined;
+    this.realtimeGateway = undefined;
     super.disconnectedCallback();
   }
 
@@ -151,9 +151,13 @@ export class EnterpriseAdminKnowledgeStateController extends OpenClawLightDomEle
 
   private startRealtime(): void {
     const gateway = this.application?.gateway;
-    if (!gateway || this.stopRealtime) {
+    if (this.stopRealtime && this.realtimeGateway === gateway) {
       return;
     }
+    // The HTTP-only Admin portal has no ApplicationGateway context. Its durable
+    // change feed must still refresh completed ingestion and publication state.
+    this.stopRealtime?.();
+    this.realtimeGateway = gateway;
     this.stopRealtime = startEnterpriseKnowledgeRealtime({
       gateway,
       audience: "admin",
@@ -358,7 +362,7 @@ export class EnterpriseAdminKnowledgeStateController extends OpenClawLightDomEle
   protected openCreateDrawer(): void {
     this.createDraft = {
       ...emptyKnowledgeZoneDraft(),
-      graphEnabled: this.readiness?.graph.enabled ?? false,
+      graphEnabled: this.readiness?.graph.enabled ?? true,
     };
     this.createErrors = {};
     this.createError = "";
@@ -370,7 +374,7 @@ export class EnterpriseAdminKnowledgeStateController extends OpenClawLightDomEle
   }
 
   protected closeCreateDrawer(): void {
-    if (this.busy && !globalThis.confirm("Zone đang được tạo. Đóng drawer?")) {
+    if (this.busy && !showNativeConfirm(kak("closeCreating"))) {
       return;
     }
     this.createOpen = false;
@@ -418,12 +422,12 @@ export class EnterpriseAdminKnowledgeStateController extends OpenClawLightDomEle
 
   protected uploadProgress(upload: EnterpriseKnowledgeUpload): UploadProgress {
     const labels: Record<EnterpriseKnowledgeUpload["state"], string> = {
-      active: "Chờ tiếp tục",
-      committing: "Đang xử lý",
-      committed: "Đã nạp",
-      cancelled: "Đã hủy",
-      expired: "Đã hết hạn",
-      error: "Lỗi",
+      active: "active",
+      committing: "committing",
+      committed: "committed",
+      cancelled: "cancelled",
+      expired: "expired",
+      error: "error",
     };
     return {
       id: upload.id,
@@ -438,6 +442,10 @@ export class EnterpriseAdminKnowledgeStateController extends OpenClawLightDomEle
     zone: EnterpriseKnowledgeZone,
     initialTab: KnowledgeTab = "overview",
   ): Promise<void> {
+    if (this.selected?.id !== zone.id) {
+      this.closeZone();
+    }
+    const request = ++this.detailRequest;
     this.selected = zone;
     this.tab = initialTab;
     this.detailLoading = true;
@@ -448,21 +456,17 @@ export class EnterpriseAdminKnowledgeStateController extends OpenClawLightDomEle
     this.versionPreview = undefined;
     this.versions = [];
     try {
-      const [detail, sources, jobs, members, bindings, publications, uploads] = await Promise.all([
-        loadEnterpriseKnowledgeZone("admin", zone.id),
-        listEnterpriseKnowledgeSources("admin", zone.id),
-        listEnterpriseKnowledgeJobs("admin", zone.id),
-        listEnterpriseKnowledgeMembers("admin", zone.id),
-        listEnterpriseKnowledgeAgentBindings(zone.id),
-        listEnterpriseKnowledgePublications("admin", zone.id),
-        listEnterpriseKnowledgeUploads("admin", zone.id),
-      ]);
-      this.selected = detail.zone;
-      this.selectedRole = detail.role;
-      this.candidate = detail.candidate ?? undefined;
-      this.graphSettings = detail.graphSettings;
-      this.sources = sources.items;
-      this.jobs = jobs.items;
+      const [detail, sources, jobs, members, bindings, publications, uploads, transfers] =
+        await Promise.all([
+          loadEnterpriseKnowledgeZone("admin", zone.id),
+          listEnterpriseKnowledgeSources("admin", zone.id),
+          listEnterpriseKnowledgeJobs("admin", zone.id),
+          listEnterpriseKnowledgeMembers("admin", zone.id),
+          listEnterpriseKnowledgeAgentBindings(zone.id),
+          listEnterpriseKnowledgePublications("admin", zone.id),
+          listEnterpriseKnowledgeUploads("admin", zone.id),
+          listEnterpriseKnowledgeEvidenceTransfers(zone.id),
+        ]);
       const jobDetails = (
         await Promise.allSettled(
           jobs.items
@@ -470,19 +474,43 @@ export class EnterpriseAdminKnowledgeStateController extends OpenClawLightDomEle
             .map((job) => loadEnterpriseKnowledgeJob("admin", zone.id, job.id)),
         )
       ).flatMap((result) => (result.status === "fulfilled" ? [result.value] : []));
-      this.jobSteps = Object.fromEntries(jobDetails.map((detail) => [detail.job.id, detail.steps]));
+      // A completed mutation and realtime refresh can race; only the latest snapshot owns the drawer.
+      if (request !== this.detailRequest) {
+        return;
+      }
+      if (this.candidate?.id !== detail.candidate?.id) {
+        this.searchHits = [];
+        this.searchCompleted = false;
+        this.degradedReason = "";
+      }
+      this.selected = detail.zone;
+      this.zones = this.zones.map((item) => (item.id === detail.zone.id ? detail.zone : item));
+      this.selectedRole = detail.role;
+      this.candidate = detail.candidate ?? undefined;
+      this.graphSettings = detail.graphSettings;
+      this.sources = sources.items;
+      this.jobs = jobs.items;
+      this.jobSteps = Object.fromEntries(
+        jobDetails.map((jobDetail) => [jobDetail.job.id, jobDetail.steps]),
+      );
       this.members = members.items;
       this.memberDraft = memberRoleDraft(members.items);
       this.bindings = bindings.items;
       this.bindingDraft = [...bindings.items];
+      this.evidenceTransfers = transfers.items;
+      this.evidenceTransferDraft = [...transfers.items];
       this.publications = publications.items;
       this.uploads = uploads.items.map((upload) => this.uploadProgress(upload));
       this.settingsDraft = draftFromKnowledgeZone(detail.zone, detail.graphSettings);
       this.settingsErrors = {};
     } catch (error) {
-      this.error = errorMessage(error);
+      if (request === this.detailRequest) {
+        this.error = errorMessage(error);
+      }
     } finally {
-      this.detailLoading = false;
+      if (request === this.detailRequest) {
+        this.detailLoading = false;
+      }
     }
   }
 
@@ -507,6 +535,7 @@ export class EnterpriseAdminKnowledgeStateController extends OpenClawLightDomEle
       settingsDirty ||
       graphDirty ||
       !sameStringSet(this.bindings, this.bindingDraft) ||
+      !sameStringSet(this.evidenceTransfers, this.evidenceTransferDraft) ||
       !sameMemberRoles(this.members, this.memberDraft)
     );
   }
@@ -515,13 +544,26 @@ export class EnterpriseAdminKnowledgeStateController extends OpenClawLightDomEle
     if (!this.busy && !this.detailsDirty()) {
       return true;
     }
-    return globalThis.confirm(
-      this.busy ? "Tác vụ đang chạy. Đóng drawer?" : "Bỏ các thay đổi chưa lưu?",
-    );
+    return showNativeConfirm(this.busy ? kak("closeBusy") : kak("discardChanges"));
   }
 
   protected closeZone(): void {
+    this.detailRequest++;
     this.selected = undefined;
+    this.candidate = undefined;
+    this.sources = [];
+    this.jobs = [];
+    this.members = [];
+    this.memberDraft = {};
+    this.bindings = [];
+    this.bindingDraft = [];
+    this.evidenceTransfers = [];
+    this.evidenceTransferDraft = [];
+    this.evidenceTransferQuery = "";
+    this.publications = [];
+    this.rollbackTarget = undefined;
+    this.rollbackError = "";
+    this.uploads = [];
     this.versions = [];
     this.selectedSource = undefined;
     this.selectedVersion = undefined;
@@ -529,6 +571,8 @@ export class EnterpriseAdminKnowledgeStateController extends OpenClawLightDomEle
     this.graphSettings = undefined;
     this.jobSteps = {};
     this.searchHits = [];
+    this.searchCompleted = false;
+    this.degradedReason = "";
     this.error = "";
     this.notice = "";
   }

@@ -6,6 +6,7 @@ import { resolveSessionRuntimeOverrideForProvider } from "../agents/session-runt
 import { resolveUtilityModelRefForAgent } from "../agents/utility-model.js";
 import { generateConversationLabelWithFallback } from "../auto-reply/reply/conversation-label-generator.js";
 import { stripInboundMetadata } from "../auto-reply/reply/strip-inbound-meta.js";
+import { resolveSessionAuthProfileOverrideSource } from "../config/sessions/auth-profile-override-provenance.js";
 import { updateSessionEntry } from "../config/sessions/session-accessor.js";
 import type { SessionEntry } from "../config/sessions/types.js";
 import type { OpenClawConfig } from "../config/types.openclaw.js";
@@ -20,6 +21,8 @@ type DashboardSessionTitleModelEntry = Pick<
   | "agentHarnessId"
   | "agentRuntimeOverride"
   | "authProfileOverride"
+  | "authProfileOverrideCompactionCount"
+  | "authProfileOverrideSource"
   | "model"
   | "modelOverride"
   | "modelProvider"
@@ -127,7 +130,13 @@ function resolveDashboardTitleAuthProfile(params: {
   entry: DashboardSessionTitleModelEntry | undefined;
   regularProvider: string;
 }): string | undefined {
-  const sessionProfile = params.entry?.authProfileOverride?.trim();
+  // Automatic profile choices are runtime observations, not durable user pins.
+  // Re-resolve them from the current prepared auth store so migrated or aliased
+  // Enterprise profiles do not strand background title generation on a stale id.
+  const sessionProfile =
+    resolveSessionAuthProfileOverrideSource(params.entry) === "user"
+      ? params.entry?.authProfileOverride?.trim()
+      : undefined;
   if (sessionProfile) {
     return sessionProfile;
   }

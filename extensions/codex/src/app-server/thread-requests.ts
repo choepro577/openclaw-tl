@@ -166,6 +166,12 @@ export function buildThreadStartParams(
     modelProvider?: string | null;
     hostSystemAgentActive?: boolean;
     restrictedToolSurfaceInheritedMcpServerNames?: readonly string[];
+    /** Exact plugin app ids admitted by the current enterprise grant. */
+    admittedCodexPluginAppIds?: readonly string[];
+    /** Exact plugin MCP server names admitted by the current enterprise grant. */
+    admittedCodexPluginMcpServerNames?: readonly string[];
+    /** Trusted native-hook relay overlay to retain on a selective plugin turn. */
+    nativeHookRelayConfig?: JsonObject;
     shellEnvironment?: Readonly<Record<string, string>>;
     disableLoginShell?: boolean;
   },
@@ -214,6 +220,9 @@ export function buildThreadStartParams(
       hostSystemAgentActive: options.hostSystemAgentActive,
       restrictedToolSurfaceInheritedMcpServerNames:
         options.restrictedToolSurfaceInheritedMcpServerNames,
+      admittedCodexPluginAppIds: options.admittedCodexPluginAppIds,
+      admittedCodexPluginMcpServerNames: options.admittedCodexPluginMcpServerNames,
+      nativeHookRelayConfig: options.nativeHookRelayConfig,
       shellEnvironment: options.shellEnvironment,
       disableLoginShell: options.disableLoginShell,
     }),
@@ -249,6 +258,12 @@ export function buildThreadResumeParams(
     model?: string | null;
     hostSystemAgentActive?: boolean;
     restrictedToolSurfaceInheritedMcpServerNames?: readonly string[];
+    /** Exact plugin app ids admitted by the current enterprise grant. */
+    admittedCodexPluginAppIds?: readonly string[];
+    /** Exact plugin MCP server names admitted by the current enterprise grant. */
+    admittedCodexPluginMcpServerNames?: readonly string[];
+    /** Trusted native-hook relay overlay to retain on a selective plugin turn. */
+    nativeHookRelayConfig?: JsonObject;
     shellEnvironment?: Readonly<Record<string, string>>;
     disableLoginShell?: boolean;
     preserveNativeModel?: boolean;
@@ -309,6 +324,9 @@ export function buildThreadResumeParams(
       hostSystemAgentActive: options.hostSystemAgentActive,
       restrictedToolSurfaceInheritedMcpServerNames:
         options.restrictedToolSurfaceInheritedMcpServerNames,
+      admittedCodexPluginAppIds: options.admittedCodexPluginAppIds,
+      admittedCodexPluginMcpServerNames: options.admittedCodexPluginMcpServerNames,
+      nativeHookRelayConfig: options.nativeHookRelayConfig,
       shellEnvironment: options.shellEnvironment,
       disableLoginShell: options.disableLoginShell,
     }),
@@ -419,6 +437,12 @@ export function buildCodexRuntimeThreadConfigForRun(
     appServer?: Pick<CodexAppServerRuntimeOptions, "networkProxy">;
     hostSystemAgentActive?: boolean;
     restrictedToolSurfaceInheritedMcpServerNames?: readonly string[];
+    /** Exact plugin app ids admitted by the current enterprise grant. */
+    admittedCodexPluginAppIds?: readonly string[];
+    /** Exact plugin MCP server names admitted by the current enterprise grant. */
+    admittedCodexPluginMcpServerNames?: readonly string[];
+    /** Trusted native-hook relay overlay to retain on a selective plugin turn. */
+    nativeHookRelayConfig?: JsonObject;
     shellEnvironment?: Readonly<Record<string, string>>;
     disableLoginShell?: boolean;
   } = {},
@@ -458,6 +482,11 @@ export function buildCodexRuntimeThreadConfigForRun(
     mergeCodexThreadConfigs(restrictedRunConfig, webSearchConfig),
     options,
   );
+  const selectivePluginCapabilityAdmission =
+    !ringZeroActive &&
+    !messageOnlySourceReply &&
+    ((options.admittedCodexPluginAppIds?.length ?? 0) > 0 ||
+      (options.admittedCodexPluginMcpServerNames?.length ?? 0) > 0);
   const runtimeConfig =
     mergeCodexThreadConfigs(
       baseConfig,
@@ -472,7 +501,18 @@ export function buildCodexRuntimeThreadConfigForRun(
         ? CODEX_DELEGATION_DISABLED_THREAD_CONFIG
         : undefined,
       messageOnlySourceReply || params.pluginHarnessToolPolicyRestricted === true
-        ? buildRestrictedToolConfigPatch(restrictedToolSurfaceMcpServerNames)
+        ? buildRestrictedToolConfigPatch(restrictedToolSurfaceMcpServerNames, {
+            config,
+            admittedCodexPluginAppIds: selectivePluginCapabilityAdmission
+              ? options.admittedCodexPluginAppIds
+              : undefined,
+            admittedCodexPluginMcpServerNames: selectivePluginCapabilityAdmission
+              ? options.admittedCodexPluginMcpServerNames
+              : undefined,
+            nativeHookRelayConfig: selectivePluginCapabilityAdmission
+              ? options.nativeHookRelayConfig
+              : undefined,
+          })
         : buildCodexRingZeroThreadConfigPatch(
             params,
             options.hostSystemAgentActive,
@@ -508,15 +548,85 @@ export function buildCodexRingZeroThreadConfigPatch(
   };
 }
 
-function buildRestrictedToolConfigPatch(inheritedMcpServerNames: readonly string[]): JsonObject {
+function buildRestrictedToolConfigPatch(
+  inheritedMcpServerNames: readonly string[],
+  options: {
+    config?: JsonObject;
+    admittedCodexPluginAppIds?: readonly string[];
+    admittedCodexPluginMcpServerNames?: readonly string[];
+    nativeHookRelayConfig?: JsonObject;
+  } = {},
+): JsonObject {
   // Restricted turns already send environments: [] and disable native code mode.
   // Remove Codex-owned tool sources here; project-document suppression belongs to
   // ring-zero, message-only, and tool-disabled context policy at the caller.
   const mcpServers = Object.fromEntries(
     [...new Set(inheritedMcpServerNames)].toSorted().map((name) => [name, { enabled: false }]),
   );
+  const admittedAppIds = [
+    ...new Set(
+      (options.admittedCodexPluginAppIds ?? []).filter(
+        (appId) => typeof appId === "string" && appId.trim().length > 0,
+      ),
+    ),
+  ].toSorted();
+  const configuredApps = isJsonObject(options.config?.apps) ? options.config.apps : undefined;
+  const apps: JsonObject | undefined =
+    options.admittedCodexPluginAppIds === undefined
+      ? undefined
+      : {
+          _default: {
+            enabled: false,
+            destructive_enabled: false,
+            open_world_enabled: false,
+          },
+        };
+  if (apps) {
+    for (const appId of admittedAppIds) {
+      const appConfig = configuredApps?.[appId];
+      // The allowlist identifies ownership; the merged plugin patch still has
+      // to provide the enabled app settings.  Missing settings fail closed.
+      if (isJsonObject(appConfig) && appConfig.enabled === true) {
+        apps[appId] = appConfig;
+      }
+    }
+  }
+  const admittedMcpServerNames = [
+    ...new Set(
+      (options.admittedCodexPluginMcpServerNames ?? []).filter(
+        (serverName) => typeof serverName === "string" && serverName.trim().length > 0,
+      ),
+    ),
+  ].toSorted();
+  const nativeHookRelayPatch: JsonObject = {};
+  for (const [key, value] of Object.entries(options.nativeHookRelayConfig ?? {})) {
+    // Only the relay's hook overlay is allowed to override the deny patch.
+    // Other final config fields remain under the restricted policy.
+    if (key === "features.hooks") {
+      if (value === true) {
+        nativeHookRelayPatch[key] = value;
+      }
+    } else if (key.startsWith("hooks.")) {
+      nativeHookRelayPatch[key] = value;
+    }
+  }
   return {
     ...CODEX_RING_ZERO_THREAD_CONFIG,
+    ...(apps
+      ? {
+          apps,
+          "features.apps": Object.keys(apps).some((appId) => appId !== "_default"),
+        }
+      : {}),
+    ...((apps && Object.keys(apps).some((appId) => appId !== "_default")) ||
+    admittedMcpServerNames.length > 0
+      ? {
+          // Codex gates model-visible hosted apps separately from features.apps.
+          // Unknown MCP server names remain denied by thread attestation.
+          "orchestrator.mcp.enabled": true,
+        }
+      : {}),
+    ...nativeHookRelayPatch,
     ...(Object.keys(mcpServers).length > 0 ? { mcp_servers: mcpServers } : {}),
   };
 }
@@ -634,6 +744,12 @@ export async function attestCodexRestrictedToolSurfaceMcpServersDisabled(
   threadId: string,
   threadConfig: JsonObject | undefined,
   signal?: AbortSignal,
+  options?: {
+    /** Exact plugin connector ids admitted on this restricted thread. */
+    admittedCodexPluginAppIds?: readonly string[];
+    /** Exact plugin MCP server names admitted on this restricted thread. */
+    admittedCodexPluginMcpServerNames?: readonly string[];
+  },
 ): Promise<void> {
   const configuredServers = threadConfig?.mcp_servers;
   if (configuredServers !== undefined && !isJsonObject(configuredServers)) {
@@ -648,6 +764,16 @@ export async function attestCodexRestrictedToolSurfaceMcpServersDisabled(
     }
     expectedDisabledServerNames.add(name);
   }
+  const admittedPluginAppIds = new Set(
+    (options?.admittedCodexPluginAppIds ?? []).filter(
+      (appId) => typeof appId === "string" && appId.trim().length > 0,
+    ),
+  );
+  const admittedPluginMcpServerNames = new Set(
+    (options?.admittedCodexPluginMcpServerNames ?? []).filter(
+      (serverName) => typeof serverName === "string" && serverName.trim().length > 0,
+    ),
+  );
   const response = await client.request(
     "mcpServerStatus/list",
     { threadId, detail: "toolsAndAuthOnly" },
@@ -665,9 +791,23 @@ export async function attestCodexRestrictedToolSurfaceMcpServersDisabled(
         "Codex mcpServerStatus/list returned an invalid restricted-tool-surface server",
       );
     }
-    if (!expectedDisabledServerNames.has(status.name)) {
+    const admittedPluginMcpServer = admittedPluginMcpServerNames.has(status.name);
+    const admittedPluginAppsServer = status.name === "codex_apps" && admittedPluginAppIds.size > 0;
+    if (
+      !expectedDisabledServerNames.has(status.name) &&
+      !admittedPluginMcpServer &&
+      !admittedPluginAppsServer
+    ) {
       throw new Error(
         `Codex restricted-tool-surface MCP attestation found unexpected server ${status.name}`,
+      );
+    }
+    if (
+      expectedDisabledServerNames.has(status.name) &&
+      (admittedPluginMcpServer || admittedPluginAppsServer)
+    ) {
+      throw new Error(
+        `Codex restricted-tool-surface MCP server ${status.name} was both disabled and admitted`,
       );
     }
     if (observedDisabledServerNames.has(status.name)) {
@@ -680,6 +820,18 @@ export async function attestCodexRestrictedToolSurfaceMcpServersDisabled(
       throw new Error(
         `Codex restricted-tool-surface MCP attestation returned malformed server ${status.name}`,
       );
+    }
+    if (admittedPluginMcpServer || admittedPluginAppsServer) {
+      // Codex 0.148 exposes a raw shared-server inventory here.  It is not
+      // filtered by the per-thread `apps` config, so unknown connector ids
+      // must not be treated as admitted.  `app/installed` above proves the
+      // selected app is visible; the native relay performs the exact
+      // connector ownership check again for every tool call.
+      // Exact inventory ownership is the admission proof for a plugin MCP
+      // server.  It may still report authenticationRequired/notLoggedIn;
+      // auth status is handled by the plugin runtime API, while unknown
+      // server names remain rejected above.
+      continue;
     }
     if (status.serverInfo !== null) {
       throw new Error(

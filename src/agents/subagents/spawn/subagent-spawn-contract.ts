@@ -39,8 +39,22 @@ export type SpawnSubagentParams = {
 };
 
 export type SpawnSubagentContext = {
+  /** Request-scoped runtime projection. Never reload host-global config when present. */
+  config?: import("../../../config/types.openclaw.js").OpenClawConfig;
+  /**
+   * Require a host-attested parent-to-child launch identity even when optional
+   * execution-identity collection is disabled. Core-managed delegation uses
+   * this for authorization; it is never accepted from model-authored params.
+   */
+  requireTrustedLaunchIdentity?: true;
+  /** Host-only durable requirement; a restart must not run without the private context lease. */
+  requiresPrivateModelContext?: true;
   agentSessionKey?: string;
   requesterTurnRunId?: string;
+  /** Host-only exact idempotency key for the originating user turn. */
+  requesterUserTurnIdempotencyKey?: string;
+  /** Host-only session id that owns requesterUserTurnIdempotencyKey. */
+  requesterUserTurnSessionId?: string;
   /** Separate key used only for completion routing, not sandbox policy. */
   completionOwnerKey?: string;
   agentChannel?: string;
@@ -60,6 +74,18 @@ export type SpawnSubagentContext = {
   inheritedToolAllowlist?: string[];
   inheritedToolDenylist?: string[];
   requesterRunId?: string;
+  /** Core-only hook used to bind security authority before a child can execute tools. */
+  onBeforeChildDispatch?: (child: {
+    childSessionKey: string;
+    anticipatedRunId: string;
+    targetAgentId: string;
+  }) => void;
+  /** Core-only cleanup hook when a prepared child never reaches a managed terminal run. */
+  onChildDispatchAborted?: (child: {
+    childSessionKey: string;
+    anticipatedRunId: string;
+    targetAgentId: string;
+  }) => void;
 };
 
 export type SpawnSubagentResult = {

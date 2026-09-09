@@ -1,0 +1,30 @@
+- main [ref=e5]:
+  - generic [ref=e6]:
+    - generic [ref=e10]:
+      - strong [ref=e11]: MAAP
+      - generic [ref=e12]: MAAP Enterprise
+    - generic [ref=e14]:
+      - generic [ref=e15]:
+        - text: MAAP USER
+        - heading "Sign in" [level=1] [ref=e16]
+        - paragraph [ref=e17]: Sign in with your company account to access your Agents.
+      - generic [ref=e18]:
+        - generic [ref=e19]:
+          - generic [ref=e20]: Username
+          - textbox "Username" [ref=e21]
+        - generic [ref=e22]:
+          - generic [ref=e23]: Password
+          - generic [ref=e24]:
+            - textbox "Password" [ref=e25]:
+              - /placeholder: ""
+              - text: temporary-password
+            - button "Hide password" [active] [pressed] [ref=e41]
+        - button "Sign in" [ref=e31]
+      - generic [ref=e33]:
+        - generic [ref=e35]: or
+        - button "Sign in with Thiên Lý" [ref=e36] [cursor=pointer]
+      - generic [ref=e38]:
+        - generic [ref=e39]: Language
+        - combobox "Language" [ref=e40]:
+          - option "Tiếng Việt"
+          - option "English" [selected]

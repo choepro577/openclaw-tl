@@ -6,7 +6,7 @@ import {
 } from "../enterprise/services/enterprise-knowledge-api.ts";
 
 type KnowledgeRealtimeOptions = {
-  gateway: ApplicationGateway;
+  gateway?: ApplicationGateway;
   audience: EnterprisePortalAudience;
   zoneIds: () => string[];
   overview?: boolean;
@@ -39,6 +39,9 @@ export function startEnterpriseKnowledgeRealtime(options: KnowledgeRealtimeOptio
   let authoritativeTimer: ReturnType<typeof globalThis.setTimeout> | undefined;
 
   const deliver = (events: EnterpriseKnowledgeChangeEvent[]) => {
+    if (disposed) {
+      return;
+    }
     const fresh = [
       ...new Map(
         events
@@ -91,6 +94,9 @@ export function startEnterpriseKnowledgeRealtime(options: KnowledgeRealtimeOptio
           afterSequence: lastSequence,
           limit: 500,
         });
+        if (disposed) {
+          return;
+        }
         if (response.gap) {
           options.onTerminal([]);
         }
@@ -103,6 +109,9 @@ export function startEnterpriseKnowledgeRealtime(options: KnowledgeRealtimeOptio
             zoneId,
             limit: 500,
           });
+          if (disposed) {
+            return;
+          }
           if (response.gap) {
             options.onTerminal([]);
           }
@@ -113,15 +122,18 @@ export function startEnterpriseKnowledgeRealtime(options: KnowledgeRealtimeOptio
     } catch {
       // WebSocket reconnect or the next safety poll remains authoritative.
     }
+    if (disposed) {
+      return;
+    }
     const activeDelay = document.visibilityState === "hidden" ? 60_000 : 20_000;
-    if (options.hasActiveJobs() || options.gateway.snapshot.phase !== "connected") {
+    if (options.hasActiveJobs() || options.gateway?.snapshot.phase !== "connected") {
       pollTimer = globalThis.setTimeout(() => void fetchFallback(), activeDelay);
     }
   };
 
   const subscribe = async () => {
-    const client = options.gateway.snapshot.client;
-    if (!client || options.gateway.snapshot.phase !== "connected") {
+    const client = options.gateway?.snapshot.client;
+    if (!client || options.gateway?.snapshot.phase !== "connected") {
       void fetchFallback();
       return;
     }
@@ -136,7 +148,7 @@ export function startEnterpriseKnowledgeRealtime(options: KnowledgeRealtimeOptio
     }
   };
 
-  const unsubscribeEvents = options.gateway.subscribeEvents((event) => {
+  const unsubscribeEvents = options.gateway?.subscribeEvents((event) => {
     if (event.event !== "enterprise.knowledge.changed") {
       return;
     }
@@ -147,7 +159,7 @@ export function startEnterpriseKnowledgeRealtime(options: KnowledgeRealtimeOptio
     deliver(parsed.events);
     lastSequence = Math.max(lastSequence, parsed.lastSequence);
   });
-  const unsubscribeGateway = options.gateway.subscribe((snapshot) => {
+  const unsubscribeGateway = options.gateway?.subscribe((snapshot) => {
     if (snapshot.phase === "connected") {
       void subscribe();
     } else if (options.hasActiveJobs()) {
@@ -158,15 +170,15 @@ export function startEnterpriseKnowledgeRealtime(options: KnowledgeRealtimeOptio
 
   return () => {
     disposed = true;
-    unsubscribeEvents();
-    unsubscribeGateway();
+    unsubscribeEvents?.();
+    unsubscribeGateway?.();
     if (pollTimer) {
       globalThis.clearTimeout(pollTimer);
     }
     if (authoritativeTimer) {
       globalThis.clearTimeout(authoritativeTimer);
     }
-    const client = options.gateway.snapshot.client;
+    const client = options.gateway?.snapshot.client;
     if (client) {
       void client.request("enterprise.knowledge.unsubscribe", {}).catch(() => undefined);
     }

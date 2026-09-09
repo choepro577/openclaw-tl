@@ -1,0 +1,175 @@
+- main [ref=e30]:
+  - complementary [ref=e31]:
+    - generic [ref=e44]:
+      - strong [ref=e45]: OpenClaw
+      - generic [ref=e46]: Enterprise Admin
+    - navigation "Quản trị Enterprise" [ref=e47]:
+      - button "Quản lý tài khoản" [ref=e48]
+      - button "Quản lý agent" [ref=e56]
+      - button "Tri thức doanh nghiệp" [ref=e62]
+      - button "Quản lý skill" [ref=e67]
+      - button "Plugins" [ref=e75]
+      - button "Config" [ref=e81]
+    - generic [ref=e87]:
+      - generic [ref=e88]:
+        - generic [ref=e89]: Q
+        - generic [ref=e90]:
+          - strong [ref=e91]: QA Admin
+          - generic [ref=e92]: "@qaadmin"
+      - button "Đổi mật khẩu" [ref=e93]
+      - button "Đăng xuất" [ref=e100]
+  - generic [ref=e157]:
+    - generic [ref=e158]:
+      - generic [ref=e159]:
+        - generic [ref=e160]:
+          - heading "Quản lý agent" [level=1] [ref=e161]
+          - paragraph [ref=e162]: Shared agent nghiệp vụ và personal agent theo từng tài khoản
+        - button "Tạo shared agent" [ref=e370]
+      - navigation "Loại agent" [ref=e165]:
+        - button "Shared Agents (2)" [ref=e229]
+        - button "Personal Agents (1)" [ref=e175]
+        - button "Điều phối Agent" [ref=e168]
+      - generic [ref=e372]:
+        - searchbox "Tìm agent" [ref=e373]
+        - generic [ref=e374]: Reserved internal agents đã được ẩn
+      - table [ref=e376]:
+        - rowgroup [ref=e377]:
+          - row [ref=e378]:
+            - columnheader "Agent" [ref=e379]
+            - columnheader "Model" [ref=e380]
+            - columnheader "Runtime" [ref=e381]
+            - columnheader "Workspace" [ref=e382]
+            - columnheader "User" [ref=e383]
+            - columnheader "Skill/Tool" [ref=e384]
+            - columnheader "Cập nhật" [ref=e385]
+            - columnheader "Thao tác" [ref=e386]
+        - rowgroup [ref=e387]:
+          - row [ref=e388]:
+            - cell "main main" [ref=e389]:
+              - strong [ref=e390]: main
+              - generic [ref=e391]: main
+            - cell "Mặc định" [ref=e392]
+            - cell "embedded" [ref=e394]
+            - cell "/var/folders/m4/71w5wnxs0tjd2cdkbcc7846m0000gn/T/openclaw-delegation-qa.78avV2/workspace" [ref=e396]
+            - cell "0" [ref=e397]
+            - cell "58 / 61" [ref=e398]
+            - cell "—" [ref=e399]
+            - cell [ref=e400]:
+              - button "Xem" [ref=e401]
+          - row [ref=e402]:
+            - cell "Agent Hợp đồng contract" [ref=e403]:
+              - strong [ref=e404]: Agent Hợp đồng
+              - generic [ref=e405]: contract
+            - cell "Mặc định" [ref=e406]
+            - cell "embedded" [ref=e408]
+            - cell "/var/folders/m4/71w5wnxs0tjd2cdkbcc7846m0000gn/T/openclaw-delegation-qa.78avV2/workspace-contract" [ref=e410]
+            - cell "0" [ref=e411]
+            - cell "54 / 61" [ref=e412]
+            - cell "—" [ref=e413]
+            - cell [ref=e414]:
+              - button "Xem" [ref=e415]
+    - dialog "Agent Hợp đồng" [ref=e417]:
+      - generic [ref=e419]:
+        - generic [ref=e420]:
+          - generic [ref=e421]:
+            - heading "Agent Hợp đồng" [level=2] [ref=e422]
+            - paragraph [ref=e423]: contract
+          - button "Đóng" [ref=e424]
+        - generic [ref=e430]:
+          - generic [ref=e433]:
+            - button "Copy ID" [ref=e434]
+            - button "Quản lý user" [ref=e435]
+            - button "Refresh" [ref=e436]
+            - generic [ref=e437]: Revision-safe
+          - generic [ref=e439]:
+            - generic "Chi tiết agent" [ref=e440]:
+              - tablist "Chi tiết agent" [ref=e444]:
+                - generic:
+                  - tab "Overview" [selected] [ref=e445]
+                  - tab "Specialty & routing" [ref=e447]
+                  - tab "Danh xưng 0" [ref=e449]:
+                    - generic [ref=e450] [cursor=pointer]:
+                      - generic:
+                        - text: Danh xưng
+                        - generic [ref=e451]: "0"
+                  - tab "Files" [ref=e452]
+                  - tab "Tools 61" [ref=e454]:
+                    - generic [ref=e455] [cursor=pointer]:
+                      - generic:
+                        - text: Tools
+                        - generic [ref=e456]: "61"
+                  - tab "Skills 54" [ref=e457]:
+                    - generic [ref=e458] [cursor=pointer]:
+                      - generic:
+                        - text: Skills
+                        - generic [ref=e459]: "54"
+                  - tab "Channels" [ref=e460]
+                  - tab "Cron" [ref=e462]
+                  - tab "Memory" [ref=e464]
+            - tabpanel "Overview" [ref=e466]:
+              - generic [ref=e467]:
+                - generic [ref=e468]:
+                  - heading "Identity" [level=2] [ref=e470]
+                  - paragraph [ref=e471]: Tên và định danh hiển thị của shared agent.
+                  - generic [ref=e473]:
+                    - generic [ref=e474]:
+                      - generic [ref=e476]: A
+                      - generic [ref=e477]:
+                        - generic [ref=e478]:
+                          - generic [ref=e479]: Tên hiển thị
+                          - textbox "Tên hiển thị" [ref=e480]: Agent Hợp đồng
+                        - generic [ref=e481]:
+                          - generic [ref=e482]: Agent ID
+                          - textbox "Agent ID" [ref=e483]: contract
+                    - button "Lưu" [ref=e485]
+                    - generic [ref=e486]: Tên hiển thị được lưu bằng config hash CAS để tránh ghi đè revision mới hơn.
+                - generic [ref=e487]:
+                  - heading "Overview" [level=2] [ref=e489]
+                  - paragraph [ref=e490]: Workspace và cấu hình hiệu lực của agent.
+                  - generic [ref=e492]:
+                    - term [ref=e493]: Workspace
+                    - definition [ref=e494]:
+                      - code [ref=e495]: /var/folders/m4/71w5wnxs0tjd2cdkbcc7846m0000gn/T/openclaw-delegation-qa.78avV2/workspace-contract
+                    - term [ref=e496]: Primary Model
+                    - definition [ref=e497]:
+                      - code [ref=e498]: Mặc định
+                    - term [ref=e499]: Runtime
+                    - definition [ref=e500]:
+                      - code [ref=e501]: embedded
+                    - term [ref=e502]: Thinking Default
+                    - definition [ref=e503]:
+                      - code [ref=e504]: —
+                    - term [ref=e505]: Skills Filter
+                    - definition [ref=e506]: Tất cả skills
+                    - term [ref=e507]: Loại
+                    - definition [ref=e508]: Shared
+                    - term [ref=e509]: Trạng thái
+                    - definition [ref=e510]:
+                      - generic [ref=e511]: Ready
+                - generic [ref=e513]:
+                  - generic [ref=e514]:
+                    - heading "Model selection" [level=2] [ref=e515]
+                    - button "Lưu" [ref=e517]
+                  - paragraph [ref=e518]: Để trống để kế thừa cấu hình mặc định của hệ thống.
+                  - generic [ref=e519]:
+                    - generic [ref=e520]:
+                      - generic [ref=e521]: Primary Model
+                      - textbox "Primary Model" [ref=e524]:
+                        - /placeholder: Kế thừa model mặc định
+                    - generic [ref=e525]:
+                      - generic [ref=e526]: Workspace
+                      - textbox "Workspace" [ref=e529]:
+                        - /placeholder: Kế thừa workspace mặc định
+                        - text: /var/folders/m4/71w5wnxs0tjd2cdkbcc7846m0000gn/T/openclaw-delegation-qa.78avV2/workspace-contract
+                    - generic [ref=e530]:
+                      - generic [ref=e531]:
+                        - generic [ref=e532]: Revision-safe
+                        - generic [ref=e533]: Nếu config đổi ở nơi khác, thao tác sẽ dừng để tải revision mới thay vì ghi đè.
+                      - generic [ref=e534]: CAS
+                - generic [ref=e537]:
+                  - heading "Danger zone" [level=2] [ref=e539]
+                  - generic [ref=e541]:
+                    - generic [ref=e542]:
+                      - generic [ref=e543]: Xóa shared agent
+                      - generic [ref=e544]: Không thể hoàn tác sau khi agent đã bị xóa.
+                    - button "Xóa agent" [ref=e546]

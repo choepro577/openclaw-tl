@@ -1,0 +1,167 @@
+.eu-thienly-entry {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.eu-thienly-divider {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  color: var(--muted);
+  font-size: var(--control-ui-text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.eu-thienly-divider::before,
+.eu-thienly-divider::after {
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+  content: "";
+}
+
+.eu-thienly-login {
+  width: 100%;
+  cursor: pointer;
+}
+
+.eu-thienly-flow {
+  display: grid;
+  gap: var(--space-4);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--border);
+}
+
+.eu-thienly-flow__header,
+.eu-thienly-flow__header h2,
+.eu-thienly-flow__header p,
+.eu-thienly-link-form h3,
+.eu-thienly-link-form p {
+  margin: 0;
+}
+
+.eu-thienly-flow__header {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.eu-thienly-flow__header h2,
+.eu-thienly-link-form h3 {
+  color: var(--text-strong);
+  font-size: var(--control-ui-text-md);
+  font-weight: 650;
+}
+
+.eu-thienly-flow__header p,
+.eu-thienly-link-form p {
+  color: var(--muted);
+  font-size: var(--control-ui-text-sm);
+  line-height: 1.45;
+}
+
+.eu-thienly-account {
+  display: grid;
+  gap: var(--space-1);
+  margin: 0;
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-muted);
+}
+
+.eu-thienly-account strong {
+  color: var(--text-strong);
+}
+
+.eu-thienly-account span {
+  color: var(--muted);
+  font-size: var(--control-ui-text-sm);
+}
+
+.eu-thienly-timeline {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.eu-thienly-timeline li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--muted);
+  font-size: var(--control-ui-text-sm);
+}
+
+.eu-thienly-timeline li.is-current {
+  color: var(--text-strong);
+  font-weight: 600;
+}
+
+.eu-thienly-timeline li.is-complete {
+  color: var(--ok);
+}
+
+.eu-thienly-timeline__marker {
+  width: var(--space-2);
+  height: var(--space-2);
+  flex: 0 0 auto;
+  border: 1px solid currentcolor;
+  border-radius: var(--radius-full);
+}
+
+.eu-thienly-timeline li.is-current .eu-thienly-timeline__marker {
+  background: var(--accent);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 var(--space-1) var(--accent-subtle);
+}
+
+.eu-thienly-timeline li.is-complete .eu-thienly-timeline__marker {
+  background: var(--ok);
+  border-color: var(--ok);
+}
+
+.eu-thienly-link-form {
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-muted);
+}
+
+.eu-thienly-flow__notice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.eu-thienly-flow__notice .btn,
+.eu-thienly-cancel {
+  cursor: default;
+}
+
+.eu-thienly-flow__notice .btn {
+  cursor: pointer;
+}
+
+.eu-thienly-success {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.eu-thienly-success strong {
+  color: var(--text-strong);
+}
+
+@media (max-width: 560px) {
+  .eu-auth-screen {
+    padding: var(--space-4);
+  }
+
+  .eu-thienly-flow__notice {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}

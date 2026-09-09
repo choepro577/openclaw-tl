@@ -1,3 +1,4 @@
+import { isDeepStrictEqual } from "node:util";
 import {
   readConfigFileSnapshot,
   readConfigFileSnapshotWithPluginMetadata,
@@ -5,6 +6,7 @@ import {
 } from "../config/io.js";
 import type { ConfigFileSnapshot } from "../config/types.js";
 import type { StartupMigrationLease } from "../infra/startup-migration-checkpoint.js";
+import { inspectPersistedInstalledPluginIndexInstallRecordsSync } from "../plugins/installed-plugin-index-record-state.js";
 import type { PluginMetadataSnapshot } from "../plugins/plugin-metadata-snapshot.types.js";
 import { createLazyRuntimeModule } from "../shared/lazy-runtime.js";
 import { addDoctorLegacyIssues } from "./doctor/shared/legacy-config-issues.js";
@@ -91,6 +93,21 @@ export async function persistRefreshedPluginIndex(params: {
     "plugin-index-store-import",
     loadInstalledPluginIndexStore,
   );
+  // A derived discovery snapshot cannot retire or rewrite a committed install.
+  // Read the durable ledger under the migration lease, not the process-local cache.
+  const durable = inspectPersistedInstalledPluginIndexInstallRecordsSync({ env: params.env });
+  if (
+    durable.status === "invalid" ||
+    (durable.status === "valid" &&
+      Object.entries(durable.records).some(
+        ([id, record]) =>
+          !isDeepStrictEqual(record, derivedPluginMetadataSnapshot.index.installRecords[id]),
+      ))
+  ) {
+    throwPluginRegistryPersistenceFailed(
+      "derived metadata no longer matches the committed install ledger; restart OpenClaw to read the current inventory",
+    );
+  }
   // The checkpoint certifies the persisted inventory, not a process-local replacement.
   // Write the exact derived index first, then prove a fresh reader can reuse it.
   await params.measure("plugin-index-persistence", () =>

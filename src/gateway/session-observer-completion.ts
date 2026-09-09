@@ -1,3 +1,4 @@
+import { measureDiagnosticsTimelineSpan } from "../infra/diagnostics-timeline.js";
 import {
   buildSessionObserverPrompt,
   normalizeSessionObserverModelOutput,
@@ -12,7 +13,7 @@ type PrepareModel = NonNullable<SessionObserverDeps["prepareModel"]>;
 type CompleteModel = NonNullable<SessionObserverDeps["completeModel"]>;
 
 export function createSessionObserverCompletion(params: {
-  getConfig: SessionObserverDeps["getConfig"];
+  getConfig: (state: SessionObserverState) => ReturnType<SessionObserverDeps["getConfig"]>;
   prepareModel: PrepareModel;
   completeModel: CompleteModel;
   now: () => number;
@@ -20,19 +21,38 @@ export function createSessionObserverCompletion(params: {
   clearTimeoutFn: typeof clearTimeout;
   isCurrent: (state: SessionObserverState) => boolean;
 }) {
-  const ensurePrepared = async (state: SessionObserverState) => {
+  const ensurePrepared = async (
+    state: SessionObserverState,
+    config: ReturnType<SessionObserverDeps["getConfig"]>,
+  ) => {
     const modelRef = state.utilityModelRef;
     if (!modelRef) {
       throw new Error("session observer utility model is unavailable");
     }
-    state.preparedPromise ??= params.prepareModel({
-      cfg: params.getConfig(),
-      agentId: state.agentId,
-      modelRef,
-      useUtilityModel: true,
-      allowMissingApiKeyModes: ["aws-sdk"],
-    });
-    return await state.preparedPromise;
+    const preparedPromise = (state.preparedPromise ??= measureDiagnosticsTimelineSpan(
+      "session.observer.prepare",
+      () =>
+        params.prepareModel({
+          cfg: config,
+          agentId: state.agentId,
+          modelRef,
+          useUtilityModel: true,
+          allowMissingApiKeyModes: ["aws-sdk"],
+        }),
+      {
+        config,
+        omitErrorMessage: true,
+        attributes: { runId: state.runId, role: "observer" },
+      },
+    ));
+    try {
+      return await preparedPromise;
+    } catch (error) {
+      if (state.preparedPromise === preparedPromise) {
+        state.preparedPromise = undefined;
+      }
+      throw error;
+    }
   };
 
   return async (state: SessionObserverState, notes: readonly string[]) => {
@@ -48,7 +68,8 @@ export function createSessionObserverCompletion(params: {
     });
     try {
       const execute = async () => {
-        const prepared = await ensurePrepared(state);
+        const config = params.getConfig(state);
+        const prepared = await ensurePrepared(state, config);
         if (!params.isCurrent(state) || controller.signal.aborted) {
           throw new Error("session observer state is no longer active");
         }
@@ -59,29 +80,38 @@ export function createSessionObserverCompletion(params: {
           if (!params.isCurrent(state) || controller.signal.aborted) {
             throw new Error("session observer state is no longer active");
           }
-          const result = await params.completeModel({
-            model: prepared.model,
-            auth: prepared.auth,
-            cfg: params.getConfig(),
-            context: {
-              systemPrompt: SESSION_OBSERVER_SYSTEM_PROMPT,
-              messages: [
-                {
-                  role: "user",
-                  content: buildSessionObserverPrompt(state, notes),
-                  timestamp: params.now(),
+          const result = await measureDiagnosticsTimelineSpan(
+            "session.observer.model",
+            () =>
+              params.completeModel({
+                model: prepared.model,
+                auth: prepared.auth,
+                cfg: config,
+                context: {
+                  systemPrompt: SESSION_OBSERVER_SYSTEM_PROMPT,
+                  messages: [
+                    {
+                      role: "user",
+                      content: buildSessionObserverPrompt(state, notes),
+                      timestamp: params.now(),
+                    },
+                  ],
                 },
-              ],
+                options: {
+                  maxTokens: Math.min(
+                    SESSION_OBSERVER_MODEL_MAX_TOKENS,
+                    Math.floor(prepared.model.maxTokens),
+                  ),
+                  temperature: 0.2,
+                  signal: controller.signal,
+                },
+              }),
+            {
+              config,
+              omitErrorMessage: true,
+              attributes: { runId: state.runId, role: "observer", attempt: attempt + 1 },
             },
-            options: {
-              maxTokens: Math.min(
-                SESSION_OBSERVER_MODEL_MAX_TOKENS,
-                Math.floor(prepared.model.maxTokens),
-              ),
-              temperature: 0.2,
-              signal: controller.signal,
-            },
-          });
+          );
           if (result.stopReason === "error") {
             throw new Error(result.errorMessage?.trim() || "session observer completion failed");
           }

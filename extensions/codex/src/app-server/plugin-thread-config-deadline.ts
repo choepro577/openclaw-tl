@@ -10,10 +10,16 @@ import {
 import type { CodexAppServerClient } from "./client.js";
 import {
   resolveCodexPluginsPolicy,
+  readCodexPluginConfig,
   type CodexPluginConfig,
   type ResolvedCodexPluginsPolicy,
 } from "./config.js";
 import { disableCodexPluginThreadConfig } from "./dynamic-tool-build.js";
+import {
+  assertCodexPluginCapabilityGrants,
+  type CodexNativePluginGrant,
+  type CodexNativePluginGrantsResolver,
+} from "./native-plugin-grants.js";
 import {
   resolveRecoverableCodexPluginConfigKeys,
   type CodexPluginRuntimeRequest,
@@ -71,6 +77,8 @@ export function resolveCodexPluginThreadConfigStartupPolicy(params: {
   pluginConfig: CodexPluginConfig;
   nativeToolSurfaceEnabled: boolean;
   scheduledRuntimeAuthority?: EmbeddedRunAttemptParams["scheduledRuntimeAuthority"];
+  /** Current account/agent grant resolver. It is consulted for each startup build. */
+  nativePluginGrants?: CodexNativePluginGrantsResolver;
 }) {
   const pluginThreadConfigRequired =
     Boolean(params.scheduledRuntimeAuthority) ||
@@ -78,10 +86,19 @@ export function resolveCodexPluginThreadConfigStartupPolicy(params: {
     shouldBuildCodexPluginThreadConfig(params.pluginConfig);
   // Restricted runs still need a config so thread/start carries an explicit
   // apps._default denial patch without app inventory discovery.
+  const restrictedPluginConfig =
+    !params.nativeToolSurfaceEnabled && params.nativePluginGrants
+      ? restrictCodexPluginConfigToNativePluginGrants(
+          params.pluginConfig,
+          params.nativePluginGrants(),
+        )
+      : params.pluginConfig;
   const pluginThreadConfigPluginConfig =
     params.nativeToolSurfaceEnabled || params.scheduledRuntimeAuthority
-      ? params.pluginConfig
-      : disableCodexPluginThreadConfig(params.pluginConfig);
+      ? restrictedPluginConfig
+      : params.nativePluginGrants
+        ? restrictedPluginConfig
+        : disableCodexPluginThreadConfig(params.pluginConfig);
   const resolvedPluginPolicy = pluginThreadConfigRequired
     ? resolveCodexPluginsPolicy(pluginThreadConfigPluginConfig)
     : undefined;
@@ -96,6 +113,59 @@ export function resolveCodexPluginThreadConfigStartupPolicy(params: {
           .toSorted()
       : undefined,
   };
+}
+
+/**
+ * Projects the configured plugin entries onto the exact account/agent grants.
+ * `allow_all_plugins` is always cleared so a grant can never widen the native
+ * tool surface; an empty grant snapshot produces an explicit deny-all config.
+ */
+export function restrictCodexPluginConfigToNativePluginGrants(
+  pluginConfig: unknown,
+  grants: readonly CodexNativePluginGrant[],
+): CodexPluginConfig {
+  const config = readCodexPluginConfig(pluginConfig);
+  const configuredPlugins = config.codexPlugins?.plugins ?? {};
+  const validGrants = grants.filter(
+    (grant) => grant.pluginName.trim().length > 0 && grant.marketplaceName.trim().length > 0,
+  );
+  const plugins: Record<string, (typeof configuredPlugins)[string]> = {};
+  for (const grant of validGrants) {
+    const existing = Object.entries(configuredPlugins).find(
+      ([, entry]) =>
+        entry.pluginName === grant.pluginName &&
+        entry.marketplaceName !== undefined &&
+        sameCodexMarketplace(entry.marketplaceName, grant.marketplaceName),
+    );
+    // A deliberate per-plugin disable remains authoritative.  Enterprise
+    // grants add the reviewed entry when a user has no Codex plugin config,
+    // while retaining any explicit app/destructive policy on an existing row.
+    if (existing?.[1].enabled === false) {
+      continue;
+    }
+    const configKey = existing?.[0] ?? `${grant.pluginName}@${grant.marketplaceName}`;
+    plugins[configKey] = existing?.[1] ?? {
+      pluginName: grant.pluginName,
+      marketplaceName: grant.marketplaceName,
+      enabled: true,
+    };
+  }
+  const explicitlyDisabled = config.codexPlugins?.enabled === false;
+  return {
+    ...config,
+    codexPlugins: {
+      ...config.codexPlugins,
+      enabled: !explicitlyDisabled && Object.keys(plugins).length > 0,
+      allow_all_plugins: false,
+      plugins,
+    },
+  };
+}
+
+function sameCodexMarketplace(left: string, right: string): boolean {
+  // Enterprise grants are reviewed against the exact marketplace returned by
+  // discovery.  Auth/catalog wire aliases are separate identities here.
+  return left === right;
 }
 
 /** Builds plugin config without allowing sequential RPC timeouts to consume the turn. */
@@ -163,6 +233,8 @@ export function createCodexPluginThreadConfigStartupProvider(params: {
   appCacheKey: string;
   metadataCache?: CodexPluginMetadataCache;
   scheduledRuntimeAuthority?: EmbeddedRunAttemptParams["scheduledRuntimeAuthority"];
+  /** Current account/agent grant resolver; checked for every config build. */
+  nativePluginGrants?: CodexNativePluginGrantsResolver;
 }) {
   const {
     client,
@@ -171,12 +243,13 @@ export function createCodexPluginThreadConfigStartupProvider(params: {
     enabledPluginConfigKeys,
     appCache,
     metadataCache: configuredMetadataCache,
+    nativePluginGrants,
     ...buildParams
   } = params;
   const metadataCache = configuredMetadataCache ?? defaultCodexPluginMetadataCache;
   return {
     enabled: true,
-    requiresCurrentPolicyCheck: Boolean(params.scheduledRuntimeAuthority),
+    requiresCurrentPolicyCheck: Boolean(params.scheduledRuntimeAuthority || nativePluginGrants),
     inputFingerprint,
     enabledPluginConfigKeys,
     accountAppRecoveryEnabled: policy?.allowAllPlugins,
@@ -189,23 +262,40 @@ export function createCodexPluginThreadConfigStartupProvider(params: {
         })
       : undefined,
     build: async (buildOptions?: { threadId?: string }) => {
+      const currentPluginConfig = nativePluginGrants
+        ? restrictCodexPluginConfigToNativePluginGrants(
+            buildParams.pluginConfig,
+            nativePluginGrants(),
+          )
+        : buildParams.pluginConfig;
       const config = await buildCodexPluginThreadConfigWithinDeadline({
         ...buildParams,
+        pluginConfig: currentPluginConfig,
         appCache: appCache ?? defaultCodexAppInventoryCache,
         metadataCache,
         failClosedOnTimeout: Boolean(params.scheduledRuntimeAuthority),
-        transform: params.scheduledRuntimeAuthority
-          ? async (builtConfig, request) =>
-              intersectCodexPluginThreadConfigWithScheduledAuthority(
-                builtConfig,
-                params.scheduledRuntimeAuthority,
-                await readCurrentCodexScheduledAppPolicy(
-                  request,
-                  params.configCwd,
-                  buildOptions?.threadId,
-                ),
-              )
-          : undefined,
+        transform:
+          params.scheduledRuntimeAuthority || nativePluginGrants
+            ? async (builtConfig, request) => {
+                if (nativePluginGrants) {
+                  assertCodexPluginCapabilityGrants({
+                    resolver: nativePluginGrants,
+                    records: builtConfig.inventory?.records ?? [],
+                  });
+                }
+                return params.scheduledRuntimeAuthority
+                  ? intersectCodexPluginThreadConfigWithScheduledAuthority(
+                      builtConfig,
+                      params.scheduledRuntimeAuthority,
+                      await readCurrentCodexScheduledAppPolicy(
+                        request,
+                        params.configCwd,
+                        buildOptions?.threadId,
+                      ),
+                    )
+                  : builtConfig;
+              }
+            : undefined,
         request: (method, requestParams, options) => client.request(method, requestParams, options),
       });
       return params.scheduledRuntimeAuthority && params.inputFingerprint

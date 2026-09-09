@@ -20,8 +20,13 @@ import {
   passesManifestOwnerBasePolicy,
 } from "../plugins/manifest-owner-policy.js";
 import type { PluginManifestRecord } from "../plugins/manifest-registry.js";
+import type { PluginMetadataSnapshot } from "../plugins/plugin-metadata-snapshot.types.js";
 import { resolveProviderUsageAuthWithPlugin } from "../plugins/provider-runtime.js";
-import { resolveProviderAuthEnvVarCandidates } from "../secrets/provider-env-vars.js";
+import {
+  resolveProviderAuthEnvVarCandidates,
+  resolveProviderAuthLookupMaps,
+  type ProviderAuthLookupMaps,
+} from "../secrets/provider-env-vars.js";
 import { normalizeSecretInput } from "../utils/normalize-secret-input.js";
 import { isOAuthOnlyUsageProvider } from "./provider-usage.shared.js";
 import type { UsageProviderId } from "./provider-usage.types.js";
@@ -48,7 +53,33 @@ type UsageAuthState = {
   allowAuthProfileStore: boolean;
   getStore?: () => AuthStore;
   store?: AuthStore;
+  metadataSnapshot?: PluginMetadataSnapshot;
+  authLookupMaps?: ProviderAuthLookupMaps;
 };
+
+export type ProviderUsageAuthFacts = {
+  metadataSnapshot: PluginMetadataSnapshot;
+  authLookupMaps: ProviderAuthLookupMaps;
+};
+
+/** Request-scoped plugin metadata reused by every provider auth resolution. */
+export function prepareProviderUsageAuthFacts(params: {
+  config: OpenClawConfig;
+  env: NodeJS.ProcessEnv;
+}): ProviderUsageAuthFacts {
+  const metadataSnapshot = loadManifestMetadataSnapshot({
+    config: params.config,
+    env: params.env,
+  });
+  return {
+    metadataSnapshot,
+    authLookupMaps: resolveProviderAuthLookupMaps({
+      config: params.config,
+      env: params.env,
+      metadataSnapshot,
+    }),
+  };
+}
 
 function resolveUsageAuthStore(state: UsageAuthState): AuthStore {
   state.store ??=
@@ -70,7 +101,19 @@ function resolveProviderApiKeyFromConfig(params: {
   }
 
   for (const providerId of params.providerIds) {
-    const envKey = resolveEnvApiKey(providerId, params.state.env)?.apiKey;
+    const envKey = resolveEnvApiKey(
+      providerId,
+      params.state.env,
+      params.state.authLookupMaps
+        ? {
+            config: params.state.cfg,
+            aliasMap: params.state.authLookupMaps.aliasMap,
+            candidateMap: params.state.authLookupMaps.envCandidateMap,
+            authEvidenceMap: params.state.authLookupMaps.authEvidenceMap,
+            skipSetupProviderFallback: false,
+          }
+        : undefined,
+    )?.apiKey;
     if (envKey) {
       return envKey;
     }
@@ -90,13 +133,15 @@ function hasProviderAuthEnvCredentialSource(params: {
   state: UsageAuthState;
   providerIds: string[];
 }): boolean {
-  const candidates = resolveProviderAuthEnvVarCandidates({
-    config: params.state.cfg,
-    env: {
-      ...(process.env.VITEST ? process.env : {}),
-      ...params.state.env,
-    },
-  });
+  const candidates =
+    params.state.authLookupMaps?.envCandidateMap ??
+    resolveProviderAuthEnvVarCandidates({
+      config: params.state.cfg,
+      env: {
+        ...(process.env.VITEST ? process.env : {}),
+        ...params.state.env,
+      },
+    });
   for (const providerId of normalizeProviderIds(params.providerIds)) {
     const envVars = Object.hasOwn(candidates, providerId) ? candidates[providerId] : undefined;
     if (!envVars) {
@@ -115,10 +160,12 @@ function hasProviderUsageAuthEnvCredentialSource(params: {
 }): boolean {
   const providerIds = new Set(normalizeProviderIds(params.providerIds));
   try {
-    const snapshot = loadManifestMetadataSnapshot({
-      config: params.state.cfg,
-      env: params.state.env,
-    });
+    const snapshot =
+      params.state.metadataSnapshot ??
+      loadManifestMetadataSnapshot({
+        config: params.state.cfg,
+        env: params.state.env,
+      });
     return snapshot.plugins.some((plugin) => {
       if (!isUsageProviderManifestEligible({ plugin, state: params.state })) {
         return false;
@@ -271,10 +318,12 @@ function resolveUsageCredentialProviderIds(params: {
   const providerIds = new Set(normalizeProviderIds([params.provider]));
   const providerIdSet = new Set(providerIds);
   try {
-    const snapshot = loadManifestMetadataSnapshot({
-      config: params.state.cfg,
-      env: params.state.env,
-    });
+    const snapshot =
+      params.state.metadataSnapshot ??
+      loadManifestMetadataSnapshot({
+        config: params.state.cfg,
+        env: params.state.env,
+      });
     for (const plugin of snapshot.plugins) {
       const pluginProviderIds = normalizeProviderIds(plugin.providers);
       if (!pluginProviderIds.some((providerId) => providerIdSet.has(providerId))) {
@@ -450,9 +499,11 @@ function hasAuthProfileCredentialSource(params: {
   state: UsageAuthState;
   providerIds: string[];
 }): boolean {
-  const store = ensureAuthProfileStoreWithoutExternalProfiles(params.state.agentDir, {
-    allowKeychainPrompt: false,
-  });
+  const store =
+    params.state.store ??
+    ensureAuthProfileStoreWithoutExternalProfiles(params.state.agentDir, {
+      allowKeychainPrompt: false,
+    });
   for (const provider of params.providerIds) {
     const order = resolveAuthProfileOrder({
       cfg: params.state.cfg,
@@ -485,6 +536,7 @@ export async function resolveProviderAuths(params: {
   agentDir?: string;
   config?: OpenClawConfig;
   env?: NodeJS.ProcessEnv;
+  prepared?: ProviderUsageAuthFacts;
   onError?: (provider: UsageProviderId, error: unknown) => void;
 }): Promise<ProviderAuth[]> {
   if (params.auth) {
@@ -495,6 +547,7 @@ export async function resolveProviderAuths(params: {
     cfg: params.config ?? getRuntimeConfig(),
     env: params.env ?? process.env,
     agentDir: params.agentDir,
+    ...params.prepared,
   };
   const authProfileSourceState: UsageAuthState = {
     ...stateBase,

@@ -477,7 +477,11 @@ async function resolveEnterpriseAssistantMediaScope(params: {
   ) {
     return null;
   }
+  const accountAgentWorkspace = resolveEnterpriseWorkspacePath(account.profileId, target.agentId);
+  // HTTP reads must use the same account workspace as the projected chat runtime
+  // when the session does not pin its own workspace.
   const workspaceRoot = resolveLocalSessionWorkspaceRoot({
+    defaultWorkspaceDir: accountAgentWorkspace,
     cfg: config,
     sessionKey: target.canonicalKey,
     agentId: target.agentId,
@@ -485,7 +489,6 @@ async function resolveEnterpriseAssistantMediaScope(params: {
   if (!workspaceRoot) {
     return null;
   }
-  const accountAgentWorkspace = resolveEnterpriseWorkspacePath(account.profileId, target.agentId);
   if (resolveWorkspaceRelativePath(accountAgentWorkspace, workspaceRoot) === null) {
     return null;
   }

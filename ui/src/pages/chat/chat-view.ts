@@ -268,6 +268,7 @@ export type ChatProps = ChatTaskSuggestionTrayProps &
     onRewindMessage?: (entryId: string) => Promise<boolean> | boolean;
     onForkMessage?: (entryId: string) => Promise<void> | void;
     backgroundTasks?: BackgroundTasksProps;
+    delegationTasks?: readonly import("../../lib/tasks/task-summary.ts").TaskSummary[];
     header?: TemplateResult | typeof nothing;
     sessionSuggestions?: readonly SessionSuggestion[];
     sessionSuggestionRole?: SessionSharingRole;
@@ -390,6 +391,7 @@ export function renderChat(props: ChatProps) {
       enterpriseUserUnavailable: props.enterpriseUserUnavailable,
       onModelSetup: props.onModelSetup,
       backgroundTasks: props.backgroundTasks,
+      delegationTasks: props.delegationTasks,
       onFocusComposer: () =>
         chatSection
           ?.querySelector<HTMLTextAreaElement>(".agent-chat__composer-combobox > textarea")

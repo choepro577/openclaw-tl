@@ -3,6 +3,7 @@ import type { OpenClawConfig } from "../config/types.openclaw.js";
 import { parseAgentSessionKey } from "../routing/session-key.js";
 import type { TaskRecord } from "../tasks/task-registry.types.js";
 import { hasOperatorBoundary } from "./operator-role-policy.js";
+import { enterpriseUserPortalIdentity } from "./server-methods/gateway-client-identity.js";
 import type { GatewayClient } from "./server-methods/types.js";
 import {
   authorizeIncognitoSessionTarget,
@@ -33,6 +34,18 @@ export function canAccessTaskRequesterSession(params: {
   task: Pick<TaskRecord, "ownerKey" | "requesterAgentId" | "requesterSessionKey">;
 }): boolean {
   const target = resolveTaskRequesterSessionTarget(params.task);
+  const enterpriseIdentity = enterpriseUserPortalIdentity(params.client);
+  if (params.client?.internal?.enterpriseSession?.audience === "user" && !enterpriseIdentity) {
+    return false;
+  }
+  if (enterpriseIdentity) {
+    // Operator scopes on a portal connection do not grant cross-account task access.
+    if (!target) {
+      return false;
+    }
+    const ownedTarget = resolveSessionSharingTarget({ cfg: params.cfg, ...target });
+    return ownedTarget?.entry.createdActor?.id === enterpriseIdentity.profileId;
+  }
   if (!target || isGatewayAdmin(params.client)) {
     return true;
   }

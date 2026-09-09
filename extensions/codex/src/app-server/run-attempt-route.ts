@@ -1,4 +1,5 @@
 import { embeddedAgentLog, formatErrorMessage } from "openclaw/plugin-sdk/agent-harness-runtime";
+import { bindPrivateRunObservationScope } from "openclaw/plugin-sdk/diagnostic-runtime";
 import type { CodexAttemptNotificationController } from "./run-attempt-notification-controller.js";
 import type { CodexAttemptResources } from "./run-attempt-resources.js";
 import type { createCodexAttemptServerRequestController } from "./run-attempt-server-requests.js";
@@ -28,7 +29,7 @@ export async function prepareCodexAttemptRoute(
   const { state, turnIdRef, completeTurn } = turnRuntime;
   const { noteNotificationReceived, enqueueNotification } = notifications;
   const attachRouteAbort = (route: CodexThreadRouteReservation) => {
-    const onAbort = () => {
+    const onAbort = bindPrivateRunObservationScope(() => {
       if (
         state.completed ||
         state.terminalTurnNotificationQueued ||
@@ -62,7 +63,7 @@ export async function prepareCodexAttemptRoute(
       });
       runAbortController.abort(closedClient ? "client_closed" : "turn_route_closed");
       completeTurn();
-    };
+    });
     route.signal.addEventListener("abort", onAbort, { once: true });
     if (route.signal.aborted) {
       onAbort();
@@ -85,9 +86,9 @@ export async function prepareCodexAttemptRoute(
       }
       resourceState.detachRouteAbort = attachRouteAbort(resourceState.turnRoute);
       await resourceState.turnRoute.activate({
-        onNotificationReceived: noteNotificationReceived,
-        onNotification: enqueueNotification,
-        onRequest: handleServerRequest,
+        onNotificationReceived: bindPrivateRunObservationScope(noteNotificationReceived),
+        onNotification: bindPrivateRunObservationScope(enqueueNotification),
+        onRequest: bindPrivateRunObservationScope(handleServerRequest),
       });
       resourceState.routeActivated = true;
     }

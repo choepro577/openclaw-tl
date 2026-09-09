@@ -1,5 +1,7 @@
 import { html, nothing } from "lit";
 import { property, state } from "lit/decorators.js";
+import { enterpriseErrorMessage } from "../../../i18n/enterprise-errors.ts";
+import { renderEnterpriseLanguagePicker } from "../../../i18n/enterprise-language-picker.ts";
 import { eu } from "../../../i18n/enterprise-user.ts";
 import { OpenClawLightDomElement } from "../../../lit/openclaw-element.ts";
 import {
@@ -11,7 +13,7 @@ export class EnterpriseUserChangePasswordPage extends OpenClawLightDomElement {
   @property({ attribute: false }) account?: EnterpriseUserAuthAccount;
   @property({ attribute: false }) onChanged?: () => void;
   @state() private busy = false;
-  @state() private error = "";
+  @state() private error: unknown = "";
 
   private async submit(event: SubmitEvent): Promise<void> {
     event.preventDefault();
@@ -29,7 +31,7 @@ export class EnterpriseUserChangePasswordPage extends OpenClawLightDomElement {
       await changeEnterpriseUserPassword(currentPassword, newPassword);
       this.onChanged?.();
     } catch (error) {
-      this.error = error instanceof Error ? error.message : eu("passwordUpdateFailed");
+      this.error = error;
     } finally {
       this.busy = false;
     }
@@ -42,6 +44,7 @@ export class EnterpriseUserChangePasswordPage extends OpenClawLightDomElement {
           <h1>${eu("changePasswordFirst")}</h1>
           <p>${eu("welcomePassword", { name: this.account?.displayName ?? eu("account") })}</p>
         </div>
+        ${renderEnterpriseLanguagePicker("input")}
         <form class="stack" @submit=${(event: SubmitEvent) => void this.submit(event)}>
           <label class="field">
             <span>${eu("currentPassword")}</span>
@@ -79,7 +82,9 @@ export class EnterpriseUserChangePasswordPage extends OpenClawLightDomElement {
             ${this.busy ? eu("saveBusy") : eu("changePassword")}
           </button>
           ${this.error
-            ? html`<div class="callout danger" role="alert">${this.error}</div>`
+            ? html`<div class="callout danger" role="alert">
+                ${enterpriseErrorMessage(this.error, eu("passwordUpdateFailed"))}
+              </div>`
             : nothing}
         </form>
       </section>

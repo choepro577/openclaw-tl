@@ -175,6 +175,8 @@ const defaultPublicDeprecatedExportsByEntrypointBudget = Object.freeze({
   "reply-history": 6,
   "provider-auth": 19,
   "telegram-account": 3,
+  // Published Diffs 2026.8.1 gateway port contract, pending package migration.
+  "gateway-config-runtime": 1,
 } satisfies Record<string, number>);
 
 export function readPluginSdkSurfaceBudgets(env: NodeJS.ProcessEnv = process.env) {
@@ -198,7 +200,8 @@ export function readPluginSdkSurfaceBudgets(env: NodeJS.ProcessEnv = process.env
       // -1: retire the deprecated messaging-targets subpath.
       // +2: bounded provider streams and read-only SecretRef resolution.
       // +1: read-only authoritative conversation-binding inspection for route-owner plugins.
-      147,
+      // +1: retain the observed published Diffs 2026.8.1 gateway config contract.
+      148,
       env,
     ),
     publicExports: readPluginSdkSurfaceBudgetEnv(
@@ -312,7 +315,8 @@ export function readPluginSdkSurfaceBudgets(env: NodeJS.ProcessEnv = process.env
       // +2: conversation-binding inspection result and runtime inspector.
       // +2: restore shipped channel setup helpers until stable packages migrate.
       // +1: canonical untrusted audio-transcript formatter for channel plugins.
-      4340,
+      // +1: canonical resolveGatewayPort for published Diffs 2026.8.1.
+      4341,
       env,
     ),
     publicFunctionExports: readPluginSdkSurfaceBudgetEnv(
@@ -404,7 +408,8 @@ export function readPluginSdkSurfaceBudgets(env: NodeJS.ProcessEnv = process.env
       // +1: read-only authoritative conversation-binding inspector.
       // +2: restore shipped channel setup helpers until stable packages migrate.
       // +1: canonical untrusted audio-transcript formatter for channel plugins.
-      2581,
+      // +1: canonical resolveGatewayPort for published Diffs 2026.8.1.
+      2582,
       env,
     ),
     publicDeprecatedExports: readPluginSdkSurfaceBudgetEnv(
@@ -423,7 +428,8 @@ export function readPluginSdkSurfaceBudgets(env: NodeJS.ProcessEnv = process.env
       //     (voice-call/matrix runtime-doctor repair names, WhatsApp ack policy,
       //     Slack progress-draft render) so installed plugins survive upgrade (#124041 class).
       // -18: retire the expired August compatibility exports and messaging-targets subpath.
-      1134,
+      // +1: deprecated gateway-config-runtime port resolver for published Diffs.
+      1135,
       env,
     ),
     publicWildcardReexports: readPluginSdkSurfaceBudgetEnv(

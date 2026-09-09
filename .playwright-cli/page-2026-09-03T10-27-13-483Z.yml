@@ -1,0 +1,83 @@
+- main [ref=e30]:
+  - complementary [ref=e31]:
+    - generic [ref=e44]:
+      - strong [ref=e45]: OpenClaw
+      - generic [ref=e46]: Enterprise Admin
+    - navigation "Quản trị Enterprise" [ref=e47]:
+      - button "Quản lý tài khoản" [ref=e48]
+      - button "Quản lý agent" [ref=e56]
+      - button "Tri thức doanh nghiệp" [ref=e62]
+      - button "Quản lý skill" [ref=e67]
+      - button "Plugins" [ref=e75]
+      - button "Config" [ref=e81]
+    - generic [ref=e87]:
+      - generic [ref=e88]:
+        - generic [ref=e89]: Q
+        - generic [ref=e90]:
+          - strong [ref=e91]: QA Admin
+          - generic [ref=e92]: "@qaadmin"
+      - button "Đổi mật khẩu" [ref=e93]
+      - button "Đăng xuất" [ref=e100]
+  - generic [ref=e157]:
+    - generic [ref=e158]:
+      - generic [ref=e159]:
+        - generic [ref=e160]:
+          - heading "Quản lý agent" [level=1] [ref=e161]
+          - paragraph [ref=e162]: Shared agent nghiệp vụ và personal agent theo từng tài khoản
+        - button "Tạo shared agent" [ref=e163]
+      - navigation "Loại agent" [ref=e165]:
+        - button "Shared Agents (1)" [ref=e174]
+        - button "Personal Agents (1)" [ref=e175]
+        - button "Điều phối Agent" [ref=e168]
+      - generic [ref=e169]:
+        - searchbox "Tìm agent" [ref=e170]
+        - generic [ref=e171]: Reserved internal agents đã được ẩn
+      - table [ref=e176]:
+        - rowgroup [ref=e177]:
+          - row [ref=e178]:
+            - columnheader "Agent" [ref=e179]
+            - columnheader "Model" [ref=e180]
+            - columnheader "Runtime" [ref=e181]
+            - columnheader "Workspace" [ref=e182]
+            - columnheader "User" [ref=e183]
+            - columnheader "Skill/Tool" [ref=e184]
+            - columnheader "Cập nhật" [ref=e185]
+            - columnheader "Thao tác" [ref=e186]
+        - rowgroup [ref=e187]:
+          - row [ref=e188]:
+            - cell "main main" [ref=e189]:
+              - strong [ref=e190]: main
+              - generic [ref=e191]: main
+            - cell "Mặc định" [ref=e192]
+            - cell "embedded" [ref=e194]
+            - cell "/var/folders/m4/71w5wnxs0tjd2cdkbcc7846m0000gn/T/openclaw-delegation-qa.78avV2/workspace" [ref=e196]
+            - cell "0" [ref=e197]
+            - cell "58 / 61" [ref=e198]
+            - cell "—" [ref=e199]
+            - cell [ref=e200]:
+              - button "Xem" [ref=e201]
+    - dialog "Tạo shared agent" [ref=e203]:
+      - generic [ref=e205]:
+        - generic [ref=e206]:
+          - generic [ref=e207]:
+            - heading "Tạo shared agent" [level=2] [ref=e208]
+            - paragraph [ref=e209]: Ghi config bằng CAS; reserved internal ID bị từ chối
+          - button "Đóng" [ref=e210]
+        - generic [ref=e216]:
+          - generic [ref=e217]:
+            - text: Agent ID
+            - textbox "Agent ID" [ref=e218]
+          - generic [ref=e219]:
+            - text: Tên hiển thị
+            - textbox "Tên hiển thị" [ref=e220]
+          - generic [ref=e221]:
+            - text: Model
+            - textbox "Model" [ref=e222]:
+              - /placeholder: provider/model hoặc để trống
+          - generic [ref=e223]:
+            - text: Workspace
+            - textbox "Workspace" [ref=e224]:
+              - /placeholder: Để trống dùng mặc định
+          - generic [ref=e225]:
+            - button "Hủy" [ref=e226]
+            - button "Tạo shared agent" [ref=e227]

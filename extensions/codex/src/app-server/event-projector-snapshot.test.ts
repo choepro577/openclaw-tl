@@ -5,8 +5,12 @@ import type {
 import type { AssistantMessage } from "openclaw/plugin-sdk/llm";
 import { describe, expect, it } from "vitest";
 import { buildCodexMessagesSnapshot } from "./event-projector-snapshot.js";
+import { readMirrorIdentity } from "./upstream-prompt-provenance.js";
 
-function buildSnapshot(trigger: EmbeddedRunAttemptParams["trigger"]): AgentMessage[] {
+function buildSnapshot(
+  trigger: EmbeddedRunAttemptParams["trigger"],
+  options: { planText?: string; planMirrorPersisted?: boolean } = {},
+): AgentMessage[] {
   return buildCodexMessagesSnapshot({
     runParams: {
       prompt: "Pre-compaction memory flush",
@@ -16,7 +20,8 @@ function buildSnapshot(trigger: EmbeddedRunAttemptParams["trigger"]): AgentMessa
     turnId: "turn-1",
     upstreamUserText: undefined,
     reasoningText: "checking memory",
-    planText: undefined,
+    planText: options.planText,
+    planMirrorPersisted: options.planMirrorPersisted,
     commentaryMessages: [],
     toolMessages: [
       {
@@ -58,5 +63,29 @@ describe("buildCodexMessagesSnapshot", () => {
     expect(messages.every((message) => (message as { display?: boolean }).display !== false)).toBe(
       true,
     );
+  });
+
+  it("hides only a plan mirror after persistence is confirmed", () => {
+    const persistedMessages = buildSnapshot("user", {
+      planText: "- [pending] inspect",
+      planMirrorPersisted: true,
+    });
+    const persistedPlan = persistedMessages.find(
+      (message) => readMirrorIdentity(message) === "turn-1:plan",
+    );
+    const persistedReasoning = persistedMessages.find(
+      (message) => readMirrorIdentity(message) === "turn-1:reasoning",
+    );
+    expect((persistedPlan as { display?: boolean } | undefined)?.display).toBe(false);
+    expect((persistedReasoning as { display?: boolean } | undefined)?.display).not.toBe(false);
+
+    const unpersistedMessages = buildSnapshot("user", {
+      planText: "- [pending] inspect",
+      planMirrorPersisted: false,
+    });
+    const unpersistedPlan = unpersistedMessages.find(
+      (message) => readMirrorIdentity(message) === "turn-1:plan",
+    );
+    expect((unpersistedPlan as { display?: boolean } | undefined)?.display).not.toBe(false);
   });
 });

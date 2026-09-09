@@ -1,3 +1,4 @@
+import type { OpenClawConfig } from "../../../config/types.openclaw.js";
 /**
  * Active-requester wake and steering for subagent announcements.
  */
@@ -15,6 +16,7 @@ import {
   loadRequesterSessionEntry,
   queueSubagentAnnounceMessage,
   resolveQueueSettings,
+  resolveSubagentAnnounceRuntimeConfig,
   tryResolveSubagentRequesterAgentId,
 } from "./subagent-announce-delivery.runtime.js";
 import { resolveRequesterStoreKey } from "./subagent-requester-store-key.js";
@@ -32,8 +34,11 @@ function formatQueueWakeFailureError(
 export function resolveRequesterSessionActivity(
   requesterSessionKey: string,
   requesterAgentId?: string,
+  config?: OpenClawConfig,
 ) {
-  const cfg = getSubagentAnnounceRuntimeConfig();
+  const runtimeConfig = getSubagentAnnounceRuntimeConfig();
+  const cfg = config ?? runtimeConfig;
+  const scopedConfig = config && config !== runtimeConfig ? config : undefined;
   const resolvedAgentId = tryResolveSubagentRequesterAgentId(
     cfg,
     requesterSessionKey,
@@ -42,11 +47,15 @@ export function resolveRequesterSessionActivity(
   if (!resolvedAgentId) {
     return { isActive: false };
   }
-  const activity = getSubagentRequesterSessionActivity(requesterSessionKey, resolvedAgentId);
+  const activity = scopedConfig
+    ? getSubagentRequesterSessionActivity(requesterSessionKey, resolvedAgentId, scopedConfig)
+    : getSubagentRequesterSessionActivity(requesterSessionKey, resolvedAgentId);
   if (activity.sessionId || activity.isActive) {
     return activity;
   }
-  const { entry } = loadRequesterSessionEntry(requesterSessionKey, resolvedAgentId);
+  const { entry } = scopedConfig
+    ? loadRequesterSessionEntry(requesterSessionKey, resolvedAgentId, scopedConfig)
+    : loadRequesterSessionEntry(requesterSessionKey, resolvedAgentId);
   const sessionId = entry?.sessionId;
   return {
     sessionId,
@@ -188,6 +197,7 @@ export async function maybeSteerSubagentAnnounce(params: {
   steerMessage: string;
   signal?: AbortSignal;
   isSourceSessionEffectsAllowed?: () => boolean;
+  resolveGatewayContext?: import("../../../gateway/server-methods/types.js").GatewayContextResolver;
 }): Promise<
   | { status: "steered"; deliveredAt?: number; enqueuedAt?: number }
   | { status: "none" | "dropped" | "source_owner_changed" }
@@ -195,7 +205,7 @@ export async function maybeSteerSubagentAnnounce(params: {
   if (params.signal?.aborted) {
     return { status: "none" };
   }
-  const cfg = getSubagentAnnounceRuntimeConfig();
+  const cfg = resolveSubagentAnnounceRuntimeConfig(params.resolveGatewayContext);
   const requesterAgentId = tryResolveSubagentRequesterAgentId(
     cfg,
     params.requesterSessionKey,
@@ -204,11 +214,12 @@ export async function maybeSteerSubagentAnnounce(params: {
   if (!requesterAgentId) {
     return { status: "none" };
   }
-  const { entry } = loadRequesterSessionEntry(params.requesterSessionKey, requesterAgentId);
+  const { entry } = loadRequesterSessionEntry(params.requesterSessionKey, requesterAgentId, cfg);
   const canonicalKey = resolveRequesterStoreKey(cfg, params.requesterSessionKey, requesterAgentId);
   const { sessionId, isActive } = resolveRequesterSessionActivity(
     params.requesterSessionKey,
     requesterAgentId,
+    cfg,
   );
   if (isSubagentRequesterSessionAbandoned(canonicalKey, sessionId)) {
     return { status: "none" };
@@ -258,6 +269,7 @@ export async function maybeSteerSubagentAnnounce(params: {
   const currentActivity = resolveRequesterSessionActivity(
     params.requesterSessionKey,
     requesterAgentId,
+    cfg,
   );
   return { status: currentActivity.isActive ? "dropped" : "none" };
 }

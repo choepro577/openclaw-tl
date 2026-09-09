@@ -6,13 +6,13 @@ import { property, state } from "lit/decorators.js";
 import type { GatewayBrowserClient } from "../../api/gateway.ts";
 import type { FastMode, ModelsProbeResult } from "../../api/types.ts";
 import { titleForRoute } from "../../app-navigation.ts";
-import { applicationContext, type ApplicationContext } from "../../app/context.ts";
+import { modelManagementContext, type ModelManagementContext } from "../../app/context.ts";
 import { hasOperatorAdminAccess } from "../../app/operator-access.ts";
 import { renderAgentScopeControl } from "../../components/agent-scope-control.ts";
-import { renderDocsLink } from "../../components/settings-ui.ts";
 import { renderSettingsWorkspace } from "../../components/settings-workspace.ts";
 import { t } from "../../i18n/index.ts";
 import { normalizeAgentLabel } from "../../lib/agents/display.ts";
+import { resolveEditableSnapshotConfig } from "../../lib/config/config-state-model.ts";
 import { isGatewayMethodAdvertised } from "../../lib/gateway-methods.ts";
 import { normalizeAgentId } from "../../lib/sessions/session-key.ts";
 import { GatewayPageController } from "../../lit/gateway-page-controller.ts";
@@ -35,6 +35,7 @@ import {
 } from "./data.ts";
 import {
   EMPTY_MODEL_PROVIDERS_DATA,
+  loadModelProviderUsage,
   loadModelProvidersData,
   MODEL_PROVIDERS_COST_DAYS,
   type ModelProvidersData,
@@ -49,11 +50,9 @@ import { isMissingMethodError, mergeProbeResults } from "./probe-results.ts";
 import type { ModelProvidersRouteData } from "./route.ts";
 import { renderModelProviders, type ModelProviderRowMessage } from "./view.ts";
 
-const MODEL_PROVIDERS_DOCS_URL = "https://docs.openclaw.ai/concepts/model-providers";
-
 export class ModelProvidersPage extends OpenClawLightDomElement {
-  @consume({ context: applicationContext, subscribe: true })
-  private context!: ApplicationContext;
+  @consume({ context: modelManagementContext, subscribe: true })
+  private context!: ModelManagementContext;
 
   @property({ attribute: false }) routeData: ModelProvidersRouteData | undefined;
 
@@ -75,6 +74,9 @@ export class ModelProvidersPage extends OpenClawLightDomElement {
   private dataClient: GatewayBrowserClient | null = null;
   // Null Task runs supersede stale work without counting as a real load.
   private loadClient: GatewayBrowserClient | null = null;
+  // Enterprise Admin fetches usage as enrichment so a slow provider API cannot
+  // block the critical model/provider cards from rendering.
+  private usageClient: GatewayBrowserClient | null = null;
   private routeDataObserved = false;
   // Global config writes survive agent switches; their card state does not.
   private agentEpoch = 0;
@@ -89,9 +91,19 @@ export class ModelProvidersPage extends OpenClawLightDomElement {
         return initialState;
       }
       this.refreshPolicy.beginLoad();
+      const configLoad = this.context.reuseRuntimeConfig
+        ? (force
+            ? this.context.runtimeConfig.refresh()
+            : this.context.runtimeConfig.ensureLoaded()
+          ).then(() =>
+            resolveEditableSnapshotConfig(this.context.runtimeConfig.state.configSnapshot),
+          )
+        : undefined;
       return loadModelProvidersData(client, {
         agentId,
         ...(force ? { refresh: true } : {}),
+        ...(this.context.deferProviderUsage ? { deferProviderUsage: true } : {}),
+        ...(configLoad ? { configLoad } : {}),
         signal,
       }).then((data) => ({ client, data }));
     },
@@ -105,8 +117,40 @@ export class ModelProvidersPage extends OpenClawLightDomElement {
       this.refreshPolicy.flushPending();
     },
   });
+  private readonly usageTask = new Task(this, {
+    autoRun: false,
+    task: ([client, agentId]: [GatewayBrowserClient | null, string], { signal }) => {
+      if (!client || !agentId || !this.context?.deferProviderUsage) {
+        return initialState;
+      }
+      return loadModelProviderUsage(client, { signal, retryRefreshing: true }).then((usage) => ({
+        client,
+        agentId,
+        ...usage,
+      }));
+    },
+    onComplete: ({ client, agentId, providerUsage, costByProvider }) => {
+      this.usageClient = null;
+      if (
+        this.gateway.client !== client ||
+        this.selectedAgentId !== agentId ||
+        this.data === null
+      ) {
+        return;
+      }
+      this.data = { ...this.data, providerUsage, costByProvider };
+      this.refreshPolicy.setLastLoadedAtMs(
+        providerUsage.ok && providerUsage.value.refreshing !== true ? this.data.updatedAt : null,
+      );
+      this.refreshPolicy.flushPending();
+    },
+    onError: () => {
+      this.usageClient = null;
+      this.refreshPolicy.flushPending();
+    },
+  });
   private readonly refreshPolicy = new UsageRefreshPolicy({
-    isLoading: () => this.loadClient !== null,
+    isLoading: () => this.loadClient !== null || this.usageClient !== null,
     reload: () => void this.refresh({ force: false }),
   });
   private readonly gateway = new GatewayPageController(this, {
@@ -152,6 +196,8 @@ export class ModelProvidersPage extends OpenClawLightDomElement {
     );
 
   override disconnectedCallback() {
+    this.usageClient = null;
+    void this.usageTask.run([null, ""]);
     this.subscriptions.clear();
     super.disconnectedCallback();
   }
@@ -208,6 +254,8 @@ export class ModelProvidersPage extends OpenClawLightDomElement {
   private invalidateRequests() {
     this.refreshPolicy.interrupt();
     this.loadClient = null;
+    this.usageClient = null;
+    void this.usageTask.run([null, ""]);
     void this.refreshTask.run([null, this.selectedAgentId, false]);
   }
 
@@ -279,6 +327,10 @@ export class ModelProvidersPage extends OpenClawLightDomElement {
       return Promise.resolve();
     }
     this.loadClient = client;
+    if (this.context.deferProviderUsage) {
+      this.usageClient = client;
+      void this.usageTask.run([client, this.selectedAgentId]);
+    }
     return this.refreshTask.run([client, this.selectedAgentId, opts.force]);
   }
 
@@ -717,10 +769,7 @@ export class ModelProvidersPage extends OpenClawLightDomElement {
       <section class="content-header">
         <div>
           <div class="page-title">${titleForRoute("model-providers")}</div>
-          <div class="page-subtitle">
-            ${t("modelProviders.subtitle")}
-            ${renderDocsLink(MODEL_PROVIDERS_DOCS_URL, t("common.learnMore"))}
-          </div>
+          <div class="page-subtitle">${t("modelProviders.subtitle")}</div>
         </div>
         <div class="page-header-actions">
           ${renderAgentScopeControl({

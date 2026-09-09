@@ -856,6 +856,8 @@ describe("plugin index install records store", () => {
           installPath: path.join(stateDir, "plugins", "clawpack-demo"),
           clawhubUrl: "https://clawhub.ai",
           clawhubPackage: "clawpack-demo",
+          clawhubVersion: "2026.5.2",
+          version: "2026.5.1",
           clawhubFamily: "code-plugin",
           clawhubChannel: "official",
           artifactKind: "npm-pack",
@@ -881,6 +883,8 @@ describe("plugin index install records store", () => {
 
     const loaded = await loadInstalledPluginIndexInstallRecords({ stateDir });
     expectRecordFields(loaded["clawpack-demo"], {
+      clawhubVersion: "2026.5.2",
+      version: "2026.5.1",
       source: "clawhub",
       spec: "clawhub:clawpack-demo",
       artifactKind: "npm-pack",

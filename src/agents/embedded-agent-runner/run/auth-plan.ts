@@ -2,6 +2,7 @@ import { resolveProviderAuthProfileId } from "../../../plugins/provider-runtime.
 import type { AuthProfileStore } from "../../auth-profiles.js";
 import { resolveExternalCliAuthOverlayScopeFromSelection } from "../../auth-profiles/external-cli-auth-selection.js";
 import type { AgentHarness } from "../../harness/types.js";
+import { resolveLegacyInheritedAuthDir } from "../../legacy-inherited-auth-dir.js";
 import {
   ensureAuthProfileStore,
   ensureAuthProfileStoreWithoutExternalProfiles,
@@ -31,6 +32,11 @@ function loadEmbeddedRunAuthProfileStore(params: {
   // explicit bindings remain available for the cross-class contracts in prepare-auth.test.ts.
   return ensureAuthProfileStore(params.agentDir, {
     config: params.config,
+    // A request-scoped Enterprise Personal Agent has its own synthetic agentDir,
+    // while the authenticated profile remains owned by the configured template.
+    // Keep the runtime lookup on that explicit inheritance owner instead of
+    // silently falling back to the process-wide shared store.
+    inheritedAuthDir: resolveLegacyInheritedAuthDir(params.config ?? {}),
     externalCliProviderIds: params.externalCliProviderIds,
     allowKeychainPrompt: false,
   });

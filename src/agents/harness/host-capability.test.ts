@@ -4,6 +4,7 @@ import path from "node:path";
 import { Type } from "typebox";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createDeferred } from "../../../test/helpers/promise.js";
+import { markGatewayRequestScopedRuntimeConfig } from "../../gateway/request-runtime-config.js";
 import {
   resetAgentRunRegistryForTest,
   rotateAgentRunRegistryLifecycleGeneration,
@@ -47,6 +48,31 @@ const mockCallGatewayTool = vi.mocked(callGatewayTool);
 type HostAttempt = Parameters<typeof createAgentHarnessHostCapabilities>[0]["attempt"];
 
 const admissions: PreparedAgentRunAdmission[] = [];
+
+it("binds native plugin grants to the admitted Agent and rechecks revocation and closure", async () => {
+  let enabled = true;
+  const resolver = vi.fn((agentId: string, owner: string) =>
+    enabled && agentId === "main" && owner === "codex"
+      ? [{ pluginName: "example", marketplaceName: "approved" }]
+      : [],
+  );
+  const config = markGatewayRequestScopedRuntimeConfig({}, { nativePluginGrants: resolver });
+  const { attempt, admission } = await admittedAttempt("plugin-grants", { config });
+  const host = createAgentHarnessHostCapabilities({ attempt, pluginId: "codex" });
+  try {
+    expect(host.capabilities.nativePluginGrants?.()).toEqual([
+      { pluginName: "example", marketplaceName: "approved" },
+    ]);
+    expect(resolver).toHaveBeenLastCalledWith("main", "codex");
+    enabled = false;
+    expect(host.capabilities.nativePluginGrants?.()).toEqual([]);
+    host.close();
+    expect(() => host.capabilities.nativePluginGrants?.()).toThrow("no longer active");
+  } finally {
+    host.close();
+    admission.close();
+  }
+});
 
 async function admittedAttempt(
   runId = "run-1",

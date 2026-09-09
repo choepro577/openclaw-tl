@@ -9,12 +9,10 @@ import type { ApplicationNavigationOptions } from "../app/context.ts";
 import type { ThemeMode } from "../app/theme.ts";
 import { t } from "../i18n/index.ts";
 import { normalizeAgentLabel } from "../lib/agents/display.ts";
-import { buildExternalLinkRel, EXTERNAL_LINK_TARGET } from "../lib/external-link.ts";
 import {
   formatKeyboardShortcutCombo,
   KEYBOARD_SHORTCUT_COMBOS,
 } from "../lib/keyboard-shortcut-catalog.ts";
-import { openExternalUrlSafe } from "../lib/open-external-url.ts";
 import type { PresenceViewer } from "../lib/presence-users.ts";
 import { normalizeAgentId } from "../lib/sessions/session-key.ts";
 import {
@@ -22,7 +20,7 @@ import {
   requestDebugOverlayToggle,
 } from "../pages/debug/debug-overlay-contract.ts";
 import { renderAgentSelectAvatar, renderAgentSelectCopy } from "./agent-select.ts";
-import { icons, type IconName } from "./icons.ts";
+import { icons } from "./icons.ts";
 import "./sidebar-build-chip.ts";
 import "./viewer-facepile.ts";
 import {
@@ -31,30 +29,8 @@ import {
   trackDropdownKeyboardDismissal,
 } from "./web-awesome.ts";
 
-// External rows of the footer identity menu. Docs-first: public docs pages over
-// raw GitHub, matching the ClawSweeper docs-link policy for user-facing copy.
-const IDENTITY_MENU_LINKS: ReadonlyArray<{
-  href: string;
-  icon: IconName;
-  label: () => string;
-}> = [
-  { href: "https://docs.openclaw.ai", icon: "book", label: () => t("common.docs") },
-  {
-    href: "https://docs.openclaw.ai/help",
-    icon: "messageSquare",
-    label: () => t("agentChip.getHelp"),
-  },
-  { href: "https://discord.gg/clawd", icon: "users", label: () => t("agentChip.discord") },
-  {
-    href: "https://docs.openclaw.ai/releases",
-    icon: "scrollText",
-    label: () => t("agentChip.viewChangelog"),
-  },
-];
-
 const AGENT_VALUE_PREFIX = "agent:";
 const COMMAND_VALUE_PREFIX = "command:";
-const LINK_VALUE_PREFIX = "link:";
 const sidebarMenuTypeahead = new WeakMap<
   HTMLElement,
   { query: string; timeout: ReturnType<typeof setTimeout> }
@@ -266,36 +242,6 @@ function renderAgentRow(agent: AgentMenuAgent, params: SidebarAgentMenuParams) {
   `;
 }
 
-function renderIdentityMenuHelpSubmenu() {
-  return html`
-    ${IDENTITY_MENU_LINKS.map(
-      (link) => html`
-        <wa-dropdown-item
-          slot="submenu"
-          class="sidebar-customize-menu__item"
-          value=${`${LINK_VALUE_PREFIX}${encodeURIComponent(link.href)}`}
-          data-new-tab-action
-          @click=${(event: MouseEvent) => {
-            if (event.target instanceof Element && event.target.closest("a")) {
-              (event.currentTarget as HTMLElement).dataset.nativeNavigation = "true";
-            }
-          }}
-        >
-          <a
-            href=${link.href}
-            target=${EXTERNAL_LINK_TARGET}
-            rel=${buildExternalLinkRel()}
-            tabindex="-1"
-          >
-            <span slot="icon" class="nav-item__icon" aria-hidden="true">${icons[link.icon]}</span>
-            <span class="sidebar-customize-menu__text">${link.label()}</span>
-          </a>
-        </wa-dropdown-item>
-      `,
-    )}
-  `;
-}
-
 export function renderSidebarAgentMenu(params: SidebarAgentMenuParams) {
   const position = params.position;
   if (!position) {
@@ -446,10 +392,6 @@ export function renderSidebarIdentityMenu(params: SidebarIdentityMenuParams) {
           return;
         }
         params.onClose(false);
-        if (value.startsWith(LINK_VALUE_PREFIX)) {
-          openExternalUrlSafe(decodeURIComponent(value.slice(LINK_VALUE_PREFIX.length)));
-          return;
-        }
         switch (value) {
           case `${COMMAND_VALUE_PREFIX}profile`:
             params.onNavigate("profile", { hash: "#settings-profile-identity" });
@@ -462,9 +404,6 @@ export function renderSidebarIdentityMenu(params: SidebarIdentityMenuParams) {
             break;
           case `${COMMAND_VALUE_PREFIX}pair-mobile`:
             params.onPairMobile();
-            break;
-          case `${COMMAND_VALUE_PREFIX}apps`:
-            params.onNavigate("apps");
             break;
           case `${COMMAND_VALUE_PREFIX}debug-overlay`:
             requestDebugOverlayToggle();
@@ -535,27 +474,12 @@ export function renderSidebarIdentityMenu(params: SidebarIdentityMenuParams) {
         <span slot="icon" class="nav-item__icon" aria-hidden="true">${icons.smartphone}</span>
         <span class="sidebar-customize-menu__text">${t("devices.pairing.button")}</span>
       </wa-dropdown-item>
-      <wa-dropdown-item class="sidebar-customize-menu__item" value="command:apps">
-        <span slot="icon" class="nav-item__icon" aria-hidden="true">${icons.layoutGrid}</span>
-        <span class="sidebar-customize-menu__text">${t("agentChip.getApps")}</span>
-      </wa-dropdown-item>
       <wa-dropdown-item class="sidebar-customize-menu__item" value="command:debug-overlay">
         <span slot="icon" class="nav-item__icon" aria-hidden="true">${icons.activity}</span>
         <span class="sidebar-customize-menu__text">${t("debug.overlay.title")}</span>
         <span slot="details" class="session-menu__shortcut" aria-hidden="true"
           >${DEBUG_OVERLAY_SHORTCUT_LABEL}</span
         >
-      </wa-dropdown-item>
-      <div class="sidebar-customize-menu__separator" role="separator"></div>
-      <wa-dropdown-item
-        class="sidebar-customize-menu__item sidebar-identity-menu__help"
-        value="command:help"
-      >
-        <span slot="icon" class="nav-item__icon" aria-hidden="true"
-          >${icons.circleQuestionMark}</span
-        >
-        <span class="sidebar-customize-menu__text">${t("agentChip.help")}</span>
-        ${renderIdentityMenuHelpSubmenu()}
       </wa-dropdown-item>
       ${params.onLogout
         ? html`

@@ -1,16 +1,189 @@
 .eu-auth-screen {
+  position: relative;
   display: grid;
   min-height: 100dvh;
+  overflow: hidden;
   place-items: center;
   padding: var(--space-6);
-  background: var(--bg);
+  background:
+    radial-gradient(
+      circle at 18% 18%,
+      color-mix(in srgb, var(--accent) 16%, transparent),
+      transparent 28%
+    ),
+    radial-gradient(
+      circle at 84% 82%,
+      color-mix(in srgb, var(--accent) 9%, transparent),
+      transparent 30%
+    ),
+    var(--bg);
+}
+
+.eu-auth-screen::before {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(color-mix(in srgb, var(--border) 30%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, var(--border) 30%, transparent) 1px, transparent 1px);
+  background-size: 40px 40px;
+  content: "";
+  mask-image: radial-gradient(circle at center, black, transparent 72%);
+  pointer-events: none;
 }
 
 .eu-auth-card {
+  position: relative;
+  z-index: 1;
   display: grid;
   width: min(100%, 420px);
   gap: var(--space-5);
   margin: 0;
+}
+
+.eu-auth-card--login {
+  width: min(100%, 880px);
+  overflow: hidden;
+  grid-template-columns: minmax(260px, 0.82fr) minmax(0, 1.18fr);
+  gap: 0;
+  border-color: color-mix(in srgb, var(--border-strong) 70%, transparent);
+  border-radius: var(--radius-xl);
+  padding: 0;
+  box-shadow:
+    0 32px 90px rgb(0 0 0 / 34%),
+    0 0 0 1px color-mix(in srgb, var(--accent) 7%, transparent);
+}
+
+.eu-auth-visual {
+  position: relative;
+  display: flex;
+  min-height: 550px;
+  box-sizing: border-box;
+  flex-direction: column;
+  justify-content: space-between;
+  overflow: hidden;
+  border-right: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
+  padding: 32px;
+  background:
+    radial-gradient(
+      circle at 50% 52%,
+      color-mix(in srgb, var(--accent) 24%, transparent),
+      transparent 34%
+    ),
+    linear-gradient(150deg, color-mix(in srgb, var(--accent) 11%, var(--card)), var(--bg-elevated));
+}
+
+.eu-auth-visual::before,
+.eu-auth-visual::after {
+  position: absolute;
+  border: 1px solid color-mix(in srgb, var(--accent) 24%, transparent);
+  border-radius: 50%;
+  content: "";
+}
+
+.eu-auth-visual::before {
+  width: 330px;
+  height: 330px;
+  right: -140px;
+  bottom: -100px;
+}
+
+.eu-auth-visual::after {
+  width: 210px;
+  height: 210px;
+  top: 116px;
+  left: -126px;
+}
+
+.eu-auth-brand {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.eu-auth-brand__mark {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
+  place-items: center;
+}
+
+.eu-auth-brand__mark img {
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
+}
+
+.eu-auth-brand > span:last-child,
+.eu-auth-brand strong,
+.eu-auth-brand small {
+  display: block;
+}
+
+.eu-auth-brand strong {
+  color: var(--text-strong);
+  font-size: var(--control-ui-text-md);
+  font-weight: 650;
+  line-height: 1.25;
+}
+
+.eu-auth-brand small {
+  color: var(--muted);
+  font-size: var(--control-ui-text-sm);
+}
+
+.eu-auth-visual__mark {
+  position: relative;
+  display: grid;
+  width: 126px;
+  height: 126px;
+  align-self: center;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--accent) 32%, var(--border));
+  border-radius: 34px;
+  background: color-mix(in srgb, var(--card) 76%, transparent);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, white 14%, transparent),
+    0 24px 64px color-mix(in srgb, var(--accent) 18%, transparent);
+  transform: rotate(-4deg);
+}
+
+.eu-auth-visual__mark::before {
+  position: absolute;
+  inset: -18px;
+  border: 1px solid color-mix(in srgb, var(--accent) 14%, transparent);
+  border-radius: 44px;
+  content: "";
+}
+
+.eu-auth-visual__mark img {
+  width: 72px;
+  height: 72px;
+  object-fit: contain;
+  transform: rotate(4deg);
+}
+
+.eu-auth-panel {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  justify-content: center;
+  padding: clamp(34px, 5vw, 54px);
+  background: color-mix(in srgb, var(--card) 94%, transparent);
+}
+
+.eu-auth-copy,
+.eu-auth-copy p {
+  margin: 0;
+}
+
+.eu-auth-eyebrow {
+  color: var(--accent);
+  font-size: calc(11px * var(--control-ui-text-scale));
+  font-weight: 750;
+  letter-spacing: 0.14em;
 }
 
 .eu-auth-card h1,
@@ -25,6 +198,115 @@
   line-height: 1.2;
 }
 
+.eu-auth-card--login h1 {
+  margin-top: 10px;
+  font-size: clamp(26px, 4vw, 34px);
+  letter-spacing: -0.045em;
+}
+
 .eu-auth-card p {
   color: var(--muted);
+}
+
+.eu-auth-card--login .stack {
+  gap: 18px;
+  margin-top: 30px;
+}
+
+.eu-auth-card--login .input,
+.eu-auth-card--login .oc-sensitive-input {
+  min-height: 48px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--bg-elevated) 76%, var(--card));
+}
+
+.eu-auth-card--login .oc-sensitive-input > input {
+  border-radius: 12px 0 0 12px;
+}
+
+.eu-auth-card--login .oc-sensitive-toggle {
+  border-radius: 0 12px 12px 0;
+}
+
+.eu-auth-card--login .btn.primary {
+  min-height: 48px;
+  margin-top: 2px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 88%, white), var(--primary));
+  font-weight: 650;
+}
+
+.eu-auth-language {
+  margin-top: 28px;
+  padding-top: 20px;
+  border-top: 1px solid color-mix(in srgb, var(--border) 78%, transparent);
+}
+
+.eu-auth-language label {
+  display: grid;
+  align-items: center;
+  grid-template-columns: auto minmax(140px, 176px);
+  gap: 16px;
+}
+
+.eu-auth-language label > span {
+  color: var(--muted);
+  font-size: calc(12px * var(--control-ui-text-scale));
+  font-weight: 600;
+}
+
+.eu-auth-language .eu-auth-language__select {
+  min-height: 36px;
+  padding-block: 6px;
+}
+
+@media (max-width: 768px) {
+  .eu-auth-screen {
+    overflow: auto;
+    padding: 18px;
+  }
+
+  .eu-auth-card--login {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .eu-auth-visual {
+    min-height: 0;
+    border-right: 0;
+    border-bottom: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
+    padding: 24px 24px 20px;
+  }
+
+  .eu-auth-visual__mark {
+    display: none;
+  }
+
+  .eu-auth-panel {
+    padding: 30px 24px 26px;
+  }
+
+  .eu-auth-card--login h1 {
+    font-size: calc(27px * var(--control-ui-text-scale));
+  }
+}
+
+@media (max-width: 400px) {
+  .eu-auth-screen {
+    align-items: start;
+    padding: 10px;
+  }
+
+  .eu-auth-visual {
+    padding: 20px 20px 16px;
+  }
+
+  .eu-auth-panel {
+    padding: 26px 20px 22px;
+  }
+
+  .eu-auth-language label {
+    align-items: stretch;
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
 }

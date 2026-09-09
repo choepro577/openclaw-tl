@@ -1,5 +1,7 @@
 // Stable Enterprise resource identities and the versioned built-in access presets.
-import type { EnterpriseResourceType } from "./entitlement-store.js";
+import type { EnterpriseResourceType } from "./resource-types.js";
+
+export const ENTERPRISE_ACCESS_PRESET_BASIC = "basic@1";
 
 export const ENTERPRISE_ACCESS_PRESET_NONE = "none";
 export const ENTERPRISE_ACCESS_PRESET_STANDARD_CODING = "standard-coding@1";
@@ -13,12 +15,65 @@ export const STANDARD_CODING_TOOL_IDS = [
   "process",
 ] as const;
 
+export const BASIC_TOOL_IDS = [
+  ...STANDARD_CODING_TOOL_IDS,
+  "memory_search",
+  "memory_get",
+  "agents_wait",
+  "ask_user",
+  "automations",
+  "progress_card",
+  "suggest_task",
+  "browser",
+  "show_widget",
+  "dashboard",
+  "canvas",
+  "conversations_list",
+  "conversations_send",
+  "conversations_turn",
+  "session_status",
+  "sessions",
+  "sessions_history",
+  "sessions_search",
+  "sessions_send",
+  "music_generate",
+  "tts",
+  "video_generate",
+  "view_image",
+  "web_search",
+  "web_fetch",
+  "x_search",
+] as const;
+
+export const ENTERPRISE_ACCESS_PRESETS = [
+  {
+    key: ENTERPRISE_ACCESS_PRESET_BASIC,
+    label: "Quyền cơ bản",
+    description: "Cấp 32 công cụ cơ bản, đồng bộ quyền sử dụng trong sandbox.",
+    toolIds: [...BASIC_TOOL_IDS],
+  },
+  {
+    key: ENTERPRISE_ACCESS_PRESET_STANDARD_CODING,
+    label: "Lập trình tiêu chuẩn",
+    description: "Đọc, ghi, sửa file và chạy lệnh trong sandbox.",
+    toolIds: [...STANDARD_CODING_TOOL_IDS],
+  },
+  {
+    key: ENTERPRISE_ACCESS_PRESET_NONE,
+    label: "Không có preset",
+    description: "Chỉ sử dụng các quyền được cấp riêng.",
+    toolIds: [],
+  },
+];
+
 export const ENTERPRISE_NON_DELEGABLE_TOOL_IDS = new Set([
   "elevated",
   "terminal",
   "portal",
   "gateway",
   "agents_list",
+  "sessions_spawn",
+  "subagents",
   "nodes",
   "computer",
   "screen",
@@ -37,6 +92,12 @@ export const ENTERPRISE_NON_DELEGABLE_TOOL_IDS = new Set([
   "node",
   "device",
 ]);
+
+export const ENTERPRISE_DELEGATION_MANAGED_TOOL_IDS = [
+  "enterprise_specialists_list",
+  "enterprise_delegate",
+  "sessions_yield",
+] as const;
 
 export function isEnterpriseNonDelegableToolId(toolId: string): boolean {
   const normalized = toolId.trim().toLowerCase();
@@ -159,17 +220,12 @@ export function enterpriseRuntimeResourceId(
 }
 
 export function accessPresetToolIds(presetKey: string): string[] {
-  return presetKey === ENTERPRISE_ACCESS_PRESET_STANDARD_CODING
-    ? [...STANDARD_CODING_TOOL_IDS]
-    : [];
+  return [...(ENTERPRISE_ACCESS_PRESETS.find((preset) => preset.key === presetKey)?.toolIds ?? [])];
 }
 
 export function normalizeEnterpriseAccessPresetKey(value: string): string {
   const normalized = value.trim();
-  if (
-    normalized !== ENTERPRISE_ACCESS_PRESET_NONE &&
-    normalized !== ENTERPRISE_ACCESS_PRESET_STANDARD_CODING
-  ) {
+  if (!ENTERPRISE_ACCESS_PRESETS.some((preset) => preset.key === normalized)) {
     throw new Error("ACCESS_PRESET_INVALID");
   }
   return normalized;

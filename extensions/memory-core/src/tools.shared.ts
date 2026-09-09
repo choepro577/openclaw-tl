@@ -4,7 +4,6 @@ import type {
   AnyAgentTool,
   OpenClawConfig,
 } from "openclaw/plugin-sdk/memory-core-host-runtime-core";
-import { normalizeLowercaseStringOrEmpty } from "openclaw/plugin-sdk/string-coerce-runtime";
 import {
   resolveMemoryToolContext,
   type MemoryToolContract,
@@ -78,44 +77,18 @@ export function createMemoryTool(params: {
   };
 }
 
-export function buildMemorySearchUnavailableResult(
-  error: string | undefined,
-  overrides?: {
-    warning?: string;
-    action?: string;
-  },
-) {
-  const reason = (error ?? "memory search unavailable").trim() || "memory search unavailable";
-  const normalizedReason = normalizeLowercaseStringOrEmpty(reason);
-  const isQuotaError = /insufficient_quota|quota|429/.test(normalizedReason);
-  const isMissingNodeSqlite = /missing node:sqlite|no such built-?in module: node:sqlite/.test(
-    normalizedReason,
-  );
-  const warning =
-    overrides?.warning ??
-    (isQuotaError
-      ? "Memory search is unavailable because the embedding provider quota is exhausted."
-      : isMissingNodeSqlite
-        ? "Memory search is unavailable because this OpenClaw Node runtime does not provide SQLite support."
-        : "Memory search is unavailable due to an embedding/provider error.");
-  const action =
-    overrides?.action ??
-    (isQuotaError
-      ? "Top up or switch embedding provider, then retry memory_search."
-      : isMissingNodeSqlite
-        ? "Run OpenClaw with a Node runtime that includes node:sqlite, then retry memory_search."
-        : "Check embedding provider configuration and retry memory_search.");
+export const MEMORY_RECALL_RECOVERY_GUIDANCE =
+  "Continue with information confirmed in the current conversation. Ask for any missing facts, and suggest contacting the administrator if earlier information is still needed.";
+
+export function buildMemorySearchUnavailableResult() {
+  // Tool results are model context, including debug fields. Detailed diagnostics
+  // remain in manager status and operator CLI output, not business answers.
   return {
     results: [],
     disabled: true,
     unavailable: true,
-    error: reason,
-    warning,
-    action,
-    debug: {
-      warning,
-      action,
-      error: reason,
-    },
+    error: "memory_recall_unavailable",
+    warning: "Memory recall is temporarily unavailable; earlier information could not be checked.",
+    action: MEMORY_RECALL_RECOVERY_GUIDANCE,
   };
 }

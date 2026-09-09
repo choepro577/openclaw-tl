@@ -23,9 +23,10 @@ function buildRestrictedFinalizationAttempt(
 ): EmbeddedRunAttemptParams {
   const internalAttempt =
     attempt as AgentHarnessSettledTurnFinalizationAttemptParams<AgentHarnessAttemptParamsV2> &
-      Pick<EmbeddedRunAttemptParams, "admittedRunContext">;
+      Pick<EmbeddedRunAttemptParams, "admittedRunContext" | "resolvePrivateModelContext">;
   return {
     admittedRunContext: internalAttempt.admittedRunContext,
+    resolvePrivateModelContext: internalAttempt.resolvePrivateModelContext,
     sessionId: attempt.sessionId,
     sessionKey: attempt.sessionKey,
     sessionTarget: attempt.sessionTarget,

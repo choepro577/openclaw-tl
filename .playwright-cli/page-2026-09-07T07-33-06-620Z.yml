@@ -1,0 +1,23 @@
+- main [ref=f2e22]:
+  - generic [ref=f2e23]:
+    - generic [ref=f2e26]:
+      - strong [ref=f2e27]: MAAP
+      - generic [ref=f2e28]: MAAP Admin
+    - generic [ref=f2e29]:
+      - generic [ref=f2e30]: Language
+      - combobox "Language" [ref=f2e31]:
+        - option "Tiếng Việt"
+        - option "English" [selected]
+    - heading "Change password" [level=1] [ref=f2e32]
+    - paragraph [ref=f2e33]: "@skillqa · sign in again after changing your password."
+    - generic [ref=f2e34]:
+      - generic [ref=f2e35]:
+        - text: Current password
+        - textbox "Current password" [ref=f2e36]
+      - generic [ref=f2e37]:
+        - text: New password
+        - textbox "New password" [ref=f2e38]
+      - generic [ref=f2e39]:
+        - text: Confirm new password
+        - textbox "Confirm new password" [ref=f2e40]
+      - button "Change password" [ref=f2e41]

@@ -145,6 +145,8 @@ The Control UI localizes itself on first load based on your browser locale. To o
 - The selected locale is saved in browser storage and reused on future visits.
 - Missing translation keys fall back to English.
 
+Enterprise Admin and User portals offer **Tiếng Việt** and **English** using the same locale preference. Choose a language on the sign-in screen, in the Admin sidebar, or under Appearance. Switching language updates visible labels without clearing form input; reloading or moving between the portals keeps the choice in the same browser. Account names, authored content, and API identifiers remain unchanged.
+
 Docs translations are generated for the same non-English locale set, but the docs site's built-in Mintlify language picker only lists locale codes Mintlify accepts. Thai (`th`) and Persian (`fa`) docs are still generated in the publish repo; they may not appear in that picker until Mintlify supports those codes.
 
 ## Appearance themes

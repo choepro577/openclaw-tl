@@ -353,6 +353,7 @@ export function bootstrapApplication(
             location.resolveInitialApplicationLocation({
               location: applicationLocation,
               basePath,
+              defaultChatLanding: firstRunDefaultLanding,
               sessionKey: settings.sessionKey,
               gateway,
               agentsList: () => agents.state.agentsList,

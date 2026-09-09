@@ -39,16 +39,20 @@ import {
 import { renderEnterpriseSessionRows } from "./user-conversation-drop-marker.ts";
 import { organizeEnterpriseUserSessions } from "./user-conversation-organization.ts";
 
+const SESSION_PAGE_SIZE = 5;
+
 export class EnterpriseUserConversationOrganizer extends OpenClawLightDomContentsElement {
   @property({ attribute: false }) context?: ApplicationContext<RouteId>;
-  @property({ attribute: false }) refreshToken = "";
   @property({ attribute: false }) onNavigate?: () => void;
   @state() private sessions: GatewaySessionRow[] = [];
   @state() private projects: EnterpriseConversationProject[] = [];
   @state() private loading = true;
   @state() private showArchived = false;
+  @state() private projectsExpanded = true;
+  @state() private recentExpanded = true;
   @state() private openMenu = "";
   @state() private collapsedProjects = new Set<string>();
+  @state() private visibleSessionCounts: Record<string, number> = {};
   @state() private busyKey = "";
   @state() private error = "";
   private loadGeneration = 0;
@@ -97,7 +101,7 @@ export class EnterpriseUserConversationOrganizer extends OpenClawLightDomContent
   }
 
   protected override updated(changed: PropertyValues<this>): void {
-    if ((changed.has("context") || changed.has("refreshToken")) && changed.size > 0) {
+    if (changed.has("context") && changed.size > 0) {
       void this.load();
     }
   }
@@ -526,9 +530,30 @@ export class EnterpriseUserConversationOrganizer extends OpenClawLightDomContent
   }
 
   private renderSessionRows(targetId: string, sessions: readonly GatewaySessionRow[]) {
-    return renderEnterpriseSessionRows(targetId, sessions, this.dragController, (session) =>
-      this.renderSession(session),
-    );
+    const key = `${this.showArchived ? "archived" : "active"}:${targetId}`;
+    const visibleCount = this.visibleSessionCounts[key] ?? SESSION_PAGE_SIZE;
+    return html`
+      ${renderEnterpriseSessionRows(
+        targetId,
+        sessions.slice(0, visibleCount),
+        this.dragController,
+        (session) => this.renderSession(session),
+      )}
+      ${sessions.length > visibleCount
+        ? html`<button
+            type="button"
+            class="eu-session-show-more"
+            @click=${() => {
+              this.visibleSessionCounts = {
+                ...this.visibleSessionCounts,
+                [key]: visibleCount + SESSION_PAGE_SIZE,
+              };
+            }}
+          >
+            ${eu("conversationShowMore")}
+          </button>`
+        : nothing}
+    `;
   }
 
   private toggleProject(projectId: string): void {
@@ -569,9 +594,10 @@ export class EnterpriseUserConversationOrganizer extends OpenClawLightDomContent
           aria-expanded=${String(!collapsed)}
           @click=${() => this.toggleProject(project.id)}
         >
-          <span class="eu-session-section__chevron" aria-hidden="true">${icons.chevronRight}</span>
-          <span aria-hidden="true">${icons.folder}</span>
-          <span>${project.name}</span>
+          <span class="eu-session-section__folder-icon" aria-hidden="true"
+            >${collapsed && !dropTarget ? icons.folder : icons.folderOpen}</span
+          >
+          <span class="eu-session-section__name">${project.name}</span>
         </button>
         <button
           type="button"
@@ -627,9 +653,7 @@ export class EnterpriseUserConversationOrganizer extends OpenClawLightDomContent
       <div class="eu-session-section__label">
         <span>${label}</span><span class="eu-session-section__count">${sessions.length}</span>
       </div>
-      <div class="eu-session-section__rows">
-        ${sessions.map((session) => this.renderSession(session))}
-      </div>
+      ${this.renderSessionRows("pinned", sessions)}
     </section>`;
   }
 
@@ -646,11 +670,25 @@ export class EnterpriseUserConversationOrganizer extends OpenClawLightDomContent
       @dragleave=${(event: DragEvent) => this.dragController.handleRecentDragLeave(event)}
       @drop=${(event: DragEvent) => this.dragController.handleRecentDrop(event)}
     >
-      <div class="eu-session-section__label">
-        <span>${this.showArchived ? eu("archived") : eu("recent")}</span>
+      <button
+        type="button"
+        class="eu-session-section__label eu-session-heading-toggle"
+        aria-expanded=${String(this.recentExpanded)}
+        @click=${() => {
+          this.recentExpanded = !this.recentExpanded;
+        }}
+      >
+        <span class="eu-session-heading-toggle__label">
+          ${this.showArchived ? eu("archived") : eu("recent")}
+          ${this.recentExpanded
+            ? nothing
+            : html`<span aria-hidden="true">${icons.chevronRight}</span>`}
+        </span>
         <span class="eu-session-section__count">${sessions.length}</span>
-      </div>
-      ${this.renderSessionRows(RECENT_SESSION_DROP_TARGET, sessions)}
+      </button>
+      ${this.recentExpanded
+        ? this.renderSessionRows(RECENT_SESSION_DROP_TARGET, sessions)
+        : nothing}
     </section>`;
   }
 
@@ -658,21 +696,22 @@ export class EnterpriseUserConversationOrganizer extends OpenClawLightDomContent
     const organized = organizeEnterpriseUserSessions(this.sessions, this.projects);
     return html`<div class="eu-session-organizer" aria-label=${eu("conversationOrganizer")}>
       <div class="eu-session-organizer__toolbar">
-        <span>${eu("projects")}</span>
+        <button
+          type="button"
+          class="eu-session-heading-toggle"
+          aria-expanded=${String(this.projectsExpanded)}
+          @click=${() => {
+            this.projectsExpanded = !this.projectsExpanded;
+          }}
+        >
+          <span class="eu-session-heading-toggle__label">
+            ${eu("projects")}
+            ${this.projectsExpanded
+              ? nothing
+              : html`<span aria-hidden="true">${icons.chevronRight}</span>`}
+          </span>
+        </button>
         <div>
-          <button
-            type="button"
-            title=${this.showArchived ? eu("activeConversations") : eu("archivedConversations")}
-            aria-label=${this.showArchived
-              ? eu("activeConversations")
-              : eu("archivedConversations")}
-            @click=${() => {
-              this.showArchived = !this.showArchived;
-              void this.load();
-            }}
-          >
-            ${this.showArchived ? icons.archiveRestore : icons.archive}
-          </button>
           <button
             type="button"
             title=${eu("projectCreate")}
@@ -690,9 +729,11 @@ export class EnterpriseUserConversationOrganizer extends OpenClawLightDomContent
         ? html`<div class="eu-session-organizer__loading" role="status">${eu("loading")}</div>`
         : html`
             ${this.renderNamedSection(eu("pinned"), organized.pinned)}
-            ${organized.projects.map(({ project, sessions }) =>
-              this.renderProjectSection(project, sessions),
-            )}
+            ${this.projectsExpanded
+              ? organized.projects.map(({ project, sessions }) =>
+                  this.renderProjectSection(project, sessions),
+                )
+              : nothing}
             ${this.renderRecentSection(organized.recent)}
             ${!organized.pinned.length && !organized.projects.length && !organized.recent.length
               ? html`<div class="eu-session-section__empty">${eu("conversationEmpty")}</div>`

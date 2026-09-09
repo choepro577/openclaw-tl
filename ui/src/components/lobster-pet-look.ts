@@ -16,7 +16,6 @@ import type {
   LobsterPetPersonalityId,
 } from "./lobster-pet-contract.ts";
 import { lobsterPaletteName, lobsterRandomName } from "./lobster-pet-lore.ts";
-import { moonPhaseFraction } from "./lobster-pet-moon.ts";
 import {
   CANONICAL_CHIMERA_PARTS,
   LOBSTER_PALETTE_WEIGHTS,
@@ -24,47 +23,17 @@ import {
   rollChimeraParts,
 } from "./lobster-pet-palettes.ts";
 import {
-  ACTUAL_LOBSTER,
-  ASCII_LOBSTER,
-  BALLOON_LOBSTER,
-  FLATPACK_LOBSTER,
-  LOADING_LOBSTER,
-  PORTAL_LOBSTER,
-  TINFOIL_PARTS,
-} from "./lobster-pet-sprites-wild.ts";
-import {
   ACCESSORY_SPRITES,
-  ANTENNAE_SPRITES,
   BALLOON,
   BINDLE,
-  FRECKLE_SPOTS,
-  GLITCH_GHOSTS,
-  GRUMPY_FACE,
   HEADWEAR,
-  PALETTE_OVERLAYS,
   PASSER_SPRITES,
   PASSER_TITLES,
-  PATTERNED_PALETTES,
-  PIXEL_LOBSTER,
-  RETRO_ANTENNAE,
-  RETRO_FACE,
-  RETRO_MEGA_CLAW,
   renderBottleSvg,
   SAILOR_CAP,
-  SELENE_MOON,
-  SPLIT_HALF,
-  TAIL_FAN,
 } from "./lobster-pet-sprites.ts";
 
 export { LOBSTER_PET_PALETTES } from "./lobster-pet-palettes.ts";
-
-const RETRO_GEOMETRY_PALETTES: ReadonlySet<LobsterPetPaletteId> = new Set(["retro", "goldenretro"]);
-
-const PALETTE_FRAME_CLASSES: Partial<Record<LobsterPetPaletteId, string>> = {
-  heisenbug: "lob-heisenbug-frame",
-  cryptid: "lob-cryptid-frame",
-  balloon: "lob-balloon-frame",
-};
 
 // A neutral look used to render catalog minis outside the pet lifecycle.
 export function canonicalLobsterLook(palette: LobsterPetPalette): LobsterPetLook {
@@ -281,8 +250,10 @@ export function createLobsterPetLook(seed: number, now: Date = new Date()): Lobs
   return preparedLook;
 }
 
-// Same species as icons.lobster / the dreams-scene sleeper: smooth dome body
-// with stubby legs, side claws, antennae, and teal-glint eyes.
+// The pet keeps its seeded palette, accessories, and animated pose pipeline,
+// while the rendered identity is a neutral connected-node MAAP mark. The
+// legacy class names below remain because the pet stylesheet and lifecycle
+// use them for movement, blinking, and compatibility with saved snapshots.
 const READING_BOOK = svg`
   <g class="lob-reading-book" transform="translate(0 2)">
     <path
@@ -308,6 +279,178 @@ const READING_BOOK = svg`
   </g>
 `;
 
+function renderMaapPetNetwork(
+  look: LobsterPetLook,
+  options: {
+    grumpy?: boolean;
+    shell?: boolean;
+    sleeping?: boolean;
+    standalone?: boolean;
+    reading?: boolean;
+  },
+  openEyeStyle: string,
+  closedEyeStyle: string,
+) {
+  const paletteId = look.palette.id;
+  const isFlatpack = paletteId === "flatpack";
+  const isLoading = paletteId === "loading";
+  const isActual = paletteId === "actual";
+  const isBalloon = paletteId === "balloon";
+  const isAscii = paletteId === "ascii";
+  const isPortal = paletteId === "portal";
+  const isPixel = paletteId === "pixel";
+  const showCompactEyes = isLoading;
+  const frameClass = isFlatpack
+    ? "lob-flatpack"
+    : isActual
+      ? "lob-actual"
+      : isBalloon
+        ? "lob-balloon-frame"
+        : isAscii
+          ? "lob-ascii"
+          : isPortal
+            ? "lob-portal-frame"
+            : isPixel
+              ? "lob-pixel-frame"
+              : "";
+  const coreClass =
+    isFlatpack || isActual || isBalloon || isAscii || isPortal
+      ? "maap-network__core"
+      : "lob-standard-dome maap-network__core";
+  const eyeMarkup = isAscii
+    ? svg`
+        <g class="lob-eye-open" style=${openEyeStyle} fill="var(--lob-glint, #00e5cc)">
+          <text x="40" y="51" font-size="11" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">(o)</text>
+        </g>
+      `
+    : showCompactEyes
+      ? svg`
+          <g class="lob-eye-open" style=${openEyeStyle} fill="var(--lob-glint, #00e5cc)">
+            <circle cx="51" cy="44" r="2.7" /><circle cx="69" cy="44" r="2.7" />
+          </g>
+        `
+      : svg`
+          <g class="lob-eye-open" style=${openEyeStyle}>
+            <circle cx="51" cy="44" r="3.8" fill="#0a1014" />
+            <circle cx="69" cy="44" r="3.8" fill="#0a1014" />
+            <circle cx="52.2" cy="42.8" r="1.45" fill="var(--lob-glint, #00e5cc)" />
+            <circle cx="70.2" cy="42.8" r="1.45" fill="var(--lob-glint, #00e5cc)" />
+          </g>
+        `;
+  const closedEyeMarkup = isAscii
+    ? svg`
+        <g class="lob-eye-closed" style=${closedEyeStyle} fill="var(--lob-glint, #00e5cc)">
+          <text x="40" y="51" font-size="11" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">(-)</text>
+        </g>
+      `
+    : svg`
+        <g class="lob-eye-closed" stroke="var(--lob-glint, #00e5cc)" stroke-width="2.5" stroke-linecap="round" fill="none" style=${closedEyeStyle}>
+          <path d="M46 45 L55 45" /><path d="M65 45 L74 45" />
+        </g>
+      `;
+  return svg`
+    <g class="maap-network ${frameClass}" data-maap-pet="true">
+      <g class="lob-antennae" stroke="var(--lob-claw, #ff775f)" stroke-width="3" stroke-linecap="round" fill="none">
+        <path d="M43 29 L27 15 L17 19" />
+        <path d="M77 29 L93 15 L103 19" />
+      </g>
+      <g fill="var(--lob-glint, #00e5cc)">
+        <circle cx="17" cy="19" r="3" />
+        <circle cx="103" cy="19" r="3" />
+      </g>
+      <path
+        class="maap-network__orbit"
+        d="M60 11 L88 27 L94 55 L75 82 L45 82 L26 55 L32 27 Z"
+        fill="none"
+        stroke="var(--lob-claw, #ff775f)"
+        stroke-width="2"
+        stroke-linejoin="round"
+        opacity="0.72"
+      />
+      <g class="lob-claw lob-claw--l">
+        <path d="M35 45 L22 37 L10 45 L22 53 L35 49 Z" fill="var(--lob-claw, #ff775f)" stroke="var(--lob-shell, #ff4f40)" stroke-width="2" stroke-linejoin="round" />
+        <circle cx="15" cy="45" r="2.2" fill="var(--lob-glint, #00e5cc)" />
+      </g>
+      <g class="lob-claw lob-claw--r">
+        <path d="M85 45 L98 37 L110 45 L98 53 L85 49 Z" fill="var(--lob-claw, #ff775f)" stroke="var(--lob-shell, #ff4f40)" stroke-width="2" stroke-linejoin="round" />
+        <circle cx="105" cy="45" r="2.2" fill="var(--lob-glint, #00e5cc)" />
+      </g>
+      <path
+        class=${coreClass}
+        d="M60 20 L81 32 L81 59 L60 72 L39 59 L39 32 Z"
+        fill="var(--lob-shell, #ff4f40)"
+        stroke="var(--lob-claw, #ff775f)"
+        stroke-width="3"
+        stroke-linejoin="round"
+        opacity=${paletteId === "invisible" ? "0.12" : "1"}
+      />
+      <path
+        class="maap-network__inner-link"
+        d="M60 25 L60 67 M45 35 L75 53 M75 35 L45 53"
+        stroke="var(--lob-glint, #00e5cc)"
+        stroke-width="1.5"
+        stroke-linecap="round"
+        opacity="0.62"
+      />
+      <g fill="var(--lob-glint, #00e5cc)">
+        <circle cx="60" cy="25" r="2.6" /><circle cx="60" cy="67" r="2.6" />
+        <circle cx="45" cy="35" r="2.6" /><circle cx="75" cy="35" r="2.6" />
+        <circle cx="45" cy="53" r="2.6" /><circle cx="75" cy="53" r="2.6" />
+      </g>
+      ${eyeMarkup}
+      ${closedEyeMarkup}
+      ${
+        options.sleeping && !options.reading
+          ? svg`<g class="lob-eye-peek" fill="var(--lob-glint, #00e5cc)"><circle cx="60" cy="44" r="2.3" /></g>`
+          : nothing
+      }
+      ${
+        options.grumpy
+          ? svg`<path class="lob-grumpy" d="M50 57 L60 61 L70 57" fill="none" stroke="var(--lob-claw, #ff775f)" stroke-width="2.5" stroke-linecap="round" />`
+          : nothing
+      }
+      ${
+        isLoading
+          ? svg`
+            <g class="lob-skeleton" fill="none" stroke="var(--lob-glint, #00e5cc)" stroke-width="1.5" opacity="0.7">
+              <path d="M42 29 H78 M40 63 H80" stroke-dasharray="3 3" />
+              <circle cx="60" cy="46" r="10" stroke-dasharray="2 3" />
+            </g>
+          `
+          : nothing
+      }
+      ${
+        isFlatpack
+          ? svg`<path class="lob-flatpack__allen-key" d="M49 76 L60 87 L71 76 M60 87 V97" fill="none" stroke="var(--lob-claw, #ff775f)" stroke-width="2" stroke-linecap="round" />`
+          : nothing
+      }
+      ${
+        isActual
+          ? svg`<g class="lob-actual__signal" fill="var(--lob-glint, #00e5cc)"><circle cx="60" cy="9" r="1.8" /><circle cx="60" cy="96" r="1.8" /></g>`
+          : nothing
+      }
+      ${
+        isBalloon
+          ? svg`<circle class="lob-balloon-frame__halo" cx="60" cy="47" r="42" fill="none" stroke="var(--lob-glint, #00e5cc)" stroke-width="1.5" stroke-dasharray="5 4" opacity="0.65" />`
+          : nothing
+      }
+      ${
+        isPortal
+          ? svg`
+            <circle class="lob-portal-ring lob-portal-ring--blue" cx="60" cy="47" r="37" fill="none" stroke="currentColor" stroke-width="1.5" stroke-dasharray="3 5" opacity="0.7" />
+            <circle class="lob-portal-ring lob-portal-ring--orange" cx="60" cy="47" r="32" fill="none" stroke="currentColor" stroke-width="1.5" stroke-dasharray="2 4" opacity="0.7" />
+          `
+          : nothing
+      }
+      ${
+        paletteId === "tinfoil"
+          ? svg`<path class="lob-tinfoil-hat" d="M42 18 L60 3 L78 18 L70 16 L60 11 L50 16 Z" fill="none" stroke="var(--lob-glint, #00e5cc)" stroke-width="1.5" />`
+          : nothing
+      }
+    </g>
+  `;
+}
+
 export function renderLobsterSvg(
   look: LobsterPetLook,
   options: {
@@ -320,15 +463,6 @@ export function renderLobsterSvg(
     reading?: boolean;
   } = {},
 ) {
-  const isPixel = look.palette.id === "pixel";
-  const isFlatpack = look.palette.id === "flatpack";
-  const isLoading = look.palette.id === "loading";
-  const isActual = look.palette.id === "actual";
-  const isBalloon = look.palette.id === "balloon";
-  const isAscii = look.palette.id === "ascii";
-  const isPortal = look.palette.id === "portal";
-  const isNewReplacementGeometry = isBalloon || isAscii || isPortal;
-  const hasRetroGeometry = RETRO_GEOMETRY_PALETTES.has(look.palette.id);
   const eyesClosed = options.shell || (options.sleeping && !options.reading);
   const openEyeStyle = eyesClosed ? "display:none" : "";
   const closedEyeStyle = eyesClosed
@@ -336,7 +470,6 @@ export function renderLobsterSvg(
     : options.standalone || options.reading
       ? "display:none"
       : "";
-  const selenePhase = Math.round(moonPhaseFraction(new Date()) * 8) % 8;
   return svg`
     <svg
       class="lobster-pet__svg"
@@ -344,100 +477,23 @@ export function renderLobsterSvg(
       preserveAspectRatio="none"
       aria-hidden="true"
     >
-      <g class=${PALETTE_FRAME_CLASSES[look.palette.id] ?? ""}>
+      <g>
+        ${renderMaapPetNetwork(look, options, openEyeStyle, closedEyeStyle)}
         ${
-          isFlatpack
-            ? FLATPACK_LOBSTER(openEyeStyle, closedEyeStyle)
-            : isLoading
-              ? LOADING_LOBSTER(openEyeStyle, closedEyeStyle)
-              : isActual
-                ? ACTUAL_LOBSTER(openEyeStyle, closedEyeStyle)
-                : isBalloon
-                  ? BALLOON_LOBSTER(openEyeStyle, closedEyeStyle)
-                  : isAscii
-                    ? ASCII_LOBSTER(openEyeStyle, closedEyeStyle)
-                    : isPortal
-                      ? PORTAL_LOBSTER(openEyeStyle, closedEyeStyle)
-                      : isPixel
-                        ? PIXEL_LOBSTER(openEyeStyle, closedEyeStyle)
-                        : svg`
-              ${hasRetroGeometry ? RETRO_ANTENNAE : ANTENNAE_SPRITES[look.antennae]}
-              ${look.tailFan ? TAIL_FAN : nothing}
-              <g class="lob-claw lob-claw--l">
-                <path d="M20 42 C5 37 0 47 5 57 C10 67 20 62 25 52 C28 45 25 42 20 42 Z" fill="var(--lob-claw)" />
-              </g>
-              ${
-                hasRetroGeometry
-                  ? nothing
-                  : svg`<g class="lob-claw lob-claw--r"><path d="M100 42 C115 37 120 47 115 57 C110 67 100 62 95 52 C92 45 95 42 100 42 Z" fill="var(--lob-claw)" /></g>`
-              }
-              ${look.palette.id === "heisenbug" ? GLITCH_GHOSTS : nothing}
-              <path class="lob-standard-dome" d="M60 8 C32 8 16 32 16 52 C16 72 30 90 44 95 L44 104 L54 104 L54 96 C58 97.5 62 97.5 66 96 L66 104 L76 104 L76 95 C90 90 104 72 104 52 C104 32 88 8 60 8 Z" fill="var(--lob-shell)" />
-              ${look.palette.id === "split" || look.palette.id === "geode" ? SPLIT_HALF : nothing}
-              ${look.palette.id === "selene" ? SELENE_MOON(selenePhase) : nothing}
-              ${PALETTE_OVERLAYS[look.palette.id] ?? nothing}
-              ${
-                look.palette.id === "tinfoil"
-                  ? TINFOIL_PARTS(!HEADWEAR.has(look.accessory))
-                  : nothing
-              }
-              ${look.freckles && !PATTERNED_PALETTES.has(look.palette.id) ? FRECKLE_SPOTS : nothing}
-              ${look.palette.id === "invisible" ? nothing : svg`<ellipse cx="48" cy="28" rx="20" ry="11" fill="#ffffff" opacity="0.1" />`}
-              <g class="lob-eye-open" style=${openEyeStyle}>
-                <circle cx="45" cy="32" r="5.5" fill="#0a1014" />
-                <circle cx="75" cy="32" r="5.5" fill="#0a1014" />
-                <circle cx="46.5" cy="30.5" r="2.2" fill="var(--lob-glint, #00e5cc)" />
-                <circle cx="76.5" cy="30.5" r="2.2" fill="var(--lob-glint, #00e5cc)" />
-              </g>
-              ${
-                options.sleeping && !options.reading
-                  ? svg`<g class="lob-eye-peek"><circle cx="45" cy="32" r="4" fill="#0a1014" /><circle cx="46" cy="30.8" r="1.6" fill="var(--lob-glint, #00e5cc)" /></g>`
-                  : nothing
-              }
-              <g class="lob-eye-closed" stroke="#0a1014" stroke-width="3" stroke-linecap="round" fill="none" style=${closedEyeStyle}>
-                <path d="M39 33 Q45 28 51 33" /><path d="M69 33 Q75 28 81 33" />
-              </g>
-            `
+          look.accessory === "none" || options.shell || look.palette.id === "flatpack"
+            ? nothing
+            : ACCESSORY_SPRITES[look.accessory]
         }
-      ${
-        hasRetroGeometry
-          ? svg`
-            ${RETRO_FACE}
-            <g class="lob-claw lob-claw--r">${RETRO_MEGA_CLAW}</g>
-          `
-          : nothing
-      }
-      ${
-        options.grumpy &&
-        !hasRetroGeometry &&
-        !isFlatpack &&
-        !isLoading &&
-        !isActual &&
-        !isNewReplacementGeometry
-          ? GRUMPY_FACE
-          : nothing
-      }
-      ${
-        look.accessory === "none" || options.shell || isFlatpack
-          ? nothing
-          : ACCESSORY_SPRITES[look.accessory]
-      }
-      ${
-        // The retro grail's mega claw owns the same shoulder; it moves light.
-        options.bindle && !hasRetroGeometry && !isFlatpack ? BINDLE : nothing
-      }
-      ${
-        // The foil hat is palette identity; Mulder declines the navy-issued
-        // sailor cap rather than stacking two hats on lobster days.
-        options.sailorCap &&
-        !options.shell &&
-        !isFlatpack &&
-        !HEADWEAR.has(look.accessory) &&
-        look.palette.id !== "tinfoil"
-          ? SAILOR_CAP
-          : nothing
-      }
-      ${options.reading ? READING_BOOK : nothing}
+        ${options.bindle ? BINDLE : nothing}
+        ${
+          options.sailorCap &&
+          !options.shell &&
+          !HEADWEAR.has(look.accessory) &&
+          look.palette.id !== "tinfoil"
+            ? SAILOR_CAP
+            : nothing
+        }
+        ${options.reading ? READING_BOOK : nothing}
       </g>
     </svg>
   `;

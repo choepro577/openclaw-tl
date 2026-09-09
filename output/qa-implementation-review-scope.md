@@ -1,0 +1,10 @@
+# Scope baseline for implementation review
+
+- Request: implement the approved combined specialist orchestration and Enterprise Knowledge remediation plan, derived from `qa-combined-agent-knowledge-20260904-results.md`.
+- Branch: `ver2`. The checkout was already extensively dirty. Do not attribute all local changes to this task or modify unrelated changes.
+- Invariants: one admitted, approved plan creates at most one child per assignment; user facts and consent survive clarifications; cancelled/expired/revoked authority never resumes implicitly; successful siblings survive partial failure. Only verified, exact, explicitly permitted excerpts reach the matching child's actual model request.
+- Owners: Enterprise delegation router/store; admitted parent backend; canonical subagent spawn/registry/settlement; request-private evidence authority/transport; Enterprise Knowledge store/Admin API/UI; shared memory guidance and skipped tool presentation.
+- Preserve: model selection, HR explicit-only, independent verification, action approval, sandbox and direct Knowledge permissions. No hardcoded company/QA answers. No deploy, live gateway restart, live grants, publication edits or live index repair.
+- Known capability boundary: Codex private child evidence fails closed pending an upstream per-sampling authorization/injection contract. Natural-language cancellation after a plan already yielded is not a new control feature implemented here; pending cancellation, active-parent abort and canonical child cancellation retain their scoped authority checks.
+- Verification boundaries: native actual HTTP/SSE request tests, durable real router/spawn/SQLite integration, store/API/UI/memory suites, and actual immutable old-owner database roundtrip are separate from vendor-model/browser acceptance. No live three-run QA acceptance is claimed by unit or integration tests.
+- Changed-file/LOC measurements from Git include earlier work in overlapping files and are not an ownership inventory. New runtime owners are intentionally split from the router and model-facing tool wrapper.

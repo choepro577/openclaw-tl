@@ -9,6 +9,7 @@ import {
   UI_COMMAND_EVENT,
 } from "../components/panel-toggle-contract.ts";
 import { i18n, isSupportedLocale } from "../i18n/index.ts";
+import { isEnterpriseUiActive } from "../pages/enterprise/state/enterprise-ui-access.ts";
 import type { ShellRouteState } from "./app-host-route-state.ts";
 import type { ApplicationContext } from "./context.ts";
 import {
@@ -106,6 +107,11 @@ export class ShellGatewayOwner {
         context.theme.refresh();
       },
     });
+    // Enterprise portals share the browser locale chosen at sign-in. The
+    // operator's server preference must not reset it when legacy chat mounts.
+    if (isEnterpriseUiActive()) {
+      return;
+    }
     const localePref = resolveServerUiPrefState(snapshot.config, "locale", scope);
     const localePrefSignature = JSON.stringify([scope, localePref.overridden, localePref.value]);
     if (localePrefSignature === this.host.lastLocalePrefSignature) {

@@ -446,6 +446,25 @@ describe("installPluginFromClawHub", () => {
     });
   });
 
+  it("preserves the resolved ClawHub release separately from the embedded runtime version", async () => {
+    installPluginFromArchiveMock.mockResolvedValueOnce({
+      ok: true,
+      pluginId: "demo",
+      targetDir: "/tmp/openclaw/plugins/demo",
+      version: "0.1.0",
+    });
+    const result = await installPluginFromClawHub({ spec: "clawhub:demo" });
+    expect(result).toMatchObject({
+      ok: true,
+      version: "0.1.0",
+      clawhub: {
+        version: "0.1.0",
+        clawhubVersion: "2026.3.22",
+        integrity: DEMO_ARCHIVE_INTEGRITY,
+      },
+    });
+  });
+
   it("installs a ClawHub plugin through the archive installer", async () => {
     const logger = createLoggerSpies();
     const result = await installPluginFromClawHub({

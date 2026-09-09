@@ -13,6 +13,7 @@ const NEW_DELEGATION_TOOL_NAMES = new Set([
   "openclaw",
   "sessions_send",
   "sessions_spawn",
+  "enterprise_delegate",
 ]);
 
 const REPORT_ONLY_TOOL_ACTIONS: ReadonlyMap<string, ReadonlySet<string>> = new Map([

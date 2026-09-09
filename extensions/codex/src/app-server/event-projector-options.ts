@@ -10,7 +10,7 @@ export type CodexAppServerEventProjectorOptions = {
   onNativePlanUpdate?: (update: {
     markdown?: string;
     steps: AgentPlanStep[];
-  }) => void | Promise<void>;
+  }) => boolean | void | Promise<boolean | void>;
   prepareNativeMcpAppResultDetails?: (item: CodexThreadItem) => Promise<unknown>;
   readRecentRateLimits?: () => JsonValue | undefined;
   runAbortSignal?: AbortSignal;

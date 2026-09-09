@@ -1,14 +1,16 @@
 import type { OpenClawConfig } from "../../config/types.openclaw.js";
 import type { EnterpriseAccount } from "../accounts/account-types.js";
-import {
-  listEnterpriseAgentCatalog,
-  listEnterpriseSkillCatalog,
-} from "../catalog/enterprise-catalog.js";
+import { readEnterpriseUserAgentAccess } from "../agents/agent-access-request-service.js";
 import { resolveEnterpriseResourceAccess } from "../entitlements/entitlement-store.js";
 import { listKnowledgeZones } from "../knowledge/knowledge-store.js";
 import { readPersonalAgentProfile } from "./personal-agent-profile-store.js";
 import { readSharedAgentRelationship } from "./shared-agent-relationship-store.js";
 import { enterpriseSharedAgentKey } from "./user-agent-key.js";
+import {
+  listEnterpriseUserCapabilityLabels,
+  listEnterpriseUserSharedAgentRoster,
+  resolveEnterpriseUserPersonalRuntime,
+} from "./user-agent-roster.js";
 import type {
   AgentKey,
   EnterpriseUserAuthAccount,
@@ -29,26 +31,13 @@ export function presentEnterpriseUserAuthAccount(
   };
 }
 
-function capabilityLabels(config: OpenClawConfig, account: EnterpriseAccount, agentId: string) {
-  return listEnterpriseSkillCatalog(config, account)
-    .items.filter(
-      (skill) =>
-        skill.ownerAgentId === agentId &&
-        skill.effectiveAccess?.effectiveAllowed === true &&
-        skill.intrinsicStatus === "ready",
-    )
-    .map((skill) => skill.name)
-    .filter((label, index, labels) => labels.indexOf(label) === index)
-    .slice(0, 6);
-}
-
 export function buildEnterpriseUserBootstrapV2(
   config: OpenClawConfig,
   account: EnterpriseAccount,
 ): EnterpriseUserBootstrapV2 {
-  const catalog = listEnterpriseAgentCatalog(config);
+  const catalog = listEnterpriseUserSharedAgentRoster(config);
   const profile = readPersonalAgentProfile(account.id, account.displayName);
-  const personalRuntime = catalog.personal.find((agent) => agent.accountId === account.id);
+  const personalRuntime = resolveEnterpriseUserPersonalRuntime(config, account);
   const personalReady = Boolean(personalRuntime?.enabled && personalRuntime.runtimeAgentId);
   const personal: EnterpriseUserAgentSummary = {
     key: "personal",
@@ -59,42 +48,45 @@ export function buildEnterpriseUserBootstrapV2(
     avatar: profile.avatarPreset,
     availability: personalReady ? "ready" : "disabled",
     capabilityLabels: personalRuntime?.runtimeAgentId
-      ? capabilityLabels(config, account, personalRuntime.runtimeAgentId)
+      ? listEnterpriseUserCapabilityLabels(config, account, personalRuntime.runtimeAgentId)
       : [],
     relationship: null,
+    access: null,
     actions: {
       canChat: personalReady,
       canSchedule: personalReady,
       canEdit: account.enabled && account.personalAgentEnabled,
       canPersonalize: false,
+      canRequestAccess: false,
     },
   };
-  const shared: EnterpriseUserAgentSummary[] = catalog.shared
-    .filter((agent) => resolveEnterpriseResourceAccess(account, "agent", agent.resourceKey).allowed)
-    .map((agent) => {
-      const relationship = readSharedAgentRelationship(
-        account.id,
-        agent.agentId,
-        account.displayName,
-      );
-      return {
-        key: enterpriseSharedAgentKey(agent.resourceKey),
-        kind: "shared" as const,
-        name: relationship.agentAlias || agent.name,
-        canonicalName: agent.name,
-        description: null,
-        avatar: null,
-        availability: "ready" as const,
-        capabilityLabels: capabilityLabels(config, account, agent.agentId),
-        relationship,
-        actions: {
-          canChat: true,
-          canSchedule: true,
-          canEdit: false,
-          canPersonalize: account.enabled,
-        },
-      };
-    });
+  const shared: EnterpriseUserAgentSummary[] = catalog.shared.map((agent) => {
+    const access = readEnterpriseUserAgentAccess(account, agent.resourceKey);
+    const relationship = access.allowed
+      ? readSharedAgentRelationship(account.id, agent.agentId, account.displayName)
+      : null;
+    return {
+      key: enterpriseSharedAgentKey(agent.resourceKey),
+      kind: "shared" as const,
+      name: relationship?.agentAlias || agent.name,
+      canonicalName: agent.name,
+      description: agent.description || null,
+      avatar: null,
+      availability: "ready" as const,
+      capabilityLabels: access.allowed
+        ? listEnterpriseUserCapabilityLabels(config, account, agent.agentId)
+        : [],
+      relationship,
+      access,
+      actions: {
+        canChat: access.allowed,
+        canSchedule: access.allowed,
+        canEdit: false,
+        canPersonalize: account.enabled && access.allowed,
+        canRequestAccess: account.enabled && !access.allowed && access.request?.state !== "pending",
+      },
+    };
+  });
   const matchingDefault = catalog.shared.find(
     (agent) =>
       agent.agentId === account.defaultAgentId &&
@@ -104,7 +96,7 @@ export function buildEnterpriseUserBootstrapV2(
     ? "personal"
     : matchingDefault
       ? enterpriseSharedAgentKey(matchingDefault.resourceKey)
-      : (shared[0]?.key ?? null);
+      : (shared.find((agent) => agent.actions.canChat)?.key ?? null);
   const knowledgeMemberships = listKnowledgeZones({ accountId: account.id, limit: 100 }).items
     .length;
   return {

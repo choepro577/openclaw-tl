@@ -62,11 +62,9 @@ function broadcastSessionsChanged(
     ? tryResolveSessionCompatibilityOwnerAgentId(cfg, payload.sessionKey)
     : undefined;
   const effectiveAgentId = payload.agentId ?? unscopedOwnerAgentId;
+  // Background title/mutation events retain their request's scoped model policy.
   const sessionRow = payload.sessionKey
-    ? loadGatewaySessionRow(
-        payload.sessionKey,
-        effectiveAgentId ? { agentId: effectiveAgentId } : undefined,
-      )
+    ? loadGatewaySessionRow(payload.sessionKey, { cfg, agentId: effectiveAgentId })
     : null;
   let rowAgentId: string | undefined;
   if (sessionRow) {

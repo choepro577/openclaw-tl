@@ -20,6 +20,7 @@ import { resolveMissingAgentHarnessSessionError } from "../../sessions/agent-har
 import { runExclusiveSessionLifecycleMutation } from "../../sessions/session-lifecycle-admission.js";
 import { authorizeGatewaySessionCreation } from "../operator-role-policy.js";
 import { ADMIN_SCOPE } from "../operator-scopes.js";
+import { loadGatewayModelCatalogForRequest } from "../server-model-catalog-auth.js";
 import { ensureSessionGroupRegistered } from "../session-groups.js";
 import { triggerSessionPatchHook } from "../session-patch-hooks.js";
 import { resolvePluginSessionOwnershipError } from "../session-plugin-ownership.js";
@@ -267,7 +268,7 @@ async function executeSessionPatchMutations(params: {
   const loadModelCatalog = (agentId: string) => {
     let promise = modelCatalogByAgent.get(agentId);
     if (!promise) {
-      promise = params.context.loadGatewayModelCatalog({ agentId });
+      promise = loadGatewayModelCatalogForRequest(params.context, agentId);
       modelCatalogByAgent.set(agentId, promise);
     }
     return promise;

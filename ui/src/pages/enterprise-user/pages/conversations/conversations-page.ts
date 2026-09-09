@@ -13,6 +13,7 @@ import {
 } from "../../../../components/settings-ui.ts";
 import { renderSettingsWorkspace } from "../../../../components/settings-workspace.ts";
 import { eu } from "../../../../i18n/enterprise-user.ts";
+import { i18n } from "../../../../i18n/index.ts";
 import { OpenClawLightDomElement } from "../../../../lit/openclaw-element.ts";
 import { navigateToUserConversationSession } from "../../adapters/chat-route-adapter.ts";
 
@@ -170,7 +171,9 @@ export class UserConversationsPage extends OpenClawLightDomElement {
                         ${title}
                       </button>`,
                       description: eu("updatedAt", {
-                        time: new Date(row.updatedAt ?? Date.now()).toLocaleString(),
+                        time: new Date(row.updatedAt ?? Date.now()).toLocaleString(
+                          i18n.getLocale(),
+                        ),
                       }),
                       control: html`<div>
                         <button class="btn" type="button" @click=${() => void this.rename(row)}>

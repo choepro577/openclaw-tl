@@ -11,18 +11,21 @@ import type { BackgroundTasksProps } from "./chat-background-tasks.types.ts";
 
 export function renderBackgroundTasksToggle(
   backgroundTasks: BackgroundTasksProps | undefined,
+  options: { subagents?: boolean } = {},
 ): TemplateResult | typeof nothing {
   if (!backgroundTasks) {
     return nothing;
   }
   const expanded = !backgroundTasks.collapsed;
-  const label = t(expanded ? "chat.backgroundTasks.collapse" : "chat.backgroundTasks.show");
+  const label = options.subagents
+    ? t(expanded ? "chat.backgroundTasks.subagentsCollapse" : "chat.backgroundTasks.subagentsShow")
+    : t(expanded ? "chat.backgroundTasks.collapse" : "chat.backgroundTasks.show");
   return html`<openclaw-tooltip .content=${label}>
     <button
       class="btn btn--ghost btn--icon chat-icon-btn chat-tasks-toggle"
       type="button"
       aria-label=${label}
-      aria-expanded=${String(expanded)}
+      aria-expanded=${expanded ? "true" : "false"}
       @click=${backgroundTasks.onToggleCollapsed}
     >
       ${icons.listChecks}
@@ -52,13 +55,14 @@ function renderTaskRows(
 
 export function renderBackgroundTasksRail(
   backgroundTasks: BackgroundTasksProps | undefined,
-  options: { embedded?: boolean } = {},
+  options: { embedded?: boolean; subagents?: boolean } = {},
 ): TemplateResult | typeof nothing {
   // Standalone collapsed rails render nothing; the shared panel menu reopens them.
   if (!backgroundTasks || (backgroundTasks.collapsed && !options.embedded)) {
     return nothing;
   }
   const { active, recent } = partitionTasks(backgroundTasks.tasks ?? []);
+  const subagents = options.subagents === true;
   const loaded = backgroundTasks.tasks !== null;
   const empty = loaded && active.length === 0 && recent.length === 0;
   const collapseButton = html`
@@ -80,7 +84,7 @@ export function renderBackgroundTasksRail(
     <aside
       id=${`${backgroundTasks.statusRowId}-rail`}
       class="chat-tasks-rail"
-      aria-label=${t("chat.backgroundTasks.label")}
+      aria-label=${t(subagents ? "chat.sidePanel.subagents" : "chat.backgroundTasks.label")}
     >
       ${options.embedded
         ? nothing
@@ -120,8 +124,10 @@ export function renderBackgroundTasksRail(
       ${empty
         ? renderPanelEmptyState({
             icon: icons.listChecks,
-            heading: t("chat.sidePanel.tasks"),
-            description: t("chat.sidePanel.tasksEmpty"),
+            heading: t(subagents ? "chat.sidePanel.subagents" : "chat.sidePanel.tasks"),
+            description: t(
+              subagents ? "chat.sidePanel.subagentsEmpty" : "chat.sidePanel.tasksEmpty",
+            ),
           })
         : nothing}
       <div class="chat-tasks-rail__scroll chat-tasks-rail__scroll--split" ?hidden=${empty}>
@@ -141,7 +147,7 @@ export function renderBackgroundTasksRail(
                 <button
                   class="chat-tasks-rail__section-toggle"
                   type="button"
-                  aria-expanded=${String(!backgroundTasks.finishedCollapsed)}
+                  aria-expanded=${backgroundTasks.finishedCollapsed ? "false" : "true"}
                   @click=${backgroundTasks.onToggleFinished}
                 >
                   <span class="chat-tasks-rail__section-title">

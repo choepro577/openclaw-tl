@@ -1,6 +1,7 @@
 // Owns process-local agent run context, ownership, and projection state.
 import { randomUUID } from "node:crypto";
 import type { VerboseLevel } from "../auto-reply/thinking.js";
+import type { OpenClawConfig } from "../config/types.openclaw.js";
 import { normalizeAgentId, parseAgentSessionKey } from "../routing/session-key.js";
 import { resolveGlobalSingleton } from "../shared/global-singleton.js";
 import { clearAgentRunUsage, resetAgentRunUsageForTest } from "./agent-run-usage.js";
@@ -23,6 +24,8 @@ type AgentRunContext = {
   projectSessionActive?: boolean;
   /** Whether lifecycle events may update the shared session row. */
   projectSessionLifecycle?: boolean;
+  /** Exact runtime config captured by the admitted run; never copied into events. */
+  runtimeConfig?: OpenClawConfig;
   /** Active cadence state by job; admission permits one invocation per job. */
   cronRunsByJobId?: Map<string, { pacingEnabled: boolean; nextCheckMs?: number }>;
   /** Timestamp when this context was first registered (for TTL-based cleanup). */
@@ -192,6 +195,9 @@ export function registerAgentRunContext(
   }
   if (context.projectSessionLifecycle !== undefined) {
     existing.projectSessionLifecycle = context.projectSessionLifecycle;
+  }
+  if (context.runtimeConfig !== undefined) {
+    existing.runtimeConfig = context.runtimeConfig;
   }
   if (context.cronRunsByJobId !== undefined) {
     existing.cronRunsByJobId ??= new Map();

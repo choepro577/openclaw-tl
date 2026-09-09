@@ -222,6 +222,10 @@ export type SubagentRunRecord = {
   taskRunId?: string;
   /** Requester attempt that must settle before this completion row can retire. */
   requesterTurnRunId?: string;
+  /** Host-only exact idempotency key for the originating user turn. */
+  requesterUserTurnIdempotencyKey?: string;
+  /** Host-only session id that owns requesterUserTurnIdempotencyKey. */
+  requesterUserTurnSessionId?: string;
   /** Durable proof that this requester attempt invoked sessions_yield. */
   requesterTurnYielded?: true;
   /** Cleanup retirement deferred until requesterTurnRunId settles. */

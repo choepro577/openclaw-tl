@@ -267,6 +267,7 @@ export function createWorkerLiveEventReceiver(options: WorkerLiveEventReceiverOp
               ...(prepared.target.agentId ? { agentId: prepared.target.agentId } : {}),
               isControlUiVisible: owned.controlUiVisible,
               lifecycleGeneration: owned.lifecycleGeneration,
+              runtimeConfig: committedConfig,
               projectSessionActive: true,
               sessionId: binding.sessionId,
               sessionKey: prepared.target.sessionKey,

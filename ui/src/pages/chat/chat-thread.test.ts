@@ -741,22 +741,39 @@ describe("collapseCompletedTurnWork", () => {
     timestamp,
   });
 
-  it("collapses a completed turn's work behind one worked-for rollup", () => {
-    const items = collapsedItems({
-      messages: [
-        userMessage("do it", 1_000),
-        assistantMessage("Checking…", 2_000),
-        toolResult("call-1", 3_000),
-        assistantMessage("All done.", 10_000),
-      ],
-    });
+  it.each([false, true])(
+    "collapses a completed turn's work with persisted thinking=%s behind one rollup",
+    (persistedThinking) => {
+      const items = collapsedItems({
+        messages: [
+          userMessage("do it", 1_000),
+          assistantMessage("Checking…", 2_000),
+          assistantMessage(
+            [
+              ...(persistedThinking ? [{ type: "thinking", thinking: "Planning the check." }] : []),
+              { type: "toolCall", id: "call-1", name: "bash", arguments: { command: "pwd" } },
+            ],
+            2_500,
+          ),
+          toolResult("call-1", 3_000),
+          assistantMessage("All done.", 10_000),
+        ],
+      });
 
-    expect(items.map((item) => item.kind)).toEqual(["group", "work-group", "group"]);
-    const work = requireWorkGroup(items[1]);
-    expect(work.groups).toHaveLength(2);
-    expect(work.durationMs).toBe(9_000);
-    expect(requireGroup(items[2]).role).toBe("assistant");
-  });
+      expect(items.map((item) => item.kind)).toEqual(["group", "work-group", "group"]);
+      const work = requireWorkGroup(items[1]);
+      expect(work.groups).toHaveLength(2);
+      expect(work.durationMs).toBe(9_000);
+      expect(requireGroup(items[2]).role).toBe("assistant");
+      expect(
+        work.groups
+          .flatMap((group) =>
+            group.messages.flatMap(({ message, key }) => extractToolCards(message, key)),
+          )
+          .map((card) => card.callId),
+      ).toEqual(["call-1"]);
+    },
+  );
 
   it("keeps durable context compaction inside completed work instead of treating it as the reply", () => {
     const items = collapsedItems({
@@ -3025,6 +3042,218 @@ describe("buildCachedChatItems", () => {
     ).toBe(true);
   });
 
+  describe("completed live tool result reconciliation", () => {
+    const callId = "call_finance|fc_finance";
+    const result = {
+      outcome: "delegated",
+      delegates: [
+        {
+          agent: { id: "finance", name: "Finance Specialist" },
+          runId: "finance-child",
+          status: "accepted",
+        },
+      ],
+    };
+    const outputText = JSON.stringify(result);
+    const liveMessage = {
+      role: "assistant",
+      runId: "finance-parent",
+      toolCallId: callId,
+      timestamp: 3,
+      __openclawToolStreamLive: true,
+      __openclawToolStreamResultReceived: true,
+      content: [
+        { type: "toolcall", name: "enterprise_delegate", arguments: {} },
+        { type: "toolresult", name: "enterprise_delegate", text: outputText, details: result },
+      ],
+    };
+    const history = (
+      resultContent: unknown = [{ type: "text", text: outputText }],
+      historyCallId = callId,
+      historyRunId?: string,
+    ) => [
+      userMessage("Tính giúp tôi điểm hòa vốn và thời gian còn đủ tiền vận hành.", 1),
+      assistantMessage("Tôi sẽ kiểm tra các giả định tài chính.", 2),
+      assistantMessage(
+        [
+          { type: "thinking", thinking: "Assess the task." },
+          { type: "toolCall", id: historyCallId, name: "enterprise_delegate", arguments: {} },
+        ],
+        3,
+        historyRunId ? { runId: historyRunId } : {},
+      ),
+      toolResultMessage(historyCallId, "enterprise_delegate", resultContent, 4, {
+        details: result,
+        ...(historyRunId ? { runId: historyRunId } : {}),
+      }),
+      assistantMessage("Kết quả đã sẵn sàng.", 5),
+    ];
+    const cardsFor = (props: Partial<CachedChatItemsProps>) =>
+      messageGroups(props).flatMap((group) =>
+        group.messages.flatMap((entry) => extractToolCards(entry.message, entry.key)),
+      );
+
+    it.each([true, false])(
+      "renders one delegation card when completed live output overlaps persisted text result (runActive: %s)",
+      (runActive) => {
+        const messages = history();
+        const props = {
+          runId: "finance-parent",
+          runActive,
+          messages,
+          toolMessages: [liveMessage],
+        };
+        const cards = cardsFor(props);
+        expect(cards).toHaveLength(1);
+        expect(cards[0]).toMatchObject({ callId, name: "enterprise_delegate", outputText });
+        const renderedMessages = messageGroups(props).flatMap((group) =>
+          group.messages.map((entry) => entry.message),
+        );
+        expect(renderedMessages).toContain(messages[1]);
+        expect(renderedMessages).toContain(messages[4]);
+      },
+    );
+
+    it("reconciles a standalone string result with its completed live card", () => {
+      expect(cardsFor({ messages: history(outputText), toolMessages: [liveMessage] })).toHaveLength(
+        1,
+      );
+    });
+
+    it("uses persisted completion and preserves its media when the live result has not arrived", () => {
+      const attachment = {
+        type: "attachment",
+        attachment: {
+          kind: "document",
+          url: "/artifacts/finance-report.pdf",
+          label: "Finance report",
+          artifactId: "persisted-finance-report",
+        },
+      };
+      const messages = history([{ type: "text", text: outputText }, attachment]);
+      const persistedDetails = { ...result, provenance: "persisted-result-only" };
+      messages[3] = { ...messages[3], details: persistedDetails };
+      const props = {
+        runId: "finance-parent",
+        runActive: true,
+        messages,
+        toolMessages: [
+          {
+            ...liveMessage,
+            __openclawToolStreamResultReceived: false,
+            content: [liveMessage.content[0]],
+          },
+        ],
+      };
+      const cards = cardsFor(props);
+      expect(cards).toHaveLength(1);
+      expect(cards[0]).toMatchObject({
+        callId,
+        name: "enterprise_delegate",
+        outputText,
+        details: persistedDetails,
+        completed: true,
+      });
+      expect(toolCards.resolveToolCardOutcome(cards[0]!, true)).toBe("succeeded");
+      const renderedContent = messageGroups(props).flatMap((group) =>
+        group.messages.flatMap((entry) => {
+          const content = requireRecord(entry.message).content;
+          return Array.isArray(content) ? content : [];
+        }),
+      );
+      expect(renderedContent).toContain(attachment);
+    });
+
+    it.each([true, false])(
+      "keeps live arguments when history contains only the authoritative result (live completed: %s)",
+      (liveCompleted) => {
+        const args = { decisionId: "current-decision-fixture" };
+        const messages = history();
+        const cards = cardsFor({
+          runId: "finance-parent",
+          runActive: true,
+          messages: [messages[0], messages[3]],
+          toolMessages: [
+            {
+              ...liveMessage,
+              __openclawToolStreamResultReceived: liveCompleted,
+              content: [
+                { ...liveMessage.content[0], arguments: args },
+                ...(liveCompleted ? [liveMessage.content[1]] : []),
+              ],
+            },
+          ],
+        });
+        expect(cards).toHaveLength(1);
+        expect(cards[0]).toMatchObject({
+          callId,
+          name: "enterprise_delegate",
+          args,
+          outputText,
+          completed: true,
+        });
+        expect(toolCards.resolveToolCardOutcome(cards[0]!, true)).toBe("succeeded");
+      },
+    );
+
+    it("keeps one complete delegation card when only persisted history is present", () => {
+      expect(cardsFor({ messages: history() })).toEqual([
+        expect.objectContaining({ callId, name: "enterprise_delegate", outputText }),
+      ]);
+    });
+
+    it.each([
+      ["another invocation", "call_other_finance", undefined],
+      ["the same call id in another run", callId, "other-parent"],
+    ])("preserves %s beside completed live output", (_label, historyCallId, historyRunId) => {
+      const cards = cardsFor({
+        messages: history(undefined, historyCallId, historyRunId),
+        toolMessages: [liveMessage],
+      });
+      expect(cards).toHaveLength(2);
+      expect(cards.every((card) => card.name === "enterprise_delegate")).toBe(true);
+    });
+
+    it("does not guess an unscoped result owner when sibling live runs reuse the call id", () => {
+      expect(
+        cardsFor({
+          messages: history(),
+          toolMessages: [liveMessage, { ...liveMessage, runId: "other-parent" }],
+        }),
+      ).toHaveLength(3);
+    });
+
+    it("does not overwrite a newer live call with an unscoped result from an earlier user turn", () => {
+      const messages = history();
+      const currentOutput = JSON.stringify({ ...result, provenance: "current-live-invocation" });
+      const cards = cardsFor({
+        messages: [messages[0], messages[3], userMessage("Tính lại với số liệu mới.", 10)],
+        toolMessages: [
+          {
+            ...liveMessage,
+            timestamp: undefined,
+            content: [liveMessage.content[0], { ...liveMessage.content[1], text: currentOutput }],
+          },
+        ],
+      });
+
+      expect(cards).toHaveLength(2);
+      expect(cards.map((card) => card.outputText)).toEqual([outputText, currentOutput]);
+    });
+
+    it("still reconciles a positively identified older live run after another user turn starts", () => {
+      expect(
+        cardsFor({
+          messages: [
+            ...history(undefined, callId, "finance-parent"),
+            userMessage("Việc khác.", 10),
+          ],
+          toolMessages: [liveMessage],
+        }),
+      ).toHaveLength(1);
+    });
+  });
+
   it("keeps same-millisecond stream segments interleaved with their matching tool cards", () => {
     const items = buildCachedChatItems(
       createProps({
@@ -3685,6 +3914,23 @@ describe("buildCachedChatItems", () => {
     expect(groups.map((group) => group.role)).toEqual(["user", "assistant", "user", "assistant"]);
     expect(canvasBlocksIn(groupAt(groups, 1))).toHaveLength(1);
     expect(canvasBlocksIn(groupAt(groups, 3))).toHaveLength(1);
+  });
+
+  it("keeps distinct App view identities even when a tool-call ID is reused in the same turn", () => {
+    const groups = messageGroups({
+      messages: [
+        userMessage("Show both Apps", 1_000),
+        mcpAppResult("mcp-app-first", "call-reused", 1_001),
+      ],
+      toolMessages: [mcpAppLiveResult("mcp-app-second", "call-reused", 1_002)],
+      showToolCalls: false,
+    });
+
+    const previews = groups.flatMap(canvasBlocksIn).map((block) => requireRecord(block).preview);
+    expect(previews).toEqual([
+      expect.objectContaining({ viewId: "mcp-app-first" }),
+      expect.objectContaining({ viewId: "mcp-app-second" }),
+    ]);
   });
 
   it("does not lift generic view handles from non-canvas payloads", () => {

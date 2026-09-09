@@ -5,10 +5,25 @@ import { icons } from "../../../components/icons.ts";
 import { t } from "../../../i18n/index.ts";
 import { isActiveTask, sortTasks, taskTimestampMs, taskTitle } from "../../../lib/tasks/data.ts";
 import type { TaskSummary } from "../../../lib/tasks/task-summary.ts";
+import {
+  backgroundTaskStatusLabel,
+  backgroundTaskStatusTone,
+} from "./chat-background-tasks-shared.ts";
 import { renderDiffStatChips } from "./chat-diff-render.ts";
 
 const SUBAGENT_ACTIVITY_LIMIT = 5;
 const SUBAGENT_ACTIVITY_TERMINAL_RETENTION_MS = 60_000;
+
+type SubagentActivityRenderOptions = {
+  subagentsOnly?: boolean;
+};
+
+function isPendingDeliveryTask(task: TaskSummary): boolean {
+  return (
+    task.status === "completed" &&
+    (task.deliveryStatus === "pending" || task.deliveryStatus === "session_queued")
+  );
+}
 
 export type SubagentActivityPresentation = {
   rows: TaskSummary[];
@@ -43,6 +58,13 @@ export function deriveSubagentActivity(params: {
     if (isActiveTask(task)) {
       continue;
     }
+    // A completed specialist remains visible until the parent session confirms
+    // receipt. The task ledger is authoritative for this transition, so an
+    // offline or slow parent cannot make the row disappear after 60 seconds.
+    if (isPendingDeliveryTask(task)) {
+      recentTerminal.push(task);
+      continue;
+    }
     const terminalAt =
       params.terminalObservedAtByTask.get(task.id) ??
       taskTimestampMs(task.endedAt ?? task.updatedAt);
@@ -68,8 +90,14 @@ export function deriveSubagentActivity(params: {
   };
 }
 
-function subagentActivityLabel(task: TaskSummary): string {
-  if (isActiveTask(task)) {
+function subagentActivityLabel(task: TaskSummary, options: SubagentActivityRenderOptions): string {
+  if (options.subagentsOnly) {
+    return backgroundTaskStatusLabel(task, { subagentsOnly: true });
+  }
+  if (task.status === "queued") {
+    return t("tasksPage.status.queued");
+  }
+  if (task.status === "running") {
     return t("chat.backgroundTasks.subagentActivity.working");
   }
   if (task.status === "cancelled") {
@@ -93,15 +121,35 @@ function subagentActivitySnippet(task: TaskSummary): string | undefined {
   );
 }
 
-function renderSubagentActivityIndicator(task: TaskSummary): TemplateResult {
-  if (isActiveTask(task)) {
+function renderSubagentActivityIndicator(
+  task: TaskSummary,
+  options: SubagentActivityRenderOptions,
+): TemplateResult {
+  if (task.status === "queued") {
+    return html`<span class="chat-subagent-activity__indicator" aria-hidden="true"
+      >${icons.clock}</span
+    >`;
+  }
+  if (task.status === "running") {
     return html`<span
       class="chat-subagent-activity__indicator chat-reading-indicator"
       aria-hidden="true"
       >${icons.claw}</span
     >`;
   }
-  const failed = task.status !== "completed";
+  const tone = options.subagentsOnly
+    ? backgroundTaskStatusTone(task, { subagentsOnly: true })
+    : task.status === "completed"
+      ? "ok"
+      : "danger";
+  if (tone === "warn") {
+    return html`<span
+      class="chat-subagent-activity__indicator chat-subagent-activity__indicator--pending"
+      aria-hidden="true"
+      >${icons.clock}</span
+    >`;
+  }
+  const failed = tone === "danger";
   return html`<span
     class="chat-subagent-activity__indicator chat-subagent-activity__indicator--${failed
       ? "failed"
@@ -113,13 +161,14 @@ function renderSubagentActivityIndicator(task: TaskSummary): TemplateResult {
 
 function renderSubagentActivityRow(
   task: TaskSummary,
+  options: SubagentActivityRenderOptions,
   onOpenTaskDetail?: (task: TaskSummary) => void,
 ): TemplateResult {
   const snippet = subagentActivitySnippet(task);
-  const label = subagentActivityLabel(task);
+  const label = subagentActivityLabel(task, options);
   const content = html`
-    ${renderSubagentActivityIndicator(task)}
-    <span class="chat-subagent-activity__label">${label}</span>
+    ${renderSubagentActivityIndicator(task, options)}
+    <span class="chat-subagent-activity__label">${taskTitle(task)} · ${label}</span>
     ${snippet
       ? keyed(
           `${task.status}:${snippet}`,
@@ -158,6 +207,7 @@ function renderSubagentActivityRow(
 export function renderSubagentActivity(
   presentation: SubagentActivityPresentation,
   onOpenTaskDetail?: (task: TaskSummary) => void,
+  options: SubagentActivityRenderOptions = {},
 ): TemplateResult | typeof nothing {
   if (presentation.rows.length === 0) {
     return nothing;
@@ -170,7 +220,7 @@ export function renderSubagentActivity(
       ${repeat(
         presentation.rows,
         (task) => task.id,
-        (task) => renderSubagentActivityRow(task, onOpenTaskDetail),
+        (task) => renderSubagentActivityRow(task, options, onOpenTaskDetail),
       )}
       ${presentation.overflowWorking > 0
         ? html`<div class="chat-subagent-activity__overflow">

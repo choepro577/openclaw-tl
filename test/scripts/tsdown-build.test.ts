@@ -1853,9 +1853,26 @@ describe("resolveTsdownBuildInvocation", () => {
     await expectPathMissing(path.join(distRuntimeDir, "heartbeat-runner.runtime-fspOEj_1.js"));
   });
 
-  it("cleans tsdown output roots before using tsdown --no-clean", async () => {
+  it("cleans tsdown output roots while preserving live Gateway handlers", async () => {
     const rootDir = createTempDir("openclaw-tsdown-clean-");
     const distFile = path.join(rootDir, "dist", "stale.js");
+    const gatewayMethodsSourceFile = path.join(rootDir, "src", "gateway", "server-methods.ts");
+    const gatewayHandlerFile = path.join(
+      rootDir,
+      "dist",
+      "gateway",
+      "server-methods",
+      "sessions-mutations.js",
+    );
+    const gatewayHandlerDependencyFile = path.join(rootDir, "dist", "gateway-shared-old.js");
+    const gatewayHandlerTransitiveDependencyFile = path.join(
+      rootDir,
+      "dist",
+      "gateway-transitive-old.js",
+    );
+    const legacyGatewayDispatcherFile = path.join(rootDir, "dist", "server-methods-oldhash.js");
+    const legacyGatewayHandlerFile = path.join(rootDir, "dist", "tasks-oldhash.js");
+    const legacyGatewayDependencyFile = path.join(rootDir, "dist", "tasks-shared-oldhash.js");
     const pluginGeneratedFile = path.join(rootDir, "dist", "extensions", "telegram", "index.js");
     const distRuntimeFile = path.join(rootDir, "dist-runtime", "stale.js");
     const agentCorePackageFile = path.join(rootDir, "packages", "agent-core", "dist", "stale.js");
@@ -1864,6 +1881,8 @@ describe("resolveTsdownBuildInvocation", () => {
     const packageSourceFile = path.join(rootDir, "packages", "agent-core", "src", "keep.ts");
     const unrelatedFile = path.join(rootDir, "tmp", "keep.js");
     await fsPromises.mkdir(path.dirname(distFile), { recursive: true });
+    await fsPromises.mkdir(path.dirname(gatewayMethodsSourceFile), { recursive: true });
+    await fsPromises.mkdir(path.dirname(gatewayHandlerFile), { recursive: true });
     await fsPromises.mkdir(path.dirname(pluginGeneratedFile), { recursive: true });
     await fsPromises.mkdir(path.dirname(distRuntimeFile), { recursive: true });
     await fsPromises.mkdir(path.dirname(agentCorePackageFile), { recursive: true });
@@ -1872,6 +1891,31 @@ describe("resolveTsdownBuildInvocation", () => {
     await fsPromises.mkdir(path.dirname(packageSourceFile), { recursive: true });
     await fsPromises.mkdir(path.dirname(unrelatedFile), { recursive: true });
     await fsPromises.writeFile(distFile, "stale\n");
+    await fsPromises.writeFile(
+      gatewayMethodsSourceFile,
+      [
+        'const loadSessions = () => import("./server-methods/sessions-mutations.js");',
+        'const loadTasks = () => import("./server-methods/tasks.js");',
+      ].join("\n"),
+    );
+    await fsPromises.writeFile(
+      gatewayHandlerFile,
+      'import "../../gateway-shared-old.js";\nexport const handlers = {};\n',
+    );
+    await fsPromises.writeFile(
+      gatewayHandlerDependencyFile,
+      'export { value } from "./gateway-transitive-old.js";\n',
+    );
+    await fsPromises.writeFile(gatewayHandlerTransitiveDependencyFile, "export const value = 1;\n");
+    await fsPromises.writeFile(
+      legacyGatewayDispatcherFile,
+      'const loadTasks = () => import("./tasks-oldhash.js");\n',
+    );
+    await fsPromises.writeFile(
+      legacyGatewayHandlerFile,
+      'import "./tasks-shared-oldhash.js";\nexport const handlers = {};\n',
+    );
+    await fsPromises.writeFile(legacyGatewayDependencyFile, "export const value = 2;\n");
     await fsPromises.writeFile(pluginGeneratedFile, "generated\n");
     await fsPromises.writeFile(distRuntimeFile, "stale\n");
     await fsPromises.writeFile(agentCorePackageFile, "stale\n");
@@ -1889,6 +1933,24 @@ describe("resolveTsdownBuildInvocation", () => {
     cleanTsdownOutputRoots({ cwd: rootDir });
 
     await expectPathMissing(distFile);
+    await expect(fsPromises.readFile(gatewayHandlerFile, "utf8")).resolves.toContain(
+      "gateway-shared-old.js",
+    );
+    await expect(fsPromises.readFile(gatewayHandlerDependencyFile, "utf8")).resolves.toContain(
+      "gateway-transitive-old.js",
+    );
+    await expect(
+      fsPromises.readFile(gatewayHandlerTransitiveDependencyFile, "utf8"),
+    ).resolves.toContain("value = 1");
+    await expect(fsPromises.readFile(legacyGatewayDispatcherFile, "utf8")).resolves.toContain(
+      "tasks-oldhash.js",
+    );
+    await expect(fsPromises.readFile(legacyGatewayHandlerFile, "utf8")).resolves.toContain(
+      "tasks-shared-oldhash.js",
+    );
+    await expect(fsPromises.readFile(legacyGatewayDependencyFile, "utf8")).resolves.toContain(
+      "value = 2",
+    );
     await expectPathMissing(pluginGeneratedFile);
     await expectPathMissing(path.join(rootDir, "dist-runtime"));
     await expectPathMissing(path.join(rootDir, "packages", "agent-core", "dist"));

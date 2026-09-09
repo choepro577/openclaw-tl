@@ -66,6 +66,7 @@ export async function runAcpAgentCommand(params: {
     sessionKey: params.sessionKey,
     sessionId: params.sessionId,
     agentId: params.sessionAgentId,
+    runtimeConfig: params.cfg,
     lifecycleGeneration: params.lifecycleGeneration,
     ...(params.suppressVisibleSessionEffects ? { isControlUiVisible: false } : {}),
   });

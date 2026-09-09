@@ -12,7 +12,7 @@ import {
 } from "../infra/agent-activity-events.js";
 import { emitAgentEvent, type AgentApprovalEventData } from "../infra/agent-events.js";
 import type { PluginHookAfterToolCallEvent } from "../plugins/types.js";
-import { normalizeAcceptedSessionSpawnResult } from "./accepted-session-spawn.js";
+import { normalizeAcceptedSessionSpawnResults } from "./accepted-session-spawn.js";
 import {
   consumeAdjustedParamsForToolCall,
   consumePreExecutionBlockedToolCall,
@@ -199,12 +199,12 @@ export async function handleToolExecutionEnd(
     ...(terminate ? { terminate: true } : {}),
     ...(asyncStarted ? { asyncStarted: true, ...asyncTaskIds } : {}),
   });
-  const acceptedSessionSpawn =
-    toolName === "sessions_spawn" && !isToolError
-      ? normalizeAcceptedSessionSpawnResult(sanitizedResult)
-      : null;
-  if (acceptedSessionSpawn) {
-    ctx.state.acceptedSessionSpawns.push(acceptedSessionSpawn);
+  const acceptedSessionSpawns =
+    (toolName === "sessions_spawn" || toolName === "enterprise_delegate") && !isToolError
+      ? normalizeAcceptedSessionSpawnResults(sanitizedResult)
+      : [];
+  if (acceptedSessionSpawns.length > 0) {
+    ctx.state.acceptedSessionSpawns.push(...acceptedSessionSpawns);
   }
   ctx.state.toolMetaById.delete(toolCallId);
   ctx.state.toolSummaryById.delete(toolCallId);
@@ -254,7 +254,7 @@ export async function handleToolExecutionEnd(
   if (asyncStarted) {
     ctx.state.hadDeterministicSideEffect = true;
   }
-  if (attemptedPotentialSideEffect || acceptedSessionSpawn || asyncStarted) {
+  if (attemptedPotentialSideEffect || acceptedSessionSpawns.length > 0 || asyncStarted) {
     ctx.state.replayState = mergeEmbeddedRunReplayState(ctx.state.replayState, {
       replayInvalid: true,
       hadPotentialSideEffects: true,

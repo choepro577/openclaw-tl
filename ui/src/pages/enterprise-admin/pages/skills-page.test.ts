@@ -6,6 +6,7 @@ import {
   ClawHubTrustErrorCodes,
   ErrorCodes,
 } from "../../../../../packages/gateway-protocol/src/index.js";
+import { i18n } from "../../../i18n/index.ts";
 import type { ClawHubSearchResult } from "../../../lib/skills/clawhub-search.ts";
 import { installDialogPolyfill } from "../../../test-helpers/modal-dialog.ts";
 import type { EnterpriseSharedAgent } from "../../enterprise/services/enterprise-api.ts";
@@ -20,6 +21,9 @@ type MutableSkillsPage = {
   externalResults: ClawHubSearchResult[] | null;
   externalMessage: { kind: string; text: string } | null;
   changeExternalQuery(value: string): void;
+  selectExternalFolder(files: FileList | null): void;
+  importExternalFolder(): Promise<void>;
+  externalFolderSelection: unknown;
   render(): unknown;
 };
 
@@ -50,7 +54,9 @@ function button(label: string): HTMLButtonElement {
 }
 
 async function settle(): Promise<void> {
-  await new Promise<void>((resolve) => setTimeout(resolve, 0));
+  await new Promise<void>((resolve) => {
+    setTimeout(resolve, 0);
+  });
 }
 
 function marketplacePage(): MutableSkillsPage {
@@ -59,18 +65,20 @@ function marketplacePage(): MutableSkillsPage {
   page.items = [];
   page.loading = false;
   page.externalOpen = true;
-  page.externalAgentId = "main";
+  page.externalAgentId = "";
   return page;
 }
 
 describe("Enterprise admin external skill installer", () => {
-  beforeEach(() => {
+  beforeEach(async () => {
+    await i18n.setLocale("vi");
     restoreDialogPolyfill = installDialogPolyfill();
     container = document.createElement("div");
     document.body.append(container);
   });
 
-  afterEach(() => {
+  afterEach(async () => {
+    await i18n.setLocale("en");
     vi.useRealTimers();
     vi.unstubAllGlobals();
     render(nothing, container);
@@ -81,7 +89,7 @@ describe("Enterprise admin external skill installer", () => {
   it("searches ClawHub with a debounce and opens the existing detail flow", async () => {
     vi.useFakeTimers();
     const fetchMock = vi.fn(async (input: string | URL | Request) => {
-      const url = String(input);
+      const url = input instanceof Request ? input.url : input.toString();
       if (url.includes("/skills/search")) {
         return new Response(
           JSON.stringify({
@@ -125,7 +133,7 @@ describe("Enterprise admin external skill installer", () => {
       container.querySelector<HTMLSelectElement>(
         "openclaw-enterprise-admin-dialog select.ea-select",
       )?.value,
-    ).toBe("main");
+    ).toBe("");
 
     page.changeExternalQuery("github");
     await vi.advanceTimersByTimeAsync(300);
@@ -154,7 +162,7 @@ describe("Enterprise admin external skill installer", () => {
   it("requires an explicit risk acknowledgement and pins the reviewed version on retry", async () => {
     let installCalls = 0;
     const fetchMock = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
-      const url = String(input);
+      const url = input instanceof Request ? input.url : input.toString();
       if (url.includes("/skills/install")) {
         installCalls += 1;
         if (installCalls === 1) {
@@ -171,7 +179,7 @@ describe("Enterprise admin external skill installer", () => {
             { status: 409, headers: { "content-type": "application/json" } },
           );
         }
-        expect(JSON.parse(String(init?.body))).toMatchObject({
+        expect(JSON.parse(typeof init?.body === "string" ? init.body : "{}")).toMatchObject({
           agentId: "main",
           ref: "skills-sh:acme/tools/email",
           version: "1.2.3",
@@ -192,6 +200,7 @@ describe("Enterprise admin external skill installer", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
     const page = marketplacePage();
+    page.externalAgentId = "main";
     page.externalResults = [
       {
         score: 1,
@@ -221,4 +230,56 @@ describe("Enterprise admin external skill installer", () => {
       text: "Installed email@1.2.3",
     });
   });
+
+  it.each(["", "main"])(
+    "saves a complete folder in scope %s and retains it after failure",
+    async (agentId) => {
+      const page = marketplacePage();
+      page.externalAgentId = agentId;
+      const files = ["example/SKILL.md", "example/references/example.md"].map((relativePath) => {
+        const file = new File(["example content"], relativePath.split("/").at(-1)!);
+        Object.defineProperty(file, "webkitRelativePath", { value: relativePath });
+        Object.defineProperty(file, "arrayBuffer", {
+          value: async () => new TextEncoder().encode("example content").buffer,
+        });
+        return file;
+      });
+      let imports = 0;
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+          if (
+            (input instanceof Request ? input.url : input.toString()).endsWith("/skills/import")
+          ) {
+            imports += 1;
+            expect(JSON.parse(typeof init?.body === "string" ? init.body : "{}")).toEqual({
+              ...(agentId ? { agentId } : {}),
+              folderName: "example",
+              files: ["SKILL.md", "references/example.md"].map((path) => ({
+                path,
+                contentBase64: btoa("example content"),
+              })),
+            });
+            return imports === 1
+              ? Response.json(
+                  { code: "SKILL_IMPORT_FAILED", message: "Disk unavailable" },
+                  { status: 400 },
+                )
+              : Response.json({ slug: "example" });
+          }
+          return Response.json({ items: [], catalogRevision: "next" });
+        }),
+      );
+      page.selectExternalFolder(files as unknown as FileList);
+      await page.importExternalFolder();
+      expect(page.externalFolderSelection).not.toBeNull();
+      expect(page.externalMessage?.kind).toBe("error");
+      await page.importExternalFolder();
+      expect(page.externalFolderSelection).toBeNull();
+      expect(page.externalMessage?.kind).toBe("success");
+      page.selectExternalFolder(files as unknown as FileList);
+      page.selectExternalFolder([new File(["bad"], "bad.md")] as unknown as FileList);
+      expect(page.externalFolderSelection).toBeNull();
+    },
+  );
 });

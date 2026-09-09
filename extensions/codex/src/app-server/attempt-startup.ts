@@ -211,10 +211,12 @@ export async function startCodexAttemptThread(params: {
             ? undefined
             : (params.bundleMcpThreadConfig?.configPatch as JsonObject | undefined),
         );
+        const startupPolicyAttemptParams = params.buildAttemptParams();
         const pluginStartupPolicy = resolveCodexPluginThreadConfigStartupPolicy({
           pluginConfig: params.pluginConfig,
           nativeToolSurfaceEnabled: params.nativeToolSurfaceEnabled,
-          scheduledRuntimeAuthority: params.buildAttemptParams().scheduledRuntimeAuthority,
+          scheduledRuntimeAuthority: startupPolicyAttemptParams.scheduledRuntimeAuthority,
+          nativePluginGrants: startupPolicyAttemptParams.hostCapabilities.nativePluginGrants,
         });
         const {
           pluginThreadConfigRequired,
@@ -502,6 +504,7 @@ export async function startCodexAttemptThread(params: {
                       configCwd: startupExecutionCwd,
                       appCacheKey: pluginAppCacheKey,
                       scheduledRuntimeAuthority: attemptParams.scheduledRuntimeAuthority,
+                      nativePluginGrants: attemptParams.hostCapabilities.nativePluginGrants,
                     })
                   : undefined,
               }) satisfies Parameters<typeof startOrResumeThread>[0];

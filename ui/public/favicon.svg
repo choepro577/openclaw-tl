@@ -1,54 +1,56 @@
-<svg viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+<svg viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="maap-logo-title">
+  <title id="maap-logo-title">MAAP</title>
   <defs>
-    <linearGradient id="lobster-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#ff4d4d"/>
-      <stop offset="100%" stop-color="#991b1b"/>
+    <linearGradient id="maap-surface" x1="18" y1="12" x2="103" y2="108" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#1E293B" />
+      <stop offset="1" stop-color="#0F172A" />
     </linearGradient>
+    <linearGradient id="maap-network" x1="25" y1="22" x2="97" y2="96" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FF7079" />
+      <stop offset="0.5" stop-color="#F35B68" />
+      <stop offset="1" stop-color="#00D5C0" />
+    </linearGradient>
+    <filter id="maap-glow" x="-30%" y="-30%" width="160%" height="160%" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="2.4" result="blur" />
+      <feMerge>
+        <feMergeNode in="blur" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
   </defs>
-  <!-- SMIL, not CSS: Chromium/Safari only run declarative SMIL inside <img>-loaded
-       SVGs, and every app surface loads this file via <img src>. Mirrors the
-       openclaw.ai hero mascot keyframes (float 4s, wiggle 2s, blink 3s, snap 4s). -->
-  <g>
-    <animateTransform attributeName="transform" type="translate" additive="sum"
-      values="0 0; 0 -5; 0 0" keyTimes="0; 0.5; 1" dur="4s" repeatCount="indefinite"
-      calcMode="spline" keySplines="0.42 0 0.58 1; 0.42 0 0.58 1"/>
-    <!-- Body -->
-    <path d="M60 10 C30 10 15 35 15 55 C15 75 30 95 45 100 L45 110 L55 110 L55 100 C55 100 60 102 65 100 L65 110 L75 110 L75 100 C90 95 105 75 105 55 C105 35 90 10 60 10Z" fill="url(#lobster-gradient)"/>
-    <!-- Left Claw (hinges on its body-facing edge) -->
-    <path d="M20 45 C5 40 0 50 5 60 C10 70 20 65 25 55 C28 48 25 45 20 45Z" fill="url(#lobster-gradient)">
-      <animateTransform attributeName="transform" type="rotate"
-        values="0 26 53; 0 26 53; -8 26 53; 0 26 53; 0 26 53" keyTimes="0; 0.85; 0.9; 0.95; 1"
-        dur="4s" repeatCount="indefinite"
-        calcMode="spline" keySplines="0.42 0 0.58 1; 0.42 0 0.58 1; 0.42 0 0.58 1; 0.42 0 0.58 1"/>
-    </path>
-    <!-- Right Claw (snaps 0.2s after the left) -->
-    <path d="M100 45 C115 40 120 50 115 60 C110 70 100 65 95 55 C92 48 95 45 100 45Z" fill="url(#lobster-gradient)">
-      <animateTransform attributeName="transform" type="rotate"
-        values="0 94 53; 0 94 53; -8 94 53; 0 94 53; 0 94 53" keyTimes="0; 0.85; 0.9; 0.95; 1"
-        dur="4s" begin="0.2s" repeatCount="indefinite"
-        calcMode="spline" keySplines="0.42 0 0.58 1; 0.42 0 0.58 1; 0.42 0 0.58 1; 0.42 0 0.58 1"/>
-    </path>
-    <!-- Antenna -->
-    <path d="M45 15 Q35 5 30 8" stroke="#ff4d4d" stroke-width="3" stroke-linecap="round">
-      <animateTransform attributeName="transform" type="rotate"
-        values="0 37.5 11; -3 37.5 11; 3 37.5 11; 0 37.5 11" keyTimes="0; 0.25; 0.75; 1"
-        dur="2s" repeatCount="indefinite"
-        calcMode="spline" keySplines="0.42 0 0.58 1; 0.42 0 0.58 1; 0.42 0 0.58 1"/>
-    </path>
-    <path d="M75 15 Q85 5 90 8" stroke="#ff4d4d" stroke-width="3" stroke-linecap="round">
-      <animateTransform attributeName="transform" type="rotate"
-        values="0 82.5 11; -3 82.5 11; 3 82.5 11; 0 82.5 11" keyTimes="0; 0.25; 0.75; 1"
-        dur="2s" repeatCount="indefinite"
-        calcMode="spline" keySplines="0.42 0 0.58 1; 0.42 0 0.58 1; 0.42 0 0.58 1"/>
-    </path>
-    <!-- Eyes -->
-    <circle cx="45" cy="35" r="6" fill="#050810"/>
-    <circle cx="75" cy="35" r="6" fill="#050810"/>
-    <circle cx="46" cy="34" r="2.5" fill="#00e5cc">
-      <animate attributeName="opacity" values="1; 1; 0.3; 1" keyTimes="0; 0.9; 0.95; 1" dur="3s" repeatCount="indefinite"/>
-    </circle>
-    <circle cx="76" cy="34" r="2.5" fill="#00e5cc">
-      <animate attributeName="opacity" values="1; 1; 0.3; 1" keyTimes="0; 0.9; 0.95; 1" dur="3s" repeatCount="indefinite"/>
-    </circle>
+
+  <rect x="4" y="4" width="112" height="112" rx="28" fill="url(#maap-surface)" />
+  <path
+    d="M60 22L91 40V78L60 98L29 78V40L60 22Z"
+    stroke="url(#maap-network)"
+    stroke-width="3"
+    stroke-linejoin="round"
+    opacity="0.85"
+  />
+  <path
+    d="M60 60L60 22M60 60L91 40M60 60L91 78M60 60L60 98M60 60L29 78M60 60L29 40"
+    stroke="url(#maap-network)"
+    stroke-width="3"
+    stroke-linecap="round"
+    opacity="0.92"
+  />
+  <path
+    d="M29 40L60 60L91 40M29 78L60 60L91 78"
+    stroke="#F8FAFC"
+    stroke-width="1.25"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+    opacity="0.34"
+  />
+
+  <g filter="url(#maap-glow)">
+    <circle cx="60" cy="60" r="10" fill="#0F172A" stroke="#00D5C0" stroke-width="3" />
+    <circle cx="60" cy="60" r="4" fill="#F8FAFC" />
+    <circle cx="60" cy="22" r="5.5" fill="#FF7079" />
+    <circle cx="91" cy="40" r="5.5" fill="#F35B68" />
+    <circle cx="91" cy="78" r="5.5" fill="#D968B8" />
+    <circle cx="60" cy="98" r="5.5" fill="#00D5C0" />
+    <circle cx="29" cy="78" r="5.5" fill="#22C9B8" />
+    <circle cx="29" cy="40" r="5.5" fill="#FF7079" />
   </g>
 </svg>

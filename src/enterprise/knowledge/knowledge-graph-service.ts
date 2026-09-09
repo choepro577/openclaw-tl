@@ -48,13 +48,6 @@ export function resolveKnowledgeGraphSnapshotContext(params: {
       "Knowledge graph snapshot not found.",
     );
   }
-  if (String(row.graph_status) === "not_built") {
-    throw new EnterpriseKnowledgeError(
-      "GRAPH_NOT_BUILT",
-      422,
-      "This generation does not contain a graph. Build a new candidate.",
-    );
-  }
   if (String(row.graph_status) === "error") {
     throw new EnterpriseKnowledgeError(
       "GRAPH_INTEGRITY_FAILED",

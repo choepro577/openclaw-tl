@@ -5,6 +5,7 @@ import { Chalk } from "chalk";
 import type { Logger as TsLogger } from "tslog";
 import { clearActiveProgressLine } from "../../packages/terminal-core/src/progress-line.js";
 import { isVerbose } from "../global-state.js";
+import { isPrivateRunObservationScope } from "../infra/private-run-observations.js";
 import { defaultRuntime, type OutputRuntimeEnv, type RuntimeEnv } from "../runtime.js";
 import {
   formatConsoleTimestamp,
@@ -378,6 +379,9 @@ export function createSubsystemLogger(subsystem: string): SubsystemLogger {
   };
 
   const emitLog = (level: LogLevel, message: string, meta?: Record<string, unknown>) => {
+    if (isPrivateRunObservationScope()) {
+      return;
+    }
     const consoleSettings = getConsoleSettings();
     const consoleEnabled =
       shouldLogToConsole(level, { level: consoleSettings.level }) &&
@@ -430,6 +434,9 @@ export function createSubsystemLogger(subsystem: string): SubsystemLogger {
   const logger: SubsystemLogger = {
     subsystem: resolvedSubsystem,
     isEnabled(level, target = "any") {
+      if (isPrivateRunObservationScope()) {
+        return false;
+      }
       const isConsoleEnabled =
         shouldLogToConsole(level, { level: getConsoleSettings().level }) &&
         shouldLogSubsystemToConsole(resolvedSubsystem);
@@ -461,6 +468,9 @@ export function createSubsystemLogger(subsystem: string): SubsystemLogger {
       emitLog("fatal", message, meta);
     },
     raw(message) {
+      if (isPrivateRunObservationScope()) {
+        return;
+      }
       if (isFileLogLevelEnabled("info")) {
         logToFile(getFileLogger(), "info", message, { raw: true });
       }

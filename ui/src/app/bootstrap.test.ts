@@ -116,6 +116,7 @@ describe("normalizeInitialApplicationLocation", () => {
       const pending = resolveInitialApplicationLocation({
         location: { pathname: "/", search: "", hash: "" },
         basePath: "",
+        defaultChatLanding: true,
         sessionKey: persistedSessionKey,
         gateway,
         agentsList: () => null,
@@ -162,6 +163,7 @@ describe("normalizeInitialApplicationLocation", () => {
         resolveInitialApplicationLocation({
           location,
           basePath: "",
+          defaultChatLanding: false,
           sessionKey,
           gateway: {
             snapshot: { phase: "connecting", client: null, hello: null },
@@ -182,6 +184,7 @@ describe("normalizeInitialApplicationLocation", () => {
       resolveInitialApplicationLocation({
         location: { pathname: "/", search: "", hash: "" },
         basePath: "",
+        defaultChatLanding: true,
         sessionKey: "agent:research:workspace",
         gateway: {
           snapshot: {
@@ -234,6 +237,7 @@ describe("normalizeInitialApplicationLocation", () => {
     const resolved = await resolveInitialApplicationLocation({
       location: testCase.location,
       basePath: "",
+      defaultChatLanding: false,
       sessionKey: "agent:main:main",
       gateway: {
         snapshot: { phase: "connecting", client: null, hello: null },
@@ -259,6 +263,7 @@ describe("normalizeInitialApplicationLocation", () => {
       resolveInitialApplicationLocation({
         location,
         basePath: "",
+        defaultChatLanding: false,
         sessionKey: "agent:main:main",
         gateway: {
           snapshot: { phase: "connecting", client: null, hello: null },
@@ -286,6 +291,7 @@ describe("normalizeInitialApplicationLocation", () => {
         hash: "",
       },
       basePath: "",
+      defaultChatLanding: false,
       sessionKey: "agent:main:main",
       gateway: {
         get snapshot() {
@@ -341,6 +347,7 @@ describe("normalizeInitialApplicationLocation", () => {
     const canonicalLocation = await resolveInitialApplicationLocation({
       location: initialLocation,
       basePath: "",
+      defaultChatLanding: false,
       sessionKey: "agent:main:main",
       gateway,
       agentsList: () => ({ defaultId: "main", mainKey: "main", agents: [] }),

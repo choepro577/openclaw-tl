@@ -9,6 +9,10 @@ import {
   normalizeOptionalString,
 } from "openclaw/plugin-sdk/string-coerce-runtime";
 import { getCodexAppServerClientInstanceId, type CodexAppServerClient } from "./client.js";
+import {
+  assertCodexNativePluginGrant,
+  isCodexNativePluginIdAllowed,
+} from "./native-plugin-grants.js";
 import type { CodexMcpServerStatus, CodexThreadItem, JsonObject, JsonValue } from "./protocol.js";
 import { retainSharedCodexAppServerClientIfCurrent } from "./shared-client.js";
 
@@ -66,23 +70,44 @@ function createNativeMcpRuntime(params: {
     if (statuses) {
       return statuses;
     }
+    params.attempt.hostCapabilities.assertActive();
     const response = await params.client.request("mcpServerStatus/list", {
       threadId: params.threadId,
       detail: "full",
     });
+    params.attempt.hostCapabilities.assertActive();
     statuses = response.data;
     return statuses;
   };
+  const assertServerAllowed = async (serverName: string): Promise<void> => {
+    params.attempt.hostCapabilities.assertActive();
+    const resolver = params.attempt.hostCapabilities.nativePluginGrants;
+    if (!resolver) {
+      return;
+    }
+    const status = (await loadStatuses()).find((entry) => entry.name === serverName);
+    // Enterprise policy is fail-closed when the app-server cannot identify the
+    // owning plugin. This prevents an unowned MCP server from inheriting a grant.
+    assertCodexNativePluginGrant(resolver, status?.pluginId);
+    params.attempt.hostCapabilities.assertActive();
+  };
   const getCatalog = async (): Promise<McpToolCatalog> => {
-    if (catalog) {
+    // A revoked grant must not leave an authorized catalog in the session cache.
+    if (catalog && !params.attempt.hostCapabilities.nativePluginGrants) {
       return catalog;
     }
     const loaded = await loadStatuses();
+    const visible = loaded.filter((status) =>
+      isCodexNativePluginIdAllowed(
+        params.attempt.hostCapabilities.nativePluginGrants,
+        status.pluginId,
+      ),
+    );
     catalog = {
       version: 1,
       generatedAt: Date.now(),
       servers: Object.fromEntries(
-        loaded.map((status) => [
+        visible.map((status) => [
           status.name,
           {
             serverName: status.name,
@@ -91,7 +116,7 @@ function createNativeMcpRuntime(params: {
           },
         ]),
       ),
-      tools: loaded.flatMap((status) =>
+      tools: visible.flatMap((status) =>
         statusTools(status).map((tool) => ({
           serverName: status.name,
           safeServerName: status.name,
@@ -119,28 +144,39 @@ function createNativeMcpRuntime(params: {
     markUsed: () => {
       runtime.lastUsedAt = Date.now();
     },
-    callTool: async (serverName, toolName, input) =>
-      (await params.client.request("mcpServer/tool/call", {
+    callTool: async (serverName, toolName, input) => {
+      await assertServerAllowed(serverName);
+      const result = await params.client.request("mcpServer/tool/call", {
         threadId: params.threadId,
         server: serverName,
         tool: toolName,
         arguments: (asOptionalRecord(input) ?? {}) as JsonObject,
-      })) as never,
+      });
+      await assertServerAllowed(serverName);
+      return result as never;
+    },
     listTools: async (serverName) => {
+      await assertServerAllowed(serverName);
       const status = (await loadStatuses()).find((entry) => entry.name === serverName);
       return { tools: status ? statusTools(status) : [] } as never;
     },
-    readResource: async (serverName, uri) =>
-      await params.client.request("mcpServer/resource/read", {
+    readResource: async (serverName, uri) => {
+      await assertServerAllowed(serverName);
+      const result = await params.client.request("mcpServer/resource/read", {
         threadId: params.threadId,
         server: serverName,
         uri,
-      }),
+      });
+      await assertServerAllowed(serverName);
+      return result;
+    },
     listResources: async (serverName) => {
+      await assertServerAllowed(serverName);
       const status = (await loadStatuses()).find((entry) => entry.name === serverName);
       return { resources: status?.resources ?? [] };
     },
     listResourceTemplates: async (serverName) => {
+      await assertServerAllowed(serverName);
       const status = (await loadStatuses()).find((entry) => entry.name === serverName);
       return { resourceTemplates: status?.resourceTemplates ?? [] } as never;
     },

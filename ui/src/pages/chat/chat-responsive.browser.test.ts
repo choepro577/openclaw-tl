@@ -186,6 +186,7 @@ function readUiCss(): string {
     "ui/src/styles/chat/layout.css",
     "ui/src/styles/chat/text.css",
     "ui/src/styles/chat/grouped.css",
+    "ui/src/pages/chat/components/chat-knowledge-card.css",
     "ui/src/styles/chat/tool-cards.css",
     "ui/src/styles/chat/question-card.css",
     "ui/src/styles/chat/sidebar.css",
@@ -242,6 +243,45 @@ function activityAlignmentHtml() {
               </div>
             </div>
           </div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function knowledgeRowsHtml(
+  evidenceLabel = "Evidence retrieved from a deliberately long source description",
+  evidenceExpanded = false,
+) {
+  return `
+    <div class="chat-activity-group__body" style="width: 100%">
+      <div class="chat-bubble chat-bubble--tool-shell">
+        <div class="chat-tools-inline chat-tools-inline--knowledge">
+          <section class="chat-knowledge">
+            <button class="chat-inline-disclosure chat-knowledge__heading" type="button" aria-expanded="false">
+              <span class="chat-knowledge__icon">${iconSvg()}</span>
+              <span class="chat-knowledge__heading-text">
+                <small>Enterprise knowledge</small>
+                <span role="status">10 references found</span>
+              </span>
+              <span class="chat-inline-disclosure__chevron">${iconSvg()}</span>
+            </button>
+          </section>
+        </div>
+      </div>
+      <div class="chat-bubble chat-bubble--tool-shell">
+        <div class="chat-tools-inline chat-tools-inline--knowledge">
+          <section class="chat-knowledge">
+            <button class="chat-inline-disclosure chat-knowledge__heading" type="button" aria-expanded="${String(evidenceExpanded)}">
+              <span class="chat-knowledge__icon">${iconSvg()}</span>
+              <span class="chat-knowledge__heading-text">
+                <small>Enterprise knowledge</small>
+                <span role="status">${evidenceLabel}</span>
+              </span>
+              <span class="chat-inline-disclosure__chevron">${iconSvg()}</span>
+            </button>
+            ${evidenceExpanded ? '<div class="chat-knowledge__body"><article class="chat-knowledge__source"><strong>Onboarding guide</strong><span class="chat-knowledge__meta">People and Culture</span><blockquote class="chat-knowledge__evidence">Evidence remains readable at full width.</blockquote></article></div>' : ""}
+          </section>
         </div>
       </div>
     </div>
@@ -1335,6 +1375,97 @@ describeBrowserLayout.concurrent("chat responsive browser layout", () => {
         chevronGap: 5,
         tool: "text",
       });
+    } finally {
+      await closeBrowserPage(page);
+    }
+  });
+
+  it.each([
+    [320, 280],
+    [1366, 700],
+  ] as const)(
+    "keeps each enterprise knowledge summary on one compact row at %spx",
+    async (width, laneWidth) => {
+      const page = await openBrowserPage(width, 240);
+      try {
+        await page.setContent(
+          `<!doctype html><html><head><style>${readUiCss()}</style></head><body><div style="width: ${laneWidth}px">${knowledgeRowsHtml()}</div></body></html>`,
+        );
+
+        const rows = await page.locator(".chat-knowledge__heading").evaluateAll((headings) =>
+          headings.map((heading) => {
+            const label = heading.querySelector<HTMLElement>("small")!.getBoundingClientRect();
+            const status = heading
+              .querySelector<HTMLElement>('[role="status"]')!
+              .getBoundingClientRect();
+            const row = heading.getBoundingClientRect();
+            return {
+              height: row.height,
+              labelRight: label.right,
+              statusLeft: status.left,
+              verticallyOverlaps: status.top < label.bottom && label.top < status.bottom,
+              overflow: (heading as HTMLElement).scrollWidth - (heading as HTMLElement).clientWidth,
+            };
+          }),
+        );
+
+        expect(rows).toHaveLength(2);
+        for (const row of rows) {
+          expect(row.statusLeft).toBeGreaterThan(row.labelRight);
+          expect(row.verticallyOverlaps).toBe(true);
+          expect(row.height).toBeLessThanOrEqual(28);
+          expect(row.overflow).toBeLessThanOrEqual(0);
+        }
+      } finally {
+        await closeBrowserPage(page);
+      }
+    },
+  );
+
+  it("places consecutive enterprise knowledge summaries side by side when they fit", async () => {
+    const page = await openBrowserPage(1366, 240);
+    try {
+      await page.setContent(
+        `<!doctype html><html><head><style>${readUiCss()}</style></head><body><div style="width: 700px">${knowledgeRowsHtml("Evidence retrieved")}</div></body></html>`,
+      );
+
+      const summaries = await page.locator(".chat-knowledge").evaluateAll((sections) =>
+        sections.map((section) => {
+          const rect = section.getBoundingClientRect();
+          return { left: rect.left, right: rect.right, top: rect.top };
+        }),
+      );
+      expect(summaries).toHaveLength(2);
+      expect(summaries[1]!.top).toBeCloseTo(summaries[0]!.top, 0);
+      expect(summaries[1]!.left).toBeGreaterThan(summaries[0]!.right);
+    } finally {
+      await closeBrowserPage(page);
+    }
+  });
+
+  it("gives an expanded enterprise knowledge detail its own full row", async () => {
+    const page = await openBrowserPage(1366, 300);
+    try {
+      await page.setContent(
+        `<!doctype html><html><head><style>${readUiCss()}</style></head><body><div style="width: 700px">${knowledgeRowsHtml("Evidence retrieved", true)}</div></body></html>`,
+      );
+
+      const layout = await page.evaluate(() => {
+        const body = document.querySelector<HTMLElement>(".chat-activity-group__body")!;
+        const expanded = document.querySelector<HTMLElement>(
+          '.chat-bubble--tool-shell:has([aria-expanded="true"])',
+        )!;
+        return {
+          bodyWidth: body.getBoundingClientRect().width,
+          expandedWidth: expanded.getBoundingClientRect().width,
+          overflow: expanded.scrollWidth - expanded.clientWidth,
+          evidence: expanded.querySelector(".chat-knowledge__evidence")?.textContent,
+        };
+      });
+
+      expect(layout.expandedWidth).toBeCloseTo(layout.bodyWidth, 0);
+      expect(layout.overflow).toBeLessThanOrEqual(0);
+      expect(layout.evidence).toBe("Evidence remains readable at full width.");
     } finally {
       await closeBrowserPage(page);
     }

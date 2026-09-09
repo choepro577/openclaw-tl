@@ -399,6 +399,7 @@ export async function prepareCodexAttemptTools(runtime: CodexAttemptRuntime) {
       allocateToolOutcomeOrdinal: allocateCodexToolOutcomeOrdinal,
       trigger: params.trigger,
       approvalReviewerDeviceId: params.approvalReviewerDeviceId,
+      ...(params.skillsSnapshot ? { skillsSnapshot: params.skillsSnapshot } : {}),
       ...(hasRequester ? { requester } : {}),
       ...(turnSourceChannel ? { turnSourceChannel } : {}),
       ...(turnSourceTo ? { turnSourceTo } : {}),

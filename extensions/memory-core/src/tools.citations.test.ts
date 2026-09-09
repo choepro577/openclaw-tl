@@ -147,11 +147,7 @@ describe("memory tools", () => {
     const tool = createMemorySearchToolOrThrow({ config: cfg });
 
     const result = await tool.execute("call_1", { query: "hello" });
-    expectUnavailableMemorySearchDetails(result.details, {
-      error: "openai embeddings failed: 429 insufficient_quota",
-      warning: "Memory search is unavailable because the embedding provider quota is exhausted.",
-      action: "Top up or switch embedding provider, then retry memory_search.",
-    });
+    expectUnavailableMemorySearchDetails(result.details);
   });
 
   it("uses default memory manager mode for shared memory_search", async () => {
@@ -203,7 +199,8 @@ describe("memory tools", () => {
       path: "memory/NOPE.md",
       text: "",
       disabled: true,
-      error: "path required",
+      error: "memory_recall_unavailable",
+      warning: "Memory recall is temporarily unavailable; the requested excerpt could not be read.",
     });
   });
 
@@ -646,7 +643,7 @@ describe("memory tools", () => {
           {
             corpus: "wiki",
             outcome: "unavailable",
-            error: "memory_search timed out after 15s",
+            error: "wiki_recall_unavailable",
           },
         ],
         warning: expect.stringContaining("Wiki corpus unavailable"),
@@ -708,7 +705,7 @@ describe("memory tools", () => {
     // Wiki supplements still serve, but the omitted memory corpus is recorded.
     expect(details.results.map((entry) => entry.corpus)).toEqual(["wiki"]);
     expect(details.warning).toContain("Memory corpus unavailable");
-    expect(details.warning).toContain("sqlite support missing");
+    expect(JSON.stringify(result)).not.toContain("sqlite support missing");
   });
 
   it("cooldowns primary memory when corpus=all memory search stalls", async () => {
@@ -746,7 +743,7 @@ describe("memory tools", () => {
           {
             corpus: "memory",
             outcome: "unavailable",
-            error: "memory_search timed out after 15s",
+            error: "memory_recall_unavailable",
           },
           { corpus: "wiki", outcome: "ok" },
         ],
@@ -769,12 +766,12 @@ describe("memory tools", () => {
         {
           corpus: "memory",
           outcome: "unavailable",
-          error: "memory_search timed out after 15s",
+          error: "memory_recall_unavailable",
         },
         { corpus: "wiki", outcome: "ok" },
       ]);
       expect(details.warning).toContain("Memory corpus unavailable");
-      expect(details.warning).toContain("memory_search timed out after 15s");
+      expect(details.warning).toContain("Memory recall is temporarily unavailable");
       expect(searchCalls).toBe(1);
     } finally {
       vi.useRealTimers();

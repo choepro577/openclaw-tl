@@ -1,10 +1,17 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
+import {
+  ClawHubTrustErrorCodes,
+  ErrorCodes,
+  readClawHubTrustErrorDetails,
+} from "../../../packages/gateway-protocol/src/index.js";
 import type { OpenClawConfig } from "../../config/types.openclaw.js";
 import type { GatewayRequestContext } from "../../gateway/server-methods/types.js";
 import { getEnterpriseAccountById } from "../accounts/account-store.js";
-import { appendEnterpriseAuditEvent } from "../audit/audit-store.js";
 import type { EnterprisePrincipal } from "../auth/auth-service.js";
-import { invokeEnterpriseGatewayHandler } from "../gateway/invoke-handler.js";
+import {
+  EnterpriseGatewayMethodError,
+  invokeEnterpriseGatewayHandler,
+} from "../gateway/invoke-handler.js";
 import {
   readJson,
   requestId,
@@ -12,16 +19,23 @@ import {
   requirePrincipal,
   sendError,
   sendJson,
-  type JsonObject,
 } from "../knowledge/enterprise-knowledge-http-common.js";
 import { EnterpriseKnowledgeError } from "../knowledge/knowledge-types.js";
 import type { AgentKey } from "../user/user-api-contracts.js";
 import {
-  abandonEnterpriseExtensionIdempotency,
-  claimEnterpriseExtensionIdempotency,
-  completeEnterpriseExtensionIdempotency,
-  hashEnterpriseExtensionRequest,
-} from "./extension-idempotency-store.js";
+  handleEnterpriseCodexPluginRoute,
+  isEnterpriseCodexPluginPath,
+} from "./codex-plugin-http.js";
+import { EnterpriseCodexPluginError } from "./codex-plugin-service.js";
+import { listCodexPublicCatalog } from "./codex-public-catalog.js";
+import {
+  audit,
+  idempotentMutation,
+  rejectUnknownFields,
+  revisionField,
+  stringField,
+  validAgentKey,
+} from "./extension-http-common.js";
 import {
   EnterpriseExtensionError,
   installEnterpriseUserSkill,
@@ -61,37 +75,6 @@ const USER_GRANTS_PREFIX = "/api/enterprise/user/v2/plugin-grants";
 const ADMIN_REQUESTS_PREFIX = "/api/enterprise/admin/plugin-requests";
 const ADMIN_GRANTS_PREFIX = "/api/enterprise/admin/plugin-grants";
 
-function validAgentKey(value: string | null): AgentKey {
-  if (value === "personal" || value?.startsWith("shared:")) {
-    return value as AgentKey;
-  }
-  throw new EnterpriseExtensionError("AGENT_KEY_INVALID", 422);
-}
-
-function stringField(body: JsonObject, key: string, max = 512): string {
-  const value = body[key];
-  if (typeof value !== "string" || !value.trim() || value.length > max) {
-    throw new EnterpriseExtensionError(`FIELD_INVALID:${key}`, 422);
-  }
-  return value.trim();
-}
-
-function revisionField(body: JsonObject): number {
-  const revision = body.baseRevision;
-  if (!Number.isSafeInteger(revision) || Number(revision) < 1) {
-    throw new EnterpriseExtensionError("BASE_REVISION_INVALID", 422);
-  }
-  return Number(revision);
-}
-
-function rejectUnknownFields(body: JsonObject, allowed: readonly string[]): void {
-  const allowedSet = new Set(allowed);
-  const unknown = Object.keys(body).find((key) => !allowedSet.has(key));
-  if (unknown) {
-    throw new EnterpriseExtensionError(`FIELD_NOT_ALLOWED:${unknown}`, 422);
-  }
-}
-
 function extensionKind(value: string | null): EnterpriseExtensionKind {
   if (value === "skill" || value === "code_plugin" || value === "bundle_plugin") {
     return value;
@@ -101,73 +84,6 @@ function extensionKind(value: string | null): EnterpriseExtensionKind {
 
 function suffix(pathname: string, prefix: string): string[] {
   return pathname.slice(prefix.length).split("/").filter(Boolean).map(decodeURIComponent);
-}
-
-function audit(params: {
-  principal: EnterprisePrincipal;
-  req: IncomingMessage;
-  action: string;
-  targetType: string;
-  targetId: string;
-  outcome: "success" | "failure";
-  after: unknown;
-}): void {
-  appendEnterpriseAuditEvent({
-    actorAccountId: params.principal.account.id,
-    actorSessionId: params.principal.sessionId,
-    action: params.action,
-    targetType: params.targetType,
-    targetId: params.targetId,
-    requestId: requestId(params.req),
-    before: null,
-    after: params.after,
-    outcome: params.outcome,
-  });
-}
-
-async function idempotentMutation<T>(params: {
-  req: IncomingMessage;
-  res: ServerResponse;
-  principal: EnterprisePrincipal;
-  audience: "admin" | "user";
-  operation: string;
-  body: JsonObject;
-  status?: number;
-  execute: () => Promise<T> | T;
-}): Promise<true> {
-  const rawKey = params.req.headers["idempotency-key"];
-  const key = (Array.isArray(rawKey) ? rawKey[0] : rawKey)?.trim() ?? "";
-  const requestHash = hashEnterpriseExtensionRequest(params.body);
-  const fence = {
-    audience: params.audience,
-    actorAccountId: params.principal.account.id,
-    operation: params.operation,
-    key,
-    requestHash,
-  } as const;
-  const claim = claimEnterpriseExtensionIdempotency(fence);
-  if (claim.state === "replay") {
-    params.res.setHeader("Idempotency-Replayed", "true");
-    return sendJson(params.res, claim.status, claim.response);
-  }
-  try {
-    const response = await params.execute();
-    const status = params.status ?? 200;
-    completeEnterpriseExtensionIdempotency({ ...fence, responseStatus: status, response });
-    audit({
-      principal: params.principal,
-      req: params.req,
-      action: `extension.${params.operation.split(":", 1)[0]}`,
-      targetType: "enterprise_extension",
-      targetId: params.operation.slice(-160),
-      outcome: "success",
-      after: { operation: params.operation, status },
-    });
-    return sendJson(params.res, status, response);
-  } catch (error) {
-    abandonEnterpriseExtensionIdempotency(fence);
-    throw error;
-  }
 }
 
 function presentUserSkillInstall(install: EnterpriseUserSkillInstall) {
@@ -219,13 +135,16 @@ function presentUserPluginGrant(grant: EnterpriseAccountPluginGrant) {
 }
 
 function claimedPath(pathname: string): boolean {
-  return [
-    USER_EXTENSIONS_PREFIX,
-    USER_REQUESTS_PREFIX,
-    USER_GRANTS_PREFIX,
-    ADMIN_REQUESTS_PREFIX,
-    ADMIN_GRANTS_PREFIX,
-  ].some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
+  return (
+    isEnterpriseCodexPluginPath(pathname) ||
+    [
+      USER_EXTENSIONS_PREFIX,
+      USER_REQUESTS_PREFIX,
+      USER_GRANTS_PREFIX,
+      ADMIN_REQUESTS_PREFIX,
+      ADMIN_GRANTS_PREFIX,
+    ].some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`))
+  );
 }
 
 export async function handleEnterpriseExtensionHttpRequest(params: {
@@ -265,6 +184,21 @@ export async function handleEnterpriseExtensionHttpRequest(params: {
       throw new EnterpriseExtensionError("FIELD_NOT_ALLOWED", 422);
     }
 
+    if (isEnterpriseCodexPluginPath(pathname)) {
+      action = "extension.codex";
+      return await handleEnterpriseCodexPluginRoute({
+        req,
+        res,
+        config,
+        pathname,
+        principal,
+        query,
+      });
+    }
+    if (pathname === `${USER_EXTENSIONS_PREFIX}/codex-catalog` && req.method === "GET") {
+      await reviewAgentAccess(config, principal, validAgentKey(query.get("agentKey")));
+      return sendJson(res, 200, await listCodexPublicCatalog(query.get("query") ?? ""));
+    }
     if (pathname === `${USER_EXTENSIONS_PREFIX}/catalog` && req.method === "GET") {
       return sendJson(
         res,
@@ -615,9 +549,13 @@ export async function handleEnterpriseExtensionHttpRequest(params: {
   } catch (error) {
     if (principal && req.method !== "GET" && req.method !== "HEAD") {
       const code =
-        error instanceof EnterpriseExtensionError || error instanceof EnterpriseKnowledgeError
+        error instanceof EnterpriseExtensionError ||
+        error instanceof EnterpriseKnowledgeError ||
+        error instanceof EnterpriseCodexPluginError
           ? error.code
-          : "ENTERPRISE_EXTENSION_INTERNAL_ERROR";
+          : error instanceof EnterpriseGatewayMethodError
+            ? error.gatewayError.code
+            : "ENTERPRISE_EXTENSION_INTERNAL_ERROR";
       audit({
         principal,
         req,
@@ -628,8 +566,28 @@ export async function handleEnterpriseExtensionHttpRequest(params: {
         after: { code },
       });
     }
-    if (error instanceof EnterpriseExtensionError || error instanceof EnterpriseKnowledgeError) {
+    if (
+      error instanceof EnterpriseExtensionError ||
+      error instanceof EnterpriseKnowledgeError ||
+      error instanceof EnterpriseCodexPluginError
+    ) {
       return sendError(req, res, error.status, error.code, error.message);
+    }
+    if (error instanceof EnterpriseGatewayMethodError) {
+      const { code, message, details } = error.gatewayError;
+      const trust = readClawHubTrustErrorDetails(details);
+      const status =
+        trust?.clawhubTrustCode === ClawHubTrustErrorCodes.RISK_ACKNOWLEDGEMENT_REQUIRED
+          ? 409
+          : code === ErrorCodes.INVALID_REQUEST
+            ? 400
+            : 503;
+      return sendJson(res, status, {
+        code,
+        message,
+        requestId: requestId(req),
+        ...(details === undefined ? {} : { details }),
+      });
     }
     const message = error instanceof Error ? error.message : "";
     if (message.startsWith("EXTENSION_REVISION_CONFLICT")) {

@@ -1,5 +1,28 @@
 export type AgentKey = "personal" | `shared:${string}`;
 
+export type EnterpriseUserAgentAccessRequestState =
+  | "pending"
+  | "approved"
+  | "rejected"
+  | "cancelled";
+
+export type EnterpriseUserAgentAccessRequest = {
+  id: string;
+  agentKey: AgentKey;
+  state: EnterpriseUserAgentAccessRequestState;
+  decisionReason: string | null;
+  revision: number;
+  createdAt: number;
+  updatedAt: number;
+  decidedAt: number | null;
+};
+
+export type EnterpriseUserAgentAccess = {
+  allowed: boolean;
+  reason: string;
+  request: EnterpriseUserAgentAccessRequest | null;
+};
+
 export type EnterpriseUserAuthAccount = {
   username: string;
   displayName: string;
@@ -19,11 +42,13 @@ export type EnterpriseUserAgentSummary = {
   availability: "ready" | "disabled" | "maintenance";
   capabilityLabels: string[];
   relationship: SharedAgentRelationshipProfile | null;
+  access: EnterpriseUserAgentAccess | null;
   actions: {
     canChat: boolean;
     canSchedule: boolean;
     canEdit: boolean;
     canPersonalize: boolean;
+    canRequestAccess: boolean;
   };
 };
 
@@ -95,7 +120,8 @@ export type PersonalAgentKnowledgeItem = {
 
 export type UserAutomationSchedule =
   | { kind: "once"; at: string }
-  | { kind: "interval"; everyMinutes: number };
+  | { kind: "interval"; everyMinutes: number }
+  | { kind: "cron"; expr: string; tz?: string };
 
 export type UserAutomation = {
   id: string;
@@ -104,6 +130,8 @@ export type UserAutomation = {
   enabled: boolean;
   agentKey: AgentKey | null;
   agentAccess: "ready" | "removed";
+  /** System-owned schedules are visible for transparency but cannot be changed by users. */
+  readOnly?: boolean;
   schedule: UserAutomationSchedule;
   prompt: string;
   nextRunAt: number | null;

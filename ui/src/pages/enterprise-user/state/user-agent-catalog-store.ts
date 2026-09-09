@@ -12,7 +12,9 @@ export class UserAgentCatalogStore {
     this.unsubscribeBootstrap ??= userBootstrapStore.subscribe(() => {
       const state = userBootstrapStore.state;
       if (state.phase === "ready") {
-        const activeAvailable = state.data.agents.some((agent) => agent.key === this.activeKey);
+        const activeAvailable = state.data.agents.some(
+          (agent) => agent.key === this.activeKey && agent.actions.canChat,
+        );
         if (!activeAvailable) {
           this.activeKey = state.data.defaultAgentKey;
         }
@@ -33,11 +35,13 @@ export class UserAgentCatalogStore {
   }
 
   get activeAgent(): EnterpriseUserAgent | null {
-    return this.agents.find((agent) => agent.key === this.activeKey) ?? null;
+    return (
+      this.agents.find((agent) => agent.key === this.activeKey && agent.actions.canChat) ?? null
+    );
   }
 
   setActive(key: AgentKey): void {
-    if (!this.agents.some((agent) => agent.key === key)) {
+    if (!this.agents.some((agent) => agent.key === key && agent.actions.canChat)) {
       return;
     }
     this.activeKey = key;
@@ -45,7 +49,7 @@ export class UserAgentCatalogStore {
   }
 
   bindRuntimeAgent(key: AgentKey, runtimeAgentId: string): void {
-    if (!this.agents.some((agent) => agent.key === key)) {
+    if (!this.agents.some((agent) => agent.key === key && agent.actions.canChat)) {
       return;
     }
     this.runtimeAgentKeys.set(runtimeAgentId, key);

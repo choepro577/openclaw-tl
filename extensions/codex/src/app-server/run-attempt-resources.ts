@@ -18,7 +18,14 @@ import {
   type CodexNativePreToolUseFailure,
   type CodexNativeHookRelay,
 } from "./native-hook-relay.js";
+import {
+  collectCodexNativePluginAppOwnersFromPolicyContext,
+  collectCodexNativePluginMcpServerOwnersFromPolicyContext,
+  resolveCodexNativePluginMcpToolOwnerFromStatus,
+  type CodexNativePluginMcpServerOwners,
+} from "./native-plugin-grants.js";
 import { codexNativeSubagentMonitorRuntime } from "./native-subagent-monitor.js";
+import type { PluginAppPolicyContext } from "./plugin-thread-config.js";
 import type { CodexSandboxPolicy, CodexTurnEnvironmentParams } from "./protocol.js";
 import type { CodexAttemptPrompt } from "./run-attempt-prompt.js";
 import {
@@ -230,10 +237,37 @@ export function prepareCodexAttemptResources(prompt: CodexAttemptPrompt) {
   const requesterChannel = params.messageChannel ?? params.messageProvider;
   const requester = buildCodexHookRequester(params);
   const buildNativeHookRelayFinalConfigPatch = (
-    decision: { action: "resume"; binding: CodexAppServerThreadBinding } | { action: "start" },
+    decision:
+      | {
+          action: "resume";
+          binding: CodexAppServerThreadBinding;
+          nativePluginMcpServerOwners?: CodexNativePluginMcpServerOwners;
+          pluginAppPolicyContext?: PluginAppPolicyContext;
+        }
+      | {
+          action: "start";
+          nativePluginMcpServerOwners?: CodexNativePluginMcpServerOwners;
+          pluginAppPolicyContext?: PluginAppPolicyContext;
+        },
   ) => {
     state.nativeHookRelay?.unregister();
-    if (params.pluginHarnessToolPolicyRestricted === true) {
+    const pluginAppPolicyContext =
+      decision.pluginAppPolicyContext ??
+      ("binding" in decision ? decision.binding.pluginAppPolicyContext : undefined);
+    const nativePluginMcpServerOwners =
+      decision.nativePluginMcpServerOwners ??
+      (pluginAppPolicyContext
+        ? collectCodexNativePluginMcpServerOwnersFromPolicyContext(pluginAppPolicyContext)
+        : undefined);
+    const hasApprovedPluginCapability =
+      (nativePluginMcpServerOwners?.length ?? 0) > 0 ||
+      (pluginAppPolicyContext
+        ? collectCodexNativePluginAppOwnersFromPolicyContext(pluginAppPolicyContext).length > 0
+        : false);
+    if (
+      params.pluginHarnessToolPolicyRestricted === true &&
+      (params.hostCapabilities.nativePluginGrants === undefined || !hasApprovedPluginCapability)
+    ) {
       state.nativeHookRelay = undefined;
       return {
         configPatch: buildCodexNativeHookRelayDisabledConfig(),
@@ -270,6 +304,15 @@ export function prepareCodexAttemptResources(prompt: CodexAttemptPrompt) {
       loopDetectionPreToolUseRelay: appServer.loopDetectionPreToolUseRelay,
       signal: runAbortController.signal,
       hostCapabilities: params.hostCapabilities,
+      nativePluginMcpServerOwners,
+      resolveNativePluginMcpToolOwner: (toolName) =>
+        resolveCodexNativePluginMcpToolOwnerFromStatus({
+          client: state.client,
+          threadId: state.thread?.threadId,
+          toolName,
+          pluginAppPolicyContext: state.thread?.pluginAppPolicyContext,
+          nativePluginMcpServerOwners,
+        }),
       onPreToolUseFailure: (failure) => {
         const projector = projectorRef.current;
         if (projector) {

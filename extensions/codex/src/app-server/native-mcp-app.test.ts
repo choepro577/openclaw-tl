@@ -1,6 +1,7 @@
 import type { EmbeddedRunAttemptParamsV2 as EmbeddedRunAttemptParams } from "openclaw/plugin-sdk/agent-harness-runtime";
 import { describe, expect, it, vi } from "vitest";
 import type { CodexAppServerClient } from "./client.js";
+import { createCodexTestHostCapabilities } from "./host-capability.test-support.js";
 import { createCodexNativeMcpAppResultDetailsPreparer } from "./native-mcp-app.js";
 
 function createAttempt(enabled = true): EmbeddedRunAttemptParams {
@@ -9,6 +10,7 @@ function createAttempt(enabled = true): EmbeddedRunAttemptParams {
     sessionKey: "agent:main:dashboard:thread-1",
     workspaceDir: "/tmp/workspace",
     config: enabled ? { mcp: { apps: { enabled: true } } } : {},
+    hostCapabilities: createCodexTestHostCapabilities(),
   } as EmbeddedRunAttemptParams;
 }
 

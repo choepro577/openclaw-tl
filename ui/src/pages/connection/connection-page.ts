@@ -13,9 +13,7 @@ import {
   type ApplicationGatewaySnapshot,
 } from "../../app/context.ts";
 import { loadGatewaySessionSelection, loadSettings, type UiSettings } from "../../app/settings.ts";
-import { renderDocsLink } from "../../components/settings-ui.ts";
 import { renderSettingsWorkspace } from "../../components/settings-workspace.ts";
-import { t } from "../../i18n/index.ts";
 import { isMissingOperatorReadScopeError } from "../../lib/gateway-errors.ts";
 import { OpenClawLightDomElement } from "../../lit/openclaw-element.ts";
 import { PollController } from "../../lit/poll-controller.ts";
@@ -24,7 +22,6 @@ import { isUnknownSystemInfoMethodError, supportsSystemInfo } from "./system-inf
 import { renderConnection } from "./view.ts";
 
 const SYSTEM_INFO_POLL_INTERVAL_MS = 10_000;
-const CONNECTION_DOCS_URL = "https://docs.openclaw.ai/gateway/remote";
 
 export { supportsSystemInfo } from "./system-info.ts";
 
@@ -277,10 +274,7 @@ export class ConnectionPage extends OpenClawLightDomElement {
       <section class="content-header">
         <div>
           <div class="page-title">${titleForRoute("connection")}</div>
-          <div class="page-subtitle">
-            ${subtitleForRoute("connection")}
-            ${renderDocsLink(CONNECTION_DOCS_URL, t("common.learnMore"))}
-          </div>
+          <div class="page-subtitle">${subtitleForRoute("connection")}</div>
         </div>
       </section>
       ${renderSettingsWorkspace(body)}

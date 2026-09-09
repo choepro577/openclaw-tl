@@ -174,6 +174,7 @@ export async function filterMemorySearchHitsBySessionVisibility(params: {
   conversationRecall?: ConversationRecallContext;
   /** Trusted control-plane calls may authorize only hits already scoped to this agent. */
   trustedAgentScope?: boolean;
+  callGateway?: Parameters<typeof createSessionVisibilityGuard>[0]["callGateway"];
 }): Promise<MemorySearchResult[]> {
   const visibility = resolveEffectiveSessionToolsVisibility({
     cfg: params.cfg,
@@ -188,24 +189,26 @@ export async function filterMemorySearchHitsBySessionVisibility(params: {
       })
     : undefined;
   const scopedAgentId = params.agentId?.trim() || requesterAgentId;
-  const guard = params.requesterSessionKey
-    ? await createSessionVisibilityGuard({
-        action: "history",
-        requesterSessionKey: params.requesterSessionKey,
-        requesterAgentId,
-        mainSessionKey:
-          requesterAgentId &&
-          (!params.sandboxed || resolveSandboxSessionToolsVisibility(params.cfg) === "all")
-            ? resolveCanonicalMainSessionKey({
-                agentId: requesterAgentId,
-                mainKey: params.cfg.session?.mainKey,
-                sessionScope: params.cfg.session?.scope,
-              })
-            : undefined,
-        visibility,
-        a2aPolicy,
-      })
-    : null;
+  const guard =
+    params.requesterSessionKey && params.hits.some((hit) => hit.source === "sessions")
+      ? await createSessionVisibilityGuard({
+          action: "history",
+          requesterSessionKey: params.requesterSessionKey,
+          requesterAgentId,
+          mainSessionKey:
+            requesterAgentId &&
+            (!params.sandboxed || resolveSandboxSessionToolsVisibility(params.cfg) === "all")
+              ? resolveCanonicalMainSessionKey({
+                  agentId: requesterAgentId,
+                  mainKey: params.cfg.session?.mainKey,
+                  sessionScope: params.cfg.session?.scope,
+                })
+              : undefined,
+          visibility,
+          a2aPolicy,
+          callGateway: params.callGateway,
+        })
+      : null;
 
   const { store: combinedSessionStore, storePath } = loadCombinedSessionStoreForGateway(
     params.cfg,

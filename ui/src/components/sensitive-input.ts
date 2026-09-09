@@ -13,26 +13,12 @@ type SensitiveInputProps = {
   className?: string;
   inputClassName?: string;
   placeholder?: string;
+  autocomplete?: string;
+  required?: boolean;
   disabled?: boolean;
   onInput: (value: string) => void;
   onToggle: () => void;
 };
-
-const graphemeSegmenter = new Intl.Segmenter(undefined, { granularity: "grapheme" });
-
-function maskedValue(value: string): string {
-  return "*".repeat(Array.from(graphemeSegmenter.segment(value)).length);
-}
-
-function syncMask(input: HTMLInputElement): void {
-  const control = input.closest<HTMLElement>("[data-sensitive-input]");
-  const maskText = control?.querySelector<HTMLElement>("[data-sensitive-mask-text]");
-  if (!maskText) {
-    return;
-  }
-  maskText.textContent = maskedValue(input.value);
-  maskText.style.transform = `translateX(${-input.scrollLeft}px)`;
-}
 
 export function renderSensitiveInput(props: SensitiveInputProps): TemplateResult {
   const visibilityLabel = props.revealed ? props.hideLabel : props.revealLabel;
@@ -41,46 +27,24 @@ export function renderSensitiveInput(props: SensitiveInputProps): TemplateResult
     : "oc-sensitive-input";
   const handleInput = (event: Event) => {
     const input = event.currentTarget as HTMLInputElement;
-    syncMask(input);
     props.onInput(input.value);
-  };
-  const handleMaskSync = (event: Event) => {
-    syncMask(event.currentTarget as HTMLInputElement);
   };
 
   return html`
-    <span
-      class=${className}
-      data-sensitive-input
-      data-sensitive-mask-ready="true"
-      data-revealed=${String(props.revealed)}
-    >
-      <span
-        class="oc-sensitive-mask"
-        aria-hidden="true"
-        data-sensitive-mask
-        ?hidden=${props.revealed}
-      >
-        <span
-          data-sensitive-mask-text
-          .textContent=${props.revealed ? "" : maskedValue(props.value)}
-        ></span>
-      </span>
+    <span class=${className}>
       <input
         id=${props.id}
         class=${props.inputClassName ?? nothing}
         name=${props.name ?? nothing}
         type=${props.revealed ? "text" : "password"}
-        autocomplete="off"
+        autocomplete=${props.autocomplete ?? "off"}
         spellcheck="false"
         placeholder=${props.placeholder ?? ""}
         .value=${props.value}
+        ?required=${props.required}
         ?disabled=${props.disabled}
         data-sensitive-value
         @input=${handleInput}
-        @change=${handleMaskSync}
-        @focus=${handleMaskSync}
-        @scroll=${handleMaskSync}
       />
       <openclaw-tooltip .content=${visibilityLabel}>
         <button

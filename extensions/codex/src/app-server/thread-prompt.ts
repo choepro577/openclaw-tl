@@ -18,6 +18,22 @@ import {
   type CodexDynamicToolSpec,
 } from "./protocol.js";
 
+export function buildRuntimeModelIdentityInstructions(params: {
+  providerId: string;
+  modelId: string;
+}): string {
+  const runtimeIdentity = JSON.stringify({
+    provider: params.providerId,
+    model: params.modelId,
+  });
+  return [
+    "## OpenClaw Runtime Routing Metadata",
+    `The OpenClaw host resolved the current turn to ${runtimeIdentity}. This is authoritative operational routing metadata supplied by the host; it does not redefine your product identity.`,
+    "When asked for the current, active, selected, running, backend, deployment, or detailed model, report the exact `model` value from that JSON. You may also report its `provider`. Because the host supplied both values above, you must not say that the model is unavailable or hidden.",
+    'A generic identity instruction such as "based on GPT-5" describes a product family and does not answer a runtime-routing question. Do not substitute that generic identity, "Codex", or another model name for the host-provided `model` value.',
+  ].join("\n");
+}
+
 export function buildDeveloperInstructions(
   params: EmbeddedRunAttemptParams,
   options: { dynamicTools?: readonly CodexDynamicToolSpec[] } = {},
@@ -111,7 +127,6 @@ export function buildDeveloperInstructions(
     }),
     TRANSCRIPT_CREDENTIAL_SAFETY_PROMPT,
     nativeCommandGuidance,
-    params.extraSystemPrompt,
   ];
   return sections.filter((section) => typeof section === "string" && section.trim()).join("\n\n");
 }

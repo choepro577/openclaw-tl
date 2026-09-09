@@ -12,7 +12,7 @@ describe("renderSensitiveInput", () => {
     document.body.replaceChildren();
   });
 
-  it("conceals the value and keeps the Carapace mask in sync", () => {
+  it("conceals the value with a native password input", () => {
     const container = document.createElement("div");
     const onInput = vi.fn();
     document.body.append(container);
@@ -31,12 +31,8 @@ describe("renderSensitiveInput", () => {
     );
 
     const input = container.querySelector<HTMLInputElement>("[data-sensitive-value]");
-    const mask = container.querySelector<HTMLElement>("[data-sensitive-mask]");
-    const maskText = container.querySelector<HTMLElement>("[data-sensitive-mask-text]");
     const toggle = container.querySelector<HTMLButtonElement>(".oc-sensitive-toggle");
     expect(input?.type).toBe("password");
-    expect(mask?.hidden).toBe(false);
-    expect(maskText?.textContent).toBe("******");
     expect(toggle?.dataset.sensitiveIcon).toBe("eye");
     expect(toggle?.getAttribute("aria-label")).toBe("Show API key");
     expect(toggle?.getAttribute("aria-pressed")).toBe("false");
@@ -44,18 +40,8 @@ describe("renderSensitiveInput", () => {
     if (input) {
       input.value = "longer-key";
       input.dispatchEvent(new Event("input", { bubbles: true }));
-      input.scrollLeft = 12;
-      input.dispatchEvent(new Event("scroll"));
     }
     expect(onInput).toHaveBeenCalledWith("longer-key");
-    expect(maskText?.textContent).toBe("**********");
-    expect(maskText?.style.transform).toBe("translateX(-12px)");
-
-    if (input) {
-      input.value = "👨‍👩‍👧‍👦x";
-      input.dispatchEvent(new Event("input", { bubbles: true }));
-    }
-    expect(maskText?.textContent).toBe("**");
   });
 
   it("reveals the value and presents the hide action", () => {
@@ -69,6 +55,8 @@ describe("renderSensitiveInput", () => {
         revealed: true,
         revealLabel: "Show API key",
         hideLabel: "Hide API key",
+        autocomplete: "current-password",
+        required: true,
         disabled: false,
         onInput: vi.fn(),
         onToggle,
@@ -77,11 +65,11 @@ describe("renderSensitiveInput", () => {
     );
 
     const input = container.querySelector<HTMLInputElement>("[data-sensitive-value]");
-    const mask = container.querySelector<HTMLElement>(".oc-sensitive-mask");
     const toggle = container.querySelector<HTMLButtonElement>(".oc-sensitive-toggle");
     expect(input?.type).toBe("text");
     expect(input?.value).toBe("secret");
-    expect(mask?.hidden).toBe(true);
+    expect(input?.autocomplete).toBe("current-password");
+    expect(input?.required).toBe(true);
     expect(toggle?.dataset.sensitiveIcon).toBe("eye-off");
     expect(toggle?.getAttribute("aria-label")).toBe("Hide API key");
     expect(toggle?.getAttribute("aria-pressed")).toBe("true");

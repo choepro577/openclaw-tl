@@ -191,6 +191,7 @@ export async function spawnSubagentDirect(
       admissionPatch: admission.childSessionPatch,
       inheritedToolAllowlist: ctx.inheritedToolAllowlist,
       inheritedToolDenylist: ctx.inheritedToolDenylist,
+      requiresPrivateModelContext: ctx.requiresPrivateModelContext,
       modelPatch: plan.initialSessionPatch,
       swarmGroupId,
       collect: params.collect === true,
@@ -383,7 +384,9 @@ export async function spawnSubagentDirect(
           },
           {
             sessionSpawnContext: buildSubagentExecutionSessionSpawnContext({
-              enabled: isExecutionIdentityCollectionEnabled(cfg),
+              enabled:
+                ctx.requireTrustedLaunchIdentity === true ||
+                isExecutionIdentityCollectionEnabled(cfg),
               backend: "subagent",
               parentAgentId: requesterAgentId,
               requesterRef: requesterInternalKey,
@@ -448,6 +451,11 @@ export async function spawnSubagentDirect(
         if (params.collect) {
           return { runId: childIdem };
         }
+        ctx.onBeforeChildDispatch?.({
+          childSessionKey,
+          anticipatedRunId: childIdem,
+          targetAgentId,
+        });
         const launch = await launchChildRun();
         taskRowOwnership = launch.taskRowOwnership;
         acceptedChildRunId = readGatewayRunId(launch.response) ?? childIdem;
@@ -514,6 +522,11 @@ export async function spawnSubagentDirect(
           emitLifecycleHooks = !endedHookEmitted;
         }
         await cleanupCreatedSession(emitLifecycleHooks);
+        ctx.onChildDispatchAborted?.({
+          childSessionKey,
+          anticipatedRunId: childIdem,
+          targetAgentId,
+        });
       },
     };
     const pipelineResult = await runSpawnPipeline({
@@ -533,6 +546,8 @@ export async function spawnSubagentDirect(
         return {
           runId,
           requesterTurnRunId: ctx.requesterTurnRunId,
+          requesterUserTurnIdempotencyKey: ctx.requesterUserTurnIdempotencyKey,
+          requesterUserTurnSessionId: ctx.requesterUserTurnSessionId,
           childSessionKey,
           controllerSessionKey: ownership.controllerSessionKey,
           requesterSessionKey: ownership.completionRequesterSessionKey,

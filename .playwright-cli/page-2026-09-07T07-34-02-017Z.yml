@@ -1,0 +1,87 @@
+- main [ref=f2e61]:
+  - complementary [ref=f2e62]:
+    - generic [ref=f2e65]:
+      - strong [ref=f2e66]: MAAP
+      - generic [ref=f2e67]: MAAP Admin
+    - navigation "Enterprise administration" [ref=f2e68]:
+      - button "Account management" [ref=f2e69]
+      - button "Agent management" [ref=f2e77]
+      - button "Enterprise knowledge" [ref=f2e83]
+      - button "Skill management" [ref=f2e88]
+      - button "Plugins" [ref=f2e96]
+      - button "Config" [ref=f2e102]
+    - generic [ref=f2e108]:
+      - generic [ref=f2e109]:
+        - generic [ref=f2e110]: Language
+        - combobox "Language" [disabled] [ref=f2e111]:
+          - option "Tiếng Việt" [selected]
+          - option "English"
+      - generic [ref=f2e112]:
+        - generic [aria-hidden] [ref=f2e113]: S
+        - generic [ref=f2e114]:
+          - strong [ref=f2e115]: Skill QA
+          - generic "@skillqa" [ref=f2e116]
+      - generic [ref=f2e117]:
+        - button "Change password" [ref=f2e118]
+        - button "Sign out" [ref=f2e125]
+  - generic [ref=f2e133]:
+    - generic [ref=f2e134]:
+      - generic [ref=f2e135]:
+        - heading "Account management" [level=1] [ref=f2e136]
+        - paragraph [ref=f2e137]: 1 accounts · Enterprise access and sign-in sessions
+      - button "Create account" [ref=f2e138]
+    - generic [ref=f2e140]:
+      - searchbox "Search accounts" [ref=f2e141]
+      - combobox "Filter by role" [ref=f2e142]:
+        - option "All roles" [selected]
+        - option "Administrator"
+        - option "Employee"
+      - combobox "Filter by status" [ref=f2e143]:
+        - option "All statuses" [selected]
+        - option "Active"
+        - option "Disabled"
+      - combobox "Filter by preset" [ref=f2e144]:
+        - option "All presets" [selected]
+        - option "Basic access"
+        - option "Standard coding"
+        - option "No preset"
+      - combobox "Filter by Personal Agent" [ref=f2e145]:
+        - option "All Personal Agents" [selected]
+        - option "Personal Agent enabled"
+        - option "No Personal Agent"
+      - combobox "Sort" [ref=f2e146]:
+        - option "Username A–Z" [selected]
+        - option "Recently updated"
+        - option "Last sign-in"
+    - table [ref=f2e148]:
+      - rowgroup [ref=f2e149]:
+        - row [ref=f2e150]:
+          - columnheader [ref=f2e151]:
+            - checkbox "Select all" [ref=f2e152]
+          - columnheader "Account" [ref=f2e153]
+          - columnheader "Role" [ref=f2e154]
+          - columnheader "Status" [ref=f2e155]
+          - columnheader "Agent" [ref=f2e156]
+          - columnheader "Access preset" [ref=f2e157]
+          - columnheader "Last sign-in" [ref=f2e158]
+          - columnheader "Updated" [ref=f2e159]
+          - columnheader "Actions" [ref=f2e160]
+      - rowgroup [ref=f2e161]:
+        - row [ref=f2e162]:
+          - cell [ref=f2e163]:
+            - checkbox "Select account skillqa" [ref=f2e164]
+          - cell "Skill QA @skillqa" [ref=f2e165]:
+            - strong [ref=f2e166]: Skill QA
+            - generic [ref=f2e167]: "@skillqa"
+          - cell "Administrator" [ref=f2e168]
+          - cell "Active" [ref=f2e169]
+          - cell "—" [ref=f2e171]
+          - cell "No preset" [ref=f2e172]
+          - cell "Sep 7, 2026, 2:33 PM" [ref=f2e174]
+          - cell "Sep 7, 2026, 2:33 PM" [ref=f2e175]
+          - cell [ref=f2e176]:
+            - button "View" [ref=f2e177]
+    - generic [ref=f2e178]:
+      - generic [ref=f2e179]: Page 1
+      - button "Previous" [disabled] [ref=f2e180]
+      - button "Next" [disabled] [ref=f2e181]

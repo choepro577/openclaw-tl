@@ -10,6 +10,10 @@ import os from "node:os";
 import path from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { retainLegacyDefaultAgentId } from "../config/legacy.default-agent-owner.js";
+import {
+  markGatewayRequestScopedRuntimeConfig,
+  readGatewayRequestRuntimeMetadata,
+} from "../gateway/request-runtime-config.js";
 import { createEmptyPluginRegistry } from "../plugins/registry-empty.js";
 import { withPreparedModelRuntimePluginGenerationScope } from "./prepared-model-runtime-generation-scope.js";
 import {
@@ -199,6 +203,50 @@ describe("prepared model runtime owner selection", () => {
       workspaceDir: "/tmp/account-main-workspace",
     });
     lease.release();
+  });
+
+  it("does not reuse private request metadata when consecutive configs serialize identically", async () => {
+    mocks.configuredAgentIds = ["main"];
+    await refreshPreparedModelRuntimeSnapshots({}, { gatewayLifecycle: true });
+    const input = {
+      agentId: "main",
+      agentDir: "/tmp/account-agent",
+      inheritedAuthDir: "/tmp/unused-agent",
+      workspaceDir: "/tmp/account-workspace",
+      preserveConfigOnRefresh: true,
+    };
+    const firstConfig = markGatewayRequestScopedRuntimeConfig(
+      {},
+      {
+        enterpriseDelegation: {
+          accountId: "account",
+          personalAgentId: "main",
+          specialists: [],
+          request: { sessionKey: "same-session", parentRunId: "first-run" },
+        },
+      },
+    );
+    const secondConfig = markGatewayRequestScopedRuntimeConfig(
+      {},
+      {
+        enterpriseDelegation: {
+          accountId: "account",
+          personalAgentId: "main",
+          specialists: [],
+          request: { sessionKey: "same-session", parentRunId: "second-run" },
+        },
+      },
+    );
+    const first = await acquireAgentRunPreparedModelRuntime({ ...input, config: firstConfig });
+    first.release();
+    const second = await acquireAgentRunPreparedModelRuntime({ ...input, config: secondConfig });
+    expect(second.snapshot.config).toBe(secondConfig);
+    expect(
+      readGatewayRequestRuntimeMetadata(second.snapshot.config)?.enterpriseDelegation?.request
+        ?.parentRunId,
+    ).toBe("second-run");
+    expect(second.snapshot).not.toBe(first.snapshot);
+    second.release();
   });
 
   it("publishes provider selections kept on the core runtime by request parameters", async () => {

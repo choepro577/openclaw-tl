@@ -99,6 +99,8 @@ export const TasksGetParamsSchema = closedObject({
 /** Lookup result for one task summary. */
 export const TasksGetResultSchema = closedObject({
   task: TaskSummarySchema,
+  /** Tool-bearing messages from the bounded, authorized child transcript. */
+  toolMessages: Type.Optional(Type.Array(Type.Unknown(), { maxItems: 200 })),
 });
 
 /** Cancel request for one task id with optional operator reason. */

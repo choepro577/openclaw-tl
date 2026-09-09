@@ -123,6 +123,37 @@ describe("getReplyFromConfig fast-path runtime", () => {
     });
   });
 
+  it("replies to suppressed Portal slash text in the same conversation", async () => {
+    await withTempHome(async (home) => {
+      const cfg: OpenClawConfig = makeReplyConfig(home);
+      for (const body of ["/plugins list", "/models"]) {
+        agentMocks.runEmbeddedAgent.mockResolvedValue(makeEmbeddedTextResult(`Reply to ${body}`));
+        const reply = await getReplyFromConfig(
+          {
+            Body: body,
+            BodyForAgent: body,
+            BodyForCommands: body,
+            RawBody: body,
+            CommandBody: body,
+            SessionKey: "agent:main:webchat:portal",
+            Provider: "webchat",
+            Surface: "webchat",
+            ChatType: "direct",
+            CommandAuthorized: false,
+            CommandInterpretationSuppressed: true,
+            CommandTurn: { kind: "normal", source: "message", authorized: false, body },
+          },
+          {},
+          cfg,
+        );
+        expect(Array.isArray(reply) ? reply[0]?.text : reply?.text).toBe(`Reply to ${body}`);
+        expect(agentMocks.runEmbeddedAgent).toHaveBeenLastCalledWith(
+          expect.objectContaining({ prompt: expect.stringContaining(body) }),
+        );
+      }
+    });
+  });
+
   it("ignores stale native legacy source for structured normal turns before routing", async () => {
     await withTempHome(async (home) => {
       agentMocks.runEmbeddedAgent.mockResolvedValue(makeEmbeddedTextResult("ok"));

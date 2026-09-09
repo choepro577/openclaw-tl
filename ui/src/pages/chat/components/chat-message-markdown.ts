@@ -7,6 +7,7 @@ import { renderCopyAsMarkdownButton } from "../../../components/copy-button.ts";
 import { icons } from "../../../components/icons.ts";
 import type { MarkdownRenderOptions } from "../../../components/markdown-render-options.ts";
 import { toSanitizedMarkdownHtml, toStreamingMarkdownHtml } from "../../../components/markdown.ts";
+import { enterpriseUserChatCardCopy } from "../../../i18n/enterprise-user-chat.ts";
 import { t } from "../../../i18n/index.ts";
 import type { NormalizedMessage } from "../../../lib/chat/chat-types.ts";
 import {
@@ -102,7 +103,7 @@ export function resolveMessageDisplayMarkdown(
 ): string {
   const metadata = asNullableRecord(asNullableRecord(message)?.["__openclaw"]);
   if (metadata?.truncated === true && metadata.reason === "oversized") {
-    return t("chat.messages.tooLargeToDisplay");
+    return enterpriseUserChatCardCopy("chat.messages.tooLargeToDisplay");
   }
   const markdown = resolveNormalizedMessageMarkdown(normalizedMessage);
   return normalizeRoleForGrouping(normalizedMessage.role) === "assistant"

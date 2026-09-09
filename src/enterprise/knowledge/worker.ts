@@ -43,12 +43,14 @@ import {
   fenceKnowledgeJobUpdate,
   finishKnowledgeGeneration,
   finishKnowledgeJob,
+  getKnowledgeJob,
   getKnowledgeSource,
   getKnowledgeSourceVersion,
   getKnowledgeZone,
   listKnowledgeJobSteps,
   listReadyKnowledgeVersionsForZone,
   pruneEnterpriseKnowledgeChanges,
+  retireKnowledgeGeneration,
   setKnowledgeVersionsVectorStatus,
   updateKnowledgeJobStep,
   type KnowledgeJob,
@@ -409,7 +411,8 @@ async function processZoneBuildJob(
     const storedGraphSettings = getKnowledgeGraphSettings(zone.id, options);
     const graphSettings = {
       ...storedGraphSettings,
-      enabled: config.enterprise?.knowledge?.graph?.enabled === true && storedGraphSettings.enabled,
+      enabled:
+        config.enterprise?.knowledge?.graph?.enabled !== false && storedGraphSettings.enabled,
     };
     const graphRuntimeConfig = config.enterprise?.knowledge?.graph;
     const aiAnalysisMode = graphRuntimeConfig?.aiAnalysis ?? "off";
@@ -999,6 +1002,16 @@ async function processZoneBuildJob(
       await embedding.close();
     }
   } catch (error) {
+    if (
+      (error instanceof EnterpriseKnowledgeError && error.code === "STALE_BUILD") ||
+      signal.aborted ||
+      (error instanceof Error && error.message === "JOB_FENCE_LOST")
+    ) {
+      // Superseding or cancelling a build does not prove its index is corrupt.
+      // Keep the discarded generation terminal and non-publishable without a failure audit.
+      retireKnowledgeGeneration(generation.id, options);
+      throw error;
+    }
     finishKnowledgeGeneration(
       generation.id,
       {
@@ -1065,12 +1078,25 @@ async function executeClaimedKnowledgeJob(
     }
     finishKnowledgeJob(job, { status: "succeeded" }, options);
   } catch (error) {
+    if (job.kind === "zone_build" && safeKnowledgeErrorCode(error) === "STALE_BUILD") {
+      const current = getKnowledgeJob(job.id, job.zoneId, options);
+      if (
+        current?.status === "running" &&
+        current.claimToken === job.claimToken &&
+        current.claimOwner === job.claimOwner &&
+        current.pipelineGeneration === job.pipelineGeneration
+      ) {
+        // The enqueue owner atomically supersedes this revision and coalesces its replacement.
+        // A revoked claim must not enqueue again after the newer build has already completed.
+        enqueueKnowledgeZoneBuild(job.zoneId, null, options);
+      }
+      return;
+    }
     if (
       abortController.signal.aborted ||
       (error instanceof Error && error.message === "JOB_FENCE_LOST")
     ) {
-      updateWorkerStep(job, { stage: job.stage, status: "cancelled" }, options);
-      finishKnowledgeJob(job, { status: "cancelled", safeErrorCode: "CANCELLED" }, options);
+      // Cancellation/replacement already owns the terminal state; stale workers cannot rewrite it.
       return;
     }
     const code = safeKnowledgeErrorCode(error);
@@ -1117,9 +1143,6 @@ async function executeClaimedKnowledgeJob(
       },
       options,
     );
-    if (job.kind === "zone_build" && code === "STALE_BUILD") {
-      enqueueKnowledgeZoneBuild(job.zoneId, null, options);
-    }
     log.warn(`Knowledge job ${job.id} failed at ${job.stage}: ${code}`);
   } finally {
     clearInterval(heartbeat);

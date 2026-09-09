@@ -62,7 +62,10 @@ type CodexAttemptResultInput = {
     | "createCurrentAttemptAssistantMessage"
     | "hasAssistantItemTextForSynthesis"
   >;
-  reasoningProjection: Pick<CodexReasoningProjection, "planText" | "reasoningText">;
+  reasoningProjection: Pick<
+    CodexReasoningProjection,
+    "isCurrentPlanPersisted" | "planText" | "reasoningText"
+  >;
   responseCompletions: Pick<CodexResponseCompletionProjection, "modelIterations" | "usage">;
   toolTranscriptProjection: Pick<
     CodexToolTranscriptProjection,
@@ -153,6 +156,7 @@ export function buildCodexAttemptResult(
     upstreamUserText: input.upstreamUserText,
     reasoningText,
     planText,
+    planMirrorPersisted: input.reasoningProjection.isCurrentPlanPersisted(),
     commentaryMessages,
     toolMessages: input.toolTranscriptProjection.transcriptMessages,
     lastAssistant,

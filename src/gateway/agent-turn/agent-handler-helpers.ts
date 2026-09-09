@@ -83,6 +83,7 @@ export function respondDeletedAgentSession(params: {
 }
 
 export function respondUnavailableAgentSessionForKey(params: {
+  cfg: OpenClawConfig;
   sessionKey: string;
   requestedSessionId?: string;
   isRawModelRun: boolean;
@@ -92,6 +93,7 @@ export function respondUnavailableAgentSessionForKey(params: {
   const { cfg, entry, canonicalKey, legacyKey } = loadSessionEntry(params.sessionKey, {
     ...(params.agentId ? { agentId: params.agentId } : {}),
     clone: false,
+    cfg: params.cfg,
   });
   if (
     respondDeletedAgentSession({

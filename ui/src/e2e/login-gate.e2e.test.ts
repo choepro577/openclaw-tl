@@ -473,14 +473,6 @@ suite.define(() => {
       expect(
         metrics.toggleSizes.every(({ height, width }) => height === "32px" && width === "32px"),
       ).toBe(true);
-
-      const failureDocs = page.locator(".login-gate__failure-docs");
-      await failureDocs.scrollIntoViewIfNeeded();
-      const failureDocsBox = await failureDocs.boundingBox();
-      if (!failureDocsBox) {
-        throw new Error("Missing failure documentation link bounds");
-      }
-      expect(failureDocsBox.y + failureDocsBox.height).toBeLessThanOrEqual(500);
     } finally {
       await closeContext(context);
     }
@@ -496,7 +488,7 @@ suite.define(() => {
       expect(await failure.evaluate((element) => element.tagName)).toBe("DIV");
       expect(await page.locator(".login-gate__failure-summary").isVisible()).toBe(true);
       expect(await page.locator(".login-gate__failure-steps").isVisible()).toBe(true);
-      expect(await page.locator(".login-gate__failure-docs").isVisible()).toBe(true);
+      expect(await page.locator(".login-gate__failure-docs").count()).toBe(0);
 
       const help = page.locator(".login-gate__help");
       expect(await help.evaluate((element) => element.tagName)).toBe("DETAILS");

@@ -6,6 +6,7 @@ import {
 } from "../../state/openclaw-state-db.js";
 import { ensureEnterpriseSchema } from "../database/enterprise-schema.js";
 import { parseEnterpriseResourceKey } from "../entitlements/resource-keys.js";
+import { deferKnowledgeAccessChange } from "./knowledge-access-changes.js";
 import {
   integer,
   normalizeLabel,
@@ -67,7 +68,7 @@ export function createKnowledgeZone(
            VALUES (?, ?, ?, ?, 1, ?, ?, ?)`,
         ).run(
           id,
-          input.graph?.enabled ? 1 : 0,
+          input.graph?.enabled === false ? 0 : 1,
           input.graph?.enrichmentEnabled === false ? 0 : 1,
           Math.max(0.92, Math.min(1, input.graph?.autoApprovalThreshold ?? 0.92)),
           actorAccountId,
@@ -173,7 +174,8 @@ export function updateKnowledgeZone(
 ): KnowledgeZone {
   ensureEnterpriseSchema(options);
   runOpenClawStateWriteTransaction(
-    ({ db }) => {
+    (database) => {
+      const { db } = database;
       const current = db
         .prepare("SELECT * FROM enterprise_knowledge_zones WHERE id = ?")
         .get(zoneId) as Row | undefined;
@@ -208,6 +210,9 @@ export function updateKnowledgeZone(
           "The zone changed. Reload and retry.",
         );
       }
+      if (input.egressPolicy !== undefined && input.egressPolicy !== current.egress_policy) {
+        deferKnowledgeAccessChange(database, zoneId);
+      }
     },
     options,
     { operationLabel: "enterprise.knowledge.zone.update" },
@@ -224,7 +229,8 @@ export function setKnowledgeZoneArchived(
 ): KnowledgeZone {
   ensureEnterpriseSchema(options);
   runOpenClawStateWriteTransaction(
-    ({ db }) => {
+    (database) => {
+      const { db } = database;
       const current = db
         .prepare("SELECT revision FROM enterprise_knowledge_zones WHERE id = ?")
         .get(zoneId) as Row | undefined;
@@ -237,6 +243,7 @@ export function setKnowledgeZoneArchived(
          access_revision = access_revision + 1, updated_by_account_id = ?, updated_at = ?
          WHERE id = ? AND revision = ?`,
       ).run(archived ? "archived" : "active", actorAccountId, Date.now(), zoneId, baseRevision);
+      deferKnowledgeAccessChange(database, zoneId);
     },
     options,
     { operationLabel: "enterprise.knowledge.zone.archive" },
@@ -296,7 +303,8 @@ export function purgeKnowledgeZone(
 ): { blobHashes: string[]; normalizedArtifactHashes: string[]; generationIds: string[] } {
   ensureEnterpriseSchema(options);
   return runOpenClawStateWriteTransaction(
-    ({ db }) => {
+    (database) => {
+      const { db } = database;
       const zone = db
         .prepare("SELECT slug, status, revision FROM enterprise_knowledge_zones WHERE id = ?")
         .get(params.zoneId) as Row | undefined;
@@ -366,6 +374,7 @@ export function purgeKnowledgeZone(
         params.zoneId,
       );
       db.prepare("DELETE FROM enterprise_knowledge_zones WHERE id = ?").run(params.zoneId);
+      deferKnowledgeAccessChange(database, params.zoneId);
       const blobHashes = new Set<string>();
       const normalizedArtifactHashes = new Set<string>();
       for (const artifact of artifacts) {
@@ -465,7 +474,8 @@ export function replaceKnowledgeZoneMemberships(
     unique.set(member.accountId, member.role);
   }
   runOpenClawStateWriteTransaction(
-    ({ db }) => {
+    (database) => {
+      const { db } = database;
       const zone = db
         .prepare("SELECT revision FROM enterprise_knowledge_zones WHERE id = ?")
         .get(zoneId) as Row | undefined;
@@ -508,6 +518,7 @@ export function replaceKnowledgeZoneMemberships(
          access_revision = access_revision + 1, updated_by_account_id = ?, updated_at = ?
          WHERE id = ? AND revision = ?`,
       ).run(actorAccountId, now, zoneId, baseRevision);
+      deferKnowledgeAccessChange(database, zoneId);
     },
     options,
     { operationLabel: "enterprise.knowledge.members.replace" },
@@ -566,7 +577,8 @@ export function replaceKnowledgeAgentBindings(
     }
   }
   runOpenClawStateWriteTransaction(
-    ({ db }) => {
+    (database) => {
+      const { db } = database;
       const zone = db
         .prepare("SELECT revision FROM enterprise_knowledge_zones WHERE id = ?")
         .get(zoneId) as Row | undefined;
@@ -590,6 +602,7 @@ export function replaceKnowledgeAgentBindings(
          access_revision = access_revision + 1, updated_by_account_id = ?, updated_at = ?
          WHERE id = ? AND revision = ?`,
       ).run(actorAccountId, now, zoneId, baseRevision);
+      deferKnowledgeAccessChange(database, zoneId);
     },
     options,
     { operationLabel: "enterprise.knowledge.bindings.replace" },

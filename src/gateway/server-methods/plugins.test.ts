@@ -311,6 +311,21 @@ describe("plugin management Gateway handlers", () => {
     });
   });
 
+  it("returns an install failure once without serializing the internal failure result", async () => {
+    const message = "Package requires compiled JavaScript output.";
+    const error = new managementMocks.ManagedPluginLifecycleError(message);
+    error.cause = { ok: false, error: message, code: "invalid_openclaw_extensions" };
+    managementMocks.install.mockRejectedValue(error);
+
+    const result = await callHandler("plugins.install", {
+      source: "clawhub",
+      packageName: "@chris-openclaw/github-workflow",
+      version: "0.2.0",
+    });
+
+    expect(result.error).toMatchObject({ code: "INVALID_REQUEST", message });
+  });
+
   it("forwards invocation-wide install policy acknowledgement", async () => {
     managementMocks.install.mockResolvedValue({
       plugin: { ...workboard, id: "diffs", name: "Diffs", enabled: true, state: "enabled" },

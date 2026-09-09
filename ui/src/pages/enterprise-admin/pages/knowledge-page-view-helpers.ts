@@ -1,18 +1,24 @@
 import { html, nothing, type TemplateResult } from "lit";
+import {
+  kak,
+  type EnterpriseAdminKnowledgeCopyKey,
+} from "../../../i18n/enterprise-admin-knowledge.ts";
+import { ea } from "../../../i18n/enterprise-admin.ts";
 import type { EnterpriseKnowledgePublication } from "../../enterprise/services/enterprise-knowledge-api.ts";
 import { formatDate } from "../utils.ts";
 import type { KnowledgeTab } from "./knowledge-page-model.ts";
 
-export const knowledgeTabs: Array<{ id: KnowledgeTab; label: string }> = [
-  { id: "overview", label: "Tổng quan" },
-  { id: "settings", label: "Cấu hình" },
-  { id: "sources", label: "Nguồn & OCR" },
-  { id: "graph", label: "Bản đồ tri thức" },
-  { id: "agents", label: "Agent truy cập" },
-  { id: "members", label: "Thành viên" },
-  { id: "search", label: "Kiểm thử & publish" },
-  { id: "activity", label: "Hoạt động" },
-];
+export const knowledgeTabs: Array<{ id: KnowledgeTab; labelKey: EnterpriseAdminKnowledgeCopyKey }> =
+  [
+    { id: "overview", labelKey: "tabOverview" },
+    { id: "settings", labelKey: "tabSettings" },
+    { id: "sources", labelKey: "tabSources" },
+    { id: "graph", labelKey: "tabGraph" },
+    { id: "agents", labelKey: "tabAgents" },
+    { id: "members", labelKey: "tabMembers" },
+    { id: "search", labelKey: "tabSearch" },
+    { id: "activity", labelKey: "tabActivity" },
+  ];
 
 export function inputFromEvent(event: Event): HTMLInputElement | undefined {
   return event.currentTarget instanceof HTMLInputElement ? event.currentTarget : undefined;
@@ -37,33 +43,49 @@ export function knowledgeStatusClass(status: string): string {
 }
 
 export function knowledgeSourceKindLabel(kind: string): string {
-  return { note: "Ghi chú", url: "URL", file: "Tệp" }[kind] ?? kind;
+  return { note: kak("sourceNote"), url: "URL", file: kak("sourceFile") }[kind] ?? kind;
 }
 
 export function knowledgeProcessingLabel(status: string): string {
   return (
     {
-      queued: "Đang chờ",
-      running: "Đang xử lý",
-      retry_wait: "Chờ chạy lại",
-      ready: "Sẵn sàng",
-      degraded: "Giới hạn",
-      succeeded: "Hoàn tất",
-      failed: "Thất bại",
-      cancelled: "Đã hủy",
-      completed: "Hoàn tất",
-      superseded: "Đã được thay thế",
+      queued: kak("statusQueued"),
+      running: kak("statusRunning"),
+      retry_wait: kak("statusRetryWait"),
+      ready: kak("statusReady"),
+      degraded: kak("statusDegraded"),
+      succeeded: kak("statusSucceeded"),
+      failed: kak("statusFailed"),
+      cancelled: kak("statusCancelled"),
+      completed: kak("statusCompleted"),
+      superseded: kak("statusSuperseded"),
     }[status] ?? status
+  );
+}
+
+export function knowledgeUploadStateLabel(state: string): string {
+  return (
+    {
+      active: kak("uploadWaiting"),
+      committing: kak("uploadProcessing"),
+      committed: kak("uploadCommitted"),
+      cancelled: kak("uploadCancelled"),
+      expired: kak("uploadExpired"),
+      error: kak("uploadError"),
+      resuming: kak("uploadResuming"),
+      uploading: kak("uploadUploading"),
+      processing: kak("uploadProcessing"),
+    }[state] ?? state
   );
 }
 
 export function knowledgeJobKindLabel(kind: string): string {
   return (
     {
-      source_ingest: "Nhập nguồn",
-      zone_build: "Tạo Candidate",
-      artifact_gc: "Dọn artifact",
-      index_gc: "Dọn index",
+      source_ingest: kak("jobSourceIngest"),
+      zone_build: kak("jobZoneBuild"),
+      artifact_gc: kak("jobArtifactGc"),
+      index_gc: kak("jobIndexGc"),
     }[kind] ?? kind
   );
 }
@@ -71,23 +93,23 @@ export function knowledgeJobKindLabel(kind: string): string {
 export function knowledgeJobStageLabel(stage: string): string {
   return (
     {
-      validate: "Kiểm tra",
-      checking: "Đang kiểm tra",
-      extract: "Trích xuất",
-      parsing: "Đang parse",
-      ocr: "OCR",
-      structure: "Dựng cấu trúc",
-      normalize: "Chuẩn hóa",
-      normalizing: "Chuẩn hóa artifact",
-      zone_build: "Lập chỉ mục",
-      structural_graph: "Dựng graph cấu trúc",
-      ai_read: "AI đọc nội dung",
-      ai_canonicalize: "AI chuẩn hóa khái niệm",
-      ai_relations: "AI tạo quan hệ",
-      embedding: "Tạo embedding",
-      graph_build: "Dựng graph",
-      validating: "Kiểm chứng evidence",
-      candidate_ready: "Candidate sẵn sàng",
+      validate: kak("stageValidate"),
+      checking: kak("stageChecking"),
+      extract: kak("stageExtract"),
+      parsing: kak("stageParsing"),
+      ocr: kak("stageOcr"),
+      structure: kak("stageStructure"),
+      normalize: kak("stageNormalize"),
+      normalizing: kak("stageNormalizing"),
+      zone_build: kak("stageZoneBuild"),
+      structural_graph: kak("stageStructuralGraph"),
+      ai_read: kak("stageAiRead"),
+      ai_canonicalize: kak("stageAiCanonicalize"),
+      ai_relations: kak("stageAiRelations"),
+      embedding: kak("stageEmbedding"),
+      graph_build: kak("stageGraphBuild"),
+      validating: kak("stageValidating"),
+      candidate_ready: kak("stageCandidateReady"),
     }[stage] ?? stage
   );
 }
@@ -95,10 +117,10 @@ export function knowledgeJobStageLabel(stage: string): string {
 export function knowledgeIntegrityLabel(status: string): string {
   return (
     {
-      unknown: "Chưa kiểm tra",
-      valid: "Hợp lệ",
-      corrupt: "Hỏng dữ liệu",
-      missing: "Thiếu dữ liệu",
+      unknown: kak("integrityUnknown"),
+      valid: kak("integrityValid"),
+      corrupt: kak("integrityCorrupt"),
+      missing: kak("integrityMissing"),
     }[status] ?? status
   );
 }
@@ -106,11 +128,11 @@ export function knowledgeIntegrityLabel(status: string): string {
 export function knowledgeGraphStatusLabel(status: string): string {
   return (
     {
-      not_built: "Chưa tạo",
-      ready: "Sẵn sàng",
-      degraded: "Giới hạn",
-      error: "Lỗi",
-      corrupt: "Hỏng dữ liệu",
+      not_built: kak("graphNotBuilt"),
+      ready: kak("graphReady"),
+      degraded: kak("graphDegraded"),
+      error: kak("graphError"),
+      corrupt: kak("graphCorrupt"),
     }[status] ?? status
   );
 }
@@ -118,13 +140,13 @@ export function knowledgeGraphStatusLabel(status: string): string {
 export function knowledgeCapabilityStatusLabel(status: string): string {
   return (
     {
-      not_configured: "Chưa cấu hình",
-      pending: "Đang chờ",
-      ready: "Sẵn sàng",
-      unavailable: "Không khả dụng",
-      degraded: "Giới hạn",
-      error: "Lỗi",
-      unknown: "Không xác định",
+      not_configured: kak("capabilityNotConfigured"),
+      pending: kak("capabilityPending"),
+      ready: kak("capabilityReady"),
+      unavailable: kak("capabilityUnavailable"),
+      degraded: kak("capabilityDegraded"),
+      error: kak("capabilityError"),
+      unknown: kak("capabilityUnknown"),
     }[status] ?? status
   );
 }
@@ -153,16 +175,16 @@ export function renderKnowledgePublicationRows(
   rollback: (publication: EnterpriseKnowledgePublication) => void,
 ): TemplateResult {
   if (!publications.length) {
-    return html`<div class="ea-empty knowledge-empty-small">Zone chưa có publication.</div>`;
+    return html`<div class="ea-empty knowledge-empty-small">${kak("publicationEmpty")}</div>`;
   }
   return html`<div class="ea-table-wrap">
     <table class="ea-table">
       <thead>
         <tr>
-          <th>Publication</th>
-          <th>Nguồn</th>
-          <th>Index</th>
-          <th>Thời gian</th>
+          <th>${kak("publication")}</th>
+          <th>${ea("Nguồn")}</th>
+          <th>${kak("index")}</th>
+          <th>${ea("Thời gian")}</th>
           <th></th>
         </tr>
       </thead>
@@ -172,14 +194,14 @@ export function renderKnowledgePublicationRows(
             <td>
               <strong>#${publication.publicationNumber}</strong>${publication.id ===
               activePublicationId
-                ? " · Active"
+                ? kak("activePublication")
                 : ""}
             </td>
             <td>${publication.sourceCount}</td>
             <td>
               FTS ${publication.lexicalStatus} · Vector
               ${publication.vectorStatus}${publication.degradedOverride
-                ? " · Degraded override"
+                ? kak("degradedOverride")
                 : ""}${publication.degradedReason
                 ? html`<div class="ea-muted">${publication.degradedReason}</div>`
                 : nothing}
@@ -192,7 +214,7 @@ export function renderKnowledgePublicationRows(
                 ?disabled=${busy || publication.id === activePublicationId}
                 @click=${() => rollback(publication)}
               >
-                Rollback
+                ${kak("rollback")}
               </button>
             </td>
           </tr>`,

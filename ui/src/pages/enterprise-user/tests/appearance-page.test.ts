@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { RouteId } from "../../../app-route-paths.ts";
 import type { ApplicationContext } from "../../../app/context.ts";
 import { loadSettings, patchSettings } from "../../../app/settings.ts";
+import { i18n } from "../../../i18n/index.ts";
 import { createApplicationContextProvider } from "../../../test-helpers/application-context.ts";
 import "../pages/settings/appearance-page.ts";
 
@@ -13,9 +14,10 @@ describe("Enterprise User appearance parity", () => {
     patchSettings({ accent: undefined, textScale: undefined, theme: "claw", themeMode: "system" });
   });
 
-  afterEach(() => {
+  afterEach(async () => {
     document.body.replaceChildren();
     patchSettings({ accent: undefined, textScale: undefined, theme: "claw", themeMode: "system" });
+    await i18n.setLocale("en");
     vi.restoreAllMocks();
   });
 
@@ -48,5 +50,37 @@ describe("Enterprise User appearance parity", () => {
     textScale125!.click();
     expect(loadSettings().textScale).toBe(125);
     expect(refresh).toHaveBeenCalledTimes(2);
+  });
+
+  it("tracks a locale change made through the shared manager", async () => {
+    const context = {
+      theme: {
+        mode: "system",
+        refresh: vi.fn(),
+        setMode: vi.fn(),
+        subscribe: () => () => undefined,
+      },
+    } as unknown as ApplicationContext<RouteId>;
+    const provider = createApplicationContextProvider(context);
+    const page = document.createElement("openclaw-user-appearance-page") as AppearancePageElement;
+    provider.append(page);
+    document.body.append(provider);
+    await page.updateComplete;
+
+    await i18n.setLocale("vi");
+    await page.updateComplete;
+
+    expect(page.querySelector<HTMLSelectElement>("select.settings-select")?.value).toBe("vi");
+    expect(page.querySelector(".eu-page-header")?.textContent).toContain("Giao diện");
+    expect(page.textContent).toContain("Màu nhấn");
+    expect(page.textContent).toContain("Nhỏ");
+    expect(page.querySelector('[data-accent-preset="blue"]')?.getAttribute("aria-label")).toBe(
+      "Xanh dương",
+    );
+    expect(
+      page
+        .querySelector<HTMLInputElement>("input.settings-accent-swatch--custom")
+        ?.getAttribute("aria-label"),
+    ).toBe("Màu tùy chỉnh");
   });
 });

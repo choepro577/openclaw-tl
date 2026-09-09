@@ -33,6 +33,7 @@ import type { EmbedSandboxMode } from "../../../lib/chat/tool-display.ts";
 import { resolveToolDisplay } from "../../../lib/chat/tool-display.ts";
 import type { LinkFaviconFetcher } from "../link-favicon-loader.ts";
 import { workspaceResultConflictFromTranscript } from "../workspace-conflict.ts";
+import { isEnterpriseKnowledgeTool } from "./chat-knowledge-card.ts";
 import { renderAssistantAttachments } from "./chat-message-attachments.ts";
 import { renderMessageImages, resolveRenderableMessageImages } from "./chat-message-images.ts";
 import {
@@ -76,6 +77,9 @@ function renderInlineToolCards(
   opts: {
     messageKey: string;
     sessionKey?: string;
+    delegationTasks?: readonly import("../../../lib/tasks/task-summary.ts").TaskSummary[];
+    delegationExpanded?: boolean;
+    onOpenSubagents?: () => void;
     agentId?: string;
     onOpenSidebar?: (content: SidebarContent) => void;
     onOpenWorkspaceFile?: (target: { path: string; line?: number | null }) => void;
@@ -88,8 +92,11 @@ function renderInlineToolCards(
     showApprovalReviews?: boolean;
   },
 ) {
+  const containerClass = toolCards.every((card) => isEnterpriseKnowledgeTool(card.name))
+    ? "chat-tools-inline chat-tools-inline--knowledge"
+    : "chat-tools-inline";
   return html`
-    <div class="chat-tools-inline">
+    <div class=${containerClass}>
       ${toolCards.map((card, index) => {
         const disclosureId = `${opts.messageKey}:toolcard:${index}`;
         const expanded = opts.isToolExpanded?.(disclosureId) ?? false;
@@ -100,6 +107,9 @@ function renderInlineToolCards(
             ? () => opts.onToggleToolExpanded?.(disclosureId, expanded)
             : () => undefined,
           sessionKey: opts.sessionKey,
+          delegationTasks: opts.delegationTasks,
+          delegationExpanded: opts.delegationExpanded,
+          onOpenSubagents: opts.onOpenSubagents,
           agentId: opts.agentId,
           onOpenSidebar: opts.onOpenSidebar,
           onOpenWorkspaceFile: opts.onOpenWorkspaceFile,
@@ -214,6 +224,10 @@ export function renderGroupedMessage(
   opts: {
     isStreaming: boolean;
     sessionKey?: string;
+    delegationTasks?: readonly import("../../../lib/tasks/task-summary.ts").TaskSummary[];
+    delegationExpanded?: boolean;
+    onOpenSubagents?: () => void;
+    hideDelegationYield?: boolean;
     boardProvider?: BoardProvider;
     agentId?: string;
     duplicateCount?: number;
@@ -266,6 +280,21 @@ export function renderGroupedMessage(
   const isStandaloneToolMessage = isStandaloneToolMessageForDisplay(message);
 
   const toolCards = (opts.showToolCalls ?? true) ? extractToolCardsCached(message, messageKey) : [];
+  if (sourceRole !== "user" && toolCards.length > 0) {
+    if (opts.hideDelegationYield && toolCards.every((card) => card.name === "sessions_yield")) {
+      return nothing;
+    }
+    if (
+      toolCards.every(
+        (card) =>
+          card.name === "enterprise_delegate" ||
+          (isStandaloneToolMessage && isEnterpriseKnowledgeTool(card.name)),
+      )
+    ) {
+      // Domain-owned cards replace raw tool JSON, including decision and citation tokens.
+      return renderInlineToolCards(toolCards, { ...opts, messageKey });
+    }
+  }
   const hasToolCards = toolCards.length > 0;
   const imageRenderOptions = {
     sessionKey: opts.sessionKey,
@@ -449,6 +478,9 @@ export function renderGroupedMessage(
         ${renderInlineToolCards(toolCards, {
           messageKey,
           sessionKey: opts.sessionKey,
+          delegationTasks: opts.delegationTasks,
+          delegationExpanded: opts.delegationExpanded,
+          onOpenSubagents: opts.onOpenSubagents,
           agentId: opts.agentId,
           onOpenSidebar,
           onOpenWorkspaceFile: opts.onOpenWorkspaceFile,
@@ -580,6 +612,9 @@ export function renderGroupedMessage(
                           : renderInlineToolCards(toolCards, {
                               messageKey,
                               sessionKey: opts.sessionKey,
+                              delegationTasks: opts.delegationTasks,
+                              delegationExpanded: opts.delegationExpanded,
+                              onOpenSubagents: opts.onOpenSubagents,
                               agentId: opts.agentId,
                               onOpenSidebar,
                               onOpenWorkspaceFile: opts.onOpenWorkspaceFile,
@@ -656,6 +691,9 @@ export function renderGroupedMessage(
               ? renderInlineToolCards(toolCards, {
                   messageKey,
                   sessionKey: opts.sessionKey,
+                  delegationTasks: opts.delegationTasks,
+                  delegationExpanded: opts.delegationExpanded,
+                  onOpenSubagents: opts.onOpenSubagents,
                   agentId: opts.agentId,
                   onOpenSidebar,
                   onOpenWorkspaceFile: opts.onOpenWorkspaceFile,

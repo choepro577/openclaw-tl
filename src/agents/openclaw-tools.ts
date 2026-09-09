@@ -48,6 +48,7 @@ import {
 import { createCronTool } from "./tools/cron-tool.js";
 import { createDashboardTool } from "./tools/dashboard-tool.js";
 import { createEmbeddedCallGateway } from "./tools/embedded-gateway-stub.js";
+import { createEnterpriseDelegationTools } from "./tools/enterprise-delegation-tools.js";
 import { createEnterpriseKnowledgeTools } from "./tools/enterprise-knowledge-tools.js";
 import { createGatewayToolCallerWrapper } from "./tools/gateway-caller-context.js";
 import { createGatewayTool } from "./tools/gateway-tool.js";
@@ -103,11 +104,30 @@ export function createOpenClawTools(options?: OpenClawToolsOptions): AnyAgentToo
     config: resolvedConfig,
     agentId: options?.requesterAgentIdOverride,
   });
-  const enterpriseKnowledgeAuthority = resolvedConfig
-    ? (readGatewayRequestRuntimeMetadata(resolvedConfig)?.enterpriseKnowledge?.createAuthority(
+  const enterpriseKnowledgeAuthority: EnterpriseKnowledgeAuthority | undefined = resolvedConfig
+    ? readGatewayRequestRuntimeMetadata(resolvedConfig)?.enterpriseKnowledge?.createAuthority(
         sessionAgentId,
-      ) as EnterpriseKnowledgeAuthority | undefined)
+      )
     : undefined;
+  const enterpriseDelegationTools = resolvedConfig
+    ? createEnterpriseDelegationTools({
+        config: resolvedConfig,
+        agentId: sessionAgentId,
+        agentSessionKey: options?.agentSessionKey,
+        runSessionKey: options?.runSessionKey,
+        runId: options?.runId,
+        agentChannel: options?.agentChannel,
+        agentAccountId: options?.agentAccountId,
+        agentTo: options?.agentTo,
+        agentThreadId: options?.agentThreadId,
+        currentMessagingTarget: options?.currentMessagingTarget,
+        currentChannelId: options?.currentChannelId,
+        currentMessageId: options?.currentMessageId,
+        workspaceDir: options?.spawnWorkspaceDir ?? options?.workspaceDir,
+        inheritedToolAllowlist: options?.inheritedToolAllowlist,
+        inheritedToolDenylist: options?.inheritedToolDenylist,
+      })
+    : [];
   const swarmToolGroups = createOpenClawSwarmToolGroups({
     config: resolvedConfig,
     effectiveRequesterAgentId: sessionAgentId,
@@ -587,6 +607,7 @@ export function createOpenClawTools(options?: OpenClawToolsOptions): AnyAgentToo
     ...(enterpriseKnowledgeAuthority
       ? createEnterpriseKnowledgeTools(enterpriseKnowledgeAuthority)
       : []),
+    ...enterpriseDelegationTools,
   ];
   options?.recordToolPrepStage?.("openclaw-tools:core-tool-list");
   let allTools = tools;

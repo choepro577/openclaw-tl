@@ -1518,6 +1518,7 @@ export async function installPluginFromClawHub(
         source: "clawhub",
         clawhubUrl: clawhubRegistry,
         clawhubPackage: canonicalPackageName,
+        clawhubVersion: versionState.version,
         clawhubFamily,
         clawhubChannel: pkg.channel,
         version: installResult.version ?? versionState.version,

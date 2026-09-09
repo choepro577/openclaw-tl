@@ -2,7 +2,8 @@ import { consume } from "@lit/context";
 import { html, nothing } from "lit";
 import { state } from "lit/decorators.js";
 import { applicationContext, type ApplicationContext } from "../../../../app/context.ts";
-import { eu } from "../../../../i18n/enterprise-user.ts";
+import { showNativeConfirm, showNativePrompt } from "../../../../branding/display-dialog.ts";
+import { eu, euKnowledgeValue } from "../../../../i18n/enterprise-user.ts";
 import { OpenClawLightDomElement } from "../../../../lit/openclaw-element.ts";
 import {
   appendEnterpriseKnowledgeUploadChunk,
@@ -66,6 +67,7 @@ export class UserKnowledgePage extends OpenClawLightDomElement {
   @state() private error = "";
   @state() private view: "sources" | "graph" = "sources";
   private stopRealtime?: () => void;
+  private detailRequest = 0;
 
   override connectedCallback(): void {
     super.connectedCallback();
@@ -73,6 +75,7 @@ export class UserKnowledgePage extends OpenClawLightDomElement {
   }
 
   override disconnectedCallback(): void {
+    this.detailRequest++;
     this.stopRealtime?.();
     this.stopRealtime = undefined;
     super.disconnectedCallback();
@@ -198,64 +201,72 @@ export class UserKnowledgePage extends OpenClawLightDomElement {
   }
 
   private async open(zone: EnterpriseKnowledgeZone, preserveView = false): Promise<void> {
+    const request = ++this.detailRequest;
+    if (this.selected?.id !== zone.id) {
+      this.hits = [];
+      this.candidate = undefined;
+      this.sources = [];
+      this.jobs = [];
+      this.jobSteps = {};
+      this.members = [];
+      this.publications = [];
+      this.uploads = [];
+      this.zoneRole = "viewer";
+    }
     this.selected = zone;
     if (!preserveView) {
       this.view = "sources";
     }
     this.busy = true;
+    this.error = "";
     try {
       const [detail, sources] = await Promise.all([
         loadEnterpriseKnowledgeZone("user", zone.id),
         listEnterpriseKnowledgeSources("user", zone.id),
       ]);
+      const [jobs, uploads, members, publications] = await Promise.all([
+        detail.role === "viewer" ? { items: [] } : listEnterpriseKnowledgeJobs("user", zone.id),
+        detail.role === "viewer" ? { items: [] } : listEnterpriseKnowledgeUploads("user", zone.id),
+        detail.role === "manager" ? listEnterpriseKnowledgeMembers("user", zone.id) : { items: [] },
+        detail.role === "manager"
+          ? listEnterpriseKnowledgePublications("user", zone.id)
+          : { items: [] },
+      ]);
+      const jobDetails = await Promise.allSettled(
+        jobs.items.slice(0, 20).map((job) => loadEnterpriseKnowledgeJob("user", zone.id, job.id)),
+      );
+      // A realtime refresh must not overwrite a newer zone selection or completed publication.
+      if (request !== this.detailRequest) {
+        return;
+      }
+      if (this.candidate?.id !== detail.candidate?.id) {
+        this.hits = [];
+      }
       this.selected = detail.zone;
+      this.zones = this.zones.map((item) =>
+        item.id === detail.zone.id ? { ...detail.zone, role: detail.role } : item,
+      );
       this.zoneRole = detail.role;
       this.sources = sources.items;
-      this.jobs =
-        detail.role === "viewer" ? [] : (await listEnterpriseKnowledgeJobs("user", zone.id)).items;
-      this.jobSteps =
-        detail.role === "viewer"
-          ? {}
-          : Object.fromEntries(
-              (
-                await Promise.allSettled(
-                  this.jobs
-                    .slice(0, 20)
-                    .map((job) => loadEnterpriseKnowledgeJob("user", zone.id, job.id)),
-                )
-              )
-                .flatMap((result) => (result.status === "fulfilled" ? [result.value] : []))
-                .map((jobDetail) => [jobDetail.job.id, jobDetail.steps]),
-            );
-      this.uploads =
-        detail.role === "viewer"
-          ? []
-          : (await listEnterpriseKnowledgeUploads("user", zone.id)).items.map((upload) =>
-              this.uploadState(upload),
-            );
-      this.candidate = detail.candidate
-        ? {
-            id: detail.candidate.id,
-            vectorStatus: detail.candidate.vectorStatus,
-            lexicalStatus: detail.candidate.lexicalStatus,
-          }
-        : undefined;
-      if (detail.role === "manager") {
-        const [members, publications] = await Promise.all([
-          listEnterpriseKnowledgeMembers("user", zone.id),
-          listEnterpriseKnowledgePublications("user", zone.id),
-        ]);
-        this.members = members.items;
-        this.publications = publications.items;
-      } else {
-        this.members = [];
-        this.publications = [];
-      }
+      this.jobs = jobs.items;
+      this.jobSteps = Object.fromEntries(
+        jobDetails.flatMap((result) =>
+          result.status === "fulfilled" ? [[result.value.job.id, result.value.steps]] : [],
+        ),
+      );
+      this.uploads = uploads.items.map((upload) => this.uploadState(upload));
+      this.candidate = detail.candidate ?? undefined;
+      this.members = members.items;
+      this.publications = publications.items;
     } catch (error) {
-      this.error = error instanceof Error ? error.message : eu("knowledgeOpenFailed");
+      if (request === this.detailRequest) {
+        this.error = error instanceof Error ? error.message : eu("knowledgeOpenFailed");
+      }
     } finally {
-      this.busy = false;
-      this.startRealtime(true);
+      if (request === this.detailRequest) {
+        this.busy = false;
+        this.startRealtime(true);
+      }
     }
   }
 
@@ -413,15 +424,30 @@ export class UserKnowledgePage extends OpenClawLightDomElement {
 
   private async search(event: SubmitEvent): Promise<void> {
     event.preventDefault();
-    if (!this.selected) {
+    if (!this.selected || !this.candidate || this.zoneRole === "viewer") {
       return;
     }
     const query = String(new FormData(event.currentTarget as HTMLFormElement).get("query") ?? "");
+    const zone = this.selected;
+    const candidateId = this.candidate.id;
+    this.hits = [];
     this.busy = true;
+    this.error = "";
     try {
-      this.hits = (await searchEnterpriseKnowledgeCandidate("user", this.selected.id, query)).hits;
+      const result = await searchEnterpriseKnowledgeCandidate("user", zone.id, query);
+      if (this.selected?.id !== zone.id || this.candidate?.id !== candidateId) {
+        return;
+      }
+      if (result.candidate.id !== candidateId) {
+        await this.open(zone, true);
+      }
+      if (this.selected?.id === zone.id && this.candidate?.id === result.candidate.id) {
+        this.hits = result.hits;
+      }
     } catch (error) {
-      this.error = error instanceof Error ? error.message : eu("knowledgeCandidateSearchFailed");
+      if (this.selected?.id === zone.id && this.candidate?.id === candidateId) {
+        this.error = error instanceof Error ? error.message : eu("knowledgeCandidateSearchFailed");
+      }
     } finally {
       this.busy = false;
     }
@@ -434,7 +460,7 @@ export class UserKnowledgePage extends OpenClawLightDomElement {
     const reason =
       this.candidate.vectorStatus === "ready"
         ? undefined
-        : globalThis.prompt(eu("knowledgeCandidatePublishReason"))?.trim();
+        : showNativePrompt(eu("knowledgeCandidatePublishReason"))?.trim();
     if (this.candidate.vectorStatus !== "ready" && !reason) {
       return;
     }
@@ -462,7 +488,7 @@ export class UserKnowledgePage extends OpenClawLightDomElement {
       return;
     }
     if (
-      !globalThis.confirm(
+      !showNativeConfirm(
         eu("knowledgeRollbackConfirm", { number: String(publication.publicationNumber) }),
       )
     ) {
@@ -612,7 +638,8 @@ export class UserKnowledgePage extends OpenClawLightDomElement {
                     class=${this.selected?.id === zone.id ? "active" : ""}
                     @click=${() => void this.open(zone)}
                   >
-                    <strong>${zone.name}</strong><span>${zone.slug} · ${zone.role}</span>
+                    <strong>${zone.name}</strong
+                    ><span>${zone.slug} · ${euKnowledgeValue(zone.role) || eu("unknown")}</span>
                   </button>`,
               )}
             </aside>
@@ -625,14 +652,14 @@ export class UserKnowledgePage extends OpenClawLightDomElement {
                           ${this.selected.description || eu("knowledgeNoDescription")}
                         </p>
                       </div>
-                      <span class="badge">${this.zoneRole}</span
+                      <span class="badge">${euKnowledgeValue(this.zoneRole)}</span
                       ><span class="badge"
                         >${this.selected.activePublicationId
                           ? eu("knowledgePublished")
                           : eu("knowledgeNotPublished")}</span
                       >
                     </section>
-                    <nav class="eu-knowledge-tabs" aria-label="Nội dung vùng tri thức">
+                    <nav class="eu-knowledge-tabs" aria-label=${eu("knowledgeContents")}>
                       <button
                         class=${this.view === "sources" ? "active" : ""}
                         type="button"
@@ -647,7 +674,7 @@ export class UserKnowledgePage extends OpenClawLightDomElement {
                         aria-current=${this.view === "graph" ? "page" : "false"}
                         @click=${() => (this.view = "graph")}
                       >
-                        Bản đồ tri thức
+                        ${eu("knowledgeGraph")}
                       </button>
                     </nav>
                     ${this.view === "graph"
@@ -671,8 +698,9 @@ export class UserKnowledgePage extends OpenClawLightDomElement {
                                   html`<article>
                                     <strong>${source.title}</strong
                                     ><span
-                                      >${source.kind} · ${eu("knowledgeVersion")}
-                                      ${source.currentVersionNumber} · ${source.status}</span
+                                      >${euKnowledgeValue(source.kind)} · ${eu("knowledgeVersion")}
+                                      ${source.currentVersionNumber} ·
+                                      ${euKnowledgeValue(source.status)}</span
                                     >
                                   </article>`,
                               )}
@@ -710,8 +738,10 @@ export class UserKnowledgePage extends OpenClawLightDomElement {
                                 </form>
                                 ${this.candidate
                                   ? html`<p class="eu-muted">
-                                      ${eu("knowledgeFts")} ${this.candidate.lexicalStatus} ·
-                                      ${eu("knowledgeVector")} ${this.candidate.vectorStatus}
+                                      ${eu("knowledgeFts")}
+                                      ${euKnowledgeValue(this.candidate.lexicalStatus)} ·
+                                      ${eu("knowledgeVector")}
+                                      ${euKnowledgeValue(this.candidate.vectorStatus)}
                                     </p>`
                                   : html`<p class="eu-muted">
                                       ${eu("knowledgeCandidateNone")}
@@ -736,7 +766,8 @@ export class UserKnowledgePage extends OpenClawLightDomElement {
                                     <span>
                                       <strong>#${publication.publicationNumber}</strong> ·
                                       ${publication.sourceCount} ${eu("knowledgeSourcesCount")} ·
-                                      ${eu("knowledgeVector")} ${publication.vectorStatus}
+                                      ${eu("knowledgeVector")}
+                                      ${euKnowledgeValue(publication.vectorStatus)}
                                     </span>
                                     <button
                                       class="btn"
@@ -780,8 +811,9 @@ export class UserKnowledgePage extends OpenClawLightDomElement {
                               .map(
                                 (job) =>
                                   html`<p class="eu-actions">
-                                    <strong>${job.kind}</strong> · ${job.stage} ·
-                                    ${job.status}${job.safeErrorCode
+                                    <strong>${euKnowledgeValue(job.kind)}</strong> ·
+                                    ${euKnowledgeValue(job.stage)} ·
+                                    ${euKnowledgeValue(job.status)}${job.safeErrorCode
                                       ? ` · ${job.safeErrorCode}`
                                       : ""}
                                     ${["queued", "running", "retry_wait"].includes(job.status)
@@ -805,8 +837,8 @@ export class UserKnowledgePage extends OpenClawLightDomElement {
                                       ? html`<span class="eu-knowledge-job-steps">
                                           ${this.jobSteps[job.id]!.map(
                                             (step) => html`<small>
-                                              ${step.stage}:
-                                              ${step.status}${step.progressTotal
+                                              ${euKnowledgeValue(step.stage)}:
+                                              ${euKnowledgeValue(step.status)}${step.progressTotal
                                                 ? ` (${step.progressCurrent ?? 0}/${step.progressTotal})`
                                                 : ""}${step.degradedReason
                                                 ? ` · ${step.degradedReason}`

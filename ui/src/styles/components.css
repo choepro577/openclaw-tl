@@ -333,12 +333,6 @@ openclaw-session-owner-chip {
   color: var(--muted);
 }
 
-.login-gate__failure-docs {
-  display: inline-flex;
-  margin-top: 10px;
-  font-size: 12px;
-}
-
 .login-gate__help {
   margin-top: 20px;
   padding-top: 16px;
@@ -408,11 +402,6 @@ openclaw-session-owner-chip {
   padding: 0;
   background: transparent;
   border: 0;
-}
-
-.login-gate__docs {
-  margin-top: 10px;
-  font-size: 12px;
 }
 
 /* Phones (matches the layout.mobile.css breakpoint). The gate renders outside
@@ -1286,7 +1275,7 @@ select.input {
   box-shadow: var(--focus-ring);
 }
 
-/* Carapace Sensitive Input adapted to the Control UI token contract. */
+/* Sensitive Input adapted to the Control UI token contract. */
 .oc-sensitive-input {
   position: relative;
   display: flex;
@@ -1333,41 +1322,6 @@ select.input {
   color: var(--muted);
 }
 
-.oc-sensitive-mask {
-  position: absolute;
-  z-index: 1;
-  inset: 0 44px 0 0;
-  display: flex;
-  overflow: hidden;
-  align-items: center;
-  padding: 0 12px;
-  color: var(--text);
-  font-family: var(--mono);
-  font-size: 13px;
-  letter-spacing: 0.08em;
-  line-height: 1;
-  pointer-events: none;
-  white-space: nowrap;
-}
-
-.oc-sensitive-mask[hidden] {
-  display: none;
-}
-
-.oc-sensitive-mask > span {
-  display: block;
-  will-change: transform;
-}
-
-.oc-sensitive-input[data-sensitive-mask-ready="true"][data-revealed="false"] > input {
-  color: transparent;
-  caret-color: var(--text);
-}
-
-.oc-sensitive-input[data-sensitive-mask-ready="true"][data-revealed="false"] > input::selection {
-  color: transparent;
-}
-
 .oc-sensitive-toggle {
   position: relative;
   z-index: 2;
@@ -1403,16 +1357,6 @@ select.input {
 .oc-sensitive-toggle svg {
   width: 16px;
   height: 16px;
-}
-
-@media (forced-colors: active) {
-  .oc-sensitive-mask {
-    display: none;
-  }
-
-  .oc-sensitive-input[data-sensitive-mask-ready="true"][data-revealed="false"] > input {
-    color: CanvasText;
-  }
 }
 
 .field select {
@@ -5741,35 +5685,6 @@ td.data-table-key-col {
   font-size: 13px;
 }
 
-.device-pair-setup__footer a {
-  display: inline-flex;
-  min-height: 40px;
-  align-items: center;
-  gap: 4px;
-  border-radius: 4px;
-  color: var(--muted);
-  text-underline-offset: 2px;
-}
-
-.device-pair-setup__footer a:hover {
-  color: var(--text);
-}
-
-.device-pair-setup__footer a:focus-visible {
-  outline: none;
-  box-shadow: var(--focus-ring);
-  color: var(--text);
-}
-
-.device-pair-setup__external-icon {
-  display: inline-flex;
-}
-
-.device-pair-setup__external-icon svg {
-  width: 14px;
-  height: 14px;
-}
-
 @media (max-width: 640px) {
   .device-pair-setup {
     max-height: 90dvh;
@@ -5792,9 +5707,6 @@ td.data-table-key-col {
     grid-template-columns: 1fr;
   }
 
-  .device-pair-setup__footer a {
-    min-height: 44px;
-  }
 }
 
 .md-preview-expand-btn .when-fullscreen {

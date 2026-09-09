@@ -13,7 +13,6 @@ import {
 import { hasOperatorAdminAccess, hasOperatorPairingAccess } from "../../app/operator-access.ts";
 import { showConfirmDialog, type ConfirmDialogOptions } from "../../components/confirm-dialog.ts";
 import { showSecretRevealDialog } from "../../components/secret-reveal-dialog.ts";
-import { renderDocsLink } from "../../components/settings-ui.ts";
 import { renderSettingsWorkspace } from "../../components/settings-workspace.ts";
 import { t } from "../../i18n/index.ts";
 import { currentConfigObject } from "../../lib/config/config-state-model.ts";
@@ -46,8 +45,6 @@ import { OpenClawLightDomElement } from "../../lit/openclaw-element.ts";
 import { PollController } from "../../lit/poll-controller.ts";
 import { SubscriptionsController } from "../../lit/subscriptions-controller.ts";
 import { renderDevices } from "./view.ts";
-
-const DEVICES_DOCS_URL = "https://docs.openclaw.ai/nodes";
 
 export type DevicesRouteData = {
   // Client identity alone cannot distinguish provider replacement or reconnect epochs.
@@ -512,10 +509,7 @@ class DevicesPage extends OpenClawLightDomElement {
       <section class="content-header">
         <div>
           <div class="page-title">${titleForRoute("devices")}</div>
-          <div class="page-subtitle">
-            ${subtitleForRoute("devices")}
-            ${renderDocsLink(DEVICES_DOCS_URL, t("common.learnMore"))}
-          </div>
+          <div class="page-subtitle">${subtitleForRoute("devices")}</div>
         </div>
       </section>
       ${renderSettingsWorkspace(

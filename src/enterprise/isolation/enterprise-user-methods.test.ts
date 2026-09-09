@@ -6,6 +6,33 @@ import {
 } from "./enterprise-user-methods.js";
 
 describe("Enterprise user Gateway method allowlist", () => {
+  it("allows only read-only, session-scoped task observation", () => {
+    expect(enterpriseUserGatewayMethodAllowed("tasks.list")).toBe(true);
+    expect(enterpriseUserGatewayMethodAllowed("tasks.get")).toBe(true);
+    for (const method of ["tasks.cancel", "tasks.retry", "tasks.dismiss"]) {
+      expect(enterpriseUserGatewayMethodAllowed(method)).toBe(false);
+    }
+    expect(
+      enterpriseUserGatewayParamsAllowed("tasks.list", {
+        sessionKey: "agent:personal:a",
+        limit: 100,
+      }),
+    ).toBe(true);
+    for (const params of [
+      null,
+      [],
+      {},
+      { sessionKey: " " },
+      { agentId: "main" },
+      { sessionKey: "own", includeAll: true },
+    ]) {
+      expect(enterpriseUserGatewayParamsAllowed("tasks.list", params)).toBe(false);
+    }
+    expect(enterpriseUserGatewayParamsAllowed("tasks.get", { taskId: "child" })).toBe(true);
+    expect(
+      enterpriseUserGatewayParamsAllowed("tasks.get", { taskId: "child", includeAll: true }),
+    ).toBe(false);
+  });
   it("allows user chat/session methods and denies operator surfaces by default", () => {
     expect(enterpriseUserGatewayMethodAllowed("chat.send")).toBe(true);
     expect(enterpriseUserGatewayMethodAllowed("sessions.list")).toBe(true);

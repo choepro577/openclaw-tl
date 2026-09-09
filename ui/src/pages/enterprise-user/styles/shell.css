@@ -1,3 +1,7 @@
+.eu-shell {
+  --shell-nav-expanded-width: 316px;
+}
+
 .eu-topbar__agent {
   display: flex;
   min-width: 0;

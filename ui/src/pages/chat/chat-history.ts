@@ -103,6 +103,7 @@ type ChatHistoryPaneRequests = {
   subscriptionGeneration: number;
   pendingSubscriptionReleases: Set<SessionMessageSubscription>;
   inFlightHistory?: InFlightChatHistoryRequest;
+  queuedHistory?: QueuedChatHistoryRequest;
 };
 
 const chatHistoryPaneRequests = new WeakMap<object, ChatHistoryPaneRequests>();
@@ -176,6 +177,8 @@ export function resetChatHistoryProjection(state: ChatState, agentId?: string): 
   // snapshot owner and its coalesced request before creating the next epoch.
   requests.historyVersion += 1;
   requests.inFlightHistory = undefined;
+  requests.queuedHistory?.resolve(undefined);
+  requests.queuedHistory = undefined;
   state.chatLoading = false;
   const scope = readChatSessionProjectionScope(state, { agentId });
   // Destructive operations keep the public session key, so only an explicit
@@ -785,12 +788,32 @@ type InFlightChatHistoryRequest = {
   client: NonNullable<ChatState["client"]>;
   connectionEpoch: number;
   key: string;
+  sessionKey: string;
+  agentId?: string;
   promise: Promise<ChatHistoryResult | undefined>;
 };
 
 type LoadChatHistoryOptions = {
   deferBranches?: boolean;
   startup?: boolean;
+  /**
+   * Stable identity of the event that invalidated the rendered snapshot.
+   * This only participates in pane-level coalescing; duplicate events with
+   * the same identity still share one Gateway request.
+   */
+  eventRevision?: string;
+};
+
+type QueuedChatHistoryRequest = {
+  client: NonNullable<ChatState["client"]>;
+  connectionEpoch: number;
+  key: string;
+  sessionKey: string;
+  agentId?: string;
+  options: LoadChatHistoryOptions;
+  promise: Promise<ChatHistoryResult | undefined>;
+  resolve: (result: ChatHistoryResult | undefined) => void;
+  reject: (error: unknown) => void;
 };
 
 type SharedChatHistoryResponse = ChatHistoryResponse & {
@@ -1370,9 +1393,23 @@ export async function loadChatHistory(
       })?.deltaCursor
     : undefined;
   const requestModeKey = deltaCursor === undefined ? "page" : `cursor:${deltaCursor}`;
-  const requestKey = `${connectionEpoch}\u0000${method}\u0000${sessionKey}\u0000${requestAgentId ?? ""}\u0000${CHAT_HISTORY_REQUEST_LIMIT}\u0000${requestModeKey}`;
+  const requestKey = `${connectionEpoch}\u0000${method}\u0000${sessionKey}\u0000${requestAgentId ?? ""}\u0000${CHAT_HISTORY_REQUEST_LIMIT}\u0000${requestModeKey}\u0000event:${opts.eventRevision ?? ""}`;
   const requests = getChatHistoryPaneRequests(state);
   const inFlight = requests.inFlightHistory;
+  const existingQueued = requests.queuedHistory;
+  if (
+    existingQueued &&
+    (existingQueued.client !== client ||
+      existingQueued.connectionEpoch !== connectionEpoch ||
+      existingQueued.sessionKey !== sessionKey ||
+      existingQueued.agentId !== requestAgentId)
+  ) {
+    // A pane can be reselected before the old request's finally-handler runs.
+    // Release that caller now so it cannot remain pending behind a retired
+    // session or account scope.
+    existingQueued.resolve(undefined);
+    requests.queuedHistory = undefined;
+  }
   // Live events replace the rendered array while their snapshot is pending;
   // only stable session and connection ownership may start another request.
   if (
@@ -1381,6 +1418,46 @@ export async function loadChatHistory(
     inFlight.connectionEpoch === connectionEpoch
   ) {
     return inFlight.promise;
+  }
+  const sameSessionScope = Boolean(
+    inFlight &&
+    inFlight.client === client &&
+    inFlight.connectionEpoch === connectionEpoch &&
+    inFlight.sessionKey === sessionKey &&
+    inFlight.agentId === requestAgentId,
+  );
+  if (sameSessionScope && inFlight) {
+    const queuedHistory = requests.queuedHistory;
+    if (
+      queuedHistory &&
+      queuedHistory.client === client &&
+      queuedHistory.connectionEpoch === connectionEpoch
+    ) {
+      // Keep one trailing request for a session. A live event may advance the
+      // cached cursor while the previous snapshot is in flight; updating the
+      // options here makes the eventual request read the newest cursor.
+      queuedHistory.key = requestKey;
+      queuedHistory.options = opts;
+      return queuedHistory.promise;
+    }
+    let resolveQueued!: (result: ChatHistoryResult | undefined) => void;
+    let rejectQueued!: (error: unknown) => void;
+    const promise = new Promise<ChatHistoryResult | undefined>((resolve, reject) => {
+      resolveQueued = resolve;
+      rejectQueued = reject;
+    });
+    requests.queuedHistory = {
+      client,
+      connectionEpoch,
+      key: requestKey,
+      sessionKey,
+      ...(requestAgentId ? { agentId: requestAgentId } : {}),
+      options: opts,
+      promise,
+      resolve: resolveQueued,
+      reject: rejectQueued,
+    };
+    return promise;
   }
   if (
     opts.deferBranches !== true &&
@@ -1397,15 +1474,40 @@ export async function loadChatHistory(
     requestAgentId,
     method,
     deltaCursor,
+    opts.eventRevision,
   ).finally(() => {
     if (requests.inFlightHistory?.promise === promise) {
       requests.inFlightHistory = undefined;
+      const queuedHistory = requests.queuedHistory;
+      requests.queuedHistory = undefined;
+      if (!queuedHistory) {
+        return;
+      }
+      const currentAgentId = isUiSelectedGlobalSessionKey(state, state.sessionKey)
+        ? resolveUiSelectedSessionAgentId(state)
+        : undefined;
+      if (
+        state.client !== queuedHistory.client ||
+        !state.connected ||
+        state.connectionEpoch !== queuedHistory.connectionEpoch ||
+        state.sessionKey !== queuedHistory.sessionKey ||
+        currentAgentId !== queuedHistory.agentId
+      ) {
+        queuedHistory.resolve(undefined);
+        return;
+      }
+      void loadChatHistory(state, queuedHistory.options).then(
+        queuedHistory.resolve,
+        queuedHistory.reject,
+      );
     }
   });
   requests.inFlightHistory = {
     client,
     connectionEpoch,
     key: requestKey,
+    sessionKey,
+    ...(requestAgentId ? { agentId: requestAgentId } : {}),
     promise,
   };
   return promise;
@@ -1476,6 +1578,7 @@ async function loadChatHistoryUncached(
   requestAgentId: string | undefined,
   method: "chat.history" | "chat.startup",
   deltaCursor: string | undefined,
+  eventRevision?: string,
 ): Promise<ChatHistoryResult | undefined> {
   const ownership = beginChatHistoryRequest(
     state,
@@ -1510,7 +1613,7 @@ async function loadChatHistoryUncached(
   setChatError(state, null);
   try {
     const requestModeKey = deltaCursor === undefined ? "page" : `cursor:${deltaCursor}`;
-    const requestKey = `${connectionEpoch}\u0000${method}\u0000${sessionKey}\u0000${requestAgentId ?? ""}\u0000${CHAT_HISTORY_REQUEST_LIMIT}\u0000${requestModeKey}`;
+    const requestKey = `${connectionEpoch}\u0000${method}\u0000${sessionKey}\u0000${requestAgentId ?? ""}\u0000${CHAT_HISTORY_REQUEST_LIMIT}\u0000${requestModeKey}\u0000event:${eventRevision ?? ""}`;
     let response = await requestSharedChatHistory(
       client,
       requestKey,
@@ -1533,7 +1636,7 @@ async function loadChatHistoryUncached(
     }
     if (isChatHistoryCursorResult(response) && response.kind === "reset") {
       clearCachedChatDeltaCursor(state, sessionKey, requestAgentId);
-      const pageRequestKey = `${connectionEpoch}\u0000${method}\u0000${sessionKey}\u0000${requestAgentId ?? ""}\u0000${CHAT_HISTORY_REQUEST_LIMIT}\u0000page`;
+      const pageRequestKey = `${connectionEpoch}\u0000${method}\u0000${sessionKey}\u0000${requestAgentId ?? ""}\u0000${CHAT_HISTORY_REQUEST_LIMIT}\u0000page\u0000event:${eventRevision ?? ""}`;
       response = await requestSharedChatHistory(
         client,
         pageRequestKey,

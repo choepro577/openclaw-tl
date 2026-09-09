@@ -16,6 +16,7 @@ const resolveClawHubBaseUrlMock = vi.fn(() => "https://clawhub.ai");
 const installSkillFromClawHubMock = vi.fn();
 const installSkillMock = vi.fn();
 const updateSkillsFromClawHubMock = vi.fn();
+const bumpSkillsSnapshotVersionMock = vi.fn();
 
 vi.mock("../../config/config.js", () => ({
   getRuntimeConfig: () => loadConfigMock(),
@@ -39,6 +40,10 @@ vi.mock("../../skills/lifecycle/clawhub.js", () => ({
 
 vi.mock("../../skills/discovery/status.js", () => ({
   buildWorkspaceSkillStatus: (...args: unknown[]) => buildWorkspaceSkillStatusMock(...args),
+}));
+
+vi.mock("../../skills/runtime/refresh-state.js", () => ({
+  bumpSkillsSnapshotVersion: (...args: unknown[]) => bumpSkillsSnapshotVersionMock(...args),
 }));
 
 vi.mock("../../skills/lifecycle/install.js", () => ({
@@ -104,6 +109,7 @@ describe("skills gateway handlers (clawhub)", () => {
     installSkillFromClawHubMock.mockReset();
     installSkillMock.mockReset();
     updateSkillsFromClawHubMock.mockReset();
+    bumpSkillsSnapshotVersionMock.mockReset();
 
     loadConfigMock.mockReturnValue({});
     listAgentIdsMock.mockReturnValue(["main"]);
@@ -644,6 +650,10 @@ describe("skills gateway handlers (clawhub)", () => {
     expect(result?.config?.results?.[0]?.warning).toBe(
       "Latest skill version needs review before use.",
     );
+    expect(bumpSkillsSnapshotVersionMock).toHaveBeenCalledWith({
+      workspaceDir: "/tmp/workspace",
+      reason: "manual",
+    });
   });
 
   it("forwards ClawHub skill update risk acknowledgements", async () => {

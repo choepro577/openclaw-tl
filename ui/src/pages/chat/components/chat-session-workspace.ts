@@ -177,6 +177,19 @@ function isCurrentWorkspaceOpenRequest(
   );
 }
 
+function showWorkspaceOpenError(
+  state: SessionWorkspaceHost,
+  workspace: SessionWorkspaceState,
+  message: string,
+) {
+  workspace.error = message;
+  openSessionCheckoutSidebar(state, {
+    kind: "markdown",
+    content: formatMarkdownCodeSpan(message),
+    rawText: message,
+  });
+}
+
 function openWorkspaceItem<T>(
   state: SessionWorkspaceHost,
   workspace: SessionWorkspaceState,
@@ -197,7 +210,7 @@ function openWorkspaceItem<T>(
       const content = result == null ? null : render(result);
       if (!content) {
         if (isCurrentWorkspaceOpenRequest(state, workspace, request, itemId)) {
-          workspace.error = missingMessage;
+          showWorkspaceOpenError(state, workspace, missingMessage);
         }
         return;
       }
@@ -206,7 +219,7 @@ function openWorkspaceItem<T>(
       }
     } catch (error) {
       if (isCurrentWorkspaceOpenRequest(state, workspace, request, itemId)) {
-        workspace.error = formatUiError(error);
+        showWorkspaceOpenError(state, workspace, formatUiError(error));
       }
     } finally {
       requestWorkspaceUpdate(state);
@@ -443,12 +456,8 @@ export function createSessionWorkspaceProps(
   state.sessionWorkspaceDraftScope = options?.draftScope;
   const workspace = getSessionWorkspace(state);
   if (
-    // The collapsed header still renders the diff action, so load its checkout
-    // capability eagerly instead of waiting for the file rail to open.
     options?.presented !== false &&
-    (options?.expanded === true ||
-      !workspace.collapsed ||
-      isGatewayMethodAdvertised(state, "sessions.diff") === true) &&
+    (options?.expanded === true || !workspace.collapsed) &&
     state.connected &&
     state.agentsList &&
     !workspace.loading &&

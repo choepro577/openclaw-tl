@@ -12,6 +12,10 @@ import {
 } from "./attempt-client-cleanup.js";
 import { CodexAppServerRpcError, type CodexAppServerClient } from "./client.js";
 import type { CodexAppServerRuntimeOptions } from "./config.js";
+import {
+  isMessageOnlyCodexSourceReply,
+  isSystemAgentOnlyCodexDynamicToolAllowlist,
+} from "./dynamic-tool-profile.js";
 import { buildCodexAppServerConnectionFingerprint } from "./plugin-app-cache-key.js";
 import {
   attestCodexPluginThreadApps,
@@ -78,6 +82,12 @@ type PendingSupervisionMaterializationParams = {
   environmentSelection?: CodexTurnEnvironmentParams[];
   signal?: AbortSignal;
   provisionalAppIds?: readonly string[];
+  /** Exact plugin app ids admitted by the current enterprise grant. */
+  admittedCodexPluginAppIds?: readonly string[];
+  /** Exact plugin MCP server names admitted by the current enterprise grant. */
+  admittedCodexPluginMcpServerNames?: readonly string[];
+  /** Trusted native-hook relay overlay to retain on a selective plugin turn. */
+  nativeHookRelayConfig?: JsonObject;
   throwIfAborted: () => void;
   lifecycleTiming: Pick<CodexThreadLifecycleTimingTracker, "measure" | "mark" | "logSummary">;
   normalizeBindingModelProvider: (
@@ -100,6 +110,20 @@ export async function materializePendingSupervisionBranch(
   }
   pending = await recoverPendingSupervisionArtifacts(params, pending);
   params.throwIfAborted();
+  const selectivePluginCapabilityAdmission =
+    !(
+      params.hostSystemAgentActive &&
+      isSystemAgentOnlyCodexDynamicToolAllowlist(params.attempt.toolsAllow)
+    ) &&
+    !isMessageOnlyCodexSourceReply(params.attempt) &&
+    ((params.admittedCodexPluginAppIds?.length ?? 0) > 0 ||
+      (params.admittedCodexPluginMcpServerNames?.length ?? 0) > 0);
+  const restrictedAttestationOptions = selectivePluginCapabilityAdmission
+    ? {
+        admittedCodexPluginAppIds: params.admittedCodexPluginAppIds,
+        admittedCodexPluginMcpServerNames: params.admittedCodexPluginMcpServerNames,
+      }
+    : undefined;
 
   const sourceResponse = await params.lifecycleTiming.measure("supervision-source-read", () =>
     params.client.request(
@@ -160,6 +184,7 @@ export async function materializePendingSupervisionBranch(
           probeThreadId,
           probeParams.config ?? undefined,
           params.signal,
+          restrictedAttestationOptions,
         ),
       );
     }
@@ -186,6 +211,9 @@ export async function materializePendingSupervisionBranch(
       hostSystemAgentActive: params.hostSystemAgentActive,
       restrictedToolSurfaceInheritedMcpServerNames:
         params.restrictedToolSurfaceInheritedMcpServerNames,
+      admittedCodexPluginAppIds: params.admittedCodexPluginAppIds,
+      admittedCodexPluginMcpServerNames: params.admittedCodexPluginMcpServerNames,
+      nativeHookRelayConfig: params.nativeHookRelayConfig,
       shellEnvironment: params.shellEnvironment,
       disableLoginShell: params.disableLoginShell,
     });
@@ -236,6 +264,7 @@ export async function materializePendingSupervisionBranch(
           finalThreadId,
           startParams.config,
           params.signal,
+          restrictedAttestationOptions,
         ),
       );
     }
@@ -437,6 +466,9 @@ function buildPendingSupervisionProbeForkParams(
     hostSystemAgentActive: params.hostSystemAgentActive,
     restrictedToolSurfaceInheritedMcpServerNames:
       params.restrictedToolSurfaceInheritedMcpServerNames,
+    admittedCodexPluginAppIds: params.admittedCodexPluginAppIds,
+    admittedCodexPluginMcpServerNames: params.admittedCodexPluginMcpServerNames,
+    nativeHookRelayConfig: params.nativeHookRelayConfig,
     shellEnvironment: params.shellEnvironment,
     disableLoginShell: params.disableLoginShell,
   });

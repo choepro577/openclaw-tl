@@ -4,8 +4,11 @@ import { normalizeToolPolicyName } from "../../../../../src/agents/tool-policy-s
 import { renderHubTabs } from "../../../components/hub-tabs.ts";
 import { icons } from "../../../components/icons.ts";
 import { toSanitizedMarkdownHtml } from "../../../components/markdown.ts";
-import "../../../components/modal-dialog.ts";
 import type { OpenClawModalDialog } from "../../../components/modal-dialog.ts";
+import { eaa } from "../../../i18n/enterprise-admin-agents.ts";
+import { ea } from "../../../i18n/enterprise-admin.ts";
+import "../../../components/modal-dialog.ts";
+import { i18n } from "../../../i18n/index.ts";
 import { isAllowedByPolicy, matchesList, resolveToolProfile } from "../../../lib/agents/display.ts";
 import type { EnterpriseAgentFile } from "../../enterprise/services/enterprise-api.ts";
 import { formatDate } from "../utils.ts";
@@ -37,10 +40,10 @@ export function renderAgentFilesPanel(props: {
           tabs: files.map((file) => ({
             value: String(file.name ?? ""),
             label: String(file.name ?? "").replace(/\.md$/iu, ""),
-            badge: file.missing ? "missing" : undefined,
+            badge: file.missing ? eaa("missing") : undefined,
             disabled: props.busy,
           })),
-          ariaLabel: "Core files",
+          ariaLabel: eaa("Core files"),
           panelId: "enterprise-agent-file-panel",
           variant: "sub",
           onSelect: props.onOpen,
@@ -68,7 +71,7 @@ export function renderAgentFilesPanel(props: {
                         ?.querySelector<OpenClawModalDialog>("openclaw-modal-dialog")
                         ?.show()}
                   >
-                    ${icons.eye} Preview
+                    ${icons.eye} ${eaa("Preview")}
                   </button>
                   <button
                     class="ea-button"
@@ -76,7 +79,7 @@ export function renderAgentFilesPanel(props: {
                     ?disabled=${!props.activeFile.writable || !dirty || props.busy}
                     @click=${props.onReset}
                   >
-                    Hoàn tác
+                    ${ea("Hoàn tác")}
                   </button>
                   <button
                     class="ea-button ea-button--primary"
@@ -84,15 +87,17 @@ export function renderAgentFilesPanel(props: {
                     ?disabled=${!props.activeFile.writable || !dirty || props.busy}
                     @click=${props.onSave}
                   >
-                    ${props.busy ? "Đang lưu…" : "Lưu file"}
+                    ${props.busy ? ea("Đang lưu…") : ea("Lưu file")}
                   </button>
                 </div>
               </header>
               ${props.activeFile.missing
-                ? html`<div class="ea-banner">File chưa tồn tại và sẽ được tạo khi lưu.</div>`
+                ? html`<div class="ea-banner">
+                    ${ea("File chưa tồn tại và sẽ được tạo khi lưu.")}
+                  </div>`
                 : nothing}
               <label class="ea-field ea-file-panel__editor">
-                Nội dung
+                ${ea("Nội dung")}
                 <textarea
                   class="ea-textarea ea-file-editor"
                   .value=${props.draft}
@@ -110,7 +115,7 @@ export function renderAgentFilesPanel(props: {
                   <div class="md-preview-dialog__header">
                     <div class="md-preview-dialog__header-main">
                       <div class="md-preview-dialog__eyebrow">
-                        ${icons.scrollText}<span>Markdown Preview</span>
+                        ${icons.scrollText}<span>${eaa("Markdown Preview")}</span>
                       </div>
                       <div class="md-preview-dialog__title-wrap">
                         <div class="md-preview-dialog__title" translate="no">
@@ -125,7 +130,7 @@ export function renderAgentFilesPanel(props: {
                       <button
                         type="button"
                         class="btn btn--sm md-preview-icon-btn"
-                        aria-label="Đóng preview"
+                        aria-label=${ea("Đóng preview")}
                         @click=${(event: Event) =>
                           (event.currentTarget as HTMLElement)
                             .closest<OpenClawModalDialog>("openclaw-modal-dialog")
@@ -145,21 +150,23 @@ export function renderAgentFilesPanel(props: {
                     >
                       <strong
                         >${props.activeFile.missing
-                          ? "Sẽ tạo khi lưu"
+                          ? ea("Sẽ tạo khi lưu")
                           : dirty
-                            ? "Preview bản nháp"
-                            : "Bản đã đồng bộ"}</strong
+                            ? ea("Preview bản nháp")
+                            : ea("Bản đã đồng bộ")}</strong
                       >
                     </div>
                     <div class="md-preview-dialog__chip">
                       <strong
-                        >${new TextEncoder().encode(props.draft).length.toLocaleString("vi-VN")}
+                        >${new Intl.NumberFormat(i18n.getLocale()).format(
+                          new TextEncoder().encode(props.draft).length,
+                        )}
                         B</strong
                       >
                       <span
                         >${props.activeFile.updatedAt
                           ? formatDate(props.activeFile.updatedAt)
-                          : "Chưa có thời gian cập nhật"}</span
+                          : ea("Chưa có thời gian cập nhật")}</span
                       >
                     </div>
                   </div>
@@ -171,11 +178,12 @@ export function renderAgentFilesPanel(props: {
                 </div>
               </openclaw-modal-dialog>
             `
-          : html`<div class="ea-empty">Chọn một core file để xem và chỉnh sửa.</div>`}
+          : html`<div class="ea-empty">${eaa("Chọn một core file để xem và chỉnh sửa.")}</div>`}
       </div>
       <p class="ea-panel-note">
-        File được kiểm tra revision trước khi lưu. Audit chỉ ghi tên, kích thước và hành động; không
-        ghi nội dung file.
+        ${eaa(
+          "File được kiểm tra revision trước khi lưu. Audit chỉ ghi tên, kích thước và hành động; không ghi nội dung file.",
+        )}
       </p>
     </section>
   `;
@@ -240,7 +248,7 @@ export function renderAgentToolsPanel(props: {
     <div class="ea-card ea-panel-editor">
       <div class="ea-toolbar">
         <label class="ea-field ea-inline-field"
-          >Profile
+          >${eaa("Profile")}
           <select
             class="ea-select"
             .value=${props.profile ?? "inherit"}
@@ -257,11 +265,11 @@ export function renderAgentToolsPanel(props: {
               );
             }}
           >
-            <option value="inherit">Kế thừa</option>
-            <option value="minimal">Minimal</option>
-            <option value="coding">Coding</option>
-            <option value="messaging">Messaging</option>
-            <option value="full">Full</option>
+            <option value="inherit">${ea("Kế thừa")}</option>
+            <option value="minimal">${eaa("Minimal")}</option>
+            <option value="coding">${eaa("Coding")}</option>
+            <option value="messaging">${eaa("Messaging")}</option>
+            <option value="full">${eaa("Full")}</option>
           </select></label
         >
         <span class="ea-spacer"></span>
@@ -271,28 +279,33 @@ export function renderAgentToolsPanel(props: {
           ?disabled=${!editable || !props.dirty || props.saving}
           @click=${props.onSave}
         >
-          ${props.saving ? "Đang lưu…" : "Lưu tool policy"}
+          ${props.saving ? ea("Đang lưu…") : ea("Lưu tool policy")}
         </button>
       </div>
       <p class="ea-muted">
         ${editable
           ? accountScoped
-            ? "Policy được lưu riêng theo tài khoản này và áp dụng cho các phiên của tài khoản; không sửa shared template hoặc global config."
-            : "Profile tạo quyền nền; override bật/tắt từng tool được lưu theo agent."
+            ? eaa(
+                "Policy được lưu riêng theo tài khoản này và áp dụng cho các phiên của tài khoản; không sửa shared template hoặc global config.",
+              )
+            : eaa("Profile tạo quyền nền; override bật/tắt từng tool được lưu theo agent.")
           : hasEffectiveInventory
-            ? `${effectiveToolIds.size}/${tools.length} tool có hiệu lực theo quyền của tài khoản.`
-            : "Policy hiệu lực được quản lý theo quyền của tài khoản."}
+            ? eaa("Tool có hiệu lực theo quyền của tài khoản: {enabled}/{total}", {
+                enabled: String(effectiveToolIds.size),
+                total: String(tools.length),
+              })
+            : eaa("Policy hiệu lực được quản lý theo quyền của tài khoản.")}
       </p>
     </div>
     <div class="ea-card ea-table-wrap" style="margin-top: 14px">
       <table class="ea-table" style="min-width: 680px">
         <thead>
           <tr>
-            <th>Tool</th>
-            <th>Mô tả</th>
-            <th>Nguồn</th>
-            <th>Quyền</th>
-            <th>Sandbox</th>
+            <th>${ea("Tool")}</th>
+            <th>${ea("Mô tả")}</th>
+            <th>${ea("Nguồn")}</th>
+            <th>${ea("Quyền")}</th>
+            <th>${eaa("Sandbox")}</th>
           </tr>
         </thead>
         <tbody>
@@ -312,14 +325,14 @@ export function renderAgentToolsPanel(props: {
             const sandboxLabel =
               sandboxStatus === "open"
                 ? sandboxEnabled
-                  ? "Sandbox đã mở"
-                  : "Sandbox chưa bật"
+                  ? ea("Sandbox đã mở")
+                  : ea("Sandbox chưa bật")
                 : sandboxStatus === "blocked"
-                  ? "Sandbox đang chặn"
+                  ? ea("Sandbox đang chặn")
                   : sandboxStatus === "locked"
-                    ? "Bị khóa"
+                    ? ea("Bị khóa")
                     : sandboxStatus === "setup_required"
-                      ? "Được cấp, cần cấu hình"
+                      ? ea("Được cấp, cần cấu hình")
                       : "—";
             return html`<tr>
               <td><strong>${String(tool.name ?? tool.id ?? "—")}</strong></td>
@@ -338,7 +351,7 @@ export function renderAgentToolsPanel(props: {
                         baseAllowed,
                       )}
                   />
-                  <span>${locked ? "Bị khóa" : enabled ? "Đã cấp" : "Đã chặn"}</span>
+                  <span>${locked ? ea("Bị khóa") : enabled ? ea("Được cấp") : ea("Đã chặn")}</span>
                 </label>
               </td>
               <td>
@@ -377,16 +390,19 @@ export function renderAgentSkillsPanel(props: {
     <div class="ea-card ea-panel-editor">
       <div class="ea-toolbar">
         <div>
-          <h3>Skill binding</h3>
+          <h3>${ea("Skill binding")}</h3>
           <p class="ea-muted">
             ${props.allowlist === null
-              ? "Đang kế thừa: tất cả skill phù hợp được phép."
-              : `${props.allowlist.length}/${skills.length} skill được chọn.`}
+              ? ea("Đang kế thừa: tất cả skill phù hợp được phép.")
+              : eaa("Skill có hiệu lực theo quyền của tài khoản: {enabled}/{total}", {
+                  enabled: String(props.allowlist.length),
+                  total: String(skills.length),
+                })}
           </p>
         </div>
         <span class="ea-spacer"></span>
         <button class="ea-button" type="button" ?disabled=${!editable} @click=${props.onInherit}>
-          Đặt lại kế thừa
+          ${ea("Đặt lại kế thừa")}
         </button>
         <button
           class="ea-button ea-button--primary"
@@ -394,7 +410,7 @@ export function renderAgentSkillsPanel(props: {
           ?disabled=${!editable || !props.dirty || props.saving}
           @click=${props.onSave}
         >
-          ${props.saving ? "Đang lưu…" : "Lưu skill binding"}
+          ${props.saving ? ea("Đang lưu…") : ea("Lưu skill binding")}
         </button>
       </div>
     </div>
@@ -402,10 +418,10 @@ export function renderAgentSkillsPanel(props: {
       <table class="ea-table" style="min-width: 680px">
         <thead>
           <tr>
-            <th>Skill</th>
-            <th>Trạng thái</th>
-            <th>Lý do setup</th>
-            <th>Được dùng</th>
+            <th>${ea("Skill")}</th>
+            <th>${ea("Trạng thái")}</th>
+            <th>${ea("Lý do setup")}</th>
+            <th>${ea("Được dùng")}</th>
           </tr>
         </thead>
         <tbody>
@@ -422,7 +438,11 @@ export function renderAgentSkillsPanel(props: {
               <td><strong>${String(skill.name ?? skill.key ?? "—")}</strong></td>
               <td>
                 <span class="ea-badge ${skill.eligible ? "ea-badge--good" : "ea-badge--warn"}"
-                  >${skill.disabled ? "Disabled" : skill.eligible ? "Ready" : "Needs setup"}</span
+                  >${skill.disabled
+                    ? ea("Disabled")
+                    : skill.eligible
+                      ? eaa("ReadyStatus")
+                      : eaa("NeedsSetup")}</span
                 >
               </td>
               <td>${missingItems.join(" · ") || "—"}</td>
@@ -439,7 +459,7 @@ export function renderAgentSkillsPanel(props: {
                         allNames,
                       )}
                   />
-                  <span>${enabled ? "Bật" : "Tắt"}</span>
+                  <span>${enabled ? ea("Bật") : ea("Tắt")}</span>
                 </label>
               </td>
             </tr>`;

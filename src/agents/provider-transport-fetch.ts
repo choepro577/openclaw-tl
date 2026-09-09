@@ -17,12 +17,14 @@ import {
   parseStrictFiniteNumber,
   parseStrictNonNegativeInteger,
 } from "@openclaw/normalization-core/number-coercion";
+import { getActiveDiagnosticsTimelineSpan } from "../infra/diagnostics-timeline.js";
 import {
   fetchWithSsrFGuard,
   withTrustedEnvProxyGuardedFetchMode,
 } from "../infra/net/fetch-guard.js";
 import { wrapGuardedBodyStream } from "../infra/net/guarded-body-stream.js";
 import { shouldUseEnvHttpProxyForUrl } from "../infra/net/proxy-env.js";
+import { fetchWithRuntimeDispatcherOrMockedGlobal } from "../infra/net/runtime-fetch.js";
 import {
   mergeSsrFPolicies,
   ssrfPolicyFromHttpBaseUrlFakeIpHostnameAllowlist,
@@ -30,6 +32,7 @@ import {
   SsrFBlockedError,
   type SsrFPolicy,
 } from "../infra/net/ssrf.js";
+import { isPrivateRunObservationScope } from "../infra/private-run-observations.js";
 import type { Model } from "../llm/types.js";
 import { createSubsystemLogger } from "../logging/subsystem.js";
 import { resolveDebugProxySettings } from "../proxy-capture/env.js";
@@ -39,6 +42,12 @@ import {
   SECRET_SENTINEL_PATTERN,
   swapSecretSentinelsInText,
 } from "../secrets/sentinel.js";
+import {
+  getPrivateModelContextScope,
+  preparePrivateModelContextRequest,
+  privateModelContextUnavailable,
+  projectPrivateModelContextEvent,
+} from "./private-model-context.js";
 import { ProviderHttpError, readResponseTextLimited } from "./provider-http-errors.js";
 import {
   ensureModelProviderLocalService,
@@ -71,7 +80,7 @@ const SSE_SANITIZE_BUFFER_MAX_CHARS = 16 * 1024 * 1024;
 const BLOCKED_EXACT_ORIGIN_TRUST_HOSTNAME_LABELS = new Set(["instance-data"]);
 const PLAIN_DECIMAL_NUMBER_RE = /^\d+(?:\.\d+)?$/;
 
-function hasReadableSseData(block: string): boolean {
+function readSseData(block: string): string {
   const dataLines = block
     .split(/\r\n|\n|\r/)
     .filter((line) => line === "data" || line.startsWith("data:"))
@@ -82,7 +91,11 @@ function hasReadableSseData(block: string): boolean {
       const value = line.slice("data:".length);
       return value.startsWith(" ") ? value.slice(1) : value;
     });
-  return dataLines.length > 0 && dataLines.join("\n").trim().length > 0;
+  return dataLines.join("\n");
+}
+
+function hasReadableSseData(block: string): boolean {
+  return readSseData(block).trim().length > 0;
 }
 
 function findSseEventBoundary(buffer: string): { index: number; length: number } | undefined {
@@ -154,8 +167,18 @@ function capNonOkResponseBodyLazily(response: Response, maxBytes: number): Respo
 
 function sanitizeOpenAISdkSseResponse(
   response: Response,
-  options?: { synthesizeJsonAsSse?: boolean },
+  options?: { synthesizeJsonAsSse?: boolean; privateContext?: boolean },
 ): Response {
+  const safeError = (error: unknown) =>
+    options?.privateContext ? privateModelContextUnavailable() : error;
+  const projectBlock = (block: string) => {
+    if (!options?.privateContext) {
+      return block;
+    }
+    const data = readSseData(block);
+    const projected = projectPrivateModelContextEvent(data, /^event:\s*error\s*$/m.test(block));
+    return projected === data ? block : `data: ${projected}`;
+  };
   const contentType = response.headers.get("content-type") ?? "";
   if (!response.body) {
     return response;
@@ -185,7 +208,10 @@ function sanitizeOpenAISdkSseResponse(
               buffer += decoder.decode();
               const data = buffer.trim();
               if (data) {
-                controller.enqueue(encoder.encode(`data: ${data}\n\n`));
+                const projected = options?.privateContext
+                  ? projectPrivateModelContextEvent(data)
+                  : data;
+                controller.enqueue(encoder.encode(`data: ${projected}\n\n`));
               }
               controller.enqueue(encoder.encode("data: [DONE]\n\n"));
               controller.close();
@@ -201,16 +227,19 @@ function sanitizeOpenAISdkSseResponse(
             buffer += decoder.decode(chunk.value, { stream: true });
           }
         } catch (error) {
-          await cancelReaderBestEffort(reader, error);
-          controller.error(error);
+          await cancelReaderBestEffort(reader, safeError(error));
+          controller.error(safeError(error));
         }
       },
       async cancel(reason) {
-        await cancelReaderBestEffort(reader, reason);
+        await cancelReaderBestEffort(reader, safeError(reason));
       },
     });
     const headers = new Headers(response.headers);
     headers.set("content-type", "text/event-stream; charset=utf-8");
+    if (options?.privateContext) {
+      headers.delete("content-length");
+    }
     return new Response(sseBody, {
       status: response.status,
       statusText: response.statusText,
@@ -244,12 +273,15 @@ function sanitizeOpenAISdkSseResponse(
         return enqueued;
       }
       const block = buffer.slice(0, boundary.index);
+      if (options?.privateContext && block.length > SSE_SANITIZE_BUFFER_MAX_CHARS) {
+        throw privateModelContextUnavailable();
+      }
       const separator = buffer.slice(boundary.index, boundary.index + boundary.length);
       buffer = buffer.slice(boundary.index + boundary.length);
       // OpenAI's SDK currently tries to JSON.parse event-only or blank-data SSE
       // messages. Drop those malformed keepalive-style blocks before it parses.
       if (hasReadableSseData(block)) {
-        controller.enqueue(encoder.encode(`${block}${separator}`));
+        controller.enqueue(encoder.encode(`${projectBlock(block)}${separator}`));
         enqueued += 1;
         return enqueued;
       }
@@ -273,8 +305,15 @@ function sanitizeOpenAISdkSseResponse(
             if (tail) {
               enqueueSanitized(controller, tail);
             }
+            // A final decoder flush can leave multiple frames buffered. Each
+            // private frame must cross projection, including an unterminated tail.
+            if (options?.privateContext) {
+              while (enqueueSanitized(controller, "") > 0) {
+                /* drain complete frames */
+              }
+            }
             if (buffer && hasReadableSseData(buffer)) {
-              controller.enqueue(encoder.encode(buffer));
+              controller.enqueue(encoder.encode(projectBlock(buffer)));
             }
             buffer = "";
             controller.close();
@@ -289,19 +328,23 @@ function sanitizeOpenAISdkSseResponse(
           }
         }
       } catch (error) {
-        await cancelReaderBestEffort(reader, error);
-        controller.error(error);
+        await cancelReaderBestEffort(reader, safeError(error));
+        controller.error(safeError(error));
       }
     },
     async cancel(reason) {
-      await cancelReaderBestEffort(reader, reason);
+      await cancelReaderBestEffort(reader, safeError(reason));
     },
   });
 
+  const headers = new Headers(response.headers);
+  if (options?.privateContext) {
+    headers.delete("content-length");
+  }
   return new Response(sanitizedBody, {
     status: response.status,
     statusText: response.statusText,
-    headers: response.headers,
+    headers,
   });
 }
 
@@ -840,6 +883,21 @@ export function buildGuardedModelFetch(
     ].join(" ");
   };
   return async (input, init) => {
+    const privateContext = getPrivateModelContextScope();
+    const privatePreparation = isPrivateRunObservationScope();
+    const captureRuntime = privatePreparation
+      ? await import("../proxy-capture/runtime.js")
+      : undefined;
+    const assertPrivatePreparationTransport = () => {
+      if (
+        privatePreparation &&
+        (resolveDebugProxySettings().enabled ||
+          captureRuntime?.isDebugProxyGlobalFetchPatchInstalled())
+      ) {
+        throw new Error("PRIVATE_PREPARATION_CAPTURE_UNAVAILABLE");
+      }
+    };
+    assertPrivatePreparationTransport();
     let localServiceLease: ProviderLocalServiceLease | undefined;
     const request = input instanceof Request ? new Request(input, init) : undefined;
     const rawUrl =
@@ -883,13 +941,64 @@ export function buildGuardedModelFetch(
     const guardedFetchOptions = {
       url,
       init: baseInit,
-      capture: {
-        meta: {
-          provider: model.provider,
-          api: model.api,
-          model: model.id,
-        },
-      },
+      capture:
+        privateContext || privatePreparation
+          ? (false as const)
+          : {
+              meta: {
+                provider: model.provider,
+                api: model.api,
+                model: model.id,
+              },
+            },
+      ...(privateContext || privatePreparation
+        ? {
+            maxRedirects: 0,
+            fetchImpl: async (requestUrl: RequestInfo | URL, outgoingInit?: RequestInit) => {
+              assertPrivatePreparationTransport();
+              if (!privateContext) {
+                return await fetchWithRuntimeDispatcherOrMockedGlobal(requestUrl, outgoingInit);
+              }
+              if (resolveDebugProxySettings().enabled) {
+                throw privateModelContextUnavailable();
+              }
+              const privateInit = await preparePrivateModelContextRequest({
+                scope: privateContext,
+                model,
+                url:
+                  typeof requestUrl === "string"
+                    ? requestUrl
+                    : requestUrl instanceof URL
+                      ? requestUrl.href
+                      : requestUrl.url,
+                init: outgoingInit,
+              });
+              // The guard has completed DNS, policy and dispatcher preparation. Never
+              // pass the private body through global fetch capture or request observers.
+              const response = await fetchWithRuntimeDispatcherOrMockedGlobal(
+                requestUrl,
+                privateInit,
+              );
+              if (response.ok || (response.status >= 300 && response.status < 400)) {
+                return response;
+              }
+              await response.body?.cancel().catch(() => undefined);
+              // Providers may echo request input in errors. Preserve retry headers/status,
+              // but do not expose such bodies to logs, transcript errors, or diagnostics.
+              const headers = new Headers(response.headers);
+              headers.delete("content-length");
+              headers.set("content-type", "application/json");
+              return new Response(
+                JSON.stringify({ error: { message: "Private-context model request failed" } }),
+                {
+                  status: response.status,
+                  statusText: response.statusText,
+                  headers,
+                },
+              );
+            },
+          }
+        : {}),
       dispatcherPolicy,
       dispatcherPool: getProviderTransportDispatcherPool(),
       timeoutMs: requestTimeoutMs,
@@ -901,10 +1010,12 @@ export function buildGuardedModelFetch(
     };
     let result: Awaited<ReturnType<typeof fetchWithSsrFGuard>>;
     const fetchStartedAt = Date.now();
+    const trace = getActiveDiagnosticsTimelineSpan();
+    const traceLabel = trace ? `span=${trace.name} spanId=${trace.spanId} ` : "";
     const useEnvProxy = !dispatcherPolicy && shouldUseEnvHttpProxyForUrl(url);
     emitModelTransportDebug(
       log,
-      `[model-fetch] start provider=${model.provider} api=${model.api} model=${model.id} ` +
+      `[model-fetch] start ${traceLabel}provider=${model.provider} api=${model.api} model=${model.id} ` +
         // Log the pre-swap URL: the swapped URL can carry an injected credential in its path.
         `method=${baseInit?.method ?? "GET"} url=${formatModelTransportDebugUrl(rawUrl)} timeoutMs=${requestTimeoutMs} ` +
         `proxy=${dispatcherPolicy ? "configured" : useEnvProxy ? "env" : "none"} ` +
@@ -928,7 +1039,7 @@ export function buildGuardedModelFetch(
         url,
       });
       log.warn(
-        `[model-fetch] error provider=${model.provider} api=${model.api} model=${model.id} ` +
+        `[model-fetch] error ${traceLabel}provider=${model.provider} api=${model.api} model=${model.id} ` +
           `elapsedMs=${Date.now() - fetchStartedAt} ${summarizeError(remediatedError)}`,
       );
       localServiceLease?.release();
@@ -937,8 +1048,8 @@ export function buildGuardedModelFetch(
     let response = result.response;
     emitModelTransportDebug(
       log,
-      `[model-fetch] response provider=${model.provider} api=${model.api} model=${model.id} ` +
-        `status=${response.status} elapsedMs=${Date.now() - fetchStartedAt} ` +
+      `[model-fetch] response ${traceLabel}provider=${model.provider} api=${model.api} model=${model.id} ` +
+        `status=${response.status} elapsedMs=${Date.now() - fetchStartedAt} phase=response-headers ` +
         `dispatcher=${result.dispatcherReused ? "reused" : "new"} ` +
         `contentType=${response.headers.get("content-type") ?? ""}`,
     );
@@ -952,16 +1063,21 @@ export function buildGuardedModelFetch(
       });
     }
     const synthesizeJsonAsSse =
-      options?.sanitizeSse !== false &&
+      (privateContext !== undefined || options?.sanitizeSse !== false) &&
       !/\btext\/event-stream\b/i.test(response.headers.get("content-type") ?? "") &&
       requestBodyHasStreamTrue(request, baseInit);
     if (synthesizeJsonAsSse) {
-      response = await normalizeOpenAISdkStreamContentType({
-        response,
-        model,
-        release: result.release,
-        localServiceLease,
-      });
+      try {
+        response = await normalizeOpenAISdkStreamContentType({
+          response,
+          model,
+          release: result.release,
+          localServiceLease,
+        });
+      } catch (error) {
+        // Invalid HTTP-200 bodies can be echoed in ProviderHttpError metadata.
+        throw privateContext ? privateModelContextUnavailable() : error;
+      }
     }
     response = buildManagedResponse(
       response,
@@ -969,9 +1085,13 @@ export function buildGuardedModelFetch(
       result.refreshTimeout,
       localServiceLease,
     );
-    return options?.sanitizeSse === false || !shouldSanitizeOpenAISdkSseResponse(model)
+    return !privateContext &&
+      (options?.sanitizeSse === false || !shouldSanitizeOpenAISdkSseResponse(model))
       ? response
-      : sanitizeOpenAISdkSseResponse(response, { synthesizeJsonAsSse });
+      : sanitizeOpenAISdkSseResponse(response, {
+          synthesizeJsonAsSse,
+          privateContext: privateContext !== undefined,
+        });
   };
 }
 /* oxlint-disable max-lines -- TODO: split this grandfathered oversized file. */

@@ -15,7 +15,10 @@ import {
   resolveLegacyInheritedAuthDir,
 } from "../../agents/legacy-inherited-auth-dir.js";
 import { resolveEnvApiKey } from "../../agents/model-auth-env.js";
-import { resolveUsableCustomProviderApiKey } from "../../agents/model-auth.js";
+import {
+  createRuntimeProviderAuthLookup,
+  resolveUsableCustomProviderApiKey,
+} from "../../agents/model-auth.js";
 import type { OpenClawConfig } from "../../config/types.openclaw.js";
 import type { UsageProviderId } from "../../infra/provider-usage.types.js";
 import {
@@ -26,7 +29,7 @@ import { getActivePluginRegistryVersion } from "../../plugins/runtime.js";
 
 type ResolvedDirectApiKey = { apiKey: string; source: string };
 
-type ProviderUsageRuntimeSnapshot = {
+export type ProviderUsageRuntimeSnapshot = {
   agentDir: string;
   agentId: string;
   configRef: OpenClawConfig;
@@ -43,6 +46,25 @@ type ProviderUsageRuntimeGeneration = ProviderUsageRuntimeSnapshot & {
 };
 
 let current: ProviderUsageRuntimeGeneration | undefined;
+
+export function readProviderUsageRuntimeSnapshot(params: {
+  config: OpenClawConfig;
+  agentDir?: string;
+  agentId?: string;
+  store?: AuthProfileStore;
+}): ProviderUsageRuntimeSnapshot | undefined {
+  const agentId = params.agentId ?? resolveLegacyInheritedAuthAgentId(params.config);
+  const agentDir = params.agentDir ?? resolveLegacyInheritedAuthDir(params.config);
+  const authStoreGeneration = getRuntimeAuthProfileStoreSnapshotRevision(agentDir);
+  return current?.configRef === params.config &&
+    (params.store === undefined || current.store === params.store) &&
+    current.agentDir === agentDir &&
+    current.agentId === agentId &&
+    current.pluginRegistryGeneration === getActivePluginRegistryVersion() &&
+    current.authStoreGeneration === authStoreGeneration
+    ? current
+    : undefined;
+}
 
 function sortedRecordEntries<T>(value: Record<string, T> | undefined) {
   return Object.entries(value ?? {}).toSorted(([left], [right]) => left.localeCompare(right));
@@ -83,10 +105,20 @@ function resolveDirectApiKeys(
   providerIds: readonly UsageProviderId[],
 ): Map<string, ResolvedDirectApiKey> {
   const directApiKeys = new Map<string, ResolvedDirectApiKey>();
+  const runtimeLookup = createRuntimeProviderAuthLookup({
+    cfg: config,
+    includePluginSyntheticAuth: false,
+  });
   for (const provider of providerIds) {
     const resolved =
       resolveUsableCustomProviderApiKey({ cfg: config, provider, env: process.env }) ??
-      resolveEnvApiKey(provider, process.env, { config });
+      resolveEnvApiKey(provider, process.env, {
+        config,
+        ...runtimeLookup.envApiKey,
+        // Preserve the previous setup-provider fallback for providers whose
+        // manifests do not expose env candidates.
+        skipSetupProviderFallback: false,
+      });
     if (!resolved) {
       continue;
     }
@@ -105,26 +137,16 @@ export function getProviderUsageRuntimeSnapshot(params: {
   agentId?: string;
   store?: AuthProfileStore;
 }): ProviderUsageRuntimeSnapshot {
+  const prepared = readProviderUsageRuntimeSnapshot(params);
+  if (prepared) {
+    return prepared;
+  }
   const agentId = params.agentId ?? resolveLegacyInheritedAuthAgentId(params.config);
   const agentDir = params.agentDir ?? resolveLegacyInheritedAuthDir(params.config);
   // Config publication replaces the object, so identity is the exact mutation signal.
   const configRef = params.config;
   // Registry publication owns descriptor lifetime; request paths only compare its O(1) counter.
   const pluginRegistryGeneration = getActivePluginRegistryVersion();
-  // Auth writers and runtime overlay publishers advance this O(1) process generation.
-  const authStoreGeneration = getRuntimeAuthProfileStoreSnapshotRevision(agentDir);
-  if (
-    current?.configRef === configRef &&
-    // Prepared owners can advance before the ambient snapshot; their exact store fences reuse.
-    (params.store === undefined || current.store === params.store) &&
-    current.agentDir === agentDir &&
-    current.agentId === agentId &&
-    current.pluginRegistryGeneration === pluginRegistryGeneration &&
-    current.authStoreGeneration === authStoreGeneration
-  ) {
-    return current;
-  }
-
   const store =
     params.store ??
     ensureAuthProfileStore(agentDir, {

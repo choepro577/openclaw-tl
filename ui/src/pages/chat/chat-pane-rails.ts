@@ -1,4 +1,5 @@
 import { isDesktopPanelAvailable } from "../../app/app-shell-chrome.ts";
+import type { TaskSummary } from "../../lib/tasks/task-summary.ts";
 import type { ChatPageHost } from "./chat-state-host.ts";
 import { createBackgroundTasksProps } from "./components/chat-background-tasks.ts";
 import { openTaskDetailId } from "./components/chat-detail-slot.ts";
@@ -25,6 +26,8 @@ export function createChatPaneRails(params: {
   setObserverVisibility: (visible: boolean) => void;
   workspaceEnabled?: boolean;
   backgroundTasksEnabled?: boolean;
+  subagentsOnly?: boolean;
+  taskDetailsInTasksSlot?: boolean;
 }) {
   const { state, sidebarLayout } = params;
   const hasPanelSlot = (slot: SidebarSlotId) =>
@@ -38,6 +41,13 @@ export function createChatPaneRails(params: {
   const closePanelSlot = (slot: SidebarSlotId) => {
     if (slot === "companion") {
       params.setObserverVisibility(false);
+    }
+    if (
+      slot === "tasks" &&
+      params.taskDetailsInTasksSlot &&
+      state.sidebarContent?.kind === "task"
+    ) {
+      state.sidebarContent = null;
     }
     state.updateSidebarLayout(closeSlot(state.sidebarLayout, slot));
   };
@@ -60,17 +70,61 @@ export function createChatPaneRails(params: {
       ? () => togglePanelSlot("desktop")
       : undefined,
   };
+  const selectedTaskId = params.taskDetailsInTasksSlot
+    ? state.sidebarContent?.kind === "task" && isSidebarSlotVisible(sidebarLayout, "tasks")
+      ? state.sidebarContent.taskId
+      : undefined
+    : openTaskDetailId(state.sidebarContent, sidebarLayout);
+  const onOpenTaskDetail = (task: TaskSummary) => {
+    if (params.taskDetailsInTasksSlot) {
+      state.sidebarContent = { kind: "task", taskId: task.id };
+      state.updateSidebarLayout(openSlot(state.sidebarLayout, "tasks"));
+      return;
+    }
+    state.handleOpenSidebar({ kind: "task", taskId: task.id });
+  };
   const backgroundTasksBase = createBackgroundTasksProps(state, {
     narrowLayout: false,
-    openTaskId: openTaskDetailId(state.sidebarContent, sidebarLayout),
-    onOpenTaskDetail: (task) => state.handleOpenSidebar({ kind: "task", taskId: task.id }),
+    openTaskId: selectedTaskId,
+    onOpenTaskDetail,
     presented: params.presented && params.backgroundTasksEnabled !== false,
+    subagentsOnly: params.subagentsOnly,
   });
+  // A retained pane can keep sidebarContent while a session switch or
+  // reconnect replaces the task snapshot. Do not reopen a stale task detail
+  // until this session's bounded list contains the selected id again.
+  const openTaskId =
+    params.taskDetailsInTasksSlot && selectedTaskId !== undefined
+      ? backgroundTasksBase.tasks?.some((task) => task.id === selectedTaskId)
+        ? selectedTaskId
+        : undefined
+      : selectedTaskId;
   const backgroundTasks = {
     ...backgroundTasksBase,
-    collapsed: !hasPanelSlot("tasks"),
+    collapsed: params.taskDetailsInTasksSlot
+      ? !isSidebarSlotVisible(sidebarLayout, "tasks")
+      : !hasPanelSlot("tasks"),
     narrowLayout: false,
-    onToggleCollapsed: () => togglePanelSlot("tasks"),
+    onToggleCollapsed: () => {
+      if (params.taskDetailsInTasksSlot) {
+        if (isSidebarSlotVisible(state.sidebarLayout, "tasks")) {
+          closePanelSlot("tasks");
+        } else {
+          openPanelSlot("tasks");
+        }
+        return;
+      }
+      togglePanelSlot("tasks");
+    },
+    onOpenList:
+      params.subagentsOnly === true
+        ? () => {
+            if (params.taskDetailsInTasksSlot && state.sidebarContent?.kind === "task") {
+              state.sidebarContent = null;
+            }
+            openPanelSlot("tasks");
+          }
+        : undefined,
   };
   const progressCardInRail =
     params.paneWidth >= SIDEBAR_NARROW_BREAKPOINT_PX &&

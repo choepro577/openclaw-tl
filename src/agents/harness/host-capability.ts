@@ -1,4 +1,5 @@
 import path from "node:path";
+import { readGatewayRequestRuntimeMetadata } from "../../gateway/request-runtime-config.js";
 import { getActiveDiagnosticTraceContext } from "../../infra/diagnostic-trace-context.js";
 import { prepareSystemRunMutableFileApproval } from "../../infra/system-run-approval-binding.js";
 import { buildAgentHookContextChannelFields } from "../../plugins/hook-agent-context.js";
@@ -159,6 +160,7 @@ export function createAgentHarnessHostCapabilities(params: {
   pluginId: string;
 }): { capabilities: AgentHarnessHostCapabilities; close: () => void } {
   const attempt = params.attempt;
+  const nativePluginGrants = readGatewayRequestRuntimeMetadata(attempt.config)?.nativePluginGrants;
   const operationalRunInstance = attempt.admittedRunContext.operationalRunInstance;
   const delegatedAuthority = getAdmittedRunDelegatedAuthority(attempt.admittedRunContext);
   if (!delegatedAuthority) {
@@ -316,6 +318,21 @@ export function createAgentHarnessHostCapabilities(params: {
     kind: "agent-harness-host-capability" as const,
     version: 1 as const,
     assertActive,
+    ...(nativePluginGrants
+      ? {
+          nativePluginGrants: () => {
+            assertActive();
+            const grants = attempt.agentId
+              ? nativePluginGrants(attempt.agentId, params.pluginId)
+              : [];
+            assertActive();
+            return cloneSnapshot(grants);
+          },
+        }
+      : {}),
+    ...(attempt.resolvePrivateModelContext
+      ? { privateModelContext: Object.freeze({ required: true as const }) }
+      : {}),
     ...(trajectoryRecorder
       ? {
           trajectory: Object.freeze({

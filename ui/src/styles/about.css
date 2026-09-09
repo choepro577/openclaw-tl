@@ -135,63 +135,6 @@
   font-variant-numeric: tabular-nums;
 }
 
-.about-hero__links {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 10px;
-  margin-top: 20px;
-}
-
-.about-hero__link {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 15px;
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  background: var(--card);
-  color: var(--text);
-  font-size: var(--control-ui-text-sm);
-  font-weight: 550;
-  text-decoration: none;
-  transition:
-    transform 140ms ease,
-    background 140ms ease,
-    border-color 140ms ease;
-}
-
-.about-hero__link:hover {
-  transform: translateY(-1px);
-  border-color: color-mix(in srgb, var(--border) 40%, var(--text) 60%);
-  background: var(--bg-hover);
-  text-decoration: none;
-}
-
-.about-hero__link:focus-visible {
-  outline: none;
-  box-shadow: var(--focus-ring);
-}
-
-.about-hero__link-icon {
-  display: inline-flex;
-}
-
-.about-hero__link svg {
-  width: 16px;
-  height: 16px;
-  fill: none;
-  stroke: currentColor;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  stroke-width: 1.8;
-}
-
-.about-hero__link svg.icon--filled {
-  fill: currentColor;
-  stroke: none;
-}
-
 .about-footer {
   margin: 4px 0 6px;
   color: var(--muted);
@@ -204,8 +147,7 @@
   .about-hero__clawd .lobster-pet__svg,
   .about-hero__clawd .lob-eye-open,
   .about-hero__clawd .lob-eye-closed,
-  .about-hero__clawd .lob-claw--r,
-  .about-hero__link {
+  .about-hero__clawd .lob-claw--r {
     animation: none;
     transition: none;
   }

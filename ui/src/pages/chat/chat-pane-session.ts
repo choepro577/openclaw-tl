@@ -42,9 +42,12 @@ import {
 } from "./components/chat-pull-requests.ts";
 import { scheduleChatScroll } from "./scroll.ts";
 
+export const CHAT_HISTORY_COMMITTED_EVENT = "openclaw:chat-history-committed";
+
 export abstract class ChatPaneSession extends ChatPaneTaskSuggestions {
   private deferredSessionHydrationActive = false;
   private pendingDeferredSessionHydration: (() => void) | null = null;
+  protected sessionHistoryCommittedKey: string | null = null;
 
   protected async refreshSessionPullRequests(options: { refresh?: boolean } = {}): Promise<void> {
     if (!this.presented) {
@@ -177,6 +180,7 @@ export abstract class ChatPaneSession extends ChatPaneTaskSuggestions {
     if (!state) {
       return;
     }
+    this.sessionHistoryCommittedKey = null;
     this.deferredSessionHydrationActive = true;
     this.pendingDeferredSessionHydration = null;
     const requestVersion = ++this.deferredSessionHydrationRequestVersion;
@@ -209,6 +213,7 @@ export abstract class ChatPaneSession extends ChatPaneTaskSuggestions {
       // after the authoritative history has committed so they cannot delay chat paint.
       state.renderLifecycle.afterCommit((complete) => {
         if (isCurrent() && this.presented) {
+          this.markSessionHistoryCommitted(sessionKey);
           this.deferredSessionHydrationActive = false;
           if (this.context.presentation !== "enterprise-user") {
             void loadChatBranches(state);
@@ -238,6 +243,22 @@ export abstract class ChatPaneSession extends ChatPaneTaskSuggestions {
     this.deferredSessionHydrationRequestVersion += 1;
     this.deferredSessionHydrationActive = false;
     this.pendingDeferredSessionHydration = null;
+    this.sessionHistoryCommittedKey = null;
+  }
+
+  protected markSessionHistoryCommitted(sessionKey: string): void {
+    const state = this.state;
+    if (
+      !state ||
+      !state.connected ||
+      !this.presented ||
+      state.sessionKey !== sessionKey ||
+      this.sessionHistoryCommittedKey === sessionKey
+    ) {
+      return;
+    }
+    this.sessionHistoryCommittedKey = sessionKey;
+    this.dispatchEvent(new Event(CHAT_HISTORY_COMMITTED_EVENT, { bubbles: true, composed: true }));
   }
 
   protected markSessionRead(row: GatewaySessionRow | undefined) {
@@ -536,6 +557,12 @@ export abstract class ChatPaneSession extends ChatPaneTaskSuggestions {
         if (!older) {
           this.catalogLoading = false;
           currentState.chatLoading = false;
+          currentState.renderLifecycle.afterCommit((complete) => {
+            if (isCurrent() && this.presented) {
+              this.markSessionHistoryCommitted(requestedSessionKey);
+            }
+            complete();
+          });
         }
         if (!older) {
           currentState.requestUpdate();

@@ -1,17 +1,23 @@
-// Enterprise account persistence and durable OpenClaw profile binding.
 import type { DatabaseSync } from "node:sqlite";
+// Enterprise account persistence and durable OpenClaw profile binding.
+import type { OpenClawConfig } from "../../config/types.openclaw.js";
 import { generateSecureUuid } from "../../infra/secure-random.js";
 import {
   openOpenClawStateDatabase,
   runOpenClawStateWriteTransaction,
   type OpenClawStateDatabaseOptions,
 } from "../../state/openclaw-state-db.js";
+import {
+  provisionEnterpriseDefaultAutomations,
+  removeEnterpriseDefaultAutomations,
+} from "../automations/default-automations.js";
 import { ensureEnterpriseSchema } from "../database/enterprise-schema.js";
 import {
   ENTERPRISE_ACCESS_PRESET_NONE,
-  ENTERPRISE_ACCESS_PRESET_STANDARD_CODING,
+  ENTERPRISE_ACCESS_PRESET_BASIC,
   normalizeEnterpriseAccessPresetKey,
 } from "../entitlements/resource-keys.js";
+import { applyAccountAccessPreset, readAccountPresetState } from "./account-access-preset.js";
 import type {
   EnterpriseAccount,
   EnterpriseAccountRole,
@@ -151,6 +157,17 @@ export function createEnterpriseAccount(
     personalAgentEnabled?: boolean;
     defaultAgentId?: string | null;
     accessPresetKey?: string;
+    config?: OpenClawConfig;
+    initialEntitlements?: Array<{
+      resourceType: "agent" | "skill" | "tool";
+      resourceId: string;
+      effect: "allow" | "deny";
+    }>;
+    audit?: {
+      actorAccountId: string;
+      actorSessionId: string;
+      requestId: string | null;
+    };
   },
   options: OpenClawStateDatabaseOptions = {},
 ): EnterpriseAccount {
@@ -162,14 +179,25 @@ export function createEnterpriseAccount(
   const profileId = generateSecureUuid();
   const accessPresetKey = normalizeEnterpriseAccessPresetKey(
     input.accessPresetKey ??
-      (input.role === "employee"
-        ? ENTERPRISE_ACCESS_PRESET_STANDARD_CODING
-        : ENTERPRISE_ACCESS_PRESET_NONE),
+      (input.role === "employee" ? ENTERPRISE_ACCESS_PRESET_BASIC : ENTERPRISE_ACCESS_PRESET_NONE),
   );
   const personalAgentEnabled = input.personalAgentEnabled ?? input.role === "employee";
   const enabled = input.enabled ?? true;
+  const initialEntitlements = input.initialEntitlements ?? [];
+  if (
+    initialEntitlements.length > 2_000 ||
+    initialEntitlements.some(
+      (item) =>
+        !item.resourceId.trim() ||
+        item.resourceId.length > 256 ||
+        !item.resourceId.startsWith(`${item.resourceType}:`),
+    )
+  ) {
+    throw new Error("RESOURCE_ID_INVALID");
+  }
   return runOpenClawStateWriteTransaction(
-    ({ db }) => {
+    (database) => {
+      const { db } = database;
       db.prepare(
         `INSERT INTO user_profiles
           (id, display_name, avatar, avatar_mime, avatar_sha256, merged_into, role, created_at, updated_at)
@@ -201,7 +229,56 @@ export function createEnterpriseAccount(
         now,
         now,
       ); // sqlite-allow-raw -- Fixed feature-local insert.
-      return withoutPassword(toAccount(selectAccount(db, "id", accountId)!));
+      const insertEntitlement = db.prepare(
+        `INSERT INTO enterprise_entitlements
+          (account_id, resource_type, resource_id, resource_state, effect, created_at, updated_at)
+         VALUES (?, ?, ?, 'active', ?, ?, ?)`,
+      );
+      for (const entitlement of initialEntitlements) {
+        insertEntitlement.run(
+          accountId,
+          entitlement.resourceType,
+          entitlement.resourceId.trim(),
+          entitlement.effect,
+          now,
+          now,
+        ); // sqlite-allow-raw -- Initial grants are committed with the account.
+      }
+      applyAccountAccessPreset(
+        db,
+        withoutPassword(toAccount(selectAccount(db, "id", accountId)!)),
+        input.config ?? {},
+        now,
+      );
+      if (input.audit) {
+        db.prepare(
+          `INSERT INTO enterprise_audit_events
+            (id, actor_account_id, actor_session_id, action, target_type, target_id, request_id,
+             before_json, after_json, outcome, created_at)
+           VALUES (?, ?, ?, 'account.create', 'account', ?, ?, NULL, ?, 'success', ?)`,
+        ).run(
+          generateSecureUuid(),
+          input.audit.actorAccountId,
+          input.audit.actorSessionId,
+          accountId,
+          input.audit.requestId,
+          JSON.stringify({
+            accountId,
+            username,
+            displayName,
+            role: input.role,
+            enabled,
+            personalAgentEnabled,
+            grants: initialEntitlements,
+            accessPresetKey,
+            permissions: readAccountPresetState(db, accountId),
+          }),
+          now,
+        ); // sqlite-allow-raw -- Account, grants, and audit are one transaction.
+      }
+      const account = withoutPassword(toAccount(selectAccount(db, "id", accountId)!));
+      provisionEnterpriseDefaultAutomations(database, account, options.env);
+      return account;
     },
     options,
     { operationLabel: "enterprise.accounts.create" },
@@ -221,7 +298,12 @@ export function updateEnterpriseAccount(
       | "mustChangePassword"
       | "accessPresetKey"
     >
-  > & { passwordHash?: string },
+  > & {
+    passwordHash?: string;
+    applyAccessPreset?: boolean;
+    config?: OpenClawConfig;
+    audit?: { actorAccountId: string; actorSessionId: string; requestId: string | null };
+  },
   options: OpenClawStateDatabaseOptions = {},
 ): EnterpriseAccount {
   ensureEnterpriseSchema(options);
@@ -232,6 +314,7 @@ export function updateEnterpriseAccount(
         throw new Error("ACCOUNT_NOT_FOUND");
       }
       const current = toAccount(currentRow);
+      const beforePermissions = readAccountPresetState(db, accountId);
       const nextDisplayName =
         patch.displayName === undefined
           ? current.displayName
@@ -256,7 +339,10 @@ export function updateEnterpriseAccount(
           throw new Error("LAST_ADMIN_REQUIRED");
         }
       }
+      const applyPreset =
+        patch.applyAccessPreset === true || nextAccessPresetKey !== current.accessPresetKey;
       const policyChanged =
+        applyPreset ||
         nextRole !== current.role ||
         nextEnabled !== current.enabled ||
         (patch.personalAgentEnabled ?? current.personalAgentEnabled) !==
@@ -292,7 +378,31 @@ export function updateEnterpriseAccount(
           "UPDATE enterprise_auth_sessions SET revoked_at = ?, revoke_reason = ? WHERE account_id = ? AND revoked_at IS NULL",
         ).run(now, !nextEnabled ? "account_disabled" : "account_role_changed", accountId); // sqlite-allow-raw -- Policy identity changes revoke every active session.
       }
-      return withoutPassword(toAccount(selectAccount(db, "id", accountId)!));
+      const account = withoutPassword(toAccount(selectAccount(db, "id", accountId)!));
+      if (applyPreset) {
+        applyAccountAccessPreset(db, account, patch.config ?? {}, now, current.accessPresetKey);
+      }
+      if (patch.audit) {
+        db.prepare(`INSERT INTO enterprise_audit_events
+          (id, actor_account_id, actor_session_id, action, target_type, target_id, request_id,
+           before_json, after_json, outcome, created_at)
+          VALUES (?, ?, ?, 'account.update', 'account', ?, ?, ?, ?, 'success', ?)`).run(
+          generateSecureUuid(),
+          patch.audit.actorAccountId,
+          patch.audit.actorSessionId,
+          accountId,
+          patch.audit.requestId,
+          JSON.stringify({ account: withoutPassword(current), permissions: beforePermissions }),
+          JSON.stringify({
+            account,
+            appliedAccessPreset: applyPreset,
+            permissions: readAccountPresetState(db, accountId),
+          }),
+          now,
+        );
+        // sqlite-allow-raw -- Account, effective overrides, and redacted audit are atomic.
+      }
+      return account;
     },
     options,
     { operationLabel: "enterprise.accounts.update" },
@@ -323,11 +433,13 @@ export function deleteEnterpriseAccountForBootstrapRollback(
 ): void {
   ensureEnterpriseSchema(options);
   runOpenClawStateWriteTransaction(
-    ({ db }) => {
+    (database) => {
+      const { db } = database;
       const account = selectAccount(db, "id", accountId);
       if (!account) {
         return;
       }
+      removeEnterpriseDefaultAutomations(database, accountId, options.env);
       db.prepare("DELETE FROM enterprise_accounts WHERE id = ?").run(accountId); // sqlite-allow-raw -- Feature-local rollback.
       db.prepare(
         "DELETE FROM user_profile_identities WHERE provider = 'openclaw-account' AND subject = ? AND profile_id = ?",

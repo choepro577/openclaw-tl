@@ -32,6 +32,10 @@ function normalizeCommandHandlerResult(result: CommandHandlerResult): CommandHan
 }
 
 export async function handleCommands(params: HandleCommandsParams): Promise<CommandHandlerResult> {
+  // Suppressed slash syntax is model input, not an unauthorized command to silently consume.
+  if (params.ctx.CommandInterpretationSuppressed === true) {
+    return { shouldContinue: true };
+  }
   if (HANDLERS === null) {
     HANDLERS = (await loadCommandHandlersRuntime()).loadCommandHandlers();
   }

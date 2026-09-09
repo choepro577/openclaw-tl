@@ -116,12 +116,52 @@ export async function changeEnterprisePassword(
   if (await verifyEnterprisePassword(newPassword, current.passwordHash)) {
     throw new Error("PASSWORD_REUSE");
   }
-  const passwordHash = await hashEnterprisePassword(newPassword);
-  const updated = updateEnterpriseAccount(
+  return replaceEnterpriseAccountPassword(
     current.id,
-    { passwordHash, mustChangePassword: false },
+    newPassword,
+    false,
+    "password_changed",
     options,
   );
-  revokeEnterpriseAccountSessions(current.id, "password_changed", options);
+}
+
+async function replaceEnterpriseAccountPassword(
+  accountId: string,
+  newPassword: string,
+  mustChangePassword: boolean,
+  revokeReason: string,
+  options: OpenClawStateDatabaseOptions,
+): Promise<EnterpriseAccount> {
+  const passwordHash = await hashEnterprisePassword(newPassword);
+  const updated = updateEnterpriseAccount(accountId, { passwordHash, mustChangePassword }, options);
+  revokeEnterpriseAccountSessions(accountId, revokeReason, options);
   return updated;
+}
+
+export async function resetEnterpriseAccountPassword(
+  accountId: string,
+  newPassword: string,
+  options: OpenClawStateDatabaseOptions = {},
+): Promise<EnterpriseAccount> {
+  if (!getEnterpriseAccountById(accountId, options)) {
+    throw new Error("ACCOUNT_NOT_FOUND");
+  }
+  return replaceEnterpriseAccountPassword(accountId, newPassword, true, "password_reset", options);
+}
+
+export async function recoverEnterpriseAccountPassword(
+  accountId: string,
+  newPassword: string,
+  options: OpenClawStateDatabaseOptions = {},
+): Promise<EnterpriseAccount> {
+  if (!getEnterpriseAccountById(accountId, options)) {
+    throw new Error("ACCOUNT_NOT_FOUND");
+  }
+  return replaceEnterpriseAccountPassword(
+    accountId,
+    newPassword,
+    false,
+    "password_recovered",
+    options,
+  );
 }

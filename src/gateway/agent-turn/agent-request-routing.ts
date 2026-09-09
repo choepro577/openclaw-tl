@@ -198,6 +198,7 @@ export async function prepareAgentRequestRouting(params: {
   if (
     requestedSessionKey &&
     respondUnavailableAgentSessionForKey({
+      cfg: params.cfg,
       sessionKey: requestedSessionKey,
       requestedSessionId,
       isRawModelRun: params.isRawModelRun,

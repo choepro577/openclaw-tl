@@ -4,6 +4,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { SubagentRunRecord } from "../registry/subagent-registry.types.js";
 import type { SubagentAnnounceDeliveryResult } from "./subagent-announce-dispatch.js";
+import { makeSettledChild } from "./subagent-announce.requester-settle-wake.fixture.js";
 
 const deliverSpy = vi.fn(
   async (
@@ -35,6 +36,12 @@ const { registryRuntimeMock } = vi.hoisted(() => ({
   },
 }));
 
+const { transcriptRuntimeMock } = vi.hoisted(() => ({
+  transcriptRuntimeMock: {
+    readRecentSessionTranscriptActiveEvents: vi.fn((): unknown[] => []),
+  },
+}));
+
 vi.mock("../registry/subagent-registry-read.js", () => registryRuntimeMock);
 
 vi.mock("./subagent-announce.runtime.js", () => ({
@@ -43,6 +50,8 @@ vi.mock("./subagent-announce.runtime.js", () => ({
   isEmbeddedAgentRunActive: vi.fn(() => false),
   getRuntimeConfig: () => ({ session: { mainKey: "main", scope: "per-sender" } }),
   loadSessionStore: vi.fn(() => ({})),
+  readRecentSessionTranscriptActiveEvents:
+    transcriptRuntimeMock.readRecentSessionTranscriptActiveEvents,
   readSessionMessagesAsync: vi.fn(async () => []),
   readSubagentSessionEntry: vi.fn(() => undefined),
   resolveAgentIdFromSessionKey: vi.fn(() => "main"),
@@ -77,32 +86,6 @@ import {
 const REQUESTER = "agent:main:main";
 const requesterSettleKey = (suffix: string) =>
   `announce:requester-settle:main:${REQUESTER}:${suffix}`;
-
-type SettledChildOverrides = Omit<Partial<SubagentRunRecord>, "execution"> & {
-  startedAt?: number;
-  endedAt?: number;
-  outcome?: SubagentRunRecord["execution"]["outcome"];
-  execution?: SubagentRunRecord["execution"];
-};
-
-function makeSettledChild(overrides: SettledChildOverrides): SubagentRunRecord {
-  const runId = overrides.runId ?? "run-child";
-  const { startedAt = 2_000, endedAt = 3_000, outcome, execution, ...recordOverrides } = overrides;
-  return {
-    runId,
-    childSessionKey: overrides.childSessionKey ?? `agent:main:subagent:${runId}`,
-    requesterSessionKey: REQUESTER,
-    requesterDisplayKey: "main",
-    task: "investigate",
-    cleanup: "keep",
-    createdAt: 1_000,
-    execution: execution ?? { status: "terminal", startedAt, endedAt, outcome },
-    expectsCompletionMessage: true,
-    delivery: { status: "delivered" },
-    requesterSettleWake: { status: "pending", attemptCount: 0 },
-    ...recordOverrides,
-  };
-}
 
 const transitionBatchSpy = vi.fn();
 const completeBatchSpy = vi.fn();
@@ -159,6 +142,19 @@ function wakeParams(
   };
 }
 
+function setLatestUserTurn(newer: boolean) {
+  transcriptRuntimeMock.readRecentSessionTranscriptActiveEvents.mockReturnValue([
+    { message: { role: "user", idempotencyKey: newer ? "newer:user" : "original:user" } },
+    {
+      message: {
+        role: "user",
+        idempotencyKey: "internal:user",
+        provenance: { kind: "inter_session" },
+      },
+    },
+  ]);
+}
+
 function deliveredCallArg(): Record<string, unknown> {
   const call = deliverSpy.mock.calls[0]?.[0];
   if (!call) {
@@ -178,42 +174,48 @@ describe("maybeWakeRequesterAfterAllChildrenSettled", () => {
     registryRuntimeMock.getLatestSubagentRunByChildSessionKey
       .mockReset()
       .mockReturnValue(undefined);
+    transcriptRuntimeMock.readRecentSessionTranscriptActiveEvents.mockReset().mockReturnValue([]);
   });
 
-  it("wakes the requester once with a batch-stable idempotency key when the fan-out drains", async () => {
-    registryRuntimeMock.listSubagentRunsForRequester.mockReturnValue([
-      makeSettledChild({
-        runId: "run-b",
-        completion: { required: true, resultText: "network findings" },
-      }),
-      makeSettledChild({
-        runId: "run-a",
-        completion: { required: true, resultText: "social findings" },
-      }),
-    ]);
+  it.each([false, true])(
+    "wakes a drained batch once and follows current intent (newer=%s)",
+    async (newer) => {
+      setLatestUserTurn(newer);
+      registryRuntimeMock.listSubagentRunsForRequester.mockReturnValue([
+        makeSettledChild({
+          runId: "run-b",
+          completion: { required: true, resultText: "network findings" },
+        }),
+        makeSettledChild({
+          runId: "run-a",
+          completion: { required: true, resultText: "social findings" },
+        }),
+      ]);
 
-    const woke = await maybeWakeRequesterAfterAllChildrenSettled(wakeParams());
+      const woke = await maybeWakeRequesterAfterAllChildrenSettled(wakeParams());
 
-    expect(woke).toBe(true);
-    expect(deliverSpy).toHaveBeenCalledTimes(1);
-    const call = deliveredCallArg();
-    expect(call.targetRequesterSessionKey).toBe(REQUESTER);
-    expect(call.requesterIsSubagent).toBe(false);
-    expect(call.expectsCompletionMessage).toBe(false);
-    expect(call.requireDirectDelivery).toBe(true);
-    expect(call.requireVisibleReply).toBeUndefined();
-    expect(call.directIdempotencyKey).toBe(requesterSettleKey("run-a,run-b"));
-    const message = String(call.triggerMessage);
-    expect(message).toContain("settled");
-    expect(message).toContain("social findings");
-    expect(message).toContain("network findings");
-    expect(message).toContain("NO_REPLY");
-    expect(registryRuntimeMock.hasDescendantRunAwaitingSettle).toHaveBeenCalledWith(
-      REQUESTER,
-      "run-b",
-      "main",
-    );
-  });
+      expect(woke).toBe(true);
+      expect(deliverSpy).toHaveBeenCalledTimes(1);
+      const call = deliveredCallArg();
+      expect(call.targetRequesterSessionKey).toBe(REQUESTER);
+      expect(call.requesterIsSubagent).toBe(false);
+      expect(call.expectsCompletionMessage).toBe(false);
+      expect(call.requireDirectDelivery).toBe(true);
+      expect(call.requireVisibleReply).toBeUndefined();
+      expect(call.directIdempotencyKey).toBe(requesterSettleKey("run-a,run-b"));
+      const message = String(call.triggerMessage);
+      expect(message).toContain("settled");
+      expect(message).toContain("social findings");
+      expect(message).toContain("network findings");
+      expect(message.includes("Follow the latest user intent")).toBe(newer);
+      expect(message).toContain("NO_REPLY");
+      expect(registryRuntimeMock.hasDescendantRunAwaitingSettle).toHaveBeenCalledWith(
+        REQUESTER,
+        "run-b",
+        "main",
+      );
+    },
+  );
 
   it("coalesces concurrent last-sibling settles into one wake", async () => {
     const children = [makeSettledChild({ runId: "run-a" }), makeSettledChild({ runId: "run-b" })];
@@ -418,36 +420,43 @@ describe("maybeWakeRequesterAfterAllChildrenSettled", () => {
     expect(deliverSpy).not.toHaveBeenCalled();
   });
 
-  it("wakes after a yielded requester's active child completes", async () => {
-    const child = makeSettledChild({
-      runId: "run-b",
-      delivery: { status: "delivered" },
-      requesterSettleWake: {
-        status: "pending",
-        attemptCount: 0,
-        batchRunIds: ["run-b"],
-        requesterYieldBatch: true,
-        rearmGeneration: 1,
-      },
-    });
-    registryRuntimeMock.listSubagentRunsForRequester.mockReturnValue([child]);
+  it.each([false, true])(
+    "wakes a yielded requester without forcing an obsolete reply (newer=%s)",
+    async (newer) => {
+      setLatestUserTurn(newer);
+      const child = makeSettledChild({
+        runId: "run-b",
+        delivery: { status: "delivered" },
+        requesterSettleWake: {
+          status: "pending",
+          attemptCount: 0,
+          batchRunIds: ["run-b"],
+          requesterYieldBatch: true,
+          rearmGeneration: 1,
+        },
+      });
+      registryRuntimeMock.listSubagentRunsForRequester.mockReturnValue([child]);
 
-    const woke = await maybeWakeRequesterAfterAllChildrenSettled(
-      wakeParams({ settledEntry: child }),
-    );
+      const woke = await maybeWakeRequesterAfterAllChildrenSettled(
+        wakeParams({ settledEntry: child }),
+      );
 
-    expect(woke).toBe(true);
-    expect(deliverSpy).toHaveBeenCalledOnce();
-    expect(deliveredCallArg().requireVisibleReply).toBe(true);
-    const message = String(deliveredCallArg().triggerMessage);
-    expect(message).not.toContain("NO_REPLY");
-    expect(message).toContain("original user request still requires your visible final answer");
-    expect(deliveredCallArg().directIdempotencyKey).toBe(requesterSettleKey("run-b:yield-1"));
-    expect(completeBatchSpy).toHaveBeenCalledWith(["run-b"], 1, {
-      delivered: true,
-      path: "direct",
-    });
-  });
+      expect(woke).toBe(true);
+      expect(deliverSpy).toHaveBeenCalledOnce();
+      expect(deliveredCallArg().requireVisibleReply).toBe(newer ? undefined : true);
+      const message = String(deliveredCallArg().triggerMessage);
+      expect(message.includes("NO_REPLY")).toBe(newer);
+      expect(message.includes("Follow the latest user intent")).toBe(newer);
+      expect(
+        message.includes("original user request still requires your visible final answer"),
+      ).toBe(!newer);
+      expect(deliveredCallArg().directIdempotencyKey).toBe(requesterSettleKey("run-b:yield-1"));
+      expect(completeBatchSpy).toHaveBeenCalledWith(["run-b"], 1, {
+        delivered: true,
+        path: "direct",
+      });
+    },
+  );
 
   it.each([
     ["is running without an end timestamp", { status: "running", startedAt: 2_000 }],

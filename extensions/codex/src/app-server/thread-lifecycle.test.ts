@@ -1454,17 +1454,36 @@ describe("Codex app-server native code mode config", () => {
     { name: "available", extraSystemPrompt: PROGRESS_CARD_SYSTEM_PROMPT, expected: true },
     { name: "denied", extraSystemPrompt: undefined, expected: false },
   ])(
-    "$name progress-card nudge propagation into thread developer instructions",
+    "$name progress-card nudge propagation into current-turn developer instructions",
     ({ extraSystemPrompt, expected }) => {
       const params = createAttemptParams({ provider: "openai" });
       params.toolsAllow = expected ? ["progress_card"] : ["read"];
       params.extraSystemPrompt = extraSystemPrompt;
 
-      expect(buildDeveloperInstructions(params).includes(PROGRESS_CARD_SYSTEM_PROMPT)).toBe(
-        expected,
-      );
+      expect(buildDeveloperInstructions(params)).not.toContain(PROGRESS_CARD_SYSTEM_PROMPT);
+      expect(
+        buildTurnCollaborationMode(params).settings.developer_instructions?.includes(
+          PROGRESS_CARD_SYSTEM_PROMPT,
+        ) ?? false,
+      ).toBe(expected);
     },
   );
+
+  it("replaces request-scoped policy on a warm thread without retaining an old decision", () => {
+    const params = createAttemptParams({ provider: "openai" });
+    params.extraSystemPrompt = "Use current decision token-first-turn only.";
+    const threadInstructions = buildDeveloperInstructions(params);
+    const first = buildTurnCollaborationMode(params);
+    params.extraSystemPrompt = "Use current decision token-second-turn only.";
+    const second = buildTurnCollaborationMode(params);
+    expect(buildDeveloperInstructions(params)).toBe(threadInstructions);
+    expect(threadInstructions).not.toContain("token-first-turn");
+    expect(first.settings.developer_instructions).toContain("token-first-turn");
+    expect(second.settings.developer_instructions).toContain("token-second-turn");
+    expect(second.settings.developer_instructions).not.toContain("token-first-turn");
+    params.extraSystemPrompt = undefined;
+    expect(buildTurnCollaborationMode(params).settings.developer_instructions).toBeNull();
+  });
 
   it("enables Codex code mode on thread/start without clobbering other config", () => {
     const request = buildThreadStartParams(createAttemptParams({ provider: "openai" }), {

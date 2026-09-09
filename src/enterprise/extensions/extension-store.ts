@@ -358,7 +358,7 @@ export function transitionEnterprisePluginRequest(
       input.reviewerAccountId ?? current.reviewerAccountId,
       input.decisionReason ?? current.decisionReason,
       input.installedPluginId ?? current.installedPluginId,
-      input.safeErrorCode ?? current.safeErrorCode,
+      input.safeErrorCode === undefined ? current.safeErrorCode : input.safeErrorCode,
       now,
       decided,
       input.id,

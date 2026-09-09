@@ -4,10 +4,15 @@
  * Lifecycle owns the persisted outbox state on retained subagent run rows;
  * this module selects a drained wave and delivers its synthesized wake.
  */
+import { isRecord } from "@openclaw/normalization-core/record-coerce";
 import { SILENT_REPLY_TOKEN } from "../../../auto-reply/tokens.js";
 import { getRuntimeConfig } from "../../../config/config.js";
+import { resolveSessionStorePathCore } from "../../../config/sessions.js";
 import { logWarn } from "../../../logger.js";
-import { getSharedGatewayContextResolver } from "../../../plugins/runtime/gateway-request-scope.js";
+import {
+  getGatewayContextResolver,
+  getSharedGatewayContextResolver,
+} from "../../../plugins/runtime/gateway-request-scope.js";
 import { isCronSessionKey } from "../../../sessions/session-key-utils.js";
 import {
   type DeliveryContext,
@@ -31,6 +36,7 @@ import {
   deliverSubagentAnnouncement,
   loadRequesterSessionEntry,
 } from "./subagent-announce-delivery.js";
+import { resolveSubagentAnnounceRuntimeConfig } from "./subagent-announce-delivery.runtime.js";
 import type { SubagentAnnounceDeliveryResult } from "./subagent-announce-dispatch.js";
 import { resolveAnnounceOrigin } from "./subagent-announce-origin.js";
 import {
@@ -39,25 +45,139 @@ import {
   filterCurrentDirectChildCompletionRows,
 } from "./subagent-announce-output.js";
 import { hasUsableSessionEntry } from "./subagent-announce.js";
+import { readRecentSessionTranscriptActiveEvents } from "./subagent-announce.runtime.js";
 
 export type RequesterSettleWakeBatchState = Omit<RequesterSettleWakeState, "retireAfterSettle">;
 
 const REQUESTER_SETTLE_WAKE_MAX_ATTEMPTS = 3;
 const REQUESTER_SETTLE_WAKE_MAX_AMBIGUOUS_REPLAYS = 3;
 const REQUESTER_SETTLE_WAKE_RETRY_DELAYS_MS = [30_000, 120_000] as const;
+const REQUESTER_SETTLE_WAKE_EXTERNAL_TURN_TAIL_EVENTS = 128;
 const activeRequesterSettleWakeBatches = new Set<string>();
+
+type LatestExternalUserTurn = {
+  found: boolean;
+  idempotencyKey?: string;
+};
+
+function readLatestExternalUserTurn(events: readonly unknown[]): LatestExternalUserTurn {
+  for (let index = events.length - 1; index >= 0; index -= 1) {
+    const event = events[index];
+    const message = isRecord(event) ? event.message : undefined;
+    if (!isRecord(message) || message.role !== "user") {
+      continue;
+    }
+    const provenance = message.provenance;
+    if (
+      provenance !== undefined &&
+      (!isRecord(provenance) || provenance.kind !== "external_user")
+    ) {
+      continue;
+    }
+    const idempotencyKey = message.idempotencyKey;
+    return {
+      found: true,
+      ...(typeof idempotencyKey === "string" && idempotencyKey.trim()
+        ? { idempotencyKey: idempotencyKey.trim() }
+        : {}),
+    };
+  }
+  return { found: false };
+}
+
+function readRequesterLatestExternalUserTurn(params: {
+  cfg: ReturnType<typeof getRuntimeConfig>;
+  requesterAgentId?: string;
+  requesterSessionKey: string;
+  requesterEntry: ReturnType<typeof loadRequesterSessionEntry>["entry"];
+  canonicalKey: string;
+}): LatestExternalUserTurn {
+  const sessionId = params.requesterEntry?.sessionId?.trim();
+  const agentId = params.requesterAgentId?.trim();
+  if (!sessionId || !agentId) {
+    return { found: false };
+  }
+  try {
+    return readLatestExternalUserTurn(
+      readRecentSessionTranscriptActiveEvents(
+        {
+          agentId,
+          sessionId,
+          sessionKey: params.canonicalKey || params.requesterSessionKey,
+          sessionEntry: params.requesterEntry,
+          storePath: resolveSessionStorePathCore(params.cfg.session?.store, { agentId }),
+        },
+        REQUESTER_SETTLE_WAKE_EXTERNAL_TURN_TAIL_EVENTS,
+      ),
+    );
+  } catch {
+    // Transcript projection can be briefly unavailable during session rollover.
+    // Preserve the legacy completion path until there is positive evidence of a
+    // newer user turn rather than dropping an otherwise valid synthesis.
+    return { found: false };
+  }
+}
+
+function hasNewerRequesterContext(params: {
+  settledBatch: readonly SubagentRunRecord[];
+  requesterEntry: ReturnType<typeof loadRequesterSessionEntry>["entry"];
+  requesterSessionKey: string;
+  requesterAgentId?: string;
+  cfg: ReturnType<typeof getRuntimeConfig>;
+  canonicalKey: string;
+}): boolean {
+  const anchoredEntries = params.settledBatch.filter((entry) =>
+    entry.requesterUserTurnIdempotencyKey?.trim(),
+  );
+  if (anchoredEntries.length === 0) {
+    return false;
+  }
+  const anchorKeys = new Set(
+    anchoredEntries.map((entry) => entry.requesterUserTurnIdempotencyKey!.trim()),
+  );
+  // Mixed anchors require the requester to reconcile the results with its
+  // current intent rather than forcing an answer to one historical turn.
+  if (anchorKeys.size !== 1) {
+    return true;
+  }
+  const anchorSessionIds = new Set(
+    anchoredEntries
+      .map((entry) => entry.requesterUserTurnSessionId?.trim())
+      .filter((sessionId): sessionId is string => Boolean(sessionId)),
+  );
+  const requesterSessionId = params.requesterEntry?.sessionId?.trim();
+  if (
+    requesterSessionId &&
+    anchorSessionIds.size > 0 &&
+    (anchorSessionIds.size !== 1 || !anchorSessionIds.has(requesterSessionId))
+  ) {
+    return true;
+  }
+  const latestExternalTurn = readRequesterLatestExternalUserTurn(params);
+  if (!latestExternalTurn.found) {
+    return false;
+  }
+  // An unidentifiable latest turn also requires intent reconciliation. The
+  // results remain available; a later user message alone never cancels work.
+  return latestExternalTurn.idempotencyKey !== [...anchorKeys][0];
+}
 
 function buildRequesterSettleWakeMessage(params: {
   findings?: string;
   requireVisibleReply: boolean;
+  newerRequesterContext: boolean;
 }): string {
   return [
     "[Subagent Context] Every subagent spawned from this session has now settled — none are still running or awaiting completion delivery.",
     "[Subagent Context] Do not keep waiting or call sessions_yield again for this batch; no further completion events will arrive.",
-    "[Subagent Context] Review the completion results and send your consolidated final answer to the user now.",
-    params.requireVisibleReply
-      ? "[Subagent Context] Child completion delivery is internal; the original user request still requires your visible final answer."
-      : `[Subagent Context] Reply ONLY: ${SILENT_REPLY_TOKEN} only if you already delivered the consolidated final answer for this batch.`,
+    params.newerRequesterContext
+      ? "[Subagent Context] The user has sent a newer message since this work was requested. Follow the latest user intent: use these findings if the work is still needed, including after a clarification or progress question. Do not resume work the user has cancelled or replaced, and do not repeat an answer already delivered for the latest request."
+      : "[Subagent Context] Review the completion results and send your consolidated final answer to the user now.",
+    params.newerRequesterContext
+      ? `[Subagent Context] Reply ONLY: ${SILENT_REPLY_TOKEN} when the latest request is already answered or no longer needs these findings. A newer message does not by itself cancel unfinished work.`
+      : params.requireVisibleReply
+        ? "[Subagent Context] Child completion delivery is internal; the original user request still requires your visible final answer."
+        : `[Subagent Context] Reply ONLY: ${SILENT_REPLY_TOKEN} only if you already delivered the consolidated final answer for this batch.`,
     "",
     params.findings ??
       "(each child result was announced individually in earlier completion events)",
@@ -218,7 +338,10 @@ export async function maybeWakeRequesterAfterAllChildrenSettled(params: {
     params.completeBatch(runIds, rearmGeneration, delivery);
   };
   const requesterSessionKey = params.requesterSessionKey.trim();
-  const cfg = getRuntimeConfig();
+  const entryGatewayContextResolver = getGatewayContextResolver(params.settledEntry);
+  const cfg = entryGatewayContextResolver
+    ? resolveSubagentAnnounceRuntimeConfig(entryGatewayContextResolver)
+    : getRuntimeConfig();
   const requesterAgentId = resolveSubagentRequesterAgentId(cfg, params.settledEntry);
   const initialState = params.settledEntry.requesterSettleWake;
   if (!requesterSessionKey || !initialState) {
@@ -332,9 +455,10 @@ export async function maybeWakeRequesterAfterAllChildrenSettled(params: {
     return false;
   }
 
-  const { entry: requesterEntry } = loadRequesterSessionEntry(
+  const { entry: requesterEntry, canonicalKey } = loadRequesterSessionEntry(
     requesterSessionKey,
     requesterAgentId,
+    cfg,
   );
   if (!hasUsableSessionEntry(requesterEntry)) {
     completeRequesterSettleWakeBatch({
@@ -345,7 +469,6 @@ export async function maybeWakeRequesterAfterAllChildrenSettled(params: {
     });
     return false;
   }
-
   const findings = buildChildCompletionFindings(
     dedupeLatestChildCompletionRows(
       filterCurrentDirectChildCompletionRows(settledBatch, {
@@ -355,10 +478,6 @@ export async function maybeWakeRequesterAfterAllChildrenSettled(params: {
       }),
     ),
   );
-  const wakeMessage = buildRequesterSettleWakeMessage({
-    findings,
-    requireVisibleReply: requesterYieldedAfterDelivery,
-  });
   const requesterSessionOrigin = normalizeDeliveryContext(params.requesterOrigin);
   const directOrigin = resolveAnnounceOrigin(requesterEntry, requesterSessionOrigin);
   const wakeKeyBase = [
@@ -397,6 +516,20 @@ export async function maybeWakeRequesterAfterAllChildrenSettled(params: {
       });
       return false;
     }
+    const newerRequesterContext = hasNewerRequesterContext({
+      settledBatch,
+      requesterEntry,
+      requesterSessionKey,
+      requesterAgentId,
+      cfg,
+      canonicalKey,
+    });
+    const requireVisibleReply = requesterYieldedAfterDelivery && !newerRequesterContext;
+    const wakeMessage = buildRequesterSettleWakeMessage({
+      findings,
+      requireVisibleReply,
+      newerRequesterContext,
+    });
 
     let attemptIndex: number;
     if (state.status === "dispatching") {
@@ -447,12 +580,13 @@ export async function maybeWakeRequesterAfterAllChildrenSettled(params: {
         requesterIsSubagent: false,
         expectsCompletionMessage: false,
         requireDirectDelivery: true,
-        ...(requesterYieldedAfterDelivery ? { requireVisibleReply: true } : {}),
+        ...(requireVisibleReply ? { requireVisibleReply: true } : {}),
         directIdempotencyKey: buildAnnounceIdempotencyKey(
           attemptIndex === 0 ? wakeKeyBase : `${wakeKeyBase}:retry-${attemptIndex}`,
         ),
         signal: params.signal,
-        resolveGatewayContext: getSharedGatewayContextResolver(settledBatch),
+        resolveGatewayContext:
+          getSharedGatewayContextResolver(settledBatch) ?? entryGatewayContextResolver,
       });
     } catch (error) {
       // A transport exception can arrive after gateway admission. Replay the

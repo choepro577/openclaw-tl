@@ -12,6 +12,7 @@ import { LitElement, css, html, nothing, type PropertyValues } from "lit";
 import { property } from "lit/decorators.js";
 import { createRef, ref } from "lit/directives/ref.js";
 import { applicationContext, type ApplicationContext } from "../app/context.ts";
+import { showNativeConfirm } from "../branding/display-dialog.ts";
 import { I18nController, t } from "../i18n/index.ts";
 import { formatUiError } from "../lib/format-error.ts";
 import { openExternalUrlSafe } from "../lib/open-external-url.ts";
@@ -390,7 +391,7 @@ export class McpAppView extends LitElement {
           const block = content.length === 1 ? content[0] : undefined;
           const text = block?.type === "text" ? block.text : null;
           const accepted = dispatchWidgetPrompt(iframe, text, promptRateKey, (prompt) =>
-            window.confirm(`${t("common.confirm")}:\n\n${prompt}`),
+            showNativeConfirm(`${t("common.confirm")}:\n\n${prompt}`),
           );
           return accepted ? {} : { isError: true };
         });

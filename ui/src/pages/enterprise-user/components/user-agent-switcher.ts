@@ -28,6 +28,8 @@ export function filterUserAgents(
 export class EnterpriseUserAgentSwitcher extends OpenClawLightDomContentsElement {
   @property({ attribute: false }) context?: ApplicationContext<RouteId>;
   @property({ attribute: false }) onNavigate?: () => void;
+  @property({ attribute: false }) operationBusy = false;
+  @property({ attribute: false }) onSwitchingChange?: (switching: boolean) => void;
   @state() private query = "";
   @state() private switching = false;
   @state() private error = "";
@@ -106,10 +108,11 @@ export class EnterpriseUserAgentSwitcher extends OpenClawLightDomContentsElement
 
   private async selectAgent(key: AgentKey): Promise<void> {
     const context = this.context;
-    if (!context || this.switching) {
+    if (!context || this.switching || this.operationBusy) {
       return;
     }
     this.switching = true;
+    this.onSwitchingChange?.(true);
     this.error = "";
     try {
       await openUserAgentConversation(context, key, "resume-latest");
@@ -119,6 +122,7 @@ export class EnterpriseUserAgentSwitcher extends OpenClawLightDomContentsElement
       this.error = error instanceof Error ? error.message : eu("switchAgentFailed");
     } finally {
       this.switching = false;
+      this.onSwitchingChange?.(false);
     }
   }
 
@@ -147,7 +151,7 @@ export class EnterpriseUserAgentSwitcher extends OpenClawLightDomContentsElement
                 type="button"
                 class="eu-agent-switcher__select"
                 aria-current=${userAgentCatalogStore.activeKey === agent.key ? "true" : nothing}
-                ?disabled=${this.switching || !agent.actions.canChat}
+                ?disabled=${this.switching || this.operationBusy || !agent.actions.canChat}
                 @click=${() => void this.selectAgent(agent.key)}
               >
                 <span class="eu-agent-switcher__menu-avatar" aria-hidden="true">

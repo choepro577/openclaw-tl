@@ -1,4 +1,4 @@
-// CLI bootstrap for the first Enterprise administrator.
+// CLI management for Enterprise administrator authentication.
 import { isCancel, log, password, text } from "@clack/prompts";
 import type { Command } from "commander";
 import {
@@ -11,7 +11,9 @@ import {
   countEnterpriseAdministrators,
   createEnterpriseAccount,
   deleteEnterpriseAccountForBootstrapRollback,
+  getEnterpriseAccountByUsername,
 } from "../accounts/account-store.js";
+import { recoverEnterpriseAccountPassword } from "./auth-service.js";
 import { hashEnterprisePassword } from "./password.js";
 
 function requirePromptValue(value: unknown, label: string): string {
@@ -26,6 +28,47 @@ function requirePromptValue(value: unknown, label: string): string {
     throw new Error(`${label} không được để trống.`);
   }
   return normalized;
+}
+
+function requirePasswordValue(value: unknown, label: string): string {
+  if (isCancel(value)) {
+    throw new Error("Đã hủy đổi mật khẩu.");
+  }
+  if (typeof value !== "string" || !value) {
+    throw new Error(`${label} không được để trống.`);
+  }
+  if (value !== value.trim()) {
+    throw new Error(`${label} không được có khoảng trắng ở đầu hoặc cuối.`);
+  }
+  return value;
+}
+
+function validatePasswordValue(value: unknown): string | undefined {
+  if (typeof value !== "string" || value.length < 10) {
+    return "Mật khẩu cần ít nhất 10 ký tự.";
+  }
+  if (value !== value.trim()) {
+    return "Mật khẩu không được có khoảng trắng ở đầu hoặc cuối.";
+  }
+  return undefined;
+}
+
+async function promptForPassword(title: string): Promise<string> {
+  const nextPassword = requirePasswordValue(
+    await password({
+      message: stylePromptMessage(title),
+      validate: validatePasswordValue,
+    }),
+    "Mật khẩu",
+  );
+  const confirmation = requirePasswordValue(
+    await password({ message: stylePromptMessage("Nhập lại mật khẩu") }),
+    "Xác nhận mật khẩu",
+  );
+  if (confirmation !== nextPassword) {
+    throw new Error("Mật khẩu xác nhận không khớp.");
+  }
+  return nextPassword;
 }
 
 async function bootstrapAdministrator(): Promise<void> {
@@ -60,23 +103,7 @@ async function bootstrapAdministrator(): Promise<void> {
     }),
     "Tên hiển thị",
   );
-  const initialPassword = requirePromptValue(
-    await password({
-      message: stylePromptMessage("Mật khẩu ban đầu"),
-      validate: (value) =>
-        typeof value === "string" && value.length >= 10
-          ? undefined
-          : "Mật khẩu cần ít nhất 10 ký tự.",
-    }),
-    "Mật khẩu",
-  );
-  const confirmation = requirePromptValue(
-    await password({ message: stylePromptMessage("Nhập lại mật khẩu") }),
-    "Xác nhận mật khẩu",
-  );
-  if (confirmation !== initialPassword) {
-    throw new Error("Mật khẩu xác nhận không khớp.");
-  }
+  const initialPassword = await promptForPassword("Mật khẩu ban đầu");
 
   const account = createEnterpriseAccount({
     username,
@@ -128,6 +155,22 @@ async function bootstrapAdministrator(): Promise<void> {
   log.info("Admin phải đổi mật khẩu ngay ở lần đăng nhập đầu tiên.");
 }
 
+async function resetAdministratorPassword(username: string): Promise<void> {
+  const account = getEnterpriseAccountByUsername(username);
+  if (!account) {
+    throw new Error(`Không tìm thấy tài khoản ${username}.`);
+  }
+  if (account.role !== "administrator") {
+    throw new Error(`${account.username} không phải tài khoản administrator.`);
+  }
+
+  log.info(stylePromptTitle("OpenClaw Enterprise - Reset Admin Password") ?? "OpenClaw Enterprise");
+  const nextPassword = await promptForPassword("Mật khẩu mới");
+  await recoverEnterpriseAccountPassword(account.id, nextPassword);
+  log.success(`Đã đặt lại mật khẩu cho administrator ${account.username}.`);
+  log.info("Các phiên đăng nhập cũ đã bị thu hồi. Bạn có thể đăng nhập bằng mật khẩu mới.");
+}
+
 export function registerEnterpriseAuthCli(program: Command): void {
   const auth = program
     .command("auth")
@@ -137,6 +180,13 @@ export function registerEnterpriseAuthCli(program: Command): void {
     .description("Create the first Enterprise administrator and enable accounts auth")
     .action(async () => {
       await bootstrapAdministrator();
+    });
+  auth
+    .command("reset-admin-password")
+    .description("Reset an existing Enterprise administrator password")
+    .argument("[username]", "Administrator username", "admin")
+    .action(async (username: string) => {
+      await resetAdministratorPassword(username);
     });
   auth.action(() => auth.help());
 }

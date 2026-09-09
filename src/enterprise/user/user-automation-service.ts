@@ -59,15 +59,25 @@ export function parseUserAutomationInput(value: unknown): UserAutomationInput {
       ? { kind: "once", at: schedule.at }
       : schedule.kind === "interval" && typeof schedule.everyMinutes === "number"
         ? { kind: "interval", everyMinutes: schedule.everyMinutes }
-        : (() => {
-            throw new Error("FIELD_INVALID:schedule");
-          })();
+        : schedule.kind === "cron" &&
+            typeof schedule.expr === "string" &&
+            (schedule.tz === undefined || typeof schedule.tz === "string")
+          ? {
+              kind: "cron",
+              expr: schedule.expr,
+              ...(schedule.tz === undefined ? {} : { tz: schedule.tz }),
+            }
+          : (() => {
+              throw new Error("FIELD_INVALID:schedule");
+            })();
   if (
     (source.agentKey !== "personal" && !source.agentKey.startsWith("shared:")) ||
     Object.keys(schedule).some((key) =>
       parsedSchedule.kind === "once"
         ? !["kind", "at"].includes(key)
-        : !["kind", "everyMinutes"].includes(key),
+        : parsedSchedule.kind === "interval"
+          ? !["kind", "everyMinutes"].includes(key)
+          : !["kind", "expr", "tz"].includes(key),
     )
   ) {
     throw new Error("FIELD_INVALID:automation");
@@ -92,21 +102,38 @@ function validateInput(input: UserAutomationInput): UserAutomationInput {
     if (!Number.isFinite(timestamp) || timestamp <= Date.now()) {
       throw new Error("FIELD_INVALID:schedule");
     }
-  } else if (
-    input.schedule.kind !== "interval" ||
-    !Number.isSafeInteger(input.schedule.everyMinutes) ||
-    input.schedule.everyMinutes < 1 ||
-    input.schedule.everyMinutes > 525_600
-  ) {
-    throw new Error("FIELD_INVALID:schedule");
+  } else if (input.schedule.kind === "interval") {
+    if (
+      !Number.isSafeInteger(input.schedule.everyMinutes) ||
+      input.schedule.everyMinutes < 1 ||
+      input.schedule.everyMinutes > 525_600
+    ) {
+      throw new Error("FIELD_INVALID:schedule");
+    }
+  } else {
+    const expr = input.schedule.expr.trim();
+    const tz = input.schedule.tz?.trim();
+    const schedule = { kind: "cron" as const, expr, ...(tz ? { tz } : {}) };
+    if (!expr || expr.length > 256 || (input.schedule.tz !== undefined && !tz)) {
+      throw new Error("FIELD_INVALID:schedule");
+    }
+    return { ...input, name, prompt, schedule };
   }
   return { ...input, name, prompt };
 }
 
 function toCronSchedule(schedule: UserAutomationSchedule): CronJob["schedule"] {
-  return schedule.kind === "once"
-    ? { kind: "at", at: new Date(schedule.at).toISOString() }
-    : { kind: "every", everyMs: schedule.everyMinutes * 60_000 };
+  if (schedule.kind === "once") {
+    return { kind: "at", at: new Date(schedule.at).toISOString() };
+  }
+  if (schedule.kind === "interval") {
+    return { kind: "every", everyMs: schedule.everyMinutes * 60_000 };
+  }
+  return {
+    kind: "cron",
+    expr: schedule.expr,
+    ...(schedule.tz ? { tz: schedule.tz } : {}),
+  };
 }
 
 function fromCronSchedule(schedule: CronJob["schedule"]): UserAutomationSchedule | null {
@@ -116,6 +143,13 @@ function fromCronSchedule(schedule: CronJob["schedule"]): UserAutomationSchedule
   if (schedule.kind === "every") {
     return { kind: "interval", everyMinutes: Math.max(1, Math.round(schedule.everyMs / 60_000)) };
   }
+  if (schedule.kind === "cron") {
+    return {
+      kind: "cron",
+      expr: schedule.expr,
+      ...(schedule.tz ? { tz: schedule.tz } : {}),
+    };
+  }
   return null;
 }
 
@@ -124,7 +158,8 @@ function toUserAutomation(
   job: CronReadView,
 ): UserAutomation | null {
   const schedule = fromCronSchedule(job.schedule);
-  if (job.payload.kind !== "agentTurn" || !schedule) {
+  const readOnly = job.payload.kind === "heartbeat";
+  if ((!readOnly && job.payload.kind !== "agentTurn") || !schedule) {
     return null;
   }
   const agentKey = resolveEnterpriseUserAgentKey(runtime.config, runtime.account, job.agentId);
@@ -135,8 +170,9 @@ function toUserAutomation(
     enabled: job.enabled,
     agentKey,
     agentAccess: agentKey ? "ready" : "removed",
+    ...(readOnly ? { readOnly: true } : {}),
     schedule,
-    prompt: job.payload.message,
+    prompt: job.payload.kind === "agentTurn" ? job.payload.message : "",
     nextRunAt: job.nextRunAtMs ?? job.state.nextRunAtMs ?? null,
     lastRunAt: job.lastRunAtMs ?? job.state.lastRunAtMs ?? null,
     lastResult: job.lastRunStatus ?? job.state.lastRunStatus ?? job.state.lastStatus ?? null,
@@ -181,6 +217,19 @@ export async function listUserAutomations(
     .filter((job): job is UserAutomation => job !== null);
 }
 
+async function assertMutableUserAutomation(
+  runtime: UserAutomationRuntime,
+  id: string,
+): Promise<void> {
+  const automation = (await listUserAutomations(runtime)).find((item) => item.id === id);
+  if (!automation) {
+    throw new Error("AUTOMATION_NOT_FOUND");
+  }
+  if (automation.readOnly) {
+    throw new Error("AUTOMATION_READ_ONLY");
+  }
+}
+
 export async function createUserAutomation(
   runtime: UserAutomationRuntime,
   rawInput: UserAutomationInput,
@@ -219,6 +268,7 @@ export async function updateUserAutomation(
   rawInput: UserAutomationInput,
 ): Promise<UserAutomation> {
   const input = validateInput(rawInput);
+  await assertMutableUserAutomation(runtime, id);
   const patch: CronJobPatch = {
     name: input.name,
     enabled: input.enabled,
@@ -265,6 +315,7 @@ export async function deleteUserAutomation(
   runtime: UserAutomationRuntime,
   id: string,
 ): Promise<void> {
+  await assertMutableUserAutomation(runtime, id);
   try {
     await invoke(runtime, "cron.remove", { id });
   } catch (error) {
@@ -276,6 +327,7 @@ export async function deleteUserAutomation(
 }
 
 export async function runUserAutomation(runtime: UserAutomationRuntime, id: string): Promise<void> {
+  await assertMutableUserAutomation(runtime, id);
   try {
     await invoke(runtime, "cron.run", { id, mode: "force" });
   } catch (error) {

@@ -1,0 +1,70 @@
+- generic [ref=e2]:
+  - complementary [ref=e3]:
+    - generic [ref=e4]:
+      - generic [ref=e5]: Active Agent
+      - strong [ref=e6]: Personal Agent
+    - button "＋ New chat" [ref=e7]
+    - navigation [ref=e8]:
+      - generic [ref=e9]: Agents
+      - generic [ref=e10]: Automations
+      - generic [ref=e11]: Plugins
+    - generic [ref=e12]: Projects
+  - main [ref=e13]:
+    - generic [ref=e14]:
+      - generic [ref=e15]:
+        - generic [ref=e16]:
+          - heading "Plugins" [level=1] [ref=e17]
+          - generic [ref=e18]: Cài Skill ClawHub sạch cho một Agent hoặc yêu cầu quyền plugin native.
+        - generic [ref=e20]:
+          - generic [ref=e21]:
+            - text: Đã cài
+            - generic [ref=e22]: "2"
+          - text: Khám phá
+          - generic [ref=e23]:
+            - text: Yêu cầu
+            - generic [ref=e24]: "1"
+      - generic [ref=e27]:
+        - generic [ref=e28]:
+          - generic [ref=e29]:
+            - generic [ref=e30]: Agent
+            - generic [ref=e31]:
+              - text: Personal Agent
+              - generic [ref=e32]: ⌄
+          - generic [ref=e33]:
+            - generic [ref=e34]: Tìm trên ClawHub
+            - searchbox "Tìm trên ClawHub" [ref=e35]: github
+          - generic [ref=e36]: Đang hiện 3
+        - generic [ref=e37]:
+          - generic [ref=e38]:
+            - heading "Skill từ ClawHub 2" [level=2] [ref=e40]
+            - generic [ref=e41]:
+              - article [ref=e42]:
+                - generic [ref=e43]: GH
+                - generic [ref=e44]:
+                  - heading "GitHub v1.2.3" [level=3] [ref=e45]
+                  - generic [ref=e46]: Làm việc với repository và pull request.
+                  - generic [ref=e47]: Skill · openclaw
+                - generic [ref=e48]:
+                  - generic [ref=e49]: Sạch
+                  - button "Xem bản phát hành" [ref=e51]
+              - article [ref=e52]:
+                - generic [ref=e53]: GA
+                - generic [ref=e54]:
+                  - heading "GitHub Actions v2.0.0" [level=3] [ref=e55]
+                  - generic [ref=e56]: Theo dõi workflow và kiểm tra build.
+                  - generic [ref=e57]: Skill · community
+                - generic [ref=e58]:
+                  - generic [ref=e59]: Sạch
+                  - button "Xem bản phát hành" [ref=e61]
+          - generic [ref=e62]:
+            - heading "Plugin native 1" [level=2] [ref=e64]
+            - paragraph [ref=e65]: Plugin native chạy trong Gateway và cần Admin phê duyệt trước khi account này dùng các tool đã duyệt.
+            - article [ref=e67]:
+              - generic [ref=e68]: GW
+              - generic [ref=e69]:
+                - heading "GitHub Workflow v3.1.0" [level=3] [ref=e70]
+                - generic [ref=e71]: Plugin bundle chạy tool native trong Gateway.
+                - generic [ref=e72]: Plugin bundle · openclaw · 2 yêu cầu phụ thuộc
+              - generic [ref=e73]:
+                - generic [ref=e74]: Cần Admin phê duyệt
+                - button "Xem bản phát hành" [ref=e76]

@@ -1,3 +1,4 @@
+import { eu } from "../../../i18n/enterprise-user.ts";
 import {
   EnterpriseApiError,
   loadEnterpriseMe,
@@ -57,7 +58,7 @@ export class EnterpriseAuthStore {
     } catch (error) {
       this.setState({
         phase: "error",
-        message: error instanceof Error ? error.message : "Không thể kiểm tra Enterprise Auth.",
+        message: error instanceof Error ? error.message : eu("portalCheckFailed"),
       });
     }
   }

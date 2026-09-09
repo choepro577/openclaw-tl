@@ -1,3 +1,4 @@
+import path from "node:path";
 import type { OpenClawConfig } from "../../config/types.openclaw.js";
 import { loadInstalledPluginIndexInstallRecordsSync } from "../../plugins/installed-plugin-index-records.js";
 import { listManagedPlugins } from "../../plugins/management-service.js";
@@ -25,15 +26,23 @@ type GatewayPluginInstallResult = {
   restartRequired?: boolean;
 };
 
-function installedRecord(
-  packageName: string,
-): { pluginId: string; version: string | null; integrity: string | null } | undefined {
+function installedRecord(packageName: string):
+  | {
+      pluginId: string;
+      version: string | null;
+      runtimeVersion: string | null;
+      installPath: string | null;
+      integrity: string | null;
+    }
+  | undefined {
   const records = loadInstalledPluginIndexInstallRecordsSync();
   for (const [pluginId, record] of Object.entries(records)) {
     if (record.source === "clawhub" && record.clawhubPackage === packageName) {
       return {
         pluginId,
-        version: record.version ?? null,
+        version: record.clawhubVersion ?? record.version ?? null,
+        runtimeVersion: record.version ?? null,
+        installPath: record.installPath ?? null,
         integrity: record.integrity ?? record.npmIntegrity ?? null,
       };
     }
@@ -62,8 +71,16 @@ function activateGrantIfLoaded(
   if (!record || !plugin) {
     return { request, grant: null };
   }
-  const activeVersion = plugin.packageVersion ?? plugin.version ?? record.version;
-  if (activeVersion !== request.exactVersion || record.version !== request.exactVersion) {
+  // A same-id bundled or config copy must not inherit the reviewed artifact's grant.
+  if (
+    !record.installPath ||
+    !plugin.rootDir ||
+    path.resolve(record.installPath) !== path.resolve(plugin.rootDir)
+  ) {
+    throw new EnterpriseExtensionError("GLOBAL_INSTALL_VERIFICATION_FAILED", 409);
+  }
+  const activeVersion = plugin.packageVersion ?? plugin.version ?? record.runtimeVersion;
+  if (activeVersion !== record.runtimeVersion || record.version !== request.exactVersion) {
     throw new EnterpriseExtensionError("GLOBAL_VERSION_CONFLICT", 409);
   }
   if (record.integrity !== request.integrity) {
@@ -126,11 +143,21 @@ export async function approveEnterprisePluginRequest(input: {
     throw new EnterpriseExtensionError("EXTENSION_REVISION_CONFLICT", 409);
   }
   const catalog = await listManagedPlugins({ config: input.config });
-  const existing = catalog.plugins.find((plugin) => plugin.packageName === request.packageName);
-  if (existing?.version && existing.version !== request.exactVersion) {
+  // Catalog availability (including a disabled bundled copy) is not a prior
+  // ClawHub install. An explicit approval must still download and verify it.
+  const existing = catalog.plugins.find(
+    (plugin) =>
+      plugin.packageName === request.packageName &&
+      plugin.installed &&
+      !(plugin.origin === "bundled" && !plugin.enabled),
+  );
+  const recordBeforeDecision = installedRecord(request.packageName);
+  if (
+    existing?.version &&
+    existing.version !== (recordBeforeDecision?.runtimeVersion ?? request.exactVersion)
+  ) {
     throw new EnterpriseExtensionError("GLOBAL_VERSION_CONFLICT", 409);
   }
-  const recordBeforeDecision = installedRecord(request.packageName);
   if (
     recordBeforeDecision &&
     (recordBeforeDecision.version !== request.exactVersion ||

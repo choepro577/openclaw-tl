@@ -5,6 +5,7 @@ import {
   it,
   vi,
   THREAD_ID,
+  TURN_ID,
   createParams,
   createProjector,
   buildEmptyToolTelemetry,
@@ -15,6 +16,7 @@ import {
   turnCompleted,
   type ProjectorNotification,
 } from "./event-projector.test-harness.js";
+import { readMirrorIdentity } from "./upstream-prompt-provenance.js";
 
 registerCodexEventProjectorTestLifecycle();
 
@@ -417,6 +419,101 @@ describe("CodexAppServerEventProjector reasoning and guardian projection", () =>
       "compactionCount",
     );
     expect(onContextCompacted).toHaveBeenCalledOnce();
+  });
+
+  it.each([
+    { persistenceResult: true, expectedHidden: true },
+    { persistenceResult: false, expectedHidden: false },
+  ])(
+    "projects the native plan mirror only after progress card persistence succeeds ($persistenceResult)",
+    async ({ persistenceResult, expectedHidden }) => {
+      const onNativePlanUpdate = vi.fn().mockResolvedValue(persistenceResult);
+      const projector = await createProjector(undefined, { onNativePlanUpdate });
+
+      await projector.handleNotification(
+        forCurrentTurn("turn/plan/updated", {
+          explanation: "Inspect the repository",
+          plan: [{ step: "inspect", status: "inProgress" }],
+        }),
+      );
+
+      const result = projector.buildResult(buildEmptyToolTelemetry());
+      const planMirror = result.messagesSnapshot.find(
+        (message) => readMirrorIdentity(message) === `${TURN_ID}:plan`,
+      );
+      expect(planMirror).toBeDefined();
+      expect((planMirror as { display?: boolean } | undefined)?.display === false).toBe(
+        expectedHidden,
+      );
+      expect(onNativePlanUpdate).toHaveBeenCalledWith({
+        markdown: "Inspect the repository",
+        steps: [{ step: "inspect", status: "in_progress" }],
+      });
+    },
+  );
+
+  it("keeps the raw mirror visible when a successful progress card clears the current plan", async () => {
+    const onNativePlanUpdate = vi.fn().mockResolvedValue(true);
+    const projector = await createProjector(undefined, { onNativePlanUpdate });
+
+    await projector.handleNotification(
+      forCurrentTurn("turn/plan/updated", {
+        plan: [{ step: "inspect", status: "pending" }],
+      }),
+    );
+    await projector.recordDynamicProgressCardUpdate({ plan: [] });
+
+    const result = projector.buildResult(buildEmptyToolTelemetry());
+    const planMirror = result.messagesSnapshot.find(
+      (message) => readMirrorIdentity(message) === `${TURN_ID}:plan`,
+    );
+    expect((planMirror as { display?: boolean } | undefined)?.display).not.toBe(false);
+  });
+
+  it("does not let a late native plan persistence result hide a newer failed plan", async () => {
+    let resolveFirst!: (persisted: boolean) => void;
+    const firstPersistence = new Promise<boolean>((resolve) => {
+      resolveFirst = resolve;
+    });
+    const onNativePlanUpdate = vi
+      .fn()
+      .mockImplementationOnce(() => firstPersistence)
+      .mockResolvedValueOnce(false);
+    const projector = await createProjector(undefined, { onNativePlanUpdate });
+
+    const firstUpdate = projector.handleNotification(
+      forCurrentTurn("turn/plan/updated", {
+        plan: [{ step: "first", status: "pending" }],
+      }),
+    );
+    await vi.waitFor(() => expect(onNativePlanUpdate).toHaveBeenCalledTimes(1));
+    await projector.handleNotification(
+      forCurrentTurn("turn/plan/updated", {
+        plan: [{ step: "newer", status: "pending" }],
+      }),
+    );
+    resolveFirst(true);
+    await firstUpdate;
+
+    const result = projector.buildResult(buildEmptyToolTelemetry());
+    const planMirror = result.messagesSnapshot.find(
+      (message) => readMirrorIdentity(message) === `${TURN_ID}:plan`,
+    );
+    expect((planMirror as { display?: boolean } | undefined)?.display).not.toBe(false);
+  });
+
+  it("treats a successful OpenClaw progress card projection as persisted plan state", async () => {
+    const projector = await createProjector();
+
+    await projector.recordDynamicProgressCardUpdate({
+      plan: [{ step: "inspect", status: "pending" }],
+    });
+
+    const result = projector.buildResult(buildEmptyToolTelemetry());
+    const planMirror = result.messagesSnapshot.find(
+      (message) => readMirrorIdentity(message) === `${TURN_ID}:plan`,
+    );
+    expect((planMirror as { display?: boolean } | undefined)?.display).toBe(false);
   });
 
   it("streams accumulated reasoning snapshots grouped by Codex reasoning indexes", async () => {

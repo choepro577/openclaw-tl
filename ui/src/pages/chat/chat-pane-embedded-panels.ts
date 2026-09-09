@@ -49,6 +49,8 @@ type SidebarPanelDefinitionParams = {
   connected: boolean;
   pendingQuestion: string | null;
   onClearCompanion: () => void;
+  subagents?: boolean;
+  taskDetailsInTasksSlot?: boolean;
   discussion: SessionDiscussionPanelConfig | null;
   discussionOpenUrl: string | null;
   discussionSourceGeneration: number;
@@ -62,6 +64,7 @@ type SidebarPanelTextKey =
   | "discussion"
   | "files"
   | "review"
+  | "subagents"
   | "tasks"
   | "terminal";
 
@@ -157,8 +160,10 @@ export function sidebarPanelDefinitions(
       ></openclaw-session-discussion>`
     : null;
   const detailContent =
-    state?.sidebarContent ??
-    (state && params?.detailOpen ? resolveSessionDiffSidebarContent(state) : null);
+    params?.taskDetailsInTasksSlot && state?.sidebarContent?.kind === "task"
+      ? null
+      : (state?.sidebarContent ??
+        (state && params?.detailOpen ? resolveSessionDiffSidebarContent(state) : null));
   return [
     definePanel(
       "detail",
@@ -210,7 +215,12 @@ export function sidebarPanelDefinitions(
           }
         : undefined,
     ),
-    definePanel("tasks", "tasks", icons.listChecks, params?.tasks ?? null),
+    definePanel(
+      "tasks",
+      params?.subagents === true ? "subagents" : "tasks",
+      icons.listChecks,
+      params?.tasks ?? null,
+    ),
     definePanel("desktop", "desktop", icons.monitor, desktop, {
       available: desktopAvailable,
       ...(desktopFocusHref

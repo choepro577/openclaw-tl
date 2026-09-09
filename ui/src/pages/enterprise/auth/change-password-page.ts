@@ -1,5 +1,7 @@
 import { html } from "lit";
 import { property, state } from "lit/decorators.js";
+import { renderEnterpriseLanguagePicker } from "../../../i18n/enterprise-language-picker.ts";
+import { eu } from "../../../i18n/enterprise-user.ts";
 import { OpenClawLightDomElement } from "../../../lit/openclaw-element.ts";
 import { changeEnterprisePassword, type EnterpriseAccount } from "../services/enterprise-api.ts";
 import { readEnterpriseFormString } from "../services/form-data.ts";
@@ -15,7 +17,7 @@ export class EnterpriseChangePasswordPage extends OpenClawLightDomElement {
     const data = new FormData(event.currentTarget as HTMLFormElement);
     const next = readEnterpriseFormString(data, "newPassword");
     if (next !== readEnterpriseFormString(data, "confirmation")) {
-      this.error = "Xác nhận mật khẩu không khớp.";
+      this.error = eu("passwordMismatch");
       return;
     }
     this.busy = true;
@@ -24,7 +26,7 @@ export class EnterpriseChangePasswordPage extends OpenClawLightDomElement {
       await changeEnterprisePassword(readEnterpriseFormString(data, "currentPassword"), next);
       this.onChanged?.();
     } catch (error) {
-      this.error = error instanceof Error ? error.message : "Không thể đổi mật khẩu.";
+      this.error = error instanceof Error ? error.message : eu("passwordUpdateFailed");
     } finally {
       this.busy = false;
     }
@@ -34,20 +36,21 @@ export class EnterpriseChangePasswordPage extends OpenClawLightDomElement {
     return html`
       <main class="enterprise-auth-screen">
         <section class="enterprise-card">
-          <h1 class="enterprise-title">Đổi mật khẩu lần đầu</h1>
+          ${renderEnterpriseLanguagePicker("enterprise-select")}
+          <h1 class="enterprise-title">${eu("changePasswordFirst")}</h1>
           <p class="enterprise-muted">
-            Xin chào ${this.account?.displayName ?? "bạn"}. Mật khẩu mới cần ít nhất 10 ký tự.
+            ${eu("welcomePassword", { name: this.account?.displayName ?? "" })}
           </p>
           <form class="enterprise-form" @submit=${(event: SubmitEvent) => void this.submit(event)}>
             <label class="enterprise-field"
-              >Mật khẩu hiện tại<input
+              >${eu("currentPassword")}<input
                 class="enterprise-input"
                 name="currentPassword"
                 type="password"
                 required
             /></label>
             <label class="enterprise-field"
-              >Mật khẩu mới<input
+              >${eu("newPassword")}<input
                 class="enterprise-input"
                 name="newPassword"
                 type="password"
@@ -55,7 +58,7 @@ export class EnterpriseChangePasswordPage extends OpenClawLightDomElement {
                 required
             /></label>
             <label class="enterprise-field"
-              >Nhập lại mật khẩu mới<input
+              >${eu("confirmNewPassword")}<input
                 class="enterprise-input"
                 name="confirmation"
                 type="password"
@@ -63,7 +66,7 @@ export class EnterpriseChangePasswordPage extends OpenClawLightDomElement {
                 required
             /></label>
             <button class="enterprise-button" type="submit" ?disabled=${this.busy}>
-              ${this.busy ? "Đang lưu…" : "Đổi mật khẩu"}
+              ${this.busy ? eu("saveBusy") : eu("changePassword")}
             </button>
             ${this.error ? html`<p class="enterprise-error" role="alert">${this.error}</p>` : ""}
           </form>

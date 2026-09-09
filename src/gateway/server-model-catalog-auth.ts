@@ -2,6 +2,7 @@ import type { RuntimeAuthMaterialization } from "../agents/auth-profiles/runtime
 import type { ResolvedPublishedModelCatalogOwner } from "../agents/prepared-model-catalog.types.js";
 import type { PreparedModelRuntimeAuthScope } from "../agents/prepared-model-runtime-auth.js";
 import type { OpenClawConfig } from "../config/types.openclaw.js";
+import { isGatewayRequestScopedRuntimeConfig } from "./request-runtime-config.js";
 import type { GatewayRequestContext } from "./server-methods/shared-types.js";
 import type { GatewayModelCatalogSnapshot } from "./server-model-catalog.types.js";
 
@@ -52,6 +53,27 @@ function requirePrivateAccess(
     throw new Error("Gateway model catalog loader omitted prepared owner access");
   }
   return access;
+}
+
+/** Loads the catalog owned by the exact request config when Enterprise projected it per user. */
+export async function loadGatewayModelCatalogForRequest(
+  context: Pick<
+    GatewayRequestContext,
+    "getRuntimeConfig" | "loadGatewayModelCatalog" | "loadGatewayModelCatalogSnapshot"
+  >,
+  agentId: string,
+): Promise<Awaited<ReturnType<GatewayRequestContext["loadGatewayModelCatalog"]>>> {
+  const config = context.getRuntimeConfig();
+  if (!isGatewayRequestScopedRuntimeConfig(config)) {
+    return await context.loadGatewayModelCatalog({ agentId });
+  }
+  return (
+    await requirePrivateAccess(context).loadDeferred({
+      agentId,
+      config,
+      readOnly: true,
+    })
+  ).entries;
 }
 
 export async function loadDeferredCatalog(

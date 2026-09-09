@@ -25,12 +25,17 @@ import type { MediaFact } from "../../media/media-facts.js";
 import type { PromptImageOrderEntry } from "../../media/prompt-image-order.js";
 import { bindGatewayContextResolver } from "../../plugins/runtime/gateway-request-scope.js";
 import { retainGatewayRootWorkAdmissionContinuation } from "../../process/gateway-work-admission.js";
+import { normalizeAgentId } from "../../routing/session-key.js";
 import {
   annotateInterSessionPromptText,
   type InputProvenance,
 } from "../../sessions/input-provenance.js";
 import { discardPreparedInboundMedia } from "../chat-attachments.js";
 import { getGatewayLocalUserIngress } from "../local-user-ingress.js";
+import {
+  isGatewayRequestScopedRuntimeConfig,
+  readGatewayRequestRuntimeMetadata,
+} from "../request-runtime-config.js";
 import type { AgentRunRequest } from "../server-methods/agent-request-types.js";
 import { createAgentRunModelSelectionHandler } from "../server-methods/agent-run-model-selection.js";
 import { resolveSessionRuntimeCwd } from "../server-methods/agent-session-reset.js";
@@ -203,8 +208,22 @@ export function startAgentRunExecution(params: {
       const ingressAgentId = params.resolvedSessionKey
         ? params.activeSessionAgentId
         : params.agentId;
+      const commandConfig = params.cfgForAgent ?? params.cfg;
+      const requestScopedRuntime = isGatewayRequestScopedRuntimeConfig(commandConfig);
+      const enterpriseUserRuntime = requestScopedRuntime
+        ? readGatewayRequestRuntimeMetadata(commandConfig)?.enterpriseUser
+        : undefined;
+      // Synthetic Personal Agents are absent from the host-global publication.
+      // Reuse the configured template's plugin/auth generation while retaining
+      // the exact account-scoped config as the executable policy.
+      const publishedRuntimeAgentId =
+        enterpriseUserRuntime &&
+        normalizeAgentId(enterpriseUserRuntime.personalAgentId) ===
+          normalizeAgentId(params.activeSessionAgentId)
+          ? enterpriseUserRuntime.personalAgentTemplateId
+          : params.activeSessionAgentId;
       const replyDispatchRuntime = await loadPublishedGatewayReplyDispatchRuntime({
-        agentId: params.activeSessionAgentId,
+        agentId: publishedRuntimeAgentId,
       });
       if (!replyDispatchRuntime?.pluginGeneration) {
         throw new Error(
@@ -273,7 +292,7 @@ export function startAgentRunExecution(params: {
         withAgentRunDispatchExecutionIdentity(
           {
             commandRuntimeContext: {
-              config: params.cfgForAgent ?? params.cfg,
+              config: commandConfig,
               pluginGeneration: replyDispatchRuntime.pluginGeneration,
             },
             cronCreatorAuthority: prepared.cronCreatorAuthority,

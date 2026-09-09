@@ -406,12 +406,15 @@ function describeSubagentOutcome(outcome?: SubagentRunOutcome): string {
   return "unknown";
 }
 
-function formatChildResultData(resultText?: string | null): string {
+function formatChildResultData(
+  resultText?: string | null,
+  maxEscapedChars = MAX_CHILD_COMPLETION_RESULT_CHARS,
+): string {
   return (
     wrapPromptDataBlock({
       label: "Child result",
       text: resultText?.trim() || "(no output)",
-      maxEscapedChars: MAX_CHILD_COMPLETION_RESULT_CHARS,
+      maxEscapedChars,
       truncationMarker: CHILD_RESULT_TRUNCATION_NOTICE,
     }) || "Child result: (no output)"
   );
@@ -437,6 +440,7 @@ type ChildCompletionRow = {
 type ChildCompletionSection = {
   index: number;
   text: string;
+  completeText: string;
   actionable: boolean;
 };
 
@@ -488,14 +492,15 @@ export function buildChildCompletionFindings(
       child.childSessionKey.trim() ||
       `child ${index + 1}`;
     const displayIndex = sections.length + 1;
+    const heading = [
+      `${displayIndex}. ${truncateChildCompletionField(title)}`,
+      `status: ${truncateChildCompletionField(outcome)}`,
+    ].join("\n");
     sections.push({
       index: displayIndex,
       actionable: child.execution.outcome?.status !== "ok",
-      text: [
-        `${displayIndex}. ${truncateChildCompletionField(title)}`,
-        `status: ${truncateChildCompletionField(outcome)}`,
-        formatChildResultData(resultText),
-      ].join("\n"),
+      text: `${heading}\n${formatChildResultData(resultText)}`,
+      completeText: `${heading}\n${formatChildResultData(resultText, MAX_CHILD_COMPLETION_FINDINGS_CHARS)}`,
     });
   }
 
@@ -516,6 +521,14 @@ export function buildChildCompletionFindings(
           ]
         : []),
     ].join("\n\n");
+  // A settled batch may be the requester's only completion delivery. Keep all
+  // captured conclusions when they fit the existing aggregate budget; otherwise
+  // retain the compact, failure-prioritized projection below. Both projections
+  // sanitize and bound escaped data before it reaches the parent prompt.
+  const completeFindings = render(sections.map((section) => section.completeText));
+  if (completeFindings.length <= MAX_CHILD_COMPLETION_FINDINGS_CHARS) {
+    return completeFindings;
+  }
   const allSections = sections.map((section) => section.text);
   if (render(allSections).length <= MAX_CHILD_COMPLETION_FINDINGS_CHARS) {
     return render(allSections);

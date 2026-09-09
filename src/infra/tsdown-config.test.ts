@@ -89,6 +89,10 @@ function readGatewayRunLoopSource(): string {
   return readFileSync(new URL("../cli/gateway-cli/run-loop.ts", import.meta.url), "utf8");
 }
 
+function readGatewayServerMethodsSource(): string {
+  return readFileSync(new URL("../gateway/server-methods.ts", import.meta.url), "utf8");
+}
+
 function readAgentAuthDiscoverySource(): string {
   return readFileSync(new URL("../agents/agent-auth-discovery.ts", import.meta.url), "utf8");
 }
@@ -226,6 +230,22 @@ describe("tsdown config", () => {
     expect(entrySources(distGraph)["cli/gateway-lifecycle.runtime"]).toBe(
       "src/cli/gateway-cli/lifecycle.runtime.ts",
     );
+  });
+
+  it("keeps every lazy Gateway handler behind a stable dist entry", () => {
+    const entries = entrySources(requireUnifiedDistGraph());
+    const missingEntries = [
+      ...readGatewayServerMethodsSource().matchAll(/import\("\.\/([^"]+)\.js"\)/gu),
+    ]
+      .map((match) => match[1])
+      .filter((modulePath): modulePath is string => Boolean(modulePath))
+      .map((modulePath) => ({
+        entry: `gateway/${modulePath}`,
+        source: `src/gateway/${modulePath}.ts`,
+      }))
+      .filter(({ entry, source }) => entries[entry] !== source);
+
+    expect(missingEntries).toEqual([]);
   });
 
   it("keeps reply dispatcher lazy runtime behind one root stable dist entry", () => {

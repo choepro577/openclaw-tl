@@ -12,6 +12,7 @@ import {
  */
 import type { ThinkLevel } from "../auto-reply/thinking.js";
 import type { OpenClawConfig } from "../config/types.openclaw.js";
+import { isGatewayRequestScopedRuntimeConfig } from "../gateway/request-runtime-config.js";
 import { formatErrorMessage } from "../infra/errors.js";
 import { bindModelLlmRuntime, getModelLlmRuntime } from "../llm/model-runtime-binding.js";
 import { completeSimple } from "../llm/stream.js";
@@ -83,6 +84,7 @@ type AllowedMissingApiKeyMode = ResolvedProviderAuth["mode"];
 type SimpleCompletionModelOptions = {
   maxTokens?: number;
   temperature?: number;
+  responseFormat?: NonNullable<Parameters<typeof completeSimple>[2]>["responseFormat"];
   reasoning?: ThinkLevel | SimpleCompletionThinkingLevel;
   signal?: AbortSignal;
 };
@@ -487,6 +489,9 @@ async function withPreparedSimpleCompletionRuntime<T>(
     : await acquireAgentRunPreparedModelRuntime(
         {
           config,
+          // Router/utility completions must retain the same account projection
+          // as full agent runs, including synthetic owners absent from global config.
+          ...(isGatewayRequestScopedRuntimeConfig(config) ? { preserveConfigOnRefresh: true } : {}),
           agentId,
           agentDir,
           workspaceDir: requestedWorkspaceDir,

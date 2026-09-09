@@ -65,6 +65,7 @@ export type InstalledPluginInstallRecordInfo = Pick<
   | "installedAt"
   | "clawhubUrl"
   | "clawhubPackage"
+  | "clawhubVersion"
   | "clawhubFamily"
   | "clawhubChannel"
   | "clawhubTrustDisposition"

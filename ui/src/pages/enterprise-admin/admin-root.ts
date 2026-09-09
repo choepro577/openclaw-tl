@@ -1,6 +1,9 @@
 import { html, nothing } from "lit";
 import { state } from "lit/decorators.js";
-import { icons } from "../../components/icons.ts";
+import { inferControlUiPublicAssetPath } from "../../app/public-assets.ts";
+import { renderSensitiveInput } from "../../components/sensitive-input.ts";
+import { adminShellCopy } from "../../i18n/enterprise-admin-shell.ts";
+import { renderEnterpriseLanguagePicker } from "../../i18n/enterprise-language-picker.ts";
 import { OpenClawLightDomElement } from "../../lit/openclaw-element.ts";
 import {
   changeEnterprisePortalPassword,
@@ -20,13 +23,18 @@ type AdminAuthState =
   | { phase: "login" }
   | { phase: "change-password"; account: EnterpriseAccount }
   | { phase: "ready"; account: EnterpriseAccount }
-  | { phase: "error"; message: string };
+  | { phase: "error"; error: unknown };
 
 export class EnterpriseAdminRoot extends OpenClawLightDomElement {
   @state() private auth: AdminAuthState = { phase: "checking" };
   @state() private pathname = adminPathname();
   @state() private busy = false;
-  @state() private formError = "";
+  @state() private loginPassword = "";
+  @state() private showLoginPassword = false;
+  @state() private formError:
+    | { kind: "password-mismatch" }
+    | { kind: "request"; error: unknown }
+    | null = null;
   private endAppearanceScope?: () => void;
 
   override connectedCallback(): void {
@@ -95,16 +103,20 @@ export class EnterpriseAdminRoot extends OpenClawLightDomElement {
         }
         this.auth = { phase: "login" };
       } else {
-        this.auth = { phase: "error", message: errorMessage(error) };
+        this.auth = { phase: "error", error };
       }
     }
   }
 
   private async login(event: SubmitEvent): Promise<void> {
     event.preventDefault();
-    const data = new FormData(event.currentTarget as HTMLFormElement);
+    const form = event.currentTarget;
+    if (!(form instanceof HTMLFormElement)) {
+      return;
+    }
+    const data = new FormData(form);
     this.busy = true;
-    this.formError = "";
+    this.formError = null;
     try {
       const { account } = await loginEnterprisePortal(
         "admin",
@@ -118,9 +130,11 @@ export class EnterpriseAdminRoot extends OpenClawLightDomElement {
         navigateAdmin("/accounts", true);
         this.auth = { phase: "ready", account };
       }
-      (event.currentTarget as HTMLFormElement).reset();
+      this.loginPassword = "";
+      this.showLoginPassword = false;
+      form.reset();
     } catch (error) {
-      this.formError = errorMessage(error);
+      this.formError = { kind: "request", error };
     } finally {
       this.busy = false;
     }
@@ -128,15 +142,18 @@ export class EnterpriseAdminRoot extends OpenClawLightDomElement {
 
   private async changePassword(event: SubmitEvent): Promise<void> {
     event.preventDefault();
-    const form = event.currentTarget as HTMLFormElement;
+    const form = event.currentTarget;
+    if (!(form instanceof HTMLFormElement)) {
+      return;
+    }
     const data = new FormData(form);
     const next = String(data.get("newPassword") ?? "");
     if (next !== String(data.get("confirmPassword") ?? "")) {
-      this.formError = "Mật khẩu xác nhận không khớp.";
+      this.formError = { kind: "password-mismatch" };
       return;
     }
     this.busy = true;
-    this.formError = "";
+    this.formError = null;
     try {
       await changeEnterprisePortalPassword(
         "admin",
@@ -147,7 +164,7 @@ export class EnterpriseAdminRoot extends OpenClawLightDomElement {
       navigateAdmin("/login", true);
       this.auth = { phase: "login" };
     } catch (error) {
-      this.formError = errorMessage(error);
+      this.formError = { kind: "request", error };
     } finally {
       this.busy = false;
     }
@@ -165,8 +182,10 @@ export class EnterpriseAdminRoot extends OpenClawLightDomElement {
   private renderBrand() {
     return html`
       <div class="ea-brand">
-        <div class="ea-brand__mark" aria-hidden="true">${icons.lobster}</div>
-        <div><strong>OpenClaw</strong><span>Enterprise Admin</span></div>
+        <div class="ea-brand__mark" aria-hidden="true">
+          <img src=${inferControlUiPublicAssetPath("favicon.svg")} alt="" />
+        </div>
+        <div><strong>MAAP</strong><span>MAAP Admin</span></div>
       </div>
     `;
   }
@@ -174,32 +193,69 @@ export class EnterpriseAdminRoot extends OpenClawLightDomElement {
   private renderLogin() {
     return html`
       <main class="ea-auth">
-        <section class="ea-auth__card">
-          ${this.renderBrand()}
-          <h1>Đăng nhập quản trị</h1>
-          <p class="ea-muted">Chỉ tài khoản administrator có thể truy cập portal này.</p>
-          <form class="ea-form" @submit=${(event: SubmitEvent) => void this.login(event)}>
-            <label class="ea-field"
-              >Username
-              <input class="ea-input" name="username" autocomplete="username" required autofocus />
-            </label>
-            <label class="ea-field"
-              >Mật khẩu
-              <input
-                class="ea-input"
-                name="password"
-                type="password"
-                autocomplete="current-password"
-                required
-              />
-            </label>
-            <button class="ea-button ea-button--primary" type="submit" ?disabled=${this.busy}>
-              ${this.busy ? "Đang đăng nhập…" : "Đăng nhập Admin"}
-            </button>
-            ${this.formError
-              ? html`<p class="ea-error" role="alert">${this.formError}</p>`
-              : nothing}
-          </form>
+        <section class="ea-auth__card ea-auth__card--login">
+          <div class="ea-auth__visual">
+            ${this.renderBrand()}
+            <div class="ea-auth__visual-mark" aria-hidden="true">
+              <img src=${inferControlUiPublicAssetPath("favicon.svg")} alt="" />
+            </div>
+          </div>
+          <div class="ea-auth__panel">
+            <div class="ea-auth__copy">
+              <span class="ea-auth__eyebrow">MAAP ADMIN</span>
+              <h1>${adminShellCopy("Đăng nhập quản trị")}</h1>
+              <p class="ea-muted">
+                ${adminShellCopy("Chỉ tài khoản administrator có thể truy cập portal này.")}
+              </p>
+            </div>
+            <form class="ea-form" @submit=${(event: SubmitEvent) => void this.login(event)}>
+              <label class="ea-field"
+                >${adminShellCopy("Username")}
+                <input
+                  class="ea-input"
+                  name="username"
+                  autocomplete="username"
+                  required
+                  autofocus
+                />
+              </label>
+              <div class="ea-field">
+                <label for="ea-admin-password">${adminShellCopy("Mật khẩu")}</label>
+                ${renderSensitiveInput({
+                  id: "ea-admin-password",
+                  name: "password",
+                  value: this.loginPassword,
+                  revealed: this.showLoginPassword,
+                  revealLabel: adminShellCopy("Hiện mật khẩu"),
+                  hideLabel: adminShellCopy("Ẩn mật khẩu"),
+                  className: "ea-auth__password",
+                  inputClassName: "ea-input",
+                  autocomplete: "current-password",
+                  required: true,
+                  disabled: this.busy,
+                  onInput: (value) => {
+                    this.loginPassword = value;
+                  },
+                  onToggle: () => {
+                    this.showLoginPassword = !this.showLoginPassword;
+                  },
+                })}
+              </div>
+              <button class="ea-button ea-button--primary" type="submit" ?disabled=${this.busy}>
+                ${this.busy ? adminShellCopy("Đang đăng nhập…") : adminShellCopy("Đăng nhập Admin")}
+              </button>
+              ${this.formError
+                ? html`<p class="ea-error" role="alert">
+                    ${this.formError.kind === "password-mismatch"
+                      ? adminShellCopy("Mật khẩu xác nhận không khớp.")
+                      : errorMessage(this.formError.error)}
+                  </p>`
+                : nothing}
+            </form>
+            <footer class="ea-auth__language">
+              ${renderEnterpriseLanguagePicker("ea-input ea-auth__language-select")}
+            </footer>
+          </div>
         </section>
       </main>
     `;
@@ -209,12 +265,14 @@ export class EnterpriseAdminRoot extends OpenClawLightDomElement {
     return html`
       <main class="ea-auth">
         <section class="ea-auth__card">
-          ${this.renderBrand()}
-          <h1>Đổi mật khẩu</h1>
-          <p class="ea-muted">@${account.username} · sau khi đổi bạn cần đăng nhập lại.</p>
+          ${this.renderBrand()} ${renderEnterpriseLanguagePicker("ea-input")}
+          <h1>${adminShellCopy("Đổi mật khẩu")}</h1>
+          <p class="ea-muted">
+            @${account.username} · ${adminShellCopy("sau khi đổi bạn cần đăng nhập lại.")}
+          </p>
           <form class="ea-form" @submit=${(event: SubmitEvent) => void this.changePassword(event)}>
             <label class="ea-field"
-              >Mật khẩu hiện tại
+              >${adminShellCopy("Mật khẩu hiện tại")}
               <input
                 class="ea-input"
                 name="currentPassword"
@@ -224,7 +282,7 @@ export class EnterpriseAdminRoot extends OpenClawLightDomElement {
               />
             </label>
             <label class="ea-field"
-              >Mật khẩu mới
+              >${adminShellCopy("Mật khẩu mới")}
               <input
                 class="ea-input"
                 name="newPassword"
@@ -235,7 +293,7 @@ export class EnterpriseAdminRoot extends OpenClawLightDomElement {
               />
             </label>
             <label class="ea-field"
-              >Xác nhận mật khẩu mới
+              >${adminShellCopy("Xác nhận mật khẩu mới")}
               <input
                 class="ea-input"
                 name="confirmPassword"
@@ -246,7 +304,7 @@ export class EnterpriseAdminRoot extends OpenClawLightDomElement {
               />
             </label>
             <button class="ea-button ea-button--primary" type="submit" ?disabled=${this.busy}>
-              ${this.busy ? "Đang cập nhật…" : "Đổi mật khẩu"}
+              ${this.busy ? adminShellCopy("Đang cập nhật…") : adminShellCopy("Đổi mật khẩu")}
             </button>
             ${!account.mustChangePassword
               ? html`<button
@@ -254,11 +312,15 @@ export class EnterpriseAdminRoot extends OpenClawLightDomElement {
                   type="button"
                   @click=${() => navigateAdmin("/accounts")}
                 >
-                  Quay lại dashboard
+                  ${adminShellCopy("Quay lại dashboard")}
                 </button>`
               : nothing}
             ${this.formError
-              ? html`<p class="ea-error" role="alert">${this.formError}</p>`
+              ? html`<p class="ea-error" role="alert">
+                  ${this.formError.kind === "password-mismatch"
+                    ? adminShellCopy("Mật khẩu xác nhận không khớp.")
+                    : errorMessage(this.formError.error)}
+                </p>`
               : nothing}
           </form>
         </section>
@@ -269,14 +331,17 @@ export class EnterpriseAdminRoot extends OpenClawLightDomElement {
   override render() {
     if (this.auth.phase === "checking") {
       return html`<main class="ea-auth">
-        <p class="ea-muted">Đang kiểm tra phiên quản trị…</p>
+        <p class="ea-muted">${adminShellCopy("Đang kiểm tra phiên quản trị…")}</p>
       </main>`;
     }
     if (this.auth.phase === "error") {
       return html`<main class="ea-auth">
         <section class="ea-auth__card ea-stack">
-          <p class="ea-error">${this.auth.message}</p>
-          <button class="ea-button" @click=${() => void this.restore()}>Thử lại</button>
+          ${renderEnterpriseLanguagePicker("ea-input")}
+          <p class="ea-error">${errorMessage(this.auth.error)}</p>
+          <button class="ea-button" @click=${() => void this.restore()}>
+            ${adminShellCopy("Thử lại")}
+          </button>
         </section>
       </main>`;
     }

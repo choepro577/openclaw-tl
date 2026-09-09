@@ -694,28 +694,15 @@ export function runAgentAttempt(params: {
   const isCliExecutionProvider = sessionRuntimeOverride
     ? sessionCliRuntime !== undefined
     : isCliProvider(cliExecutionProvider, params.cfg);
-  const completionRetainsRequesterTools =
-    trustedSubagentAnnounceHandoff &&
-    !isRawModelRun &&
-    !isCliExecutionProvider &&
-    (!messageToolOwnsVisibleReply(params.opts) || completionNeedsMessageDelivery);
-  // Message-tool-only delivery constrains the visible reply, not the parent
-  // continuation's verified authority. Keep the inherited cap while requiring
-  // message to survive every applicable policy before enabling any tools.
   // An explicit cap is enforced even when tools are disabled; clear it so a
   // denied completion can finish tool-free and its owner can relay frozen text.
   const runtimeToolsAllow = isSubagentAnnounceHandoff
-    ? completionRetainsRequesterTools
-      ? params.opts.toolsAllow
-      : completionNeedsMessageDelivery
-        ? ["message"]
-        : undefined
+    ? completionNeedsMessageDelivery
+      ? ["message"]
+      : undefined
     : params.opts.toolsAllow;
   const disableTools =
-    params.opts.modelRun === true ||
-    (isSubagentAnnounceHandoff &&
-      !completionRetainsRequesterTools &&
-      !completionNeedsMessageDelivery);
+    params.opts.modelRun === true || (isSubagentAnnounceHandoff && !completionNeedsMessageDelivery);
   if (params.fallbackRuntimeState && params.fallbackRuntimeState.originRuntime === undefined) {
     params.fallbackRuntimeState.originRuntime =
       !isRawModelRun && isCliExecutionProvider ? "cli" : "embedded";

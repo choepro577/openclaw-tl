@@ -1,0 +1,155 @@
+- generic [ref=f4e7]:
+  - link "Chuyển đến nội dung chính" [ref=f4e8] [cursor=pointer]:
+    - /url: "#enterprise-user-main"
+  - complementary "Điều hướng Enterprise User" [ref=f4e11]:
+    - generic [ref=f4e12]:
+      - generic [ref=f4e14]:
+        - group [ref=f4e16]:
+          - generic "Đổi Agent đang dùng" [ref=f4e17]:
+            - generic [aria-hidden] [ref=f4e18]: 💼
+            - generic [ref=f4e19]:
+              - generic [ref=f4e20]: Agent đang dùng
+              - strong [ref=f4e21]: Personal Agent
+        - button "Hội thoại mới" [ref=f4e25]
+        - navigation "Các trang dành cho user" [ref=f4e28]:
+          - button "Các Agent" [ref=f4e29]
+          - button "Tác vụ tự động" [ref=f4e35]
+          - button "Plugin" [ref=f4e41]
+          - generic "Hội thoại đã tổ chức" [ref=f4e48]:
+            - generic [ref=f4e49]:
+              - button "Dự án" [expanded] [ref=f4e50]
+              - button "Project mới" [ref=f4e53]
+            - alert [ref=f4e55]: "Mock route missing: /api/enterprise/user/v2/conversation-projects"
+            - generic [ref=f4e56]:
+              - generic [ref=f4e57]:
+                - generic [ref=f4e58]: Đã ghim
+                - generic [ref=f4e59]: "2"
+              - generic [ref=f4e60]:
+                - generic [ref=f4e61]:
+                  - button "Tax filing research" [ref=f4e62]
+                  - generic [ref=f4e67]:
+                    - button "Thao tác hội thoại"
+                    - img "Lần chạy đang hoạt động"
+                - generic [ref=f4e68]:
+                  - button "Home server migration" [ref=f4e69]
+                  - generic:
+                    - button "Thao tác hội thoại"
+            - generic [ref=f4e74]:
+              - button "Gần đây 27" [expanded] [ref=f4e75]:
+                - generic [ref=f4e76]: Gần đây
+                - generic [ref=f4e77]: "27"
+              - generic [ref=f4e78]:
+                - generic [ref=f4e79]:
+                  - button "Release readiness check" [ref=f4e80]
+                  - generic:
+                    - button "Thao tác hội thoại"
+                - generic [ref=f4e85]:
+                  - button "Gateway API notes" [ref=f4e86]
+                  - generic:
+                    - button "Thao tác hội thoại"
+                - generic [ref=f4e91]:
+                  - button "Activity feed design review" [ref=f4e92]
+                  - generic:
+                    - button "Thao tác hội thoại"
+                - generic [ref=f4e97]:
+                  - button "Archive retention audit" [ref=f4e98]
+                  - generic [ref=f4e103]:
+                    - button "Thao tác hội thoại"
+                    - img "Lần chạy đang hoạt động"
+                - generic [ref=f4e104]:
+                  - button "Support handoff" [ref=f4e105]
+                  - generic:
+                    - button "Thao tác hội thoại"
+              - button "Xem thêm" [ref=f4e110]
+      - group [ref=f4e112]:
+        - generic "Hiếu DZ" [ref=f4e113]:
+          - generic [aria-hidden] [ref=f4e114]: H
+  - main [ref=f4e116]:
+    - generic [ref=f4e121]:
+      - generic [ref=f4e122]:
+        - generic [ref=f4e123]:
+          - heading "Personal Agent" [level=1] [ref=f4e124]
+          - paragraph [ref=f4e125]: Tùy chỉnh cách Agent hỗ trợ bạn mà không thay đổi cấu hình doanh nghiệp.
+        - button "Lưu thay đổi" [disabled] [ref=f4e126]
+      - generic [ref=f4e127]:
+        - generic "Cài đặt Personal Agent" [ref=f4e128]:
+          - tablist "Cài đặt Personal Agent" [ref=f4e132]:
+            - generic:
+              - tab "Tổng quan" [selected] [ref=f4e133]
+              - tab "Hướng dẫn" [ref=f4e135]
+              - tab "Tri thức 0" [ref=f4e137]:
+                - generic [ref=f4e138] [cursor=pointer]:
+                  - generic:
+                    - text: Tri thức
+                    - generic [ref=f4e139]: "0"
+              - tab "Khả năng 0" [ref=f4e140]:
+                - generic [ref=f4e141] [cursor=pointer]:
+                  - generic:
+                    - text: Khả năng
+                    - generic [ref=f4e142]: "0"
+        - tabpanel "Tổng quan" [ref=f4e143]:
+          - generic [ref=f4e144]:
+            - heading "Nhận diện" [level=2] [ref=f4e146]
+            - paragraph [ref=f4e147]: Chọn từ bộ avatar được doanh nghiệp cho phép.
+            - generic [ref=f4e148]:
+              - generic [ref=f4e149]:
+                - generic [ref=f4e150]: Tên
+                - textbox "Tên" [ref=f4e153]: Personal Agent Test
+              - generic [ref=f4e154]:
+                - generic [ref=f4e155]: Ảnh đại diện
+                - radiogroup "Ảnh đại diện" [ref=f4e159]:
+                  - generic [ref=f4e162]:
+                    - radio "sparkles" [ref=f4e163]:
+                      - generic [ref=f4e164]:
+                        - generic [aria-hidden] [ref=f4e165]: ✨
+                        - generic [ref=f4e166]: sparkles
+                    - radio "briefcase" [checked] [ref=f4e167]:
+                      - generic [ref=f4e168]:
+                        - generic [aria-hidden] [ref=f4e169]: 💼
+                        - generic [ref=f4e170]: briefcase
+                    - radio "message-circle" [ref=f4e171]:
+                      - generic [ref=f4e172]:
+                        - generic [aria-hidden] [ref=f4e173]: 💬
+                        - generic [ref=f4e174]: message-circle
+                    - radio "bot" [ref=f4e175]:
+                      - generic [ref=f4e176]:
+                        - generic [aria-hidden] [ref=f4e177]: 🤖
+                        - generic [ref=f4e178]: bot
+                    - radio "user" [ref=f4e179]:
+                      - generic [ref=f4e180]:
+                        - generic [aria-hidden] [ref=f4e181]: 👤
+                        - generic [ref=f4e182]: user
+              - generic [ref=f4e183]:
+                - generic [ref=f4e184]: Lời chào
+                - textbox "Lời chào" [ref=f4e187]: Xin chào Hiếu DZ, tôi có thể giúp gì cho bạn?
+              - generic [ref=f4e188]:
+                - generic [ref=f4e189]: Xem trước
+                - generic [ref=f4e192]:
+                  - generic [aria-hidden] [ref=f4e193]: 💼
+                  - generic [ref=f4e194]:
+                    - strong [ref=f4e195]: Personal Agent Test
+                    - paragraph [ref=f4e196]: Xin chào Hiếu DZ, tôi có thể giúp gì cho bạn?
+          - generic [ref=f4e197]:
+            - heading "Phong cách phản hồi" [level=2] [ref=f4e199]
+            - generic [ref=f4e200]:
+              - generic [ref=f4e201]:
+                - generic [ref=f4e202]: Giọng điệu
+                - radiogroup "Giọng điệu" [ref=f4e206]:
+                  - generic [ref=f4e209]:
+                    - radio "Chuyên nghiệp" [checked] [ref=f4e210]
+                    - radio "Thân thiện" [ref=f4e212]
+                    - radio "Súc tích" [ref=f4e214]
+              - generic [ref=f4e216]:
+                - generic [ref=f4e217]: Độ dài câu trả lời
+                - radiogroup "Độ dài câu trả lời" [ref=f4e221]:
+                  - generic [ref=f4e224]:
+                    - radio "Ngắn gọn" [ref=f4e225]
+                    - radio "Cân bằng" [checked] [ref=f4e227]
+                    - radio "Chi tiết" [ref=f4e229]
+              - generic [ref=f4e231]:
+                - generic [ref=f4e232]: Ngôn ngữ
+                - radiogroup "Ngôn ngữ" [ref=f4e236]:
+                  - generic [ref=f4e239]:
+                    - radio "Tự động" [checked] [ref=f4e240]
+                    - radio "Tiếng Việt" [ref=f4e242]
+                    - radio "Tiếng Anh" [ref=f4e244]

@@ -11,7 +11,6 @@ import {
   resolvePairingHint,
   shouldShowInsecureContextHint,
 } from "../lib/connection-hints.ts";
-import { buildExternalLinkRel, EXTERNAL_LINK_TARGET } from "../lib/external-link.ts";
 import { formatUiError } from "../lib/format-error.ts";
 import { OpenClawLightDomContentsElement } from "../lit/openclaw-element.ts";
 import { renderConnectCommand } from "./connect-command.ts";
@@ -46,8 +45,6 @@ type LoginFailureFeedback = {
   summary: string;
   refreshAction?: { label: string };
   steps: LoginFailureStep[];
-  docsHref: string;
-  docsLabel: string;
   rawError: string;
 };
 
@@ -79,16 +76,6 @@ type LoginFailureFeedbackParams = {
   hasPassword: boolean;
 };
 
-function resolveDocsLabel(href: string): string {
-  if (href.includes("insecure-http")) {
-    return t("login.failure.docsInsecure");
-  }
-  if (href.includes("device-pairing")) {
-    return t("login.failure.docsPairing");
-  }
-  return t("login.failure.docsAuth");
-}
-
 // Shared with offline presentation so no disconnected surface prints credentials.
 export function redactLoginFailureError(value: string): string {
   const redacted = value
@@ -107,14 +94,12 @@ export function redactLoginFailureError(value: string): string {
 function buildFeedback(params: {
   kind: LoginFailureKind;
   rawError: string;
-  docsHref?: string;
   titleKey: string;
   summaryKey: string;
   stepKeys: LoginFailureStepDefinition[];
   stepParams?: Record<string, string>;
   refreshAction?: { label: string };
 }): LoginFailureFeedback {
-  const docsHref = params.docsHref ?? "https://docs.openclaw.ai/web/dashboard";
   return {
     kind: params.kind,
     title: t(params.titleKey, params.stepParams),
@@ -125,8 +110,6 @@ function buildFeedback(params: {
         ? { text: t(step, params.stepParams), commands: [] }
         : { text: t(step.key, params.stepParams), commands: step.commands },
     ),
-    docsHref,
-    docsLabel: resolveDocsLabel(docsHref),
     rawError: redactLoginFailureError(params.rawError),
   };
 }
@@ -150,7 +133,6 @@ function resolveLoginFailureFeedback(
       summaryKey: "chat.sidebar.serverUpdatedRefresh",
       refreshAction: { label: t("login.failure.protocol.refresh") },
       stepKeys: [],
-      docsHref: "https://docs.openclaw.ai/web/control-ui",
     });
   }
 
@@ -162,7 +144,6 @@ function resolveLoginFailureFeedback(
     return buildFeedback({
       kind: "pairing-required",
       rawError,
-      docsHref: "https://docs.openclaw.ai/web/control-ui#device-pairing-first-connection",
       titleKey:
         pairing.kind === "scope-upgrade-pending"
           ? "login.failure.pairing.scopeTitle"
@@ -215,7 +196,6 @@ function resolveLoginFailureFeedback(
     return buildFeedback({
       kind: "insecure-context",
       rawError,
-      docsHref: "https://docs.openclaw.ai/web/control-ui#insecure-http",
       titleKey: "login.failure.insecure.title",
       summaryKey: "login.failure.insecure.summary",
       stepKeys: ["login.failure.insecure.stepHttps", "login.failure.insecure.stepAvoidDisable"],
@@ -229,8 +209,6 @@ function resolveLoginFailureFeedback(
     return buildFeedback({
       kind: "origin-not-allowed",
       rawError,
-      docsHref:
-        "https://docs.openclaw.ai/web/control-ui#debuggingtesting-dev-server--remote-gateway",
       titleKey: "login.failure.origin.title",
       summaryKey: "login.failure.origin.summary",
       stepKeys: [
@@ -245,8 +223,6 @@ function resolveLoginFailureFeedback(
     return buildFeedback({
       kind: "protocol-mismatch",
       rawError,
-      docsHref:
-        "https://docs.openclaw.ai/web/control-ui#debuggingtesting-dev-server--remote-gateway",
       titleKey: "login.failure.protocol.title",
       summaryKey: "login.failure.protocol.summary",
       refreshAction: { label: t("login.failure.protocol.refresh") },
@@ -402,13 +378,6 @@ function renderLoginFailure(feedback: LoginFailureFeedback) {
         <summary>${t("login.failure.rawError")}</summary>
         <div class="login-gate__failure-raw mono">${feedback.rawError}</div>
       </details>
-      <a
-        class="session-link login-gate__failure-docs"
-        href=${feedback.docsHref}
-        target=${EXTERNAL_LINK_TARGET}
-        rel=${buildExternalLinkRel()}
-        >${feedback.docsLabel}</a
-      >
     </div>
   `;
 }
@@ -428,8 +397,8 @@ function renderLoginGate(props: LoginGateProps) {
     <div class="login-gate">
       <div class="login-gate__card">
         <div class="login-gate__header">
-          <img class="login-gate__logo" src=${faviconSrc} alt="OpenClaw" />
-          <div class="login-gate__title">OpenClaw</div>
+          <img class="login-gate__logo" src=${faviconSrc} alt="MAAP" />
+          <div class="login-gate__title">MAAP</div>
           <div class="login-gate__sub">${t("login.subtitle")}</div>
         </div>
         <div class="login-gate__form">
@@ -536,15 +505,6 @@ function renderLoginGate(props: LoginGateProps) {
             <li>${t("connection.help.step2")} ${renderConnectCommand("openclaw dashboard")}</li>
             <li>${t("connection.help.step3")}</li>
           </ol>
-          <div class="login-gate__docs">
-            <a
-              class="session-link"
-              href="https://docs.openclaw.ai/web/dashboard"
-              target="_blank"
-              rel="noreferrer"
-              >${t("connection.help.docsLink")}</a
-            >
-          </div>
         </details>
       </div>
     </div>

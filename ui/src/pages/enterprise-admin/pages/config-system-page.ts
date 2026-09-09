@@ -1,5 +1,6 @@
 import { html, nothing } from "lit";
 import { state } from "lit/decorators.js";
+import { ea } from "../../../i18n/enterprise-admin.ts";
 import { OpenClawLightDomElement } from "../../../lit/openclaw-element.ts";
 import {
   applyAdminConfig,
@@ -12,6 +13,7 @@ import { errorMessage } from "../utils.ts";
 
 type EditorMode = "structured" | "raw";
 type ConfigLeaf = { path: string; value: unknown };
+type ConfigNotice = "restart" | "reload" | "unchanged" | "";
 
 function collectLeaves(value: unknown, prefix = ""): ConfigLeaf[] {
   if (value && typeof value === "object" && !Array.isArray(value)) {
@@ -66,7 +68,7 @@ export class EnterpriseAdminConfigSystemPage extends OpenClawLightDomElement {
   @state() private loading = true;
   @state() private busy = false;
   @state() private error = "";
-  @state() private notice = "";
+  @state() private notice: ConfigNotice = "";
 
   override connectedCallback(): void {
     super.connectedCallback();
@@ -128,10 +130,10 @@ export class EnterpriseAdminConfigSystemPage extends OpenClawLightDomElement {
       const result = await applyAdminConfig(this.raw, this.snapshot.hash);
       this.notice =
         result.impact === "restart"
-          ? "Đã lưu config. Gateway cần restart để áp dụng toàn bộ thay đổi."
+          ? "restart"
           : result.impact === "reload"
-            ? "Đã lưu config. Gateway đang reload cấu hình."
-            : "Config không có thay đổi.";
+            ? "reload"
+            : "unchanged";
       await this.load();
     } catch (error) {
       this.error = errorMessage(error);
@@ -151,8 +153,8 @@ export class EnterpriseAdminConfigSystemPage extends OpenClawLightDomElement {
         <input
           class="ea-input"
           type="search"
-          placeholder="Tìm config path…"
-          aria-label="Tìm config path"
+          placeholder=${ea("Tìm config path…")}
+          aria-label=${ea("Tìm config path")}
           .value=${this.search}
           @input=${(event: Event) =>
             (this.search = (event.currentTarget as HTMLInputElement).value)}
@@ -198,7 +200,7 @@ export class EnterpriseAdminConfigSystemPage extends OpenClawLightDomElement {
             </label>`;
           })}
           ${leaves.length === 0
-            ? html`<div class="ea-empty">Không tìm thấy config path phù hợp.</div>`
+            ? html`<div class="ea-empty">${ea("Không tìm thấy config path phù hợp.")}</div>`
             : nothing}
         </div>
       </div>
@@ -209,8 +211,8 @@ export class EnterpriseAdminConfigSystemPage extends OpenClawLightDomElement {
     return html`<section class="ea-page">
       <header class="ea-page-header">
         <div>
-          <h1>System Config</h1>
-          <p>Chỉnh sửa có cấu trúc hoặc Raw JSON, validate và áp dụng bằng CAS.</p>
+          <h1>${ea("System Config")}</h1>
+          <p>${ea("Chỉnh sửa có cấu trúc hoặc Raw JSON, validate và áp dụng bằng CAS.")}</p>
         </div>
         <button
           class="ea-button"
@@ -218,34 +220,38 @@ export class EnterpriseAdminConfigSystemPage extends OpenClawLightDomElement {
           ?disabled=${this.busy}
           @click=${() => void this.load()}
         >
-          Tải lại
+          ${ea("Tải lại")}
         </button>
       </header>
       ${this.loading
-        ? html`<div class="ea-loading">Đang tải config đã redacted…</div>`
+        ? html`<div class="ea-loading">${ea("Đang tải config đã redacted…")}</div>`
         : html`
             <div class="ea-config-layout">
               <div class="ea-stack">
-                <div class="ea-segmented" role="tablist" aria-label="Chế độ chỉnh sửa config">
+                <div
+                  class="ea-segmented"
+                  role="tablist"
+                  aria-label=${ea("Chế độ chỉnh sửa config")}
+                >
                   <button
                     class=${this.mode === "structured" ? "is-active" : ""}
                     type="button"
                     @click=${() => (this.mode = "structured")}
                   >
-                    Structured
+                    ${ea("Structured")}
                   </button>
                   <button
                     class=${this.mode === "raw" ? "is-active" : ""}
                     type="button"
                     @click=${() => (this.mode = "raw")}
                   >
-                    Raw JSON
+                    ${ea("Raw JSON")}
                   </button>
                 </div>
                 ${this.mode === "structured"
                   ? this.renderStructured()
                   : html`<label class="ea-field"
-                      >Advanced Raw JSON
+                      >${ea("Advanced Raw JSON")}
                       <textarea
                         class="ea-textarea ea-textarea--config"
                         .value=${this.raw}
@@ -260,14 +266,14 @@ export class EnterpriseAdminConfigSystemPage extends OpenClawLightDomElement {
               </div>
               <aside class="ea-stack">
                 <div class="ea-card ea-config-summary">
-                  <h3>Quy trình an toàn</h3>
+                  <h3>${ea("Quy trình an toàn")}</h3>
                   <ol class="ea-muted">
-                    <li>Sửa draft đã redacted</li>
-                    <li>Validate schema/plugin/include</li>
-                    <li>Review diff & impact</li>
-                    <li>Xác nhận APPLY</li>
+                    <li>${ea("Sửa draft đã redacted")}</li>
+                    <li>${ea("Validate schema/plugin/include")}</li>
+                    <li>${ea("Review diff & impact")}</li>
+                    <li>${ea("Xác nhận APPLY")}</li>
                   </ol>
-                  <div class="ea-code">Config hash: ${this.snapshot?.hash ?? "—"}</div>
+                  <div class="ea-code">${ea("Config hash")}: ${this.snapshot?.hash ?? "—"}</div>
                 </div>
                 <button
                   class="ea-button"
@@ -275,24 +281,26 @@ export class EnterpriseAdminConfigSystemPage extends OpenClawLightDomElement {
                   ?disabled=${this.busy}
                   @click=${() => void this.validate()}
                 >
-                  ${this.busy ? "Đang xử lý…" : "Validate draft"}
+                  ${this.busy ? ea("Đang xử lý…") : ea("Validate draft")}
                 </button>
                 ${this.validation
                   ? html`<div class="ea-card ea-config-summary">
-                      <h3>Review diff & impact</h3>
+                      <h3>${ea("Review diff & impact")}</h3>
                       <span
                         class="ea-badge ${this.validation.valid
                           ? "ea-badge--good"
                           : "ea-badge--bad"}"
                       >
-                        ${this.validation.valid ? "Valid" : "Invalid"}
+                        ${this.validation.valid ? ea("Valid") : ea("Invalid")}
                       </span>
                       ${this.validation.impact.restartRequired
                         ? html`<div class="ea-banner">
-                            Thay đổi yêu cầu restart và có thể làm mất kết nối.
+                            ${ea("Thay đổi yêu cầu restart và có thể làm mất kết nối.")}
                           </div>`
                         : this.validation.impact.reloadRequired
-                          ? html`<div class="ea-banner">Thay đổi yêu cầu reload cấu hình.</div>`
+                          ? html`<div class="ea-banner">
+                              ${ea("Thay đổi yêu cầu reload cấu hình.")}
+                            </div>`
                           : nothing}
                       <div class="ea-code ea-code--review">
                         ${JSON.stringify(
@@ -306,7 +314,7 @@ export class EnterpriseAdminConfigSystemPage extends OpenClawLightDomElement {
                         )}
                       </div>
                       <label class="ea-field"
-                        >Gõ APPLY để xác nhận
+                        >${ea("Gõ APPLY để xác nhận")}
                         <input
                           class="ea-input"
                           autocomplete="off"
@@ -323,7 +331,7 @@ export class EnterpriseAdminConfigSystemPage extends OpenClawLightDomElement {
                         this.busy}
                         @click=${() => void this.apply()}
                       >
-                        Apply config với CAS
+                        ${ea("Apply config với CAS")}
                       </button>
                     </div>`
                   : nothing}
@@ -331,7 +339,15 @@ export class EnterpriseAdminConfigSystemPage extends OpenClawLightDomElement {
             </div>
           `}
       ${this.error ? html`<p class="ea-error" role="alert">${this.error}</p>` : nothing}
-      ${this.notice ? html`<p class="ea-success" role="status">${this.notice}</p>` : nothing}
+      ${this.notice
+        ? html`<p class="ea-success" role="status">
+            ${this.notice === "restart"
+              ? ea("Đã lưu config. Gateway cần restart để áp dụng toàn bộ thay đổi.")
+              : this.notice === "reload"
+                ? ea("Đã lưu config. Gateway đang reload cấu hình.")
+                : ea("Config không có thay đổi.")}
+          </p>`
+        : nothing}
     </section>`;
   }
 }

@@ -9,10 +9,9 @@ import type {
   SystemAgentSetupDetectResult,
 } from "../../api/types.ts";
 import { subtitleForRoute, titleForRoute } from "../../app-navigation.ts";
-import { applicationContext, type ApplicationContext } from "../../app/context.ts";
+import { modelManagementContext, type ModelManagementContext } from "../../app/context.ts";
 import { readSessionDefaults } from "../../app/gateway-store.ts";
 import { hasOperatorAdminAccess } from "../../app/operator-access.ts";
-import { renderDocsLink } from "../../components/settings-ui.ts";
 import { renderSettingsWorkspace } from "../../components/settings-workspace.ts";
 import { t } from "../../i18n/index.ts";
 import { formatUiError } from "../../lib/format-error.ts";
@@ -41,8 +40,6 @@ import {
 import { renderModelSetup, resolveSetupBrandIcon } from "./view.ts";
 import { ModelSetupWizardRunner } from "./wizard-runner.ts";
 import type { ModelSetupWizardCompletion, ModelSetupWizardStartMethod } from "./wizard-runner.ts";
-
-const MODEL_SETUP_DOCS_URL = "https://docs.openclaw.ai/concepts/model-providers";
 
 type Candidate = SystemAgentSetupDetectResult["candidates"][number];
 type AuthOption = NonNullable<SystemAgentSetupDetectResult["authOptions"]>[number];
@@ -78,8 +75,8 @@ async function captureModelResult<T>(
 }
 
 export class ModelSetupPage extends OpenClawLightDomElement {
-  @consume({ context: applicationContext, subscribe: true })
-  private context!: ApplicationContext;
+  @consume({ context: modelManagementContext, subscribe: true })
+  private context!: ModelManagementContext;
 
   @property({ attribute: false }) routeData: ModelSetupRouteData | undefined;
 
@@ -298,7 +295,7 @@ export class ModelSetupPage extends OpenClawLightDomElement {
     this.iconLoader.reconcile(this.currentIconUrls());
   }
 
-  private synchronizeGateway(snapshot: ApplicationContext["gateway"]["snapshot"]): void {
+  private synchronizeGateway(snapshot: ModelManagementContext["gateway"]["snapshot"]): void {
     const connection = {
       client: snapshot.client,
       hello: snapshot.hello,
@@ -717,10 +714,7 @@ export class ModelSetupPage extends OpenClawLightDomElement {
       <section class="content-header">
         <div>
           <div class="page-title">${titleForRoute("model-setup")}</div>
-          <div class="page-subtitle">
-            ${subtitleForRoute("model-setup")}
-            ${renderDocsLink(MODEL_SETUP_DOCS_URL, t("common.learnMore"))}
-          </div>
+          <div class="page-subtitle">${subtitleForRoute("model-setup")}</div>
         </div>
       </section>
       ${renderSettingsWorkspace(body)}

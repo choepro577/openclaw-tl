@@ -142,6 +142,72 @@ export function buildLiveRenderedToolRefs(toolMessages: unknown[]): LiveToolStre
   return refs;
 }
 
+/** A durable result can replace only one unambiguous live invocation, never a same-name tool. */
+export function resolveMatchingLiveToolMessageIndex(
+  resultMessage: unknown,
+  toolMessages: readonly unknown[],
+): number | undefined {
+  const record = asToolRecord(resultMessage);
+  if (!record) {
+    return undefined;
+  }
+  const blocks = Array.isArray(record.content) ? record.content.map(asToolRecord) : [];
+  if (
+    blocks.some((block) => isToolCallContentType(block?.type)) ||
+    !(
+      (typeof record.role === "string" && normalizeRoleForGrouping(record.role) === "tool") ||
+      blocks.some((block) => isToolResultContentType(block?.type))
+    )
+  ) {
+    return undefined;
+  }
+  const resultRefs = extractToolMessageRefs(resultMessage);
+  const resultRef = resultRefs.length === 1 ? resultRefs[0] : undefined;
+  if (!resultRef) {
+    return undefined;
+  }
+  const matches = toolMessages.flatMap((message, index) =>
+    extractToolMessageRefs(message).some(
+      (ref) =>
+        ref.id === resultRef.id &&
+        (!ref.runId || !resultRef.runId || ref.runId === resultRef.runId),
+    )
+      ? [index]
+      : [],
+  );
+  return matches.length === 1 ? matches[0] : undefined;
+}
+
+/** Prepare a matched invocation for the existing result merger without mutating live state. */
+export function prepareLiveToolMessageForPersistedResult(
+  liveMessage: unknown,
+  resultMessage: unknown,
+): unknown {
+  const live = asToolRecord(liveMessage);
+  const result = asToolRecord(resultMessage);
+  if (!live || !result || !Array.isArray(live.content)) {
+    return liveMessage;
+  }
+  const resultIds = new Set(extractToolMessageRefs(resultMessage).map((ref) => ref.id));
+  const topLevelToolId = resolveToolUseId({ ...live, id: undefined });
+  const content = live.content.filter((block) => {
+    const record = asToolRecord(block);
+    return (
+      !record ||
+      !isToolResultContentType(record.type) ||
+      !resultIds.has(resolveToolUseId(record) ?? topLevelToolId ?? "")
+    );
+  });
+  // Hydration owns completion even when the live result event is late. Keep
+  // live arguments; the merger will attach the durable result, details and media.
+  return {
+    ...live,
+    content,
+    __openclawToolStreamResultReceived: true,
+    ...(result["__openclaw"] !== undefined ? { __openclaw: result["__openclaw"] } : {}),
+  };
+}
+
 export function removeLiveToolBlocksFromHistory(
   message: unknown,
   liveToolRefs: LiveToolStreamRef[],

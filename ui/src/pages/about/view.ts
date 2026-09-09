@@ -1,6 +1,6 @@
 import "../../styles/lobster-pet.css";
 import { expectDefined } from "@openclaw/normalization-core";
-import { html, nothing, type TemplateResult } from "lit";
+import { html, nothing } from "lit";
 import type { ControlUiBuildInfo } from "../../build-info.ts";
 import { icons } from "../../components/icons.ts";
 import {
@@ -17,10 +17,8 @@ import {
 } from "../../components/settings-ui.ts";
 import "../../components/tooltip.ts";
 import { i18n, t } from "../../i18n/index.ts";
-import { buildExternalLinkRel, EXTERNAL_LINK_TARGET } from "../../lib/external-link.ts";
 import { formatRelativeTimestamp } from "../../lib/format.ts";
 import "../../styles/about.css";
-import { brandIcons } from "./brand-icons.ts";
 
 export type AboutCommitCopyState = "idle" | "copying" | "copied" | "error";
 
@@ -34,33 +32,6 @@ type AboutProps = {
 };
 
 const SHORT_COMMIT_LENGTH = 12;
-
-// Docs-first where a docs page exists; GitHub/Discord match the native
-// macOS/iOS About screens (AboutSettings.swift, SettingsProTabSections.swift).
-const ABOUT_LINKS: ReadonlyArray<{ href: string; icon: TemplateResult; label: () => string }> = [
-  { href: "https://openclaw.ai", icon: icons.globe, label: () => t("aboutPage.linkWebsite") },
-  { href: "https://docs.openclaw.ai", icon: icons.book, label: () => t("aboutPage.linkDocs") },
-  {
-    href: "https://github.com/openclaw/openclaw",
-    icon: brandIcons.github,
-    label: () => t("aboutPage.linkGitHub"),
-  },
-  {
-    href: "https://discord.gg/clawd",
-    icon: brandIcons.discord,
-    label: () => t("aboutPage.linkDiscord"),
-  },
-  {
-    href: "https://x.com/openclaw",
-    icon: brandIcons.x,
-    label: () => t("aboutPage.linkX"),
-  },
-  {
-    href: "https://docs.openclaw.ai/releases",
-    icon: icons.scrollText,
-    label: () => t("aboutPage.linkChangelog"),
-  },
-];
 
 function formatControlUiBuildDate(
   value: string | null,
@@ -175,21 +146,6 @@ function renderHero(props: AboutProps) {
       ${props.buildInfo.version
         ? html`<code class="about-hero__version" dir="ltr">v${props.buildInfo.version}</code>`
         : nothing}
-      <nav class="about-hero__links" aria-label=${t("aboutPage.linksLabel")}>
-        ${ABOUT_LINKS.map(
-          (link) => html`
-            <a
-              class="about-hero__link"
-              href=${link.href}
-              target=${EXTERNAL_LINK_TARGET}
-              rel=${buildExternalLinkRel()}
-            >
-              <span class="about-hero__link-icon" aria-hidden="true">${link.icon}</span>
-              <span>${link.label()}</span>
-            </a>
-          `,
-        )}
-      </nav>
     </section>
   `;
 }

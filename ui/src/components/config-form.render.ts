@@ -2,7 +2,6 @@
 import { html, nothing, type TemplateResult } from "lit";
 import type { ConfigUiHints } from "../api/types.ts";
 import { t } from "../i18n/index.ts";
-import { buildExternalLinkRel, EXTERNAL_LINK_TARGET } from "../lib/external-link.ts";
 import "./web-awesome-popover.ts";
 import { SECTION_META } from "./config-form.meta.ts";
 import { renderNode } from "./config-form.node.ts";
@@ -273,12 +272,6 @@ export function renderConfigForm(props: ConfigFormProps) {
                         >
                           <div class="settings-section__help-panel">
                             ${params.description ? html`<p>${params.description}</p>` : nothing}
-                            <a
-                              href=${docsUrl}
-                              target=${EXTERNAL_LINK_TARGET}
-                              rel=${buildExternalLinkRel()}
-                              >${t("configForm.readGuide")} <span aria-hidden="true">→</span></a
-                            >
                           </div>
                         </wa-popover>
                       </span>

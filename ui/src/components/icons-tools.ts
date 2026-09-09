@@ -184,55 +184,48 @@ export const toolIcons = {
     <path d="M21 18h-8" />
     <path d="M3 6v4c0 1.1.9 2 2 2h3" />
     <path d="M3 10v6c0 1.1.9 2 2 2h3" />`),
-  claw: strokeIcon(svg` <path
-      d="M8.2 10 A5.2 5.2 0 1 0 8.2 20.4 A5.2 5.2 0 0 0 8.2 10 Z M10.2 20 C14.5 20.8 19 18.6 22.3 13.2 C21 12.9 19.7 12.7 18.4 12.8 L17.5 14.6 L16 12.9 L14.3 14.5 L13.5 13 L11.5 14.2 Z"
-    />
-    <path
-      class="claw-icon__jaw"
-      d="M5.6 12.2 C5.2 5.6 10.4 1.4 15.6 2 C19.4 2.6 21.8 5.2 22.6 8.2 C20.9 7.7 19.2 7.6 17.6 7.9 L16.9 6.3 L15.2 8.5 C13.6 9.4 12.2 10.9 11.6 12.4 L6.8 13 Z"
-    />`),
+  // Keep the activity-icon key; layered gold artwork stays legible at small sizes.
+  claw: strokeIcon(svg`
+    <g class="rice-pot__body" stroke="none">
+      <ellipse cx="12" cy="22" rx="8" ry="1.2" fill="#b87916" opacity=".18" />
+      <path d="M4 12H2a2 2 0 0 0 0 4h3v-2H2.5v-.5H4zm16 0h2a2 2 0 0 1 0 4h-3v-2h2.5v-.5H20z" fill="#e7a51e" />
+      <path d="M3.5 11.5h17l-.9 6.2C19.2 20.5 16.6 22 12 22s-7.2-1.5-7.6-4.3z" fill="#f4b82e" />
+      <path d="m16.5 12 4-.5-.9 6.2C19.2 20.5 16.6 22 12 22c3.2-1.1 4.1-2.6 4.3-5z" fill="#dc9316" />
+      <path d="M5.4 13h10.8l-.3 3.7c-.2 1.9-2 3-4.9 3-3.1 0-4.8-1.2-5.1-3z" fill="#ffd55a" />
+      <path d="M6.8 14.2h1.7l.4 2.9c.1.6-.3 1-.8.9-.8-.1-1.1-.6-1.2-1.3z" fill="#fff1ac" />
+      <ellipse cx="12" cy="11.7" rx="8.8" ry="2" fill="#cf8611" />
+      <path d="M3.2 11.2C4.5 8.4 7.7 7 12 7s7.5 1.4 8.8 4.2c.3 1-3.6 2-8.8 2s-9.1-1-8.8-2" fill="#ffd45b" />
+      <path d="M4.8 10.5C6.4 8.9 8.7 8.2 12 8.2s5.6.7 7.2 2.3c-4.7-1.1-9.7-1.1-14.4 0" fill="#fff0a1" />
+      <ellipse cx="12" cy="7.5" rx="2.2" ry="1" fill="#d38b15" />
+      <rect x="10.2" y="5.8" width="3.6" height="2" rx="1" fill="#f5b82e" />
+      <ellipse cx="12" cy="5.9" rx="1.8" ry=".7" fill="#ffe58b" />
+    </g>
+    <g fill="none" stroke="#e5be65" stroke-width="1.5" opacity=".85">
+      <path class="rice-pot__steam" d="M7 5c-1.6-1.3 1-2 0-3.5" />
+      <path class="rice-pot__steam" d="M12 3.8c-1.6-1.3 1-1.8 0-3" />
+      <path class="rice-pot__steam" d="M17 5c-1.6-1.3 1-2 0-3.5" />
+    </g>
+  `),
   spark: strokeIcon(svg` <path
     d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"
   />`),
-  lobster: html`
-    <svg viewBox="0 0 120 120" fill="none">
-      <defs>
-        <!-- Gradient stops read theme tokens (base.css --lobster-icon-*): the
-             shipped hex pair sank into dark backgrounds, so dark mode brightens
-             both stops while light mode keeps the original artwork. var() is
-             only valid in style="", not presentation attributes. -->
-        <linearGradient id="lob-g" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" style="stop-color: var(--lobster-icon-body, #ff4d4d)" />
-          <stop offset="100%" style="stop-color: var(--lobster-icon-shade, #991b1b)" />
-        </linearGradient>
-      </defs>
-      <path
-        d="M60 10C30 10 15 35 15 55C15 75 30 95 45 100L45 110L55 110L55 100C55 100 60 102 65 100L65 110L75 110L75 100C90 95 105 75 105 55C105 35 90 10 60 10Z"
-        fill="url(#lob-g)"
-      />
-      <path d="M20 45C5 40 0 50 5 60C10 70 20 65 25 55C28 48 25 45 20 45Z" fill="url(#lob-g)" />
-      <path
-        d="M100 45C115 40 120 50 115 60C110 70 100 65 95 55C92 48 95 45 100 45Z"
-        fill="url(#lob-g)"
-      />
-      <path
-        d="M45 15Q35 5 30 8"
-        style="stroke: var(--lobster-icon-body, #ff4d4d)"
-        stroke-width="3"
-        stroke-linecap="round"
-      />
-      <path
-        d="M75 15Q85 5 90 8"
-        style="stroke: var(--lobster-icon-body, #ff4d4d)"
-        stroke-width="3"
-        stroke-linecap="round"
-      />
-      <circle cx="45" cy="35" r="6" style="fill: var(--lobster-icon-eye, #050810)" />
-      <circle cx="75" cy="35" r="6" style="fill: var(--lobster-icon-eye, #050810)" />
-      <circle cx="46" cy="34" r="2.5" fill="#00e5cc" />
-      <circle cx="76" cy="34" r="2.5" fill="#00e5cc" />
-    </svg>
-  `,
+  // Kept under the legacy property name so existing navigation and plugin
+  // presentation contracts continue to resolve the same default icon. The
+  // artwork itself is the MAAP connected-node mark rather than the old mascot.
+  lobster: strokeIcon(svg` <path
+      d="M12 3 20 7.5v9L12 21l-8-4.5v-9z"
+      opacity=".45"
+    />
+    <path d="M12 12V3M12 12l8-4.5M12 12l8 4.5M12 12v9M12 12l-8 4.5M12 12 4 7.5" />
+    <path d="m4 7.5 8 4.5 8-4.5M4 16.5l8-4.5 8 4.5" opacity=".55" />
+    <circle cx="12" cy="12" r="3.25" fill="var(--maap-icon-core, #0f172a)" />
+    <circle cx="12" cy="12" r="1.25" fill="var(--maap-icon-accent, #00d5c0)" stroke="none" />
+    <circle cx="12" cy="3" r="1.7" fill="currentColor" stroke="none" />
+    <circle cx="20" cy="7.5" r="1.7" fill="currentColor" stroke="none" />
+    <circle cx="20" cy="16.5" r="1.7" fill="var(--maap-icon-accent, #00d5c0)" stroke="none" />
+    <circle cx="12" cy="21" r="1.7" fill="var(--maap-icon-accent, #00d5c0)" stroke="none" />
+    <circle cx="4" cy="16.5" r="1.7" fill="var(--maap-icon-accent, #00d5c0)" stroke="none" />
+    <circle cx="4" cy="7.5" r="1.7" fill="currentColor" stroke="none" />`),
   circleUser: strokeIcon(svg` <path d="M18 20a6 6 0 0 0-12 0" />
     <circle cx="12" cy="10" r="4" />
     <circle cx="12" cy="12" r="10" />`),

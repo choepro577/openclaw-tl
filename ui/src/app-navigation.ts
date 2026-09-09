@@ -2,6 +2,7 @@ import { normalizeLowercaseStringOrEmpty } from "@openclaw/normalization-core/st
 import { isValidWorkboardBoardId } from "@openclaw/workboard-contract";
 // Control UI app navigation defines sidebar and settings presentation metadata.
 import type { RouteId } from "./app-route-paths.ts";
+import { maskEngineName } from "./branding/display-brand.ts";
 import type { IconName } from "./components/icons.ts";
 import { i18n, t } from "./i18n/index.ts";
 
@@ -447,17 +448,20 @@ export function titleForRoute(routeId: NavigationRouteId): string {
 
 /** Window/tab title, markers leftmost because tabs truncate from the right.
  * Offline replaces the approval count (a stale queue is not actionable) and
- * carries the pending-outbox total; titles already ending in the brand
- * ("Ask OpenClaw") skip the suffix so it never reads "… OpenClaw — OpenClaw". */
+ * carries the pending-outbox total. Runtime context is projected through the
+ * same display boundary as the rest of the shell before the brand suffix is
+ * added, while the caller's raw title remains untouched for session logic. */
 export function formatDocumentTitle(options: {
   context: string;
   attentionCount?: number;
   offline?: boolean;
   queuedCount?: number;
 }): string {
-  const base = options.context.endsWith("OpenClaw")
-    ? options.context
-    : `${options.context} — OpenClaw`;
+  // Route copy is already branded by i18n. Runtime/session context must stay
+  // opaque, so only the exact legacy product label is relabelled here; any
+  // path, URL, or sentence containing the engine name is masked instead.
+  const context = options.context === "OpenClaw" ? "MAAP" : maskEngineName(options.context);
+  const base = context.endsWith("MAAP") ? context : `${context} — MAAP`;
   if (options.offline) {
     const queued =
       options.queuedCount && options.queuedCount > 0

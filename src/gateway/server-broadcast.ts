@@ -309,6 +309,11 @@ export function createGatewayBroadcaster(params: {
         continue;
       }
       const enterpriseIdentity = enterpriseUserPortalIdentity(c);
+      if (event === "task" && enterpriseIdentity && sessionKeys.length === 0) {
+        // Global registry events may describe another account or background work.
+        // Reconnect reloads the portal's own session-scoped snapshot instead.
+        continue;
+      }
       const isOwnedEnterpriseCronEvent =
         event === "cron" &&
         enterpriseIdentity !== undefined &&

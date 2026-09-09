@@ -112,6 +112,7 @@ describe("delegation capability", () => {
   it("removes delegation tools but retains ordinary reporting tools", () => {
     const tools = [
       createTool("sessions_spawn"),
+      createTool("enterprise_delegate"),
       createTool("sessions_send"),
       createTool("openclaw"),
       createTool("llm-task"),

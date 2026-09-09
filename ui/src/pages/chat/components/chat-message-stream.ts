@@ -3,10 +3,12 @@ import type { QuestionPrompt } from "../../../app/question-prompt.ts";
 import { icons } from "../../../components/icons.ts";
 import { t } from "../../../i18n/index.ts";
 import type { AssistantIdentity } from "../../../lib/assistant-identity.ts";
-import type { ChatItem } from "../../../lib/chat/chat-types.ts";
+import type { ChatItem, MessageGroup } from "../../../lib/chat/chat-types.ts";
+import { extractToolCardsCached } from "../../../lib/chat/tool-cards.ts";
 import { formatDurationCompact } from "../../../lib/format.ts";
 import { renderChatAvatar } from "../chat-avatar.ts";
 import type { ChatRunStartupPhase } from "../chat-run-startup.ts";
+import { delegationSummary, type DelegationCardContext } from "./chat-delegation-card.ts";
 import { renderGroupedMessage } from "./chat-message-bubble.ts";
 import { renderChatTimestamp } from "./chat-message-timestamp.ts";
 import { renderChatQuestionSummary } from "./chat-question-card.ts";
@@ -44,6 +46,7 @@ type StreamMessageOptions = Pick<
 
 export type StreamGroupOptions = StreamMessageOptions & {
   onOpenSidebar?: (content: SidebarContent) => void;
+  onOpenSubagents?: () => void;
   assistant?: AssistantIdentity;
   showAssistantAvatar?: boolean;
   startupPhase?: ChatRunStartupPhase;
@@ -159,11 +162,24 @@ export function renderStreamGroup(parts: StreamGroupPart[], opts: StreamGroupOpt
  * the turn's done indicator; the expanded groups render after this row.
  */
 export function renderWorkGroupSummary(
-  item: { key: string; durationMs: number | null },
-  opts: { expanded: boolean; onToggle: () => void; presentation?: "standalone" | "continuation" },
+  item: { key: string; durationMs: number | null; groups?: readonly MessageGroup[] },
+  opts: DelegationCardContext & {
+    expanded: boolean;
+    onToggle: () => void;
+    presentation?: "standalone" | "continuation";
+  },
 ) {
   const duration = formatDurationCompact(item.durationMs);
-  const label = duration ? t("chat.workRun.workedFor", { duration }) : t("chat.workRun.worked");
+  const handoffs = (item.groups ?? []).flatMap((group) =>
+    group.messages.flatMap(({ message, key }) =>
+      extractToolCardsCached(message, key)
+        .filter((card) => card.name === "enterprise_delegate")
+        .map((card) => delegationSummary(card, opts)),
+    ),
+  );
+  const label =
+    [...new Set(handoffs)].join(" · ") ||
+    (duration ? t("chat.workRun.workedFor", { duration }) : t("chat.workRun.worked"));
   const content = html`
     <div class="chat-activity-group chat-work-group ${opts.expanded ? "is-open" : ""}">
       <button

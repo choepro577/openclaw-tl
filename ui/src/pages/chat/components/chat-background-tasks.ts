@@ -11,7 +11,7 @@ import {
   mergeTaskLists,
   normalizeTaskEventPayload,
   normalizeTasksCancelResult,
-  normalizeTasksGetResult,
+  normalizeTasksGetDetailResult,
   normalizeTasksListResult,
   sortTasks,
   taskTimestampMs,
@@ -38,11 +38,13 @@ type BackgroundTasksState = {
   connectionClient: GatewayBrowserClient | null;
   connectionEpoch: number | undefined;
   error: string | null;
+  expandedTaskToolIds: Set<string>;
   finishedCollapsed: boolean;
   // Loads are keyed to the client so a reconnect (or gateway switch) refreshes
   // the snapshot instead of trusting the previous connection's task list.
   loadedClient: GatewayBrowserClient | null;
   loading: boolean;
+  openTaskId?: string;
   pendingTaskEvents: BackgroundTaskEventBuffer | null;
   pendingReload: boolean;
   requestId: number;
@@ -56,6 +58,7 @@ type BackgroundTasksState = {
   terminalObservedAtByTask: Map<string, number>;
   tasks: TaskSummary[] | null;
   taskDetails: Map<string, TaskSummary>;
+  taskToolMessages: Map<string, unknown[]>;
   taskDetailErrors: Map<string, string>;
   taskDetailLoadingIds: Set<string>;
 };
@@ -79,7 +82,10 @@ const RECENT_TASKS_LIMIT = 100;
 
 let nextStatusRowId = 0;
 
-function getBackgroundTasksState(host: BackgroundTasksHost): BackgroundTasksState {
+function getBackgroundTasksState(
+  host: BackgroundTasksHost,
+  subagentsOnly = false,
+): BackgroundTasksState {
   const sessionKey =
     canonicalUiSessionKeyForPersistence(host, host.sessionKey) ||
     normalizeOptionalString(host.sessionKey) ||
@@ -109,11 +115,13 @@ function getBackgroundTasksState(host: BackgroundTasksHost): BackgroundTasksStat
     connectionClient: host.client,
     connectionEpoch: host.connectionEpoch,
     error: null,
-    // Finished history starts collapsed so active work owns the rail; the
-    // section header still shows the count for discoverability.
-    finishedCollapsed: current?.finishedCollapsed ?? true,
+    expandedTaskToolIds: new Set(),
+    // Enterprise's dedicated Subagents page is a history view, so completed
+    // agents start visible. The generic Tasks rail keeps its compact default.
+    finishedCollapsed: current?.finishedCollapsed ?? !subagentsOnly,
     loadedClient: null,
     loading: false,
+    openTaskId: undefined,
     pendingTaskEvents: null,
     pendingReload: false,
     requestId: 0,
@@ -125,6 +133,7 @@ function getBackgroundTasksState(host: BackgroundTasksHost): BackgroundTasksStat
     terminalObservedAtByTask: new Map(),
     tasks: null,
     taskDetails: new Map(),
+    taskToolMessages: new Map(),
     taskDetailErrors: new Map(),
     taskDetailLoadingIds: new Set(),
   };
@@ -158,6 +167,16 @@ function prepareTaskSnapshot(state: BackgroundTasksState, task: TaskSummary): Ta
     state.terminalObservedAtByTask.delete(retained.id);
   }
   return retained;
+}
+
+/** Keep lookup-only fields on the private detail copy while lifecycle fields
+ * continue to follow the newest compact list/event snapshot. */
+function preserveTaskLookupDetail(snapshot: TaskSummary, detail: TaskSummary): TaskSummary {
+  return {
+    ...snapshot,
+    ...(detail.prompt ? { prompt: detail.prompt } : {}),
+    ...(detail.result ? { result: detail.result } : {}),
+  };
 }
 
 function observeTaskTerminal(
@@ -307,6 +326,43 @@ function loadBackgroundTasks(
   })();
 }
 
+/** Reconcile a terminal result through the existing session-scoped task load. */
+export function requestBackgroundTasksRefresh(
+  host: BackgroundTasksHost,
+  sessionKey = host.sessionKey,
+): void {
+  const state = host.backgroundTasksState;
+  const scopedSessionKey =
+    canonicalUiSessionKeyForPersistence(host, sessionKey) ||
+    normalizeOptionalString(sessionKey) ||
+    sessionKey;
+  if (
+    !state ||
+    !host.client ||
+    !host.connected ||
+    state.connectionClient !== host.client ||
+    state.connectionEpoch !== host.connectionEpoch ||
+    state.sessionKey !== scopedSessionKey
+  ) {
+    return;
+  }
+  const hasActiveOrPendingTask =
+    state.tasks === null ||
+    state.tasks.some(
+      (task) =>
+        isActiveTask(task) ||
+        task.deliveryStatus === "pending" ||
+        task.deliveryStatus === "session_queued",
+    );
+  if (!hasActiveOrPendingTask) {
+    return;
+  }
+  // loadBackgroundTasks owns single-flight and trailing reload coalescing. A
+  // terminal event arriving while the snapshot is pending therefore gets one
+  // authoritative follow-up without mixing sessions or connections.
+  loadBackgroundTasks(host, state, true);
+}
+
 function taskMatchesSessionScope(
   host: BackgroundTasksHost,
   task: TaskSummary,
@@ -319,6 +375,20 @@ function taskMatchesSessionScope(
       canonicalUiSessionKeyForPersistence(host, key) === sessionKey ||
       normalizeOptionalString(key) === sessionKey,
   );
+}
+
+function isRequesterSubagentTask(
+  host: BackgroundTasksHost,
+  sessionKey: string,
+  task: TaskSummary,
+): boolean {
+  if (task.runtime !== "subagent") {
+    return false;
+  }
+  const taskSessionKey =
+    canonicalUiSessionKeyForPersistence(host, task.sessionKey) ||
+    normalizeOptionalString(task.sessionKey);
+  return taskSessionKey === sessionKey;
 }
 
 function bufferBackgroundTaskEvent(
@@ -408,6 +478,10 @@ export function handleBackgroundTasksEvent(
     }
     state.tasks = state.tasks.filter((task) => task.id !== event.taskId);
     state.taskDetails.delete(event.taskId);
+    state.taskToolMessages.delete(event.taskId);
+    state.expandedTaskToolIds = new Set(
+      [...state.expandedTaskToolIds].filter((id) => !id.startsWith(`${event.taskId}:`)),
+    );
     state.taskActivityById.delete(event.taskId);
     state.terminalObservedAtByTask.delete(event.taskId);
     state.taskDetailErrors.delete(event.taskId);
@@ -422,10 +496,15 @@ export function handleBackgroundTasksEvent(
   observeTaskTerminal(state, newest, "event");
   state.tasks = sortTasks([newest, ...state.tasks.filter((task) => task.id !== event.task.id)]);
   if (detail) {
-    state.taskDetails = new Map(state.taskDetails).set(event.task.id, {
-      ...newest,
-      ...(detail.prompt ? { prompt: detail.prompt } : {}),
-    });
+    state.taskDetails = new Map(state.taskDetails).set(
+      event.task.id,
+      preserveTaskLookupDetail(newest, detail),
+    );
+    if (state.openTaskId === event.task.id) {
+      // The child transcript is canonical for tool arguments/results. Refresh
+      // only the open inspector; closed task rows keep their compact cache.
+      void loadBackgroundTaskDetail(host, state, newest, true);
+    }
   }
   host.requestUpdate?.();
 }
@@ -434,13 +513,14 @@ async function loadBackgroundTaskDetail(
   host: BackgroundTasksHost,
   state: BackgroundTasksState,
   task: TaskSummary,
+  force = false,
 ) {
   const rowId = task.id;
   const client = host.client;
   if (
     !client ||
     !host.connected ||
-    state.taskDetails.has(rowId) ||
+    (!force && state.taskDetails.has(rowId)) ||
     state.taskDetailLoadingIds.has(rowId)
   ) {
     return;
@@ -455,8 +535,8 @@ async function loadBackgroundTaskDetail(
     if (getBackgroundTasksState(host) !== state) {
       return;
     }
-    const normalizedDetail = normalizeTasksGetResult(payload);
-    const detail = normalizedDetail ? prepareTaskSnapshot(state, normalizedDetail) : null;
+    const normalizedDetail = normalizeTasksGetDetailResult(payload);
+    const detail = normalizedDetail ? prepareTaskSnapshot(state, normalizedDetail.task) : null;
     if (!detail || detail.id !== rowId) {
       throw new Error(t("chat.backgroundTasks.detailFailed"));
     }
@@ -468,10 +548,14 @@ async function loadBackgroundTaskDetail(
     }
     const newest = newestTaskSnapshot(current, detail);
     observeTaskTerminal(state, newest, "snapshot");
-    state.taskDetails = new Map(state.taskDetails).set(rowId, {
-      ...newest,
-      ...(detail.prompt ? { prompt: detail.prompt } : {}),
-    });
+    state.taskDetails = new Map(state.taskDetails).set(
+      rowId,
+      preserveTaskLookupDetail(newest, detail),
+    );
+    state.taskToolMessages = new Map(state.taskToolMessages).set(
+      rowId,
+      normalizedDetail?.toolMessages ?? [],
+    );
     if (state.tasks) {
       state.tasks = sortTasks([
         newest,
@@ -558,9 +642,11 @@ export function createBackgroundTasksProps(
     openTaskId?: string;
     onOpenTaskDetail?: (task: TaskSummary) => void;
     presented?: boolean;
+    subagentsOnly?: boolean;
   } = {},
 ): BackgroundTasksProps {
-  const state = getBackgroundTasksState(host);
+  const state = getBackgroundTasksState(host, opts.subagentsOnly === true);
+  state.openTaskId = opts.openTaskId;
   if (!host.connected) {
     // A reconnect can silently drop `task` events, so a disconnect invalidates
     // the loaded marker and the next connected render refetches the snapshot.
@@ -577,8 +663,17 @@ export function createBackgroundTasksProps(
   ) {
     loadBackgroundTasks(host, state);
   }
+  const visibleTasks =
+    opts.subagentsOnly === true
+      ? (state.tasks?.filter((task) => isRequesterSubagentTask(host, state.sessionKey, task)) ??
+        null)
+      : state.tasks;
+  const visibleTaskIds = visibleTasks ? new Set(visibleTasks.map((task) => task.id)) : null;
+  const visibleTaskDetails = opts.subagentsOnly
+    ? new Map([...state.taskDetails].filter(([taskId]) => visibleTaskIds?.has(taskId) === true))
+    : state.taskDetails;
   const subagentActivity = deriveSubagentActivity({
-    tasks: state.tasks ?? [],
+    tasks: visibleTasks ?? [],
     sessionKey: state.sessionKey,
     terminalObservedAtByTask: state.terminalObservedAtByTask,
     canonicalizeSessionKey: (sessionKey) =>
@@ -590,20 +685,27 @@ export function createBackgroundTasksProps(
   return {
     sessionKey: state.sessionKey,
     statusRowId: state.statusRowId,
+    ...(opts.subagentsOnly === true ? { subagentsOnly: true } : {}),
     collapsed: state.collapsed,
     narrowLayout: opts.narrowLayout === true,
     connected: host.connected,
     // tasks.cancel needs operator.write; read-only operators get no button.
-    canCancel: host.connected && hasOperatorWriteAccess(host.hello?.auth ?? null),
+    canCancel:
+      opts.subagentsOnly !== true &&
+      host.connected &&
+      hasOperatorWriteAccess(host.hello?.auth ?? null) &&
+      (host.hello?.features?.methods?.includes("tasks.cancel") ?? true),
     loading: state.loading,
     error: state.error,
-    tasks: state.tasks,
-    activeCount: state.tasks?.filter(isActiveTask).length ?? 0,
+    tasks: visibleTasks,
+    activeCount: visibleTasks?.filter(isActiveTask).length ?? 0,
     subagentActivity,
     openTaskId: opts.openTaskId,
-    taskDetails: state.taskDetails,
+    taskDetails: visibleTaskDetails,
+    taskToolMessages: state.taskToolMessages,
     taskDetailErrors: state.taskDetailErrors,
     taskDetailLoadingIds: state.taskDetailLoadingIds,
+    expandedTaskToolIds: state.expandedTaskToolIds,
     cancellingTaskIds: state.cancellingTaskIds,
     finishedCollapsed: state.finishedCollapsed,
     onToggleCollapsed: () => toggleBackgroundTasks(host),
@@ -614,6 +716,16 @@ export function createBackgroundTasksProps(
     onRefresh: () => loadBackgroundTasks(host, state, true),
     onCancel: (taskId) => void cancelBackgroundTask(host, state, taskId),
     onLoadDetail: (task) => void loadBackgroundTaskDetail(host, state, task),
+    onToggleTaskTool: (id) => {
+      const next = new Set(state.expandedTaskToolIds);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      state.expandedTaskToolIds = next;
+      host.requestUpdate?.();
+    },
     onOpenTaskDetail: opts.onOpenTaskDetail
       ? (task) => {
           // Opening retries a failed tasks.get: the panel's render-driven load

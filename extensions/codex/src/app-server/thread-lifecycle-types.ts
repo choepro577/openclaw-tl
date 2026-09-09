@@ -2,7 +2,8 @@ import type { EmbeddedRunAttemptParamsV2 as EmbeddedRunAttemptParams } from "ope
 import type { CodexAppServerLiveThreadOwnership } from "./client-runtime.js";
 import type { CodexAppServerClient } from "./client.js";
 import type { CodexAppServerRuntimeOptions } from "./config.js";
-import type { CodexPluginThreadConfig } from "./plugin-thread-config.js";
+import type { CodexNativePluginMcpServerOwners } from "./native-plugin-grants.js";
+import type { CodexPluginThreadConfig, PluginAppPolicyContext } from "./plugin-thread-config.js";
 import type { CodexDynamicToolSpec, CodexTurnEnvironmentParams, JsonObject } from "./protocol.js";
 import type { CodexAppServerBindingStore, CodexAppServerThreadBinding } from "./session-binding.js";
 import type { CodexContextEngineThreadBootstrapProjection } from "./thread-context-engine.js";
@@ -24,8 +25,21 @@ export type CodexAppServerThreadLifecycleBinding = CodexAppServerThreadBinding &
 };
 
 type CodexThreadFinalConfigPatchDecision =
-  | { action: "resume"; binding: CodexAppServerThreadBinding }
-  | { action: "start" };
+  | {
+      action: "resume";
+      binding: CodexAppServerThreadBinding;
+      /** Trusted MCP ownership from the current plugin inventory snapshot. */
+      nativePluginMcpServerOwners?: CodexNativePluginMcpServerOwners;
+      /** Policy context used to admit only this thread's plugin apps. */
+      pluginAppPolicyContext?: PluginAppPolicyContext;
+    }
+  | {
+      action: "start";
+      /** Trusted MCP ownership from the current plugin inventory snapshot. */
+      nativePluginMcpServerOwners?: CodexNativePluginMcpServerOwners;
+      /** Policy context used to admit only this thread's plugin apps. */
+      pluginAppPolicyContext?: PluginAppPolicyContext;
+    };
 
 type CodexThreadFinalConfigPatchResult = {
   configPatch?: JsonObject;

@@ -1,0 +1,111 @@
+- main [ref=f4e5]:
+  - complementary [ref=f4e6]:
+    - generic [ref=f4e19]:
+      - strong [ref=f4e20]: OpenClaw
+      - generic [ref=f4e21]: Enterprise Admin
+    - navigation "Quản trị Enterprise" [ref=f4e22]:
+      - button "Quản lý tài khoản" [ref=f4e23]
+      - button "Quản lý agent" [ref=f4e31]
+      - button "Tri thức doanh nghiệp" [ref=f4e37]
+      - button "Quản lý skill" [ref=f4e42]
+      - button "Plugins" [ref=f4e50]
+      - button "Config" [ref=f4e56]
+    - generic [ref=f4e62]:
+      - generic [ref=f4e63]:
+        - generic [ref=f4e64]: Q
+        - generic [ref=f4e65]:
+          - strong [ref=f4e66]: QA Admin
+          - generic [ref=f4e67]: "@qaadmin"
+      - button "Đổi mật khẩu" [ref=f4e68]
+      - button "Đăng xuất" [ref=f4e75]
+  - generic [ref=f4e263]:
+    - generic [ref=f4e264]:
+      - generic [ref=f4e265]:
+        - generic [ref=f4e266]:
+          - heading "Quản lý tài khoản" [level=1] [ref=f4e267]
+          - paragraph [ref=f4e268]: 1 tài khoản · quyền truy cập và phiên đăng nhập Enterprise
+        - button "Tạo tài khoản" [ref=f4e269]
+      - generic [ref=f4e271]:
+        - searchbox "Tìm tài khoản" [ref=f4e272]
+        - combobox "Lọc role" [ref=f4e273]:
+          - option "Tất cả role" [selected]
+          - option "Administrator"
+          - option "Employee"
+        - combobox "Lọc trạng thái" [ref=f4e274]:
+          - option "Tất cả trạng thái" [selected]
+          - option "Đang hoạt động"
+          - option "Đã khóa"
+        - combobox "Lọc preset" [ref=f4e275]:
+          - option "Tất cả preset" [selected]
+          - option "Lập trình tiêu chuẩn"
+          - option "Không có preset"
+        - combobox "Lọc personal agent" [ref=f4e276]:
+          - option "Tất cả personal agent" [selected]
+          - option "Đã bật personal agent"
+          - option "Không có personal agent"
+        - combobox "Sắp xếp" [ref=f4e277]:
+          - option "Username A–Z" [selected]
+          - option "Mới cập nhật"
+          - option "Đăng nhập gần nhất"
+      - table [ref=f4e279]:
+        - rowgroup [ref=f4e280]:
+          - row [ref=f4e281]:
+            - columnheader [ref=f4e282]:
+              - checkbox "Chọn tất cả" [ref=f4e283]
+            - columnheader "Tài khoản" [ref=f4e284]
+            - columnheader "Role" [ref=f4e285]
+            - columnheader "Trạng thái" [ref=f4e286]
+            - columnheader "Agent" [ref=f4e287]
+            - columnheader "Access preset" [ref=f4e288]
+            - columnheader "Đăng nhập cuối" [ref=f4e289]
+            - columnheader "Cập nhật" [ref=f4e290]
+            - columnheader "Thao tác" [ref=f4e291]
+        - rowgroup [ref=f4e292]:
+          - row [ref=f4e293]:
+            - cell [ref=f4e294]:
+              - checkbox "Chọn qaadmin" [ref=f4e295]
+            - cell "QA Admin @qaadmin" [ref=f4e296]:
+              - strong [ref=f4e297]: QA Admin
+              - generic [ref=f4e298]: "@qaadmin"
+            - cell "administrator" [ref=f4e299]
+            - cell "Hoạt động" [ref=f4e300]
+            - cell "—" [ref=f4e302]
+            - cell "Không cấp sẵn công cụ" [ref=f4e303]
+            - cell "17:26 3 thg 9, 2026" [ref=f4e305]
+            - cell "17:26 3 thg 9, 2026" [ref=f4e306]
+            - cell [ref=f4e307]:
+              - button "Xem" [ref=f4e308]
+      - generic [ref=f4e309]:
+        - generic [ref=f4e310]: Trang 1
+        - button "Trước" [disabled] [ref=f4e311]
+        - button "Sau" [disabled] [ref=f4e312]
+    - dialog "Tạo tài khoản" [ref=f4e314]:
+      - generic [ref=f4e316]:
+        - generic [ref=f4e317]:
+          - generic [ref=f4e318]:
+            - heading "Tạo tài khoản" [level=2] [ref=f4e319]
+            - paragraph [ref=f4e320]: Bước 1/2 · tài khoản mới bắt buộc đổi mật khẩu khi đăng nhập lần đầu
+          - button "Đóng" [ref=f4e321]
+        - generic [ref=f4e327]:
+          - generic [ref=f4e328]:
+            - text: Username
+            - 'textbox "Username Bắt buộc không dấu, tối thiểu 3 ký tự. Ví dụ: hieu.nguyen" [ref=f4e329]'
+            - generic [ref=f4e330]: "Bắt buộc không dấu, tối thiểu 3 ký tự. Ví dụ: hieu.nguyen"
+          - generic [ref=f4e331]:
+            - text: Tên hiển thị
+            - textbox "Tên hiển thị" [ref=f4e332]
+          - generic [ref=f4e333]:
+            - text: Role
+            - combobox "Role" [ref=f4e334]:
+              - option "Employee" [selected]
+              - option "Administrator"
+          - generic [ref=f4e335]:
+            - generic [ref=f4e336]: Kích hoạt ngay
+            - checkbox "Kích hoạt ngay" [checked] [ref=f4e337]
+          - generic [ref=f4e338]:
+            - text: Mật khẩu tạm
+            - textbox "Mật khẩu tạm" [ref=f4e339]
+          - generic [ref=f4e340]:
+            - text: Xác nhận mật khẩu
+            - textbox "Xác nhận mật khẩu" [ref=f4e341]
+          - button "Tiếp tục" [ref=f4e343]

@@ -1,0 +1,153 @@
+{
+  "verified_at": "2026-09-04T07:21:16.024368+00:00",
+  "browser_admin_tab": "1369521194",
+  "browser_user_tab": "1369521197",
+  "zones": [
+    {
+      "slug": "qa-cntt-20260904",
+      "egress_policy": "external_allowed",
+      "publication_number": 2,
+      "lexical_status": "ready",
+      "vector_status": "ready",
+      "degraded_override": 0,
+      "generation_id": "5c17c548-b7b0-4668-b91b-7d78399f0228",
+      "integrity_status": "valid",
+      "embedding_identity": {
+        "provider": "openai",
+        "model": "text-embedding-3-small",
+        "dimension": 1536
+      }
+    },
+    {
+      "slug": "qa-nhan-su-20260904",
+      "egress_policy": "external_allowed",
+      "publication_number": 3,
+      "lexical_status": "ready",
+      "vector_status": "ready",
+      "degraded_override": 0,
+      "generation_id": "1fd693b9-451f-4dfe-b200-a557b79520b3",
+      "integrity_status": "valid",
+      "embedding_identity": {
+        "provider": "openai",
+        "model": "text-embedding-3-small",
+        "dimension": 1536
+      }
+    },
+    {
+      "slug": "qa-phap-che-20260904",
+      "egress_policy": "external_allowed",
+      "publication_number": 2,
+      "lexical_status": "ready",
+      "vector_status": "ready",
+      "degraded_override": 0,
+      "generation_id": "9ac391d8-606e-468d-a543-d6111060e6d3",
+      "integrity_status": "valid",
+      "embedding_identity": {
+        "provider": "openai",
+        "model": "text-embedding-3-small",
+        "dimension": 1536
+      }
+    },
+    {
+      "slug": "qa-san-pham-20260904",
+      "egress_policy": "external_allowed",
+      "publication_number": 2,
+      "lexical_status": "ready",
+      "vector_status": "ready",
+      "degraded_override": 0,
+      "generation_id": "c9ce31ae-ed89-426c-b10d-8faf75ee740f",
+      "integrity_status": "valid",
+      "embedding_identity": {
+        "provider": "openai",
+        "model": "text-embedding-3-small",
+        "dimension": 1536
+      }
+    },
+    {
+      "slug": "qa-tai-chinh-20260904",
+      "egress_policy": "external_allowed",
+      "publication_number": 2,
+      "lexical_status": "ready",
+      "vector_status": "ready",
+      "degraded_override": 0,
+      "generation_id": "7744be78-9af5-4a6b-b778-75431f4c2f28",
+      "integrity_status": "valid",
+      "embedding_identity": {
+        "provider": "openai",
+        "model": "text-embedding-3-small",
+        "dimension": 1536
+      }
+    },
+    {
+      "slug": "qa-van-hanh-20260904",
+      "egress_policy": "external_allowed",
+      "publication_number": 3,
+      "lexical_status": "ready",
+      "vector_status": "ready",
+      "degraded_override": 0,
+      "generation_id": "c0c2adec-66cf-4496-a324-fe8880b875dc",
+      "integrity_status": "valid",
+      "embedding_identity": {
+        "provider": "openai",
+        "model": "text-embedding-3-small",
+        "dimension": 1536
+      }
+    }
+  ],
+  "test": {
+    "session_id": "e4f3a1cf-02e7-4921-8c8e-cab86eedcdbe",
+    "tool_calls": {
+      "enterprise_knowledge_search": 6,
+      "enterprise_knowledge_get": 4
+    },
+    "searches": [
+      {
+        "query": "triển khai đào tạo 30 người số lượng học viên mỗi lớp thông báo lịch trước bao lâu bảo hành sau bàn giao số ngày",
+        "zoneSlug": null,
+        "maxResults": 10
+      },
+      {
+        "query": "chính sách sao lưu dữ liệu thời gian lưu giữ backup xóa nhầm dữ liệu khôi phục",
+        "zoneSlug": null,
+        "maxResults": 10
+      },
+      {
+        "query": "quy định hiện hành nghiệm thu bàn giao bảo hành triển khai đào tạo chi nhánh",
+        "zoneSlug": null,
+        "maxResults": 10
+      },
+      {
+        "query": "production chính sách đào tạo chia lớp tối đa học viên đăng ký trước bảo hành cấu hình",
+        "zoneSlug": null,
+        "maxResults": 10
+      },
+      {
+        "query": "production retention backup vận hành thời gian lưu bản sao lưu khôi phục dữ liệu xóa nhầm",
+        "zoneSlug": null,
+        "maxResults": 10
+      },
+      {
+        "query": "quy định chính thức hiện hành đào tạo bàn giao chi nhánh Bến Tre Aurora Desk",
+        "zoneSlug": null,
+        "maxResults": 10
+      }
+    ],
+    "routes": [
+      {
+        "api": "openai-chatgpt-responses",
+        "model": "gpt-5.6-sol"
+      }
+    ],
+    "auth_mode": "OAuth",
+    "answer": "Tôi đã rà soát toàn bộ 6 vùng tri thức nội bộ được cấp quyền. **Chưa thể xác nhận đây là quy định hiện hành để áp dụng thực tế**, vì các tài liệu tìm được đều ghi rõ là **dữ liệu QA/kiểm thử hư cấu, không phải chính sách production**.\n\nNếu chỉ dùng các tài liệu này làm **tham khảo**, kết quả là:\n\n- **30 người:** tối thiểu **2 lớp**, vì mỗi lớp tối đa 18 người.\n- **Báo lịch/đăng ký đào tạo:** trước ít nhất **9 ngày làm việc**.\n- **Bảo hành sau bàn giao:** **60 ngày theo lịch**, tính từ biên bản nghiệm thu; chỉ áp dụng cho cấu hình đã thống nhất.\n- **Thời gian giữ bản sao lưu vận hành:** **35 ngày**. Vì vậy, nếu xóa nhầm cần báo CNTT càng sớm càng tốt; tài liệu không cam kết chắc chắn mọi dữ liệu trong 35 ngày đều khôi phục được.\n\n**Nguồn đã kiểm tra**\n\n1. *[QA] OPS-02 — Đào tạo và bàn giao chi nhánh*, phiên bản 2, xuất bản 04/09/2026 — nêu giới hạn lớp, thời hạn đăng ký và bảo hành; đồng thời ghi rõ “DỮ LIỆU KIỂM THỬ HƯ CẤU, không phải chính sách production”.\n2. *[QA] IT-02 — MFA và truy cập nhà cung cấp*, phiên bản 1, xuất bản 04/09/2026 — nêu bản sao lưu vận hành giữ 35 ngày; tài liệu cũng tự xác định là dữ liệu kiểm thử.\n3. *[QA] OPS-01 — Kế hoạch triển khai chi nhánh Bến Tre*, phiên bản 1 — ghi rõ chỉ dùng đánh giá trợ lý, không áp dụng cho hoạt động thực tế.\n\n**Khuyến nghị:** chưa nên chốt lịch hoặc cam kết “60/35 ngày” với chi nhánh; cần đối chiếu bản chính thức từ Vận hành và CNTT hoặc điều khoản hợp đồng/SLA production."
+  },
+  "doctor": {
+    "overall": "good",
+    "artifact_errors": 0,
+    "artifacts_checked": 28,
+    "queued": 0,
+    "running": 0,
+    "stuck": 0,
+    "historical_failed_jobs_24h": 2
+  }
+}

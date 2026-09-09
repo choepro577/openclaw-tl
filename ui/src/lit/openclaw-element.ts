@@ -1,9 +1,15 @@
-import { LitElement } from "lit";
+import { LitElement, type PropertyValues } from "lit";
+import { projectDisplay } from "../branding/display-projection.ts";
 import { I18nController } from "../i18n/lib/lit-controller.ts";
 
 /** Lit base that refreshes the element when the active locale changes. */
 export abstract class OpenClawLitElement extends LitElement {
   protected readonly i18nController = new I18nController(this);
+
+  protected override update(changed: PropertyValues) {
+    super.update(changed);
+    projectDisplay(this.renderRoot);
+  }
 }
 
 /** OpenClaw Lit base for components styled by the shared light-DOM stylesheet. */

@@ -20,6 +20,20 @@ export const CORE_FIELD_HELP: Record<string, string> = {
     "Additive multi-account module for the existing Gateway. Keep disabled to preserve the original OpenClaw UI and authentication behavior.",
   "enterprise.enabled":
     "Enables Enterprise accounts, entitlement APIs, isolated user workspaces, and Enterprise UI routes. Default false.",
+  "enterprise.thienly":
+    "Employee consent sign-in using the Thiên Lý API and private Personal Agents.",
+  "enterprise.thienly.enabled":
+    "Enable after registering the client and exact callback on Thiên Lý. Default false.",
+  "enterprise.thienly.webBaseUrl":
+    "Thiên Lý V2 origin and optional deployment base path; opens integrations/maap/connect.",
+  "enterprise.thienly.apiBaseUrl":
+    "Thiên Lý API base including /api; exchanges authorization codes server to server.",
+  "enterprise.thienly.callbackUrl":
+    "Exact registered callback, ending in /api/auth/user/thienly/callback. HTTPS required except loopback development.",
+  "enterprise.thienly.clientId":
+    "Client identifier registered in the Thiên Lý MAAP connection configuration.",
+  "enterprise.thienly.clientSecretEnv":
+    "Server environment variable containing the registered client secret. The secret is never sent to the browser.",
   "enterprise.userPortal":
     "Selects the Enterprise employee portal implementation independently from the Admin portal.",
   "enterprise.userPortal.version":
@@ -36,7 +50,7 @@ export const CORE_FIELD_HELP: Record<string, string> = {
   "enterprise.knowledge.graph":
     "Derived per-Zone graph settings. Source Versions and normalized artifacts remain the source of truth.",
   "enterprise.knowledge.graph.enabled":
-    "Enable graph generation and Graph View. Existing Zones remain opt-in until rebuilt.",
+    "Enable optional knowledge graph enrichment when sources are processed. Structural graphs are always generated, and older snapshots acquire their graph automatically on first view without republishing.",
   "enterprise.knowledge.graph.aiAnalysis":
     "Control AI-first structural analysis: off, shadow, or on. AI never publishes automatically.",
   "enterprise.knowledge.graph.agentExpansion":

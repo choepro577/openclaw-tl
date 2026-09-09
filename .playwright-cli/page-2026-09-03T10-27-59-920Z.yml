@@ -1,0 +1,147 @@
+- main [ref=e30]:
+  - complementary [ref=e31]:
+    - generic [ref=e44]:
+      - strong [ref=e45]: OpenClaw
+      - generic [ref=e46]: Enterprise Admin
+    - navigation "Quản trị Enterprise" [ref=e47]:
+      - button "Quản lý tài khoản" [ref=e48]
+      - button "Quản lý agent" [ref=e56]
+      - button "Tri thức doanh nghiệp" [ref=e62]
+      - button "Quản lý skill" [ref=e67]
+      - button "Plugins" [ref=e75]
+      - button "Config" [ref=e81]
+    - generic [ref=e87]:
+      - generic [ref=e88]:
+        - generic [ref=e89]: Q
+        - generic [ref=e90]:
+          - strong [ref=e91]: QA Admin
+          - generic [ref=e92]: "@qaadmin"
+      - button "Đổi mật khẩu" [ref=e93]
+      - button "Đăng xuất" [ref=e100]
+  - generic [ref=e158]:
+    - generic [ref=e160]:
+      - heading "Quản lý agent" [level=1] [ref=e161]
+      - paragraph [ref=e162]: Shared agent nghiệp vụ và personal agent theo từng tài khoản
+    - navigation "Loại agent" [ref=e165]:
+      - button "Shared Agents (2)" [ref=e229]
+      - button "Personal Agents (1)" [ref=e175]
+      - button "Điều phối Agent" [active] [ref=e168]
+    - generic [ref=e270]:
+      - generic [ref=e271]:
+        - generic [ref=e272]:
+          - generic [ref=e273]: DELEGATION STATUS
+          - heading "Off" [level=2] [ref=e274]
+          - paragraph [ref=e275]: Personal Agents delegate only to assigned specialists that are currently eligible. Changes apply from the next request.
+        - button "Preview activation" [ref=e277]
+      - region "Four setup steps" [ref=e278]:
+        - generic [ref=e279]:
+          - generic [ref=e280]: "1"
+          - generic [ref=e281]:
+            - strong [ref=e282]: Choose a routing model
+            - generic [ref=e283]: Not complete
+        - generic [ref=e284]:
+          - generic [ref=e285]: "2"
+          - generic [ref=e286]:
+            - strong [ref=e287]: Complete specialist profiles
+            - generic [ref=e288]: 0 ready
+        - generic [ref=e289]:
+          - generic [ref=e290]: "3"
+          - generic [ref=e291]:
+            - strong [ref=e292]: Review affected users
+            - generic [ref=e293]: 0 Personal Agents
+        - generic [ref=e294]:
+          - generic [ref=e295]: "4"
+          - generic [ref=e296]:
+            - strong [ref=e297]: Activate safely
+            - generic [ref=e298]: "Off"
+      - generic [ref=e299]:
+        - generic [ref=e300]:
+          - generic [ref=e301]: Users with Personal Agent
+          - strong [ref=e302]: "0"
+        - generic [ref=e303]:
+          - generic [ref=e304]: Assignments
+          - strong [ref=e305]: "0"
+        - generic [ref=e306]:
+          - generic [ref=e307]: Effective
+          - strong [ref=e308]: "0"
+        - generic [ref=e309]:
+          - generic [ref=e310]: Ready to delegate
+          - strong [ref=e311]: "0"
+        - generic [ref=e312]:
+          - generic [ref=e313]: Delegated
+          - strong [ref=e314]: "0"
+        - generic [ref=e315]:
+          - generic [ref=e316]: Asked for clarification
+          - strong [ref=e317]: 0%
+        - generic [ref=e318]:
+          - generic [ref=e319]: Blocked
+          - strong [ref=e320]: "0"
+        - generic [ref=e321]:
+          - generic [ref=e322]: Failed
+          - strong [ref=e323]: 0%
+      - generic [ref=e324]:
+        - generic [ref=e325]:
+          - generic [ref=e326]:
+            - heading "General settings" [level=3] [ref=e327]
+            - paragraph [ref=e328]: Safe defaults are already filled in.
+          - generic [ref=e329]: Revision 0
+        - generic [ref=e330]:
+          - text: Routing model
+          - combobox "Routing model If this model becomes unavailable, routing stops and does not switch models automatically." [ref=e331]:
+            - option "Choose a model…" [selected]
+          - generic [ref=e332]: If this model becomes unavailable, routing stops and does not switch models automatically.
+        - generic [ref=e333]:
+          - text: Operating mode
+          - combobox "Operating mode" [ref=e334]:
+            - option "Off" [selected]
+            - option "Shadow mode, record decisions only"
+            - option "Active"
+        - group [ref=e335]:
+          - generic "Advanced settings" [ref=e336]
+        - button "Save settings" [ref=e338]
+      - generic [ref=e339]:
+        - generic [ref=e340]:
+          - generic [ref=e341]:
+            - heading "Routing log" [level=3] [ref=e342]
+            - paragraph [ref=e343]: Prompts and responses are not stored; only hashes and administrative reason codes are retained.
+          - generic [ref=e344]: 0 events
+        - generic "Routing log filters" [ref=e345]:
+          - generic [ref=e346]:
+            - text: From
+            - textbox "From" [ref=e347]
+          - generic [ref=e348]:
+            - text: To
+            - textbox "To" [ref=e349]
+          - generic [ref=e350]:
+            - text: Account ID
+            - textbox "Account ID" [ref=e351]
+          - generic [ref=e352]:
+            - text: Agent ID
+            - textbox "Agent ID" [ref=e353]
+          - generic [ref=e354]:
+            - text: Outcome
+            - combobox "Outcome" [ref=e355]:
+              - option "All" [selected]
+              - option "delegated"
+              - option "clarified"
+              - option "local"
+              - option "blocked"
+              - option "failed"
+              - option "cancelled"
+              - option "shadow"
+          - generic [ref=e356]:
+            - text: Reason code
+            - textbox "Reason code" [ref=e357]
+          - button "Apply filters" [ref=e358]
+        - table [ref=e359]:
+          - rowgroup [ref=e360]:
+            - row [ref=e361]:
+              - columnheader "Time" [ref=e362]
+              - columnheader "Account" [ref=e363]
+              - columnheader "Agent" [ref=e364]
+              - columnheader "Outcome" [ref=e365]
+              - columnheader "Source" [ref=e366]
+              - columnheader "Reason" [ref=e367]
+              - columnheader "Latency" [ref=e368]
+          - rowgroup
+        - generic [ref=e369]: No routing events yet.

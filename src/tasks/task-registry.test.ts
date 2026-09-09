@@ -42,7 +42,10 @@ import {
   requestFlowCancel,
 } from "./task-flow-registry.js";
 import type { TaskFlowRecord } from "./task-flow-registry.types.js";
-import { getTaskActivitySnapshot } from "./task-registry-activity.js";
+import {
+  getTaskActivitySnapshot,
+  getTaskLiveToolActivitySnapshot,
+} from "./task-registry-activity.js";
 import {
   cancelTaskById,
   deleteTaskRecordById,
@@ -60,6 +63,7 @@ import {
   markTaskTerminalById,
   recordTaskProgressByRunId,
   reloadTaskRegistryFromStore,
+  setTaskRunDeliveryStatusByRunId,
   resolveTaskForLookupToken,
   updateTaskNotifyPolicyById,
 } from "./task-registry.js";
@@ -649,6 +653,38 @@ describe("task-registry", () => {
     });
   });
 
+  it("advances the task projection timestamp when delivery changes", async () => {
+    await withTaskRegistryTempDir(async () => {
+      resetTaskRegistryMemoryForTest();
+      const runId = "run-delivery-timestamp";
+      const task = createTaskFixture("subagent", {
+        runId,
+        childSessionKey: "agent:main:subagent:delivery-timestamp",
+        task: "Publish the specialist result",
+        status: "running",
+        deliveryStatus: "pending",
+        startedAt: 100,
+        lastEventAt: 100,
+      });
+      const dateNow = vi.spyOn(Date, "now").mockReturnValue(100);
+      try {
+        const [updated] = setTaskRunDeliveryStatusByRunId({
+          runId,
+          runtime: "subagent",
+          sessionKey: task.requesterSessionKey,
+          deliveryStatus: "delivered",
+        });
+        expect(updated).toMatchObject({
+          taskId: task.taskId,
+          deliveryStatus: "delivered",
+          lastEventAt: 101,
+        });
+      } finally {
+        dateNow.mockRestore();
+      }
+    });
+  });
+
   it("bounds durable liveness writes for live activity deltas", async () => {
     await withTaskRegistryTempDir(async () => {
       resetTaskRegistryMemoryForTest();
@@ -891,6 +927,18 @@ describe("task-registry", () => {
         toolUseCount: 2,
         lastToolName: "exec",
       });
+      expect(getTaskLiveToolActivitySnapshot(requireTaskByRunId("run-tools").taskId)).toEqual([
+        expect.objectContaining({
+          toolCallId: "call-1",
+          name: "read",
+          resultReceived: false,
+        }),
+        expect.objectContaining({
+          toolCallId: "call-2",
+          name: "exec",
+          resultReceived: false,
+        }),
+      ]);
     });
   });
 

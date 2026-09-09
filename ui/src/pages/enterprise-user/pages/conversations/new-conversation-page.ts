@@ -14,8 +14,15 @@ import { userAgentCatalogStore } from "../../state/user-agent-catalog-store.ts";
 export function resolveNewConversationAgentKey(
   selectedKey: AgentKey | null,
   activeKey: AgentKey | null,
+  agents: readonly { key: AgentKey; actions: { canChat: boolean } }[],
 ): AgentKey | null {
-  return selectedKey ?? activeKey;
+  if (selectedKey && agents.some((agent) => agent.key === selectedKey && agent.actions.canChat)) {
+    return selectedKey;
+  }
+  if (activeKey && agents.some((agent) => agent.key === activeKey && agent.actions.canChat)) {
+    return activeKey;
+  }
+  return null;
 }
 
 export class UserNewConversationPage extends OpenClawLightDomElement {
@@ -31,11 +38,13 @@ export class UserNewConversationPage extends OpenClawLightDomElement {
     this.selectedKey = resolveNewConversationAgentKey(
       this.selectedKey,
       userAgentCatalogStore.activeKey,
+      userAgentCatalogStore.agents,
     );
     this.unsubscribe = userAgentCatalogStore.subscribe(() => {
       this.selectedKey = resolveNewConversationAgentKey(
         this.selectedKey,
         userAgentCatalogStore.activeKey,
+        userAgentCatalogStore.agents,
       );
       this.requestUpdate();
     });
@@ -43,6 +52,7 @@ export class UserNewConversationPage extends OpenClawLightDomElement {
       this.selectedKey = resolveNewConversationAgentKey(
         this.selectedKey,
         userAgentCatalogStore.activeKey,
+        userAgentCatalogStore.agents,
       );
       this.requestUpdate();
     });
@@ -58,6 +68,7 @@ export class UserNewConversationPage extends OpenClawLightDomElement {
     const selectedKey = resolveNewConversationAgentKey(
       this.selectedKey,
       userAgentCatalogStore.activeKey,
+      userAgentCatalogStore.agents,
     );
     if (!selectedKey || this.busy) {
       return;
@@ -78,6 +89,7 @@ export class UserNewConversationPage extends OpenClawLightDomElement {
     const selected = resolveNewConversationAgentKey(
       this.selectedKey,
       userAgentCatalogStore.activeKey,
+      agents,
     );
     const page = renderSettingsPage(html`
       <header class="eu-page-header">

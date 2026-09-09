@@ -3,9 +3,9 @@ import { PROTOCOL_VERSION } from "../../../packages/gateway-protocol/src/index.j
 import type { OpenClawConfig } from "../../config/types.openclaw.js";
 import type { GatewayClient } from "../../gateway/server-methods/types.js";
 import type { EnterpriseAccount } from "../accounts/account-types.js";
-import { listEnterpriseAgentCatalog } from "../catalog/enterprise-catalog.js";
 import { resolveEnterprisePersonalAgentId } from "../personal-agent/personal-agent-config.js";
 import { enterpriseSharedAgentKey, resolveEnterpriseSharedAgentKey } from "./user-agent-key.js";
+import { listEnterpriseUserSharedAgentRoster } from "./user-agent-roster.js";
 import type { AgentKey } from "./user-api-contracts.js";
 
 export function createEnterpriseUserGatewayClient(
@@ -73,7 +73,7 @@ export function resolveEnterpriseUserAgentKey(
   if (runtimeAgentId === resolveEnterprisePersonalAgentId(config, account)) {
     return account.personalAgentEnabled ? "personal" : null;
   }
-  const shared = listEnterpriseAgentCatalog(config).shared.find(
+  const shared = listEnterpriseUserSharedAgentRoster(config).shared.find(
     (agent) => agent.agentId === runtimeAgentId,
   );
   if (!shared) {

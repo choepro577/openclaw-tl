@@ -18,6 +18,14 @@ function textContent(text: string) {
   return [{ type: "text" as const, text }];
 }
 
+const nonVisibleErrorContents = [
+  { name: "stream-error placeholder", content: textContent(STREAM_ERROR_FALLBACK_TEXT) },
+  { name: "empty content", content: [] },
+  { name: "whitespace content", content: textContent(" \n ") },
+  { name: "thinking-only content", content: [{ type: "thinking", thinking: "private reasoning" }] },
+  { name: "reasoning-only content", content: [{ type: "reasoning", text: "private reasoning" }] },
+];
+
 function assistantTextMessage(text: string, seq: number) {
   return {
     role: "assistant" as const,
@@ -493,80 +501,89 @@ describe("SessionHistorySseState", () => {
     expect(state.snapshot().messages.at(-1)?.["__openclaw"]?.seq).toBe(5);
   });
 
-  test("requests refresh when later assistant content repairs an inline stream error", () => {
-    const state = newState([userTextMessage("hello", 1)]);
+  test.each(nonVisibleErrorContents)(
+    "requests refresh when later assistant content repairs inline $name",
+    ({ content }) => {
+      const state = newState([userTextMessage("hello", 1)]);
 
-    const sentinel = state.appendInlineMessage({
-      message: {
-        role: "assistant",
-        content: textContent(STREAM_ERROR_FALLBACK_TEXT),
-        stopReason: "error",
-        errorMessage: "provider failed before content",
-      },
-      messageSeq: 2,
-    });
-
-    expect(sentinel?.message).toMatchObject({
-      role: "assistant",
-      content: [{ type: "text", text: "The agent run failed before producing a reply." }],
-      __openclaw: { seq: 2 },
-    });
-    expect(appendAssistantText(state, "actual fallback response", 3)).toEqual({
-      shouldRefresh: true,
-    });
-  });
-
-  test("keeps an inline failed turn before a new forwarded inter-session turn", () => {
-    const state = newState([
-      {
-        role: "assistant",
-        content: textContent(STREAM_ERROR_FALLBACK_TEXT),
-        stopReason: "error",
-        __openclaw: { seq: 1 },
-      },
-    ]);
-
-    const forwarded = state.appendInlineMessage({
-      message: {
-        role: "user",
-        content: textContent("forwarded update"),
-        provenance: {
-          kind: "inter_session",
-          sourceSessionKey: "agent:main:webchat:source",
-          sourceTool: "sessions_send",
+      const sentinel = state.appendInlineMessage({
+        message: {
+          role: "assistant",
+          content,
+          stopReason: "error",
+          errorMessage: "provider failed before content",
         },
-      },
-      messageSeq: 2,
-    });
+        messageSeq: 2,
+      });
 
-    expect(forwarded?.message).toMatchObject({
-      role: "assistant",
-      content: textContent("forwarded update"),
-    });
-    expect(appendAssistantText(state, "actual fallback response", 3)?.message).toMatchObject({
-      role: "assistant",
-      content: textContent("actual fallback response"),
-    });
-    expect(state.snapshot().messages[0]?.content).toEqual([
-      { type: "text", text: "The agent run failed before producing a reply." },
-    ]);
-  });
-
-  test("requests refresh when initial SSE history ends with a repaired stream error", () => {
-    const state = newState([
-      userTextMessage("hello", 1),
-      {
+      expect(sentinel?.message).toMatchObject({
         role: "assistant",
-        content: textContent(STREAM_ERROR_FALLBACK_TEXT),
-        stopReason: "error",
+        content: [{ type: "text", text: "The agent run failed before producing a reply." }],
         __openclaw: { seq: 2 },
-      },
-    ]);
+      });
+      expect(appendAssistantText(state, "actual fallback response", 3)).toEqual({
+        shouldRefresh: true,
+      });
+    },
+  );
 
-    expect(appendAssistantText(state, "actual fallback response", 3)).toEqual({
-      shouldRefresh: true,
-    });
-  });
+  test.each(nonVisibleErrorContents)(
+    "keeps inline failed $name before a new forwarded inter-session turn",
+    ({ content }) => {
+      const state = newState([
+        {
+          role: "assistant",
+          content,
+          stopReason: "error",
+          __openclaw: { seq: 1 },
+        },
+      ]);
+
+      const forwarded = state.appendInlineMessage({
+        message: {
+          role: "user",
+          content: textContent("forwarded update"),
+          provenance: {
+            kind: "inter_session",
+            sourceSessionKey: "agent:main:webchat:source",
+            sourceTool: "sessions_send",
+          },
+        },
+        messageSeq: 2,
+      });
+
+      expect(forwarded?.message).toMatchObject({
+        role: "assistant",
+        content: textContent("forwarded update"),
+      });
+      expect(appendAssistantText(state, "actual fallback response", 3)?.message).toMatchObject({
+        role: "assistant",
+        content: textContent("actual fallback response"),
+      });
+      expect(state.snapshot().messages[0]?.content).toEqual([
+        { type: "text", text: "The agent run failed before producing a reply." },
+      ]);
+    },
+  );
+
+  test.each(nonVisibleErrorContents)(
+    "requests refresh when initial SSE history ends with repaired $name",
+    ({ content }) => {
+      const state = newState([
+        userTextMessage("hello", 1),
+        {
+          role: "assistant",
+          content,
+          stopReason: "error",
+          __openclaw: { seq: 2 },
+        },
+      ]);
+
+      expect(appendAssistantText(state, "actual fallback response", 3)).toEqual({
+        shouldRefresh: true,
+      });
+    },
+  );
 
   test("marks bounded tail snapshots as having older history", () => {
     const snapshot = buildSessionHistorySnapshot({

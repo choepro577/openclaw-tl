@@ -1,0 +1,286 @@
+{
+  "capturedAt": "2026-09-04T16:01:58.018Z",
+  "parentAgent": "enterprise-personal-2ae2cbc2deecdb86fe86",
+  "accountId": "68264167-a2d8-48b1-a00a-d31a06a7fd92",
+  "sessionKey": "agent:enterprise-personal-2ae2cbc2deecdb86fe86:dashboard:0e9025ed-af58-4fd1-abb3-5af4b83cd347",
+  "transcriptId": "430ba585-fe54-4bcd-b401-77d752aefb94",
+  "sessionHash": "a7f61170046546383e9584d5c1ada307ac6ee775a95aff59a30ec34a0bd45285",
+  "collectionMode": "sqlite3 -readonly; no runtime mutations",
+  "privateBodiesOmitted": true,
+  "parent": {
+    "session_key": "agent:enterprise-personal-2ae2cbc2deecdb86fe86:dashboard:0e9025ed-af58-4fd1-abb3-5af4b83cd347",
+    "current_session_id": "430ba585-fe54-4bcd-b401-77d752aefb94",
+    "status": null,
+    "agent": "enterprise-personal-2ae2cbc2deecdb86fe86",
+    "events": [
+      {
+        "seq": 1,
+        "at": "2026-09-04T16:01:39.908Z",
+        "messageTimestamp": 1788537691674,
+        "recordedAt": 1788537699908,
+        "role": "user",
+        "userRunCorrelationId": "6b8fcba0-f367-44a8-bb62-8c6c861cc826",
+        "content": [
+          {
+            "type": "text",
+            "text": "Mình cần quyết xem có chốt đợt triển khai tại Bến Tre cho 30 người được chưa. Ngân sách tổng là 60 triệu; nhà cung cấp lấy 48 triệu trước thuế và có xem dữ liệu khách hàng. Nhóm đi công tác 3 người, 3 ngày 2 đêm; khách sạn 900 nghìn/người/đêm, tiền ăn 240 nghìn/người/ngày. Hợp đồng dự thảo BT-0904 bắt trả trước 80%, không ấn định thời hạn xử lý việc chậm tiến độ, còn trách nhiệm của nhà cung cấp bị giới hạn ở 2 triệu. Bạn cân đối giúp phần tiền còn dư, xem khoản trả trước đáng lo ở đâu và nên sửa những điều khoản gì. Đồng thời giúp mình xác định các việc phải xong trước triển khai, cách xếp lịch đào tạo và bàn giao, để mình biết đã nên chốt hay chưa."
+          }
+        ]
+      },
+      {
+        "seq": 2,
+        "at": "2026-09-04T16:01:39.912Z",
+        "messageTimestamp": 1788537699912,
+        "recordedAt": 1788537699912,
+        "role": "assistant",
+        "model": "gateway-injected",
+        "provider": "openclaw",
+        "stopReason": "stop",
+        "content": [
+          {
+            "type": "text",
+            "text": "Chưa có chuyên gia nào bắt đầu vì phương án chuyển việc chưa hợp lệ. Bạn làm rõ phần việc và kết quả cần nhận giúp mình nhé?"
+          }
+        ]
+      }
+    ]
+  },
+  "children": [],
+  "routing": [
+    {
+      "id": "f25a9164-9f4b-45b0-8434-151e1939091c",
+      "account_id": "68264167-a2d8-48b1-a00a-d31a06a7fd92",
+      "parent_run_id_hash": "9135b936c55ea5c84e8a46d88d6285827966a663dad1351c226ae52c8d38ab18",
+      "outcome": "clarified",
+      "decision_source": "ai",
+      "reason_code": "router_target_invalid",
+      "confirmation_state": "not_required",
+      "policy_revision": 2,
+      "latency_ms": 8214,
+      "created_at": 1788537699901,
+      "targetAgentIds": [
+        "enterprise-contract-specialist",
+        "enterprise-finance-specialist"
+      ],
+      "childRunIds": []
+    }
+  ],
+  "planAudits": [],
+  "counts": {
+    "routingEvents": 1,
+    "selectedPlans": 0,
+    "confirmedPlans": 0,
+    "acceptedChildren": 0,
+    "endedChildren": 0,
+    "routedChildIds": 0
+  },
+  "environment": {
+    "account": [
+      {
+        "id": "68264167-a2d8-48b1-a00a-d31a06a7fd92",
+        "username": "hieu",
+        "display_name": "Hiếu DZ",
+        "role": "employee",
+        "enabled": 1,
+        "personal_agent_enabled": 1,
+        "policy_revision": 4
+      }
+    ],
+    "parentAgent": "enterprise-personal-2ae2cbc2deecdb86fe86",
+    "zones": [
+      {
+        "id": "0ee8b68b-8b2d-46db-87c2-d7c624abd7f9",
+        "slug": "qa-phap-che-20260904",
+        "name": "[KIỂM THỬ] Pháp chế & Mua sắm",
+        "status": "active",
+        "revision": 7,
+        "access_revision": 2,
+        "source_set_revision": 3,
+        "build_revision": 4,
+        "active_publication_id": "f746a0fb-083b-4114-99ec-ab202fdb4ff8",
+        "egress_policy": "external_allowed",
+        "updated_at": 1788505995879,
+        "publication_number": 2,
+        "generation_id": "9ac391d8-606e-468d-a543-d6111060e6d3",
+        "vector_status": "ready",
+        "published_at": 1788505995879
+      },
+      {
+        "id": "26f44d58-4a43-46f2-85a7-09f10c9c833d",
+        "slug": "qa-van-hanh-20260904",
+        "name": "[KIỂM THỬ] Dự án & Vận hành",
+        "status": "active",
+        "revision": 9,
+        "access_revision": 2,
+        "source_set_revision": 4,
+        "build_revision": 5,
+        "active_publication_id": "0f4ee7c5-d421-4383-9166-6abd5242cef9",
+        "egress_policy": "external_allowed",
+        "updated_at": 1788506267375,
+        "publication_number": 3,
+        "generation_id": "c0c2adec-66cf-4496-a324-fe8880b875dc",
+        "vector_status": "ready",
+        "published_at": 1788506267375
+      },
+      {
+        "id": "58f2e858-97bf-4953-965f-2637158b0169",
+        "slug": "qa-nhan-su-20260904",
+        "name": "[KIỂM THỬ] Nhân sự & Onboarding",
+        "status": "active",
+        "revision": 10,
+        "access_revision": 2,
+        "source_set_revision": 4,
+        "build_revision": 5,
+        "active_publication_id": "b3e8dbbc-012d-4df3-9049-7bf768861e34",
+        "egress_policy": "external_allowed",
+        "updated_at": 1788506190584,
+        "publication_number": 3,
+        "generation_id": "1fd693b9-451f-4dfe-b200-a557b79520b3",
+        "vector_status": "ready",
+        "published_at": 1788506190584
+      },
+      {
+        "id": "766b3227-d307-4c04-9c47-4e79d392ea2f",
+        "slug": "qa-tai-chinh-20260904",
+        "name": "[KIỂM THỬ] Tài chính & Chi phí",
+        "status": "active",
+        "revision": 7,
+        "access_revision": 2,
+        "source_set_revision": 3,
+        "build_revision": 4,
+        "active_publication_id": "b1c002af-74a6-4790-9abf-4e99b3809965",
+        "egress_policy": "external_allowed",
+        "updated_at": 1788506214938,
+        "publication_number": 2,
+        "generation_id": "7744be78-9af5-4a6b-b778-75431f4c2f28",
+        "vector_status": "ready",
+        "published_at": 1788506214938
+      },
+      {
+        "id": "dab5a778-619c-424d-9c60-c67d19634bda",
+        "slug": "qa-cntt-20260904",
+        "name": "[KIỂM THỬ] CNTT & An toàn thông tin",
+        "status": "active",
+        "revision": 9,
+        "access_revision": 4,
+        "source_set_revision": 3,
+        "build_revision": 4,
+        "active_publication_id": "094dafcd-2713-4c0d-826a-cd645390cb27",
+        "egress_policy": "external_allowed",
+        "updated_at": 1788506165191,
+        "publication_number": 2,
+        "generation_id": "5c17c548-b7b0-4668-b91b-7d78399f0228",
+        "vector_status": "ready",
+        "published_at": 1788506165191
+      },
+      {
+        "id": "ec9cfb6f-7eb6-49e1-bcf0-7d671ed199d5",
+        "slug": "qa-san-pham-20260904",
+        "name": "[KIỂM THỬ] Sản phẩm & Chăm sóc khách hàng",
+        "status": "active",
+        "revision": 7,
+        "access_revision": 2,
+        "source_set_revision": 3,
+        "build_revision": 4,
+        "active_publication_id": "feeba391-8313-43bd-bed3-1de6a910a4bf",
+        "egress_policy": "external_allowed",
+        "updated_at": 1788506242229,
+        "publication_number": 2,
+        "generation_id": "c9ce31ae-ed89-426c-b10d-8faf75ee740f",
+        "vector_status": "ready",
+        "published_at": 1788506242229
+      }
+    ],
+    "directBindings": [
+      {
+        "zone_id": "0ee8b68b-8b2d-46db-87c2-d7c624abd7f9",
+        "agent_resource_key": "agent:personal:68264167-a2d8-48b1-a00a-d31a06a7fd92",
+        "created_at": 1788464482803
+      },
+      {
+        "zone_id": "26f44d58-4a43-46f2-85a7-09f10c9c833d",
+        "agent_resource_key": "agent:personal:68264167-a2d8-48b1-a00a-d31a06a7fd92",
+        "created_at": 1788488889915
+      },
+      {
+        "zone_id": "58f2e858-97bf-4953-965f-2637158b0169",
+        "agent_resource_key": "agent:personal:68264167-a2d8-48b1-a00a-d31a06a7fd92",
+        "created_at": 1788464399970
+      },
+      {
+        "zone_id": "766b3227-d307-4c04-9c47-4e79d392ea2f",
+        "agent_resource_key": "agent:personal:68264167-a2d8-48b1-a00a-d31a06a7fd92",
+        "created_at": 1788464480699
+      },
+      {
+        "zone_id": "dab5a778-619c-424d-9c60-c67d19634bda",
+        "agent_resource_key": "agent:personal:68264167-a2d8-48b1-a00a-d31a06a7fd92",
+        "created_at": 1788466071120
+      },
+      {
+        "zone_id": "ec9cfb6f-7eb6-49e1-bcf0-7d671ed199d5",
+        "agent_resource_key": "agent:personal:68264167-a2d8-48b1-a00a-d31a06a7fd92",
+        "created_at": 1788464495855
+      }
+    ],
+    "evidenceTransferTableExists": true,
+    "evidenceTransferGrants": [],
+    "delegationPolicy": [
+      {
+        "rollout": "on",
+        "router_model": "openai/gpt-5.6-luna",
+        "auto_threshold": 0.9,
+        "clarify_threshold": 0.7,
+        "minimum_margin": 0.15,
+        "max_delegates_per_turn": 3,
+        "event_retention_days": 90,
+        "revision": 2,
+        "updated_at": 1788455885818
+      }
+    ],
+    "delegationOverrides": [],
+    "agentEntitlements": [
+      {
+        "resource_id": "agent:shared:enterprise-contract-specialist",
+        "resource_state": "active",
+        "effect": "allow",
+        "updated_at": 1788455749303
+      },
+      {
+        "resource_id": "agent:shared:enterprise-finance-specialist",
+        "resource_state": "active",
+        "effect": "allow",
+        "updated_at": 1788455749303
+      },
+      {
+        "resource_id": "agent:shared:enterprise-hr-specialist",
+        "resource_state": "active",
+        "effect": "allow",
+        "updated_at": 1788455749303
+      },
+      {
+        "resource_id": "agent:shared:main",
+        "resource_state": "active",
+        "effect": "allow",
+        "updated_at": 1788410872301
+      }
+    ],
+    "personalProfileRevision": [],
+    "sharedRelationshipRevisions": [],
+    "excluded": [
+      "profile_json",
+      "credentials",
+      "published source bodies",
+      "private paths"
+    ],
+    "fingerprintSha256": "a11a3d464e14edcd36dacfe562fa1635ab3bd774b858ab1f5abec0aada1b446d"
+  },
+  "evidenceAuditBoundary": "Private evidence audits do not persist a parent-session or child-run join. They are not exported by account/time inference.",
+  "acceptance": {
+    "routing": "FAIL",
+    "actualChildren": "NOT_STARTED",
+    "evidence": "NOT_RETRIEVED",
+    "caseProgression": "PAUSED_AT_DEFECT",
+    "naturalPromptStandalone": true
+  }
+}

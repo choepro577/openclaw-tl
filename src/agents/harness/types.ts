@@ -100,6 +100,7 @@ type AgentHarnessAttemptParamsBase = Omit<
   | "contextEngineLogicalTurnLease"
   | "onContextEngineTurnCandidate"
   | "trajectoryRecorder"
+  | "resolvePrivateModelContext"
 >;
 /**
  * @deprecated Use AgentHarnessAttemptParamsV2. The optional capability keeps
@@ -376,6 +377,12 @@ type AgentHarnessRunCapability<
   deliveryDefaults?: AgentHarnessDeliveryDefaults;
   /** Certifies exact runAttempt enforcement; direct-policy-restricted channel side questions fail in core. */
   conversationToolPolicySupport?: "exact";
+  /**
+   * Opts into host-private internal preparation: no payload observations or
+   * persistence; capture external callbacks and retire native state on every exit.
+   * This declaration never grants tools or waives before-tool/approval policy.
+   */
+  privatePreparationSupport?: "host-observation-scope-v1";
   /**
    * Canonical OpenClaw tool names whose exact denies the harness can also enforce
    * against native equivalents. Every other deny remains fail-closed.

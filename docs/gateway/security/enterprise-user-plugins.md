@@ -47,6 +47,62 @@ The account grant becomes `active` only after the Gateway reports the plugin as 
 
 The grant stores a fixed tool snapshot. New tools are not granted automatically. Non-delegable tools plus global, Agent, and account denies still win. A version or integrity change suspends the grant until a new Admin review. Disabling or removing the global plugin makes the grant unavailable or orphaned; it never creates a per-user plugin process.
 
+## Codex plugins
+
+The Codex catalog in **Plugins > Discover** uses the selected Agent's Codex runtime.
+Open a plugin to review its declared skills, apps, and MCP servers, then request
+Admin approval. A public catalog listing alone does not grant access.
+
+Use a chat model marked **Codex** to run these plugins. A model routed through
+the OpenClaw runtime does not load Codex-native plugins, even when installation
+and connector authentication are ready. Select a Codex model in the chat picker
+or have an Admin configure the model's runtime policy.
+
+Restricted Enterprise chats selectively admit approved hosted Apps, including
+Gmail. Native plugin MCP servers are not yet fully supported on that restricted
+route: Codex 0.148 loads remote-installed plugin packages as a group, and its
+per-thread plugin settings do not isolate that group by Enterprise grant.
+Installation or connector readiness alone does not prove those MCP tools can
+run in the chat. Keep the native plugin feature disabled on that route until
+the runtime can enforce an exact plugin allowlist.
+
+Admins review Codex requests in **Enterprise Admin > Plugins**. Approval installs
+the reviewed plugin through Codex and grants it to the requesting account and
+Agent. A failed installation remains visible and can be retried. Rejecting a
+request requires a reason; users can cancel requests that are still pending.
+
+Installation and authentication are separate steps. For example, installing an
+email plugin does not connect an email account. Complete the required connector
+sign-in, then check its status again. Connector credentials follow the Agent's
+configured Codex account; using the same provider account for multiple Enterprise
+users does not create separate third-party accounts.
+
+The detail page presents the metadata supplied by Codex: descriptions, starter
+prompts, artwork, declared apps and skills, and publisher information. A starter
+prompt opens an unsent chat draft. Declared capabilities describe the package;
+the connection status separately indicates whether its hosted apps are callable.
+
+For an approved app, **Connected accounts** lists the provider link names,
+email addresses, and authentication states returned for that connector.
+**Connect another account** opens the official provider account-add flow without
+replacing existing accounts. Return to OpenClaw and use **Check connection**
+after sign-in; this refreshes the account list and the active Codex MCP tool
+catalog so existing chats can discover the added account.
+
+The account list uses Codex desktop's product-layer connector links API with the
+same agent-scoped ChatGPT auth profile. The public app-server protocol alone
+provides readiness and setup URLs, not mailbox identities. No browser cookies or
+credentials are returned to the UI. If the product API is unavailable, the UI
+shows that the account list could not be loaded instead of reporting an empty
+list or inferring an email address from the Codex login account. **Manage
+connection** remains available for provider-side account rename or removal.
+
+Installed Codex plugins can be disabled, enabled, or removed from the selected
+account-Agent scope. Only active approved grants are admitted to that Agent's
+Codex plugin policy. This does not enable unrelated native tools or all apps on
+the Codex account. Native ClawHub plugin approval and Gateway-wide installation
+continue to use their existing lifecycle.
+
 ## Operations
 
 - Users update Skills manually; there is no auto-update.

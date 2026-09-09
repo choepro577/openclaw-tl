@@ -48,6 +48,7 @@ export async function prepareCodexAttemptPrompt(context: CodexAttemptContext) {
     workspaceBootstrapContext,
     buildActiveContextEngineRuntimeContext,
     baseDeveloperInstructions,
+    runtimeModelIdentityInstructions,
     openClawPromptContext,
     skillsCollaborationInstructions,
     promptState,
@@ -320,6 +321,7 @@ export async function prepareCodexAttemptPrompt(context: CodexAttemptContext) {
         turnScopedDeveloperInstructions: workspaceBootstrapContext.turnScopedDeveloperInstructions,
         skillsCollaborationInstructions,
         memoryCollaborationInstructions: workspaceBootstrapContext.memoryCollaborationInstructions,
+        runtimeModelIdentityInstructions,
       }).settings.developer_instructions ?? undefined,
     );
   const rebuildCodexPromptBuildFromCurrentProjection = async () => {

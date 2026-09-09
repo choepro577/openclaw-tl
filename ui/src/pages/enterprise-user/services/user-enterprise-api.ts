@@ -6,10 +6,20 @@ import type {
   PersonalAgentKnowledgeItem,
   PersonalAgentProfile,
 } from "../contracts/personal-agent.ts";
-import type { AgentKey, SharedAgentRelationshipProfile } from "../contracts/user-agent.ts";
+import type {
+  AgentKey,
+  EnterpriseUserAgentAccessRequest,
+  SharedAgentRelationshipProfile,
+} from "../contracts/user-agent.ts";
 import type { UserAutomation, UserAutomationInput } from "../contracts/user-automation.ts";
 import type { EnterpriseUserBootstrapV2 } from "../contracts/user-bootstrap.ts";
 import type {
+  UserCodexCatalog,
+  UserCodexCatalogItem,
+  UserCodexPluginDetail,
+  UserCodexPluginGrant,
+  UserCodexPluginMutationResult,
+  UserCodexPluginRequest,
   UserExtensionCatalogItem,
   UserExtensionKind,
   UserExtensionReview,
@@ -86,6 +96,39 @@ export function updateEnterpriseUserAvatar(input: {
 
 export function loadEnterpriseUserBootstrapV2(): Promise<EnterpriseUserBootstrapV2> {
   return requestEnterpriseUserJson("/api/enterprise/user/v2/bootstrap");
+}
+
+export async function listEnterpriseUserAgentAccessRequests(): Promise<
+  EnterpriseUserAgentAccessRequest[]
+> {
+  const result = await requestEnterpriseUserJson<{
+    items: EnterpriseUserAgentAccessRequest[];
+  }>("/api/enterprise/user/v2/agent-access-requests");
+  return result.items;
+}
+
+export async function requestEnterpriseUserAgentAccess(
+  agentKey: AgentKey,
+): Promise<EnterpriseUserAgentAccessRequest> {
+  const result = await requestEnterpriseUserJson<{
+    request: EnterpriseUserAgentAccessRequest;
+  }>("/api/enterprise/user/v2/agent-access-requests", {
+    method: "POST",
+    ...idempotentJson({ agentKey }),
+  });
+  return result.request;
+}
+
+export async function cancelEnterpriseUserAgentAccessRequest(
+  request: EnterpriseUserAgentAccessRequest,
+): Promise<EnterpriseUserAgentAccessRequest> {
+  const result = await requestEnterpriseUserJson<{
+    request: EnterpriseUserAgentAccessRequest;
+  }>(`/api/enterprise/user/v2/agent-access-requests/${encodeURIComponent(request.id)}/cancel`, {
+    method: "POST",
+    ...idempotentJson({ baseRevision: request.revision }),
+  });
+  return result.request;
 }
 
 export function openEnterpriseUserConversation(
@@ -319,6 +362,112 @@ export async function searchUserExtensions(input: {
     { signal: input.signal },
   );
   return result.items;
+}
+
+export async function searchUserCodexPlugins(input: {
+  agentKey: AgentKey;
+  query: string;
+  signal?: AbortSignal;
+}): Promise<UserCodexCatalog> {
+  const query = new URLSearchParams({ agentKey: input.agentKey });
+  if (input.query.trim()) {
+    query.set("query", input.query.trim());
+  }
+  const result = await requestEnterpriseUserJson<{
+    status?: UserCodexCatalog["status"];
+    items: UserCodexCatalogItem[];
+    installed: UserCodexPluginGrant[];
+    requests: UserCodexPluginRequest[];
+  }>(`/api/enterprise/user/v2/extensions/codex?${query.toString()}`, {
+    signal: input.signal,
+  });
+  return {
+    status: result.status ?? "available",
+    items: result.items,
+    installed: result.installed,
+    requests: result.requests,
+  };
+}
+
+export function loadUserCodexPluginDetail(input: {
+  agentKey: AgentKey;
+  pluginId: string;
+  signal?: AbortSignal;
+}): Promise<UserCodexPluginDetail> {
+  const query = new URLSearchParams({ agentKey: input.agentKey, pluginId: input.pluginId });
+  return requestEnterpriseUserJson<UserCodexPluginDetail>(
+    `/api/enterprise/user/v2/extensions/codex/detail?${query.toString()}`,
+    { signal: input.signal },
+  );
+}
+
+export async function createUserCodexPluginRequest(input: {
+  agentKey: AgentKey;
+  pluginId: string;
+}): Promise<UserCodexPluginRequest> {
+  const result = await requestEnterpriseUserJson<{ request: UserCodexPluginRequest }>(
+    "/api/enterprise/user/v2/extensions/codex/requests",
+    { method: "POST", ...idempotentJson(input) },
+  );
+  return result.request;
+}
+
+export async function listUserCodexPluginRequests(input: {
+  agentKey: AgentKey;
+}): Promise<UserCodexPluginRequest[]> {
+  const query = new URLSearchParams({ agentKey: input.agentKey });
+  const result = await requestEnterpriseUserJson<{ items: UserCodexPluginRequest[] }>(
+    `/api/enterprise/user/v2/extensions/codex/requests?${query.toString()}`,
+  );
+  return result.items;
+}
+
+export async function cancelUserCodexPluginRequest(
+  item: UserCodexPluginRequest,
+): Promise<UserCodexPluginRequest> {
+  const result = await requestEnterpriseUserJson<{ request: UserCodexPluginRequest }>(
+    `/api/enterprise/user/v2/extensions/codex/requests/${encodeURIComponent(item.id)}/cancel`,
+    { method: "POST", ...idempotentJson({ baseRevision: item.revision }) },
+  );
+  return result.request;
+}
+
+async function mutateUserCodexGrant(
+  item: UserCodexPluginGrant,
+  action: "enable" | "disable" | "remove" | "refresh" | "connect",
+  extra: Record<string, unknown> = {},
+): Promise<UserCodexPluginMutationResult> {
+  return requestEnterpriseUserJson<UserCodexPluginMutationResult>(
+    `/api/enterprise/user/v2/extensions/codex/grants/${encodeURIComponent(item.id)}/${action}`,
+    { method: "POST", ...idempotentJson({ baseRevision: item.revision, ...extra }) },
+  );
+}
+
+export function setUserCodexPluginEnabled(
+  item: UserCodexPluginGrant,
+  enabled: boolean,
+): Promise<UserCodexPluginMutationResult> {
+  return mutateUserCodexGrant(item, enabled ? "enable" : "disable");
+}
+
+export function removeUserCodexPlugin(
+  item: UserCodexPluginGrant,
+): Promise<UserCodexPluginMutationResult> {
+  return mutateUserCodexGrant(item, "remove");
+}
+
+export function refreshUserCodexPlugin(
+  item: UserCodexPluginGrant,
+): Promise<UserCodexPluginMutationResult> {
+  return mutateUserCodexGrant(item, "refresh");
+}
+
+/** Ask the Codex runtime to start the provider-owned account connection flow. */
+export function connectUserCodexPlugin(
+  item: UserCodexPluginGrant,
+  serverName: string,
+): Promise<UserCodexPluginMutationResult> {
+  return mutateUserCodexGrant(item, "connect", { serverName });
 }
 
 export function reviewUserExtension(input: {

@@ -103,6 +103,7 @@ export function renderBackgroundTasksStatusRow(
   const subagentActivity = renderSubagentActivity(
     backgroundTasks.subagentActivity,
     backgroundTasks.onOpenTaskDetail,
+    { subagentsOnly: backgroundTasks.subagentsOnly },
   );
   const remainingTasks = (backgroundTasks.tasks ?? []).filter(
     (task) => !backgroundTasks.subagentActivity.taskIds.has(task.id),

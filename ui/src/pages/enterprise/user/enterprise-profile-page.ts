@@ -1,6 +1,8 @@
 import { html } from "lit";
 import { property, state } from "lit/decorators.js";
+import { eu } from "../../../i18n/enterprise-user.ts";
 import { OpenClawLightDomElement } from "../../../lit/openclaw-element.ts";
+import { enterpriseCopy, enterpriseRoleLabel } from "../enterprise-copy.ts";
 import { logoutEnterprise, type EnterpriseAccount } from "../services/enterprise-api.ts";
 
 export class EnterpriseProfilePage extends OpenClawLightDomElement {
@@ -19,20 +21,23 @@ export class EnterpriseProfilePage extends OpenClawLightDomElement {
   override render() {
     return html`
       <section class="enterprise-panel enterprise-stack">
-        <h2>Hồ sơ Enterprise</h2>
+        <h2>${enterpriseCopy("profileTitle")}</h2>
         <div class="enterprise-grid">
           <div>
-            <span class="enterprise-muted">Tên</span><br /><strong
+            <span class="enterprise-muted">${enterpriseCopy("name")}</span><br /><strong
               >${this.account?.displayName}</strong
             >
           </div>
           <div>
-            <span class="enterprise-muted">Username</span><br /><strong class="enterprise-code"
+            <span class="enterprise-muted">${eu("username")}</span><br /><strong
+              class="enterprise-code"
               >${this.account?.username}</strong
             >
           </div>
           <div>
-            <span class="enterprise-muted">Role</span><br /><strong>${this.account?.role}</strong>
+            <span class="enterprise-muted">${eu("role")}</span><br /><strong
+              >${enterpriseRoleLabel(this.account?.role ?? "")}</strong
+            >
           </div>
         </div>
         <button
@@ -40,7 +45,7 @@ export class EnterpriseProfilePage extends OpenClawLightDomElement {
           ?disabled=${this.busy}
           @click=${() => void this.logout()}
         >
-          ${this.busy ? "Đang đăng xuất…" : "Đăng xuất"}
+          ${this.busy ? enterpriseCopy("logoutBusy") : eu("logout")}
         </button>
       </section>
     `;

@@ -11,7 +11,10 @@ import { withOpenClawTestState } from "../../test-utils/openclaw-test-state.js";
 import { createEnterpriseAccount, updateEnterpriseAccount } from "../accounts/account-store.js";
 import { ENTERPRISE_ADMIN_AUTH_COOKIE, ENTERPRISE_USER_AUTH_COOKIE } from "../auth/cookie.js";
 import { hashEnterprisePassword } from "../auth/password.js";
-import { replaceEnterpriseEntitlements } from "../entitlements/entitlement-store.js";
+import {
+  listEnterpriseEntitlements,
+  replaceEnterpriseEntitlements,
+} from "../entitlements/entitlement-store.js";
 import { sharedAgentResourceKey } from "../entitlements/resource-keys.js";
 import { resolveEnterprisePersonalAgentId } from "../personal-agent/personal-agent-config.js";
 import { handleEnterpriseHttpRequest } from "./enterprise-http.js";
@@ -771,6 +774,24 @@ describe("Enterprise HTTP API", () => {
         });
         expect(denied.status).toBe(403);
 
+        const invalidUsername = await apiRequest(baseUrl, "/api/enterprise/admin/accounts", {
+          method: "POST",
+          cookie,
+          csrf: body.csrfToken,
+          body: {
+            username: "csrf.hiếu",
+            displayName: "Invalid Username",
+            initialPassword: "employee-password-4",
+            role: "employee",
+          },
+        });
+        expect(invalidUsername.status).toBe(400);
+        await expect(invalidUsername.json()).resolves.toMatchObject({
+          code: "VALIDATION_ERROR",
+          message:
+            "Username chỉ gồm chữ thường không dấu, số, dấu chấm, gạch dưới hoặc gạch ngang.",
+        });
+
         const created = await apiRequest(baseUrl, "/api/enterprise/admin/accounts", {
           method: "POST",
           cookie,
@@ -791,6 +812,56 @@ describe("Enterprise HTTP API", () => {
             accessPresetKey: "standard-coding@1",
           },
         });
+      } finally {
+        await closeServer(server);
+      }
+    });
+  });
+
+  it("grants an employee access to the shared agent selected as their default", async () => {
+    await withOpenClawTestState({ scenario: "minimal", applyEnv: true }, async () => {
+      createEnterpriseAccount({
+        username: "default-agent.admin",
+        displayName: "Default Agent Admin",
+        passwordHash: await hashEnterprisePassword("admin-password-5"),
+        role: "administrator",
+        mustChangePassword: false,
+      });
+      const config: OpenClawConfig = {
+        enterprise: { enabled: true },
+        gateway: { auth: { mode: "accounts" } },
+        agents: { entries: { finance: { name: "Finance Agent" } } },
+      };
+      const { server, baseUrl } = await startEnterpriseServer(config);
+      try {
+        const login = await apiRequest(baseUrl, "/api/auth/admin/login", {
+          method: "POST",
+          body: { username: "default-agent.admin", password: "admin-password-5" },
+        });
+        const loginBody = (await login.json()) as { csrfToken: string };
+        const created = await apiRequest(baseUrl, "/api/enterprise/admin/accounts", {
+          method: "POST",
+          cookie: cookieFrom(login),
+          csrf: loginBody.csrfToken,
+          body: {
+            username: "default-agent.employee",
+            displayName: "Default Agent Employee",
+            initialPassword: "employee-password-5",
+            role: "employee",
+            personalAgentEnabled: false,
+            defaultAgentId: "finance",
+          },
+        });
+
+        expect(created.status).toBe(201);
+        const createdBody = (await created.json()) as { account: { id: string } };
+        expect(listEnterpriseEntitlements(createdBody.account.id)).toContainEqual(
+          expect.objectContaining({
+            resourceType: "agent",
+            resourceId: sharedAgentResourceKey("finance"),
+            effect: "allow",
+          }),
+        );
       } finally {
         await closeServer(server);
       }
@@ -837,9 +908,12 @@ describe("Enterprise HTTP API", () => {
           });
         },
       );
-      const { server, baseUrl } = await startEnterpriseServer(ENTERPRISE_CONFIG, {
-        getGatewayContext: () => ({}) as GatewayRequestContext,
-      });
+      const { server, baseUrl } = await startEnterpriseServer(
+        { ...ENTERPRISE_CONFIG, agents: { entries: { main: {} } } },
+        {
+          getGatewayContext: () => ({}) as GatewayRequestContext,
+        },
+      );
       try {
         const login = await apiRequest(baseUrl, "/api/auth/admin/login", {
           method: "POST",
@@ -883,6 +957,37 @@ describe("Enterprise HTTP API", () => {
             warning: "Suspicious behavior was detected.",
           },
         });
+        skillHandlerMocks.install.mockImplementation(
+          ({ params, respond }: MockSkillHandlerOptions) => {
+            expect(params).toMatchObject({
+              source: "clawhub",
+              scope: "global",
+              slug: "@openclaw/github",
+            });
+            expect(params).not.toHaveProperty("agentId");
+            respond(true, { ok: true, slug: "github" });
+          },
+        );
+        const globalInstall = await apiRequest(baseUrl, "/api/enterprise/admin/skills/install", {
+          method: "POST",
+          cookie,
+          csrf: loginBody.csrfToken,
+          body: { ref: "@openclaw/github" },
+        });
+        expect(globalInstall.status).toBe(200);
+        const folderImport = await apiRequest(baseUrl, "/api/enterprise/admin/skills/import", {
+          method: "POST",
+          cookie,
+          body: { folderName: "example", files: [] },
+        });
+        expect(folderImport.status).toBe(403);
+        const invalidFolder = await apiRequest(baseUrl, "/api/enterprise/admin/skills/import", {
+          method: "POST",
+          cookie,
+          csrf: loginBody.csrfToken,
+          body: { folderName: "example", files: [] },
+        });
+        expect(invalidFolder.status).toBe(400);
       } finally {
         await closeServer(server);
       }
@@ -1004,5 +1109,292 @@ describe("Enterprise HTTP API", () => {
         await closeServer(server);
       }
     });
+  });
+
+  it("secures delegation settings, rejects looser overrides, and blocks unknown grants", async () => {
+    await withOpenClawTestState({ scenario: "minimal", applyEnv: true }, async () => {
+      createEnterpriseAccount({
+        username: "delegation.api.admin",
+        displayName: "Delegation API Admin",
+        passwordHash: await hashEnterprisePassword("delegation-admin-password"),
+        role: "administrator",
+        mustChangePassword: false,
+      });
+      const employee = createEnterpriseAccount({
+        username: "delegation.api.employee",
+        displayName: "Delegation API Employee",
+        passwordHash: await hashEnterprisePassword("delegation-employee-password"),
+        role: "employee",
+        mustChangePassword: false,
+        initialEntitlements: [
+          {
+            resourceType: "agent",
+            resourceId: sharedAgentResourceKey("contracts"),
+            effect: "allow",
+          },
+        ],
+      });
+      const config: OpenClawConfig = {
+        enterprise: { enabled: true },
+        gateway: { auth: { mode: "accounts" } },
+        agents: {
+          entries: {
+            contracts: {
+              name: "Agent Hợp đồng",
+              description:
+                "Chuyên kiểm tra điều khoản, rủi ro và nghĩa vụ trong hợp đồng doanh nghiệp.",
+              delegationTarget: {
+                status: "active",
+                aliases: ["chuyên gia hợp đồng"],
+                handlingMode: "explicit_only",
+                useWhen: [
+                  "Kiểm tra điều khoản phạt trong hợp đồng",
+                  "Đánh giá rủi ro trước khi ký hợp đồng",
+                ],
+                avoidWhen: [],
+                requiredInputs: [],
+              },
+            },
+          },
+        },
+      };
+      let routerModelAvailable = true;
+      const gatewayContext = {
+        loadGatewayModelCatalog: async () =>
+          routerModelAvailable ? [{ provider: "test", id: "router", name: "Test Router" }] : [],
+      } as unknown as GatewayRequestContext;
+      const { server, baseUrl } = await startEnterpriseServer(config, {
+        getGatewayContext: () => gatewayContext,
+      });
+      try {
+        const login = await apiRequest(baseUrl, "/api/auth/admin/login", {
+          method: "POST",
+          body: { username: "delegation.api.admin", password: "delegation-admin-password" },
+        });
+        const cookie = cookieFrom(login);
+        const loginBody = (await login.json()) as { csrfToken: string };
+
+        const settings = await apiRequest(baseUrl, "/api/enterprise/admin/delegation/settings", {
+          cookie,
+        });
+        await expect(settings.json()).resolves.toMatchObject({
+          policy: { rollout: "off", revision: 0 },
+          availableModels: ["test/router"],
+        });
+
+        const noCsrf = await apiRequest(baseUrl, "/api/enterprise/admin/delegation/settings", {
+          method: "PATCH",
+          cookie,
+          body: {
+            baseRevision: 0,
+            rollout: "shadow",
+            routerModel: "test/router",
+            autoThreshold: 0.9,
+            clarifyThreshold: 0.7,
+            minimumMargin: 0.15,
+            maxDelegatesPerTurn: 3,
+            eventRetentionDays: 90,
+          },
+        });
+        expect(noCsrf.status).toBe(403);
+
+        const saved = await apiRequest(baseUrl, "/api/enterprise/admin/delegation/settings", {
+          method: "PATCH",
+          cookie,
+          csrf: loginBody.csrfToken,
+          body: {
+            baseRevision: 0,
+            rollout: "shadow",
+            routerModel: "test/router",
+            autoThreshold: 0.9,
+            clarifyThreshold: 0.7,
+            minimumMargin: 0.15,
+            maxDelegatesPerTurn: 3,
+            eventRetentionDays: 90,
+          },
+        });
+        expect(saved.status).toBe(200);
+        await expect(saved.json()).resolves.toMatchObject({ policy: { revision: 1 } });
+
+        const invalidEventFilter = await apiRequest(
+          baseUrl,
+          "/api/enterprise/admin/delegation/events?outcome=unknown",
+          { cookie },
+        );
+        expect(invalidEventFilter.status).toBe(400);
+        await expect(invalidEventFilter.json()).resolves.toMatchObject({
+          code: "VALIDATION_ERROR",
+        });
+
+        const previewResponse = await apiRequest(
+          baseUrl,
+          "/api/enterprise/admin/delegation/activation-preview",
+          { method: "POST", cookie, csrf: loginBody.csrfToken, body: {} },
+        );
+        expect(previewResponse.status).toBe(200);
+        const preview = (await previewResponse.json()) as { previewToken: string };
+        routerModelAvailable = false;
+        const unavailableActivation = await apiRequest(
+          baseUrl,
+          "/api/enterprise/admin/delegation/activate",
+          {
+            method: "POST",
+            cookie,
+            csrf: loginBody.csrfToken,
+            body: { previewToken: preview.previewToken, exclusions: [] },
+          },
+        );
+        expect(unavailableActivation.status).toBe(400);
+        await expect(unavailableActivation.json()).resolves.toMatchObject({
+          code: "DELEGATION_ROUTER_MODEL_UNAVAILABLE",
+        });
+        routerModelAvailable = true;
+
+        const looser = await apiRequest(
+          baseUrl,
+          `/api/enterprise/admin/accounts/${employee.id}/delegation`,
+          {
+            method: "PATCH",
+            cookie,
+            csrf: loginBody.csrfToken,
+            body: {
+              agentResourceKey: sharedAgentResourceKey("contracts"),
+              mode: "confirm_before_handoff",
+              baseRevision: 0,
+              baseAccountPolicyRevision: employee.policyRevision,
+            },
+          },
+        );
+        expect(looser.status).toBe(400);
+        await expect(looser.json()).resolves.toMatchObject({
+          code: "DELEGATION_OVERRIDE_CANNOT_LOOSEN",
+        });
+
+        const disabled = await apiRequest(
+          baseUrl,
+          `/api/enterprise/admin/accounts/${employee.id}/delegation`,
+          {
+            method: "PATCH",
+            cookie,
+            csrf: loginBody.csrfToken,
+            body: {
+              agentResourceKey: sharedAgentResourceKey("contracts"),
+              mode: "disabled",
+              baseRevision: 0,
+              baseAccountPolicyRevision: employee.policyRevision,
+            },
+          },
+        );
+        expect(disabled.status).toBe(200);
+
+        const unknownGrant = await apiRequest(baseUrl, "/api/enterprise/admin/access/changes", {
+          method: "POST",
+          cookie,
+          csrf: loginBody.csrfToken,
+          body: {
+            changes: [
+              {
+                accountId: employee.id,
+                resourceType: "agent",
+                resourceKey: "agent:shared:deleted-agent",
+                effect: "allow",
+              },
+            ],
+            baseRevisions: { [employee.id]: employee.policyRevision + 1 },
+          },
+        });
+        expect(unknownGrant.status).toBe(400);
+        expect(
+          listEnterpriseEntitlements(employee.id).some(
+            (item) => item.resourceId === "agent:shared:deleted-agent",
+          ),
+        ).toBe(false);
+      } finally {
+        await closeServer(server);
+      }
+    });
+  });
+});
+
+it("serves preset metadata and applies/reapplies basic through the authenticated HTTP API", async () => {
+  await withOpenClawTestState({ scenario: "minimal", applyEnv: true }, async () => {
+    createEnterpriseAccount({
+      username: "preset.admin",
+      displayName: "Admin",
+      passwordHash: await hashEnterprisePassword("preset-admin-password"),
+      role: "administrator",
+      mustChangePassword: false,
+    });
+    const { server, baseUrl } = await startEnterpriseServer();
+    try {
+      const login = await apiRequest(baseUrl, "/api/auth/admin/login", {
+        method: "POST",
+        body: { username: "preset.admin", password: "preset-admin-password" },
+      });
+      const { csrfToken } = (await login.json()) as { csrfToken: string };
+      const cookie = cookieFrom(login);
+      const listing = await apiRequest(baseUrl, "/api/enterprise/admin/accounts", { cookie });
+      const catalog = (await listing.json()) as {
+        accessPresets: Array<{ key: string; toolIds: string[] }>;
+      };
+      expect(
+        catalog.accessPresets.find((preset) => preset.key === "basic@1")?.toolIds,
+      ).toHaveLength(32);
+      const response = await apiRequest(baseUrl, "/api/enterprise/admin/accounts", {
+        method: "POST",
+        cookie,
+        csrf: csrfToken,
+        body: {
+          username: "preset.employee",
+          displayName: "Employee",
+          initialPassword: "preset-employee-password",
+          role: "employee",
+        },
+      });
+      expect(response.status).toBe(201);
+      const { account } = (await response.json()) as {
+        account: { id: string; accessPresetKey: string; policyRevision: number };
+      };
+      expect(account.accessPresetKey).toBe("basic@1");
+      const { readEnterpriseAccountToolPolicy, writeEnterpriseAccountToolPolicy } =
+        await import("../accounts/account-tool-policy-store.js");
+      writeEnterpriseAccountToolPolicy(account.id, 0, {
+        profile: "coding",
+        alsoAllow: [],
+        deny: ["browser"],
+      });
+      const endpoint = `/api/enterprise/admin/accounts/${account.id}`;
+      expect(
+        (
+          await apiRequest(baseUrl, endpoint, {
+            method: "PATCH",
+            cookie,
+            csrf: csrfToken,
+            body: { displayName: "Renamed", accessPresetKey: "basic@1" },
+          })
+        ).status,
+      ).toBe(200);
+      expect(readEnterpriseAccountToolPolicy(account.id).deny).toContain("browser");
+      expect(
+        (
+          await apiRequest(baseUrl, endpoint, {
+            method: "PATCH",
+            cookie,
+            csrf: csrfToken,
+            body: { applyAccessPreset: true },
+          })
+        ).status,
+      ).toBe(200);
+      expect(readEnterpriseAccountToolPolicy(account.id).deny).not.toContain("browser");
+      const invalid = await apiRequest(baseUrl, endpoint, {
+        method: "PATCH",
+        cookie,
+        csrf: csrfToken,
+        body: { applyAccessPreset: "yes" },
+      });
+      expect(invalid.status).toBe(400);
+    } finally {
+      await closeServer(server);
+    }
   });
 });

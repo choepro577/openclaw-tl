@@ -32,6 +32,7 @@ describe("reconcileHeartbeatMonitorJobs", () => {
     const remove = vi.fn(async () => ({ ok: true }));
     const list = vi.fn(async () => [
       monitorJob("stale-agent"),
+      { ...monitorJob("private-agent"), owner: { accountId: "private-account" } },
       {
         ...monitorJob("main"),
         id: "user-job",

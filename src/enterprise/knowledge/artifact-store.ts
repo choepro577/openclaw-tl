@@ -273,3 +273,15 @@ export function resolveKnowledgeGenerationDatabasePath(
     `${generationId}.sqlite`,
   );
 }
+
+// Graph caches share the generation lifecycle; the original publication checksum stays unchanged.
+export function resolveKnowledgeGenerationGraphDatabasePath(
+  zoneId: string,
+  generationId: string,
+  env: NodeJS.ProcessEnv = process.env,
+): string {
+  return resolveKnowledgeGenerationDatabasePath(zoneId, generationId, env).replace(
+    /\.sqlite$/,
+    ".graph.sqlite",
+  );
+}

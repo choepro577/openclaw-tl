@@ -55,15 +55,20 @@ CREATE VIRTUAL TABLE chunks_fts USING fts5(
 `;
 
 function toFtsQuery(query: string): string {
-  const tokens = query
-    .normalize("NFC")
-    .toLowerCase()
-    .match(/[\p{L}\p{N}_-]+/gu)
-    ?.slice(0, 32);
-  if (!tokens?.length) {
+  const tokens = [...knowledgeLexicalTerms(query)];
+  if (!tokens.length) {
     return '""';
   }
   return tokens.map((token) => `"${token.replaceAll('"', '""')}"`).join(" OR ");
+}
+
+function knowledgeLexicalTerms(text: string): Set<string> {
+  const normalized = text.normalize("NFC").toLowerCase();
+  return new Set(normalized.match(/[\p{L}\p{N}_-]+/gu));
+}
+
+function foldedKnowledgeLexicalTerms(text: string): Set<string> {
+  return knowledgeLexicalTerms(text.normalize("NFD").replace(/\p{M}/gu, ""));
 }
 
 async function sha256File(filePath: string): Promise<string> {
@@ -209,26 +214,30 @@ export async function buildKnowledgeGenerationIndex(params: {
         }
       }
     }
-    if (params.graph?.settings.enabled) {
-      const builtGraph = buildKnowledgeGraphInDatabase({
-        db,
-        artifacts: params.artifacts,
-        vectors: params.vectors,
-        settings: params.graph.settings,
-        reviewOverlays: params.graph.reviewOverlays,
-        manualEdges: params.graph.manualEdges,
-        enrichmentNodes: params.graph.enrichmentNodes,
-        enrichmentRelations: params.graph.enrichmentRelations,
-        enrichmentIdentity: params.graph.enrichmentIdentity,
-        enrichmentDegraded: params.graph.enrichmentDegraded,
-      });
-      graphStatus = builtGraph.status;
-      graphNodeCount = builtGraph.nodeCount;
-      graphEdgeCount = builtGraph.edgeCount;
-      graphProposedCount = builtGraph.proposedCount;
-      graphOrphanCount = builtGraph.orphanCount;
-      db.prepare("INSERT INTO metadata (key, value) VALUES ('graphStatus', ?)").run(graphStatus);
-    }
+    // Document structure is always available; graph settings control optional enrichment.
+    const builtGraph = buildKnowledgeGraphInDatabase({
+      db,
+      artifacts: params.artifacts,
+      vectors: params.vectors,
+      settings: params.graph?.settings ?? {
+        enabled: true,
+        enrichmentEnabled: false,
+        autoApprovalThreshold: 0.92,
+        updatedAt: 0,
+      },
+      reviewOverlays: params.graph?.reviewOverlays ?? [],
+      manualEdges: params.graph?.manualEdges ?? [],
+      enrichmentNodes: params.graph?.enrichmentNodes,
+      enrichmentRelations: params.graph?.enrichmentRelations,
+      enrichmentIdentity: params.graph?.enrichmentIdentity,
+      enrichmentDegraded: params.graph?.enrichmentDegraded,
+    });
+    graphStatus = builtGraph.status;
+    graphNodeCount = builtGraph.nodeCount;
+    graphEdgeCount = builtGraph.edgeCount;
+    graphProposedCount = builtGraph.proposedCount;
+    graphOrphanCount = builtGraph.orphanCount;
+    db.prepare("INSERT INTO metadata (key, value) VALUES ('graphStatus', ?)").run(graphStatus);
     const integrity = db.prepare("PRAGMA integrity_check").get() as { integrity_check?: string };
     if (integrity.integrity_check !== "ok") {
       throw new Error("INDEX_INTEGRITY_FAILED");
@@ -247,7 +256,7 @@ export async function buildKnowledgeGenerationIndex(params: {
     chunkCount,
     vectorStatus,
     graphStatus,
-    graphSchemaVersion: graphStatus === "not_built" ? 1 : 2,
+    graphSchemaVersion: 2,
     graphNodeCount,
     graphEdgeCount,
     graphProposedCount,
@@ -405,6 +414,9 @@ export async function searchKnowledgeGenerationIndex(params: {
     { readOnly: true, allowExtension: true },
   );
   try {
+    const query = params.query.slice(0, 2_000);
+    const queryTerms = [...knowledgeLexicalTerms(query)];
+    const foldedQueryTerms = [...foldedKnowledgeLexicalTerms(query)];
     const lexicalRows = db
       .prepare(
         `SELECT c.segment_id, c.source_id, c.source_version_id, c.source_version,
@@ -412,7 +424,7 @@ export async function searchKnowledgeGenerationIndex(params: {
        FROM chunks_fts JOIN chunks c ON c.id = chunks_fts.rowid
        WHERE chunks_fts MATCH ? ORDER BY rank ASC LIMIT ?`,
       )
-      .all(toFtsQuery(params.query), Math.max(params.maxResults * 4, 20)) as SearchRow[];
+      .all(toFtsQuery(query), Math.max(params.maxResults * 4, 20)) as SearchRow[];
     let vectorRows: SearchRow[] = [];
     const rawIdentity = db
       .prepare("SELECT value FROM metadata WHERE key = 'embeddingIdentity'")
@@ -462,16 +474,25 @@ export async function searchKnowledgeGenerationIndex(params: {
     };
     addRows(lexicalRows, 1);
     addRows(vectorRows, 1);
-    const rows = [...fused.values()].toSorted((left, right) => {
-      const title = params.query.normalize("NFC").trim().toLocaleLowerCase();
-      const leftBoost =
-        left.source_title.normalize("NFC").trim().toLocaleLowerCase() === title ? 0.25 : 0;
-      const rightBoost =
-        right.source_title.normalize("NFC").trim().toLocaleLowerCase() === title ? 0.25 : 0;
-      return right.fusedScore + rightBoost - (left.fusedScore + leftBoost);
-    });
+    const normalizedTitleQuery = query.normalize("NFC").trim().toLocaleLowerCase();
+    for (const row of fused.values()) {
+      const text = `${row.source_title} ${row.original_text}`;
+      const terms = knowledgeLexicalTerms(text);
+      const foldedTerms = foldedKnowledgeLexicalTerms(text);
+      const overlap = queryTerms.filter((term) => terms.has(term)).length;
+      const foldedOverlap = foldedQueryTerms.filter((term) => foldedTerms.has(term)).length;
+      // Comparable coverage breaks zone-local rank ties; preserving accents avoids
+      // treating distinct words as exact matches. Both signals share one RRF budget.
+      row.fusedScore +=
+        (overlap / Math.max(queryTerms.length, 1) +
+          foldedOverlap / Math.max(foldedQueryTerms.length, 1)) /
+        120;
+      if (row.source_title.normalize("NFC").trim().toLocaleLowerCase() === normalizedTitleQuery) {
+        row.fusedScore += 0.25;
+      }
+    }
+    const rows = [...fused.values()].toSorted((left, right) => right.fusedScore - left.fusedScore);
     const perSource = new Map<string, number>();
-    const normalizedTitleQuery = params.query.normalize("NFC").trim().toLocaleLowerCase();
     const candidates = rows
       .map((row) => {
         const locator = JSON.parse(row.locator_json) as KnowledgeLocator;
@@ -488,9 +509,6 @@ export async function searchKnowledgeGenerationIndex(params: {
           },
           params.databaseOptions,
         );
-        const exactTitle =
-          row.source_title.normalize("NFC").trim().toLocaleLowerCase() === normalizedTitleQuery;
-        const score = row.fusedScore + (exactTitle ? 0.25 : 0);
         const citation: KnowledgeCitation = {
           citationId,
           zoneLabel: params.zoneLabel,
@@ -503,7 +521,7 @@ export async function searchKnowledgeGenerationIndex(params: {
           citationId,
           citation,
           excerpt: row.original_text.slice(0, 800),
-          score,
+          score: row.fusedScore,
           sourceId: row.source_id,
           vector: row.vector,
         };
@@ -557,10 +575,8 @@ export async function searchKnowledgeGenerationIndexWithGraph(
     graphBudgetMs?: number;
   },
 ): Promise<{ hits: KnowledgeSearchHit[]; graph: KnowledgeGenerationGraphCoverage }> {
-  const seeds = await searchKnowledgeGenerationIndex({
-    ...params,
-    maxResults: Math.min(params.maxResults, 8),
-  });
+  const hybridHits = await searchKnowledgeGenerationIndex(params);
+  const seeds = hybridHits.slice(0, 8);
   const disabled: KnowledgeGenerationGraphCoverage = {
     seedCount: seeds.length,
     expandedEvidenceCount: 0,
@@ -569,7 +585,7 @@ export async function searchKnowledgeGenerationIndexWithGraph(
     availability: "disabled",
   };
   if (params.graphExpansion === "off" || seeds.length === 0) {
-    return { hits: seeds.slice(0, params.maxResults), graph: disabled };
+    return { hits: hybridHits, graph: disabled };
   }
   const db = new DatabaseSync(
     resolveKnowledgeGenerationDatabasePath(params.zoneId, params.generationId, params.env),
@@ -583,7 +599,7 @@ export async function searchKnowledgeGenerationIndexWithGraph(
       .get();
     if (!graphTable) {
       return {
-        hits: seeds.slice(0, params.maxResults),
+        hits: hybridHits,
         graph: { ...disabled, availability: "not_built" },
       };
     }
@@ -684,9 +700,9 @@ export async function searchKnowledgeGenerationIndexWithGraph(
         break;
       }
     }
-    const seedIds = new Set(
-      seeds.flatMap((seed) => {
-        const reference = verifyKnowledgeCitationReference(seed.citationId, params.databaseOptions);
+    const hybridSegmentIds = new Set(
+      hybridHits.flatMap((hit) => {
+        const reference = verifyKnowledgeCitationReference(hit.citationId, params.databaseOptions);
         return reference ? [reference.segmentId] : [];
       }),
     );
@@ -698,7 +714,7 @@ export async function searchKnowledgeGenerationIndexWithGraph(
     for (const [segmentId, graphScore] of [...evidenceScores.entries()].toSorted(
       (left, right) => right[1] - left[1],
     )) {
-      if (seedIds.has(segmentId)) {
+      if (hybridSegmentIds.has(segmentId)) {
         continue;
       }
       const row = chunkQuery.get(segmentId) as SearchRow | undefined;
@@ -740,7 +756,7 @@ export async function searchKnowledgeGenerationIndexWithGraph(
       };
     });
     const combined = new Map<string, KnowledgeSearchHit>();
-    for (const hit of [...seeds, ...(params.graphExpansion === "on" ? expandedHits : [])]) {
+    for (const hit of [...hybridHits, ...(params.graphExpansion === "on" ? expandedHits : [])]) {
       const existing = combined.get(hit.citationId);
       if (!existing || hit.score > existing.score) {
         combined.set(hit.citationId, hit);
@@ -760,7 +776,7 @@ export async function searchKnowledgeGenerationIndexWithGraph(
     };
   } catch {
     return {
-      hits: seeds.slice(0, params.maxResults),
+      hits: hybridHits,
       graph: { ...disabled, availability: "not_built" },
     };
   } finally {

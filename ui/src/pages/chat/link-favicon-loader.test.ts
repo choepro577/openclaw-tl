@@ -26,6 +26,22 @@ describe("hydrateLinkFavicons", () => {
     expect(image.dataset.linkFaviconState).toBeUndefined();
   });
 
+  it("uses the local MAAP mark for engine-hosted links", () => {
+    const root = document.createElement("div");
+    root.innerHTML =
+      '<a href="https://docs.openclaw.ai/help"><img class="markdown-link-favicon" data-link-favicon-host="docs.openclaw.ai" alt=""></a>';
+    document.body.append(root);
+    const image = root.querySelector("img") as HTMLImageElement;
+    const fetcher = vi.fn();
+
+    hydrateLinkFavicons(document.body, fetcher);
+
+    expect(fetcher).not.toHaveBeenCalled();
+    expect(image.src).toBe(`${window.location.origin}/favicon.svg`);
+    expect(image.classList.contains("is-loaded")).toBe(true);
+    expect(image.dataset.linkFaviconState).toBe("loaded");
+  });
+
   it("loads each inert placeholder once and reveals only a decoded image", async () => {
     const image = appendPlaceholder();
     const fetcher = vi.fn().mockResolvedValue("blob:link-favicon");

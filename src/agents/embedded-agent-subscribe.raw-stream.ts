@@ -6,6 +6,7 @@ import path from "node:path";
 import { resolveStateDir } from "../config/paths.js";
 import { isTruthyEnvValue } from "../infra/env.js";
 import { appendRegularFile } from "../infra/fs-safe.js";
+import { isPrivateRunObservationScope } from "../infra/private-run-observations.js";
 
 let rawStreamReady = false;
 
@@ -21,7 +22,7 @@ function resolveRawStreamPath(): string {
 }
 
 export function appendRawStream(payload: Record<string, unknown>) {
-  if (!isRawStreamEnabled()) {
+  if (isPrivateRunObservationScope() || !isRawStreamEnabled()) {
     return;
   }
   const rawStreamPath = resolveRawStreamPath();

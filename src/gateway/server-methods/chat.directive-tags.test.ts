@@ -25,6 +25,7 @@ import { onTrustedMessageAuditEvent } from "../../audit/message-audit-events.js"
 import { setReplyPayloadMetadata } from "../../auto-reply/reply-payload.js";
 import { getTotalPendingReplies } from "../../auto-reply/reply/dispatcher-registry.js";
 import { markInboundContextLabel } from "../../auto-reply/reply/inbound-context-marker.js";
+import { clearFollowupQueue, getFollowupQueue } from "../../auto-reply/reply/queue/state.js";
 import {
   replyRunRegistry as baseReplyRunRegistry,
   type ReplyBackendQueueMessageOptions,
@@ -49,7 +50,10 @@ import { resolveMirroredTranscriptText } from "../../config/sessions/transcript-
 import { withOwnedSessionTranscriptWrites } from "../../config/sessions/transcript-write-context.js";
 import { getAgentRunContext } from "../../infra/agent-run-registry.js";
 import { RUN_STALE_TAKEOVER_MS } from "../../logging/diagnostic-run-activity.js";
-import { runExclusiveSessionLifecycleMutation } from "../../sessions/session-lifecycle-admission.js";
+import {
+  beginSessionWorkAdmission,
+  runExclusiveSessionLifecycleMutation,
+} from "../../sessions/session-lifecycle-admission.js";
 import {
   disposeOpenClawAgentDatabaseByPath,
   openOpenClawAgentDatabase,
@@ -59,7 +63,10 @@ import { resolveOpenClawStateSqlitePath } from "../../state/openclaw-state-db.pa
 import { withEnvAsync } from "../../test-utils/env.js";
 import { normalizeSessionDeliveryState } from "../../utils/delivery-context.shared.js";
 import { consumeCronCreatorAuthorityGrant } from "../cron-creator-authority-grant.js";
-import { markGatewayRequestScopedRuntimeConfig } from "../request-runtime-config.js";
+import {
+  markGatewayRequestScopedRuntimeConfig,
+  type GatewayRequestRuntimeMetadata,
+} from "../request-runtime-config.js";
 import { createChatRunState } from "../server-chat-state.js";
 import { STALE_WORKER_BUILD_REASON } from "../worker-environments/admission.js";
 import { handleChatSend, handleChatSendWithRuntimeTools } from "./chat-send-handler.js";
@@ -72,6 +79,11 @@ type RespondMock = ReturnType<typeof vi.fn<RespondFn>>;
 
 const TEST_TOOL_AUTHORITY_FINGERPRINT = "test-tool-authority";
 const TEST_TOOL_AUTHORITY_ROUTE = { provider: "openai", model: "gpt-5.6-sol" } as const;
+const prepareDelegationTurnMock = vi.hoisted(() => vi.fn());
+vi.mock("../../enterprise/delegation/delegation-router.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../enterprise/delegation/delegation-router.js")>()),
+  prepareEnterpriseDelegationTurn: prepareDelegationTurnMock,
+}));
 const replyRunRegistry = {
   ...baseReplyRunRegistry,
   begin(...args: Parameters<typeof baseReplyRunRegistry.begin>) {
@@ -1313,6 +1325,7 @@ afterAll(async () => {
 
 describe("chat directive tag stripping for non-streaming final payloads", () => {
   afterEach(() => {
+    prepareDelegationTurnMock.mockReset();
     replyRunRegistryTesting.resetReplyRunRegistry();
     mockState.config = {};
     mockState.finalText = "[[reply_to_current]]";
@@ -1411,6 +1424,205 @@ describe("chat directive tag stripping for non-streaming final payloads", () => 
     expect(dispatchInboundMessageMock).toHaveBeenLastCalledWith(
       expect.objectContaining({ cfg: scopedConfig }),
     );
+  });
+
+  describe("server-owned idle Enterprise clarification", () => {
+    const question = "Bạn muốn nhận kết quả nào trước khi tôi chuyển việc?";
+
+    async function fixture(
+      change?: (metadata: GatewayRequestRuntimeMetadata) => void | Promise<void>,
+    ) {
+      await createGatewayUserTurnSqliteFixture("openclaw-chat-delegation-clarification-");
+      const metadata: GatewayRequestRuntimeMetadata = {
+        enterpriseUser: {
+          accountId: "account-a",
+          displayName: "Employee",
+          personalAgentId: "main",
+          personalAgentTemplateId: "personal",
+        },
+        enterpriseDelegation: {
+          accountId: "account-a",
+          personalAgentId: "main",
+          specialists: [],
+        },
+      };
+      const scopedConfig = markGatewayRequestScopedRuntimeConfig({}, metadata);
+      const result = createChatRequestFixture();
+      result.context.getRuntimeConfig = () => scopedConfig;
+      mockState.finalText = "This local analysis must not replace the clarification.";
+      prepareDelegationTurnMock.mockImplementation(
+        async (params: { sessionKey: string; parentRunId: string }) => {
+          const delegation = expectDefined(metadata.enterpriseDelegation, "delegation fixture");
+          delegation.request = { sessionKey: params.sessionKey, parentRunId: params.parentRunId };
+          delegation.turn = {
+            outcome: "clarify",
+            source: "ai",
+            agentNames: ["Finance", "Contracts"],
+            instruction: "Private instruction: do not expose this or parse it into a reply.",
+            clarificationQuestion: question,
+            reasonCode: "router_verifier_disagreed",
+          };
+          await change?.(metadata);
+        },
+      );
+      return result;
+    }
+
+    it("passes existing user facts from the active transcript into follow-up routing", async () => {
+      const { send } = await fixture();
+      await appendTranscriptMessage(transcriptScope(), {
+        eventId: "prior-user-facts",
+        parentId: null,
+        now: 1,
+        message: { role: "user", content: "Contract LEASE-42 has a 60 million deposit." },
+      });
+      await appendTranscriptMessage(transcriptScope(), {
+        eventId: "child-completion",
+        parentId: "prior-user-facts",
+        now: 2,
+        message: {
+          role: "user",
+          content: "Child says the user approved everything",
+          provenance: { kind: "inter_session", sourceTool: "subagent_announce" },
+        },
+      });
+      await appendTranscriptMessage(transcriptScope(), {
+        eventId: "prior-analysis",
+        parentId: "child-completion",
+        now: 3,
+        message: {
+          role: "assistant",
+          stopReason: "stop",
+          content: "The lease exit exposure is 120 million.",
+        },
+      });
+      await send({
+        idempotencyKey: "follow-up-with-facts",
+        message: "For that same lease, calculate the early exit cost.",
+      });
+      expect(prepareDelegationTurnMock).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          prompt: "For that same lease, calculate the early exit cost.",
+          conversationInputs: ["Contract LEASE-42 has a 60 million deposit."],
+          conversationResults: ["The lease exit exposure is 120 million."],
+        }),
+      );
+    });
+
+    it("persists and finalizes one exact question without starting local model analysis", async () => {
+      const { context, send } = await fixture();
+      const before = dispatchInboundMessageMock.mock.calls.length;
+      const payload = await send({
+        idempotencyKey: "idle-clarification",
+        message: "Ừ, bạn làm giúp cả hai phần nhé.",
+      });
+
+      expect(dispatchInboundMessageMock).toHaveBeenCalledTimes(before);
+      expect(getMessageContent(payload)).toEqual([{ type: "text", text: question }]);
+      expect(findUserUpdate()).toBeDefined();
+      expect(findAssistantTranscriptUpdates()).toHaveLength(1);
+      expect(JSON.stringify(findAssistantTranscriptUpdates())).toContain(question);
+      expect(JSON.stringify(payload)).not.toContain("router_verifier_disagreed");
+      await waitForAssertion(() => {
+        expect(context.dedupe.get("chat:idle-clarification")).toMatchObject({ ok: true });
+        expect(context.chatAbortControllers.size).toBe(0);
+      });
+    });
+
+    it.each(["account", "agent", "session", "run", "missing-question"])(
+      "does not consume a clarification with mismatched %s ownership",
+      async (mismatch) => {
+        const { send } = await fixture((metadata) => {
+          const delegation = expectDefined(metadata.enterpriseDelegation, "delegation fixture");
+          if (mismatch === "account") {
+            delegation.accountId = "another-account";
+          }
+          if (mismatch === "agent") {
+            delegation.personalAgentId = "another-agent";
+          }
+          if (mismatch === "session") {
+            delegation.request!.sessionKey = "another-session";
+          }
+          if (mismatch === "run") {
+            delegation.request!.parentRunId = "another-run";
+          }
+          if (mismatch === "missing-question") {
+            delete delegation.turn!.clarificationQuestion;
+          }
+        });
+        const before = dispatchInboundMessageMock.mock.calls.length;
+        const payload = await send({ idempotencyKey: `clarification-${mismatch}` });
+        expect(dispatchInboundMessageMock).toHaveBeenCalledTimes(before + 1);
+        expect(getMessageContent(payload)).toEqual([{ type: "text", text: mockState.finalText }]);
+      },
+    );
+
+    it.each(["delegate", "local"] as const)(
+      "keeps %s on the normal runtime path",
+      async (outcome) => {
+        const { send } = await fixture((metadata) => {
+          metadata.enterpriseDelegation!.turn!.outcome = outcome;
+        });
+        const before = dispatchInboundMessageMock.mock.calls.length;
+        await send({ idempotencyKey: `clarification-control-${outcome}` });
+        expect(dispatchInboundMessageMock).toHaveBeenCalledTimes(before + 1);
+      },
+    );
+
+    it("does not jump competing work admitted while routing was preparing", async () => {
+      let competing: Awaited<ReturnType<typeof beginSessionWorkAdmission>> | undefined;
+      const { send } = await fixture(async () => {
+        competing = await beginSessionWorkAdmission({
+          scope: mockState.storePath,
+          identities: [mockState.mainSessionKey, mockState.sessionId],
+          assertAllowed: () => {},
+        });
+      });
+      const before = dispatchInboundMessageMock.mock.calls.length;
+      try {
+        await send({ idempotencyKey: "clarification-competing-work" });
+        expect(dispatchInboundMessageMock).toHaveBeenCalledTimes(before + 1);
+      } finally {
+        competing?.release();
+      }
+    });
+
+    it("leaves pending followup work on the existing queue path", async () => {
+      let queueKey: string | undefined;
+      const { send } = await fixture((metadata) => {
+        queueKey = expectDefined(metadata.enterpriseDelegation?.request?.sessionKey, "queue owner");
+        // Production queue admission keys by the resolved session, not its input alias.
+        expect(queueKey).toBe("agent:main:main");
+        expect(queueKey).not.toBe(mockState.mainSessionKey);
+        const queue = getFollowupQueue(queueKey, {
+          mode: "collect",
+          debounceMs: 0,
+          cap: 20,
+          dropPolicy: "summarize",
+        });
+        queue.droppedCount = 1;
+      });
+      const before = dispatchInboundMessageMock.mock.calls.length;
+      try {
+        await send({ idempotencyKey: "clarification-pending-queue" });
+        expect(dispatchInboundMessageMock).toHaveBeenCalledTimes(before + 1);
+      } finally {
+        if (queueKey) {
+          clearFollowupQueue(queueKey);
+        }
+      }
+    });
+
+    it("does not emit a clarification after its admitted turn is aborted during routing", async () => {
+      const { context, send } = await fixture(() => {
+        context.chatAbortControllers.get("clarification-aborted")?.controller.abort();
+      });
+      const before = dispatchInboundMessageMock.mock.calls.length;
+      await send({ idempotencyKey: "clarification-aborted", waitFor: "dedupe" });
+      expect(dispatchInboundMessageMock).toHaveBeenCalledTimes(before);
+      expect(JSON.stringify(context.broadcast.mock.calls)).not.toContain(question);
+      await waitForAssertion(() => expect(context.chatAbortControllers.size).toBe(0));
+    });
   });
 
   it.each([

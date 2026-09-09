@@ -55,6 +55,36 @@ Provider and channel execution paths must use the active runtime config snapshot
 
 ## Reusable runtime utilities
 
+### Private internal preparation
+
+An agent harness may declare `privatePreparationSupport: "host-observation-scope-v1"`
+only when its attempt implementation supports private, tool-capable internal
+preparation. This is not a tool grant or a replacement for run admission. The host
+keeps the selected model, active parent authority, and intersected tool policy.
+Harnesses without this declaration are rejected before private retrieval; the
+built-in harness is owned and checked by the host directly.
+
+Use `isPrivateRunObservationScope()` and `bindPrivateRunObservationScope(callback)`
+from `openclaw/plugin-sdk/diagnostic-runtime`. The first reads the host restriction;
+the second captures it for external event callbacks, including callbacks that run
+after the original async invocation returns. The SDK does not expose a way to
+enter this scope. Native implementations must isolate their client and ephemeral
+thread, suppress payload logs and observers, and retire both on every exit.
+
+For example, an internal retrieval result may contain a company-policy excerpt.
+It must reach the selected model and host validator, but not `llm_input`,
+`llm_output`, `after_tool_call`, `agent_end`, persistence hooks, diagnostic payloads,
+or public stream events. `before_agent_finalize` is not run for this intermediate
+selection because it is not a user-facing reply. `before_agent_run`,
+`before_tool_call`, and approval decisions remain enforced. Ordinary incognito
+chats and specialist answers do not acquire this restriction automatically.
+
+Private preparation is unavailable while debug-proxy capture is enabled or a
+global capture fetch patch remains installed. Native implementations must also
+check their final child-process environment: a configured capture proxy can
+record traffic outside the host observation scope. Ordinary runs retain their
+existing capture behavior.
+
 Model-picker integrations use two focused runtime subpaths. Import the typed
 `ModelPickerAction` and `ModelPickerCapabilityProfile` contracts from
 `openclaw/plugin-sdk/interactive-runtime`. Import

@@ -486,6 +486,26 @@ export const TOOL_DISPLAY_CONFIG: ToolDisplayConfig = {
       title: "Agents",
       detailKeys: [],
     },
+    enterprise_specialists_list: {
+      emoji: "🧭",
+      title: "Enterprise Specialists",
+      detailKeys: [],
+    },
+    enterprise_delegate: {
+      emoji: "🤝",
+      title: "Enterprise Delegation",
+      detailKeys: ["decisionId"],
+    },
+    enterprise_knowledge_search: {
+      emoji: "🔎",
+      title: "Enterprise Knowledge Search",
+      detailKeys: ["query", "limit"],
+    },
+    enterprise_knowledge_get: {
+      emoji: "📖",
+      title: "Enterprise Knowledge",
+      detailKeys: ["citationId"],
+    },
     memory_search: {
       emoji: "🧠",
       title: "Memory Search",

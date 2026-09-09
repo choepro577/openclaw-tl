@@ -85,7 +85,7 @@ export function getKnowledgeGraphSettings(
           `INSERT OR IGNORE INTO enterprise_knowledge_graph_settings
            (zone_id, enabled, enrichment_enabled, auto_approval_threshold, revision,
             updated_by_account_id, created_at, updated_at)
-           VALUES (?, 0, 1, 0.92, 1, NULL, ?, ?)`,
+           VALUES (?, 1, 1, 0.92, 1, NULL, ?, ?)`,
         )
         .run(zoneId, now, now),
     { ...options, database },

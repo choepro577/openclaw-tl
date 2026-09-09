@@ -1,9 +1,14 @@
 import crypto from "node:crypto";
 import path from "node:path";
 import { normalizeOptionalString } from "@openclaw/normalization-core/string-coerce";
-import { clearAutoFallbackPrimaryProbeSelection } from "../../agents/agent-scope.js";
+import {
+  clearAutoFallbackPrimaryProbeSelection,
+  resolveAgentEffectiveModelPrimary,
+} from "../../agents/agent-scope.js";
 import { resolveSessionAuthSelection } from "../../agents/auth-profiles/session-override.js";
 import { resolveAgentHarnessPolicy } from "../../agents/harness/policy.js";
+import { splitTrailingAuthProfile } from "../../agents/model-ref-profile.js";
+import { resolveDefaultModelForAgent } from "../../agents/model-selection.js";
 import { hasResolvedThinkingCatalogEntry } from "../../agents/thinking-runtime.js";
 import { resolveSessionAuthProfileOverrideSource } from "../../config/sessions/auth-profile-override-provenance.js";
 import { formatSqliteSessionFileMarker } from "../../config/sessions/legacy-sqlite-marker.js";
@@ -405,6 +410,18 @@ export async function prepareReplyRunAdmission(context: PreparedReplyRunContext)
         agentId,
         sessionKey: context.runtimePolicySessionKey,
       });
+  const configuredDefaultProfile = splitTrailingAuthProfile(
+    resolveAgentEffectiveModelPrimary(cfg, agentId) ?? "",
+  ).profile;
+  const configuredDefaultModel = configuredDefaultProfile
+    ? resolveDefaultModelForAgent({ cfg, agentId, allowPluginNormalization: false })
+    : undefined;
+  // Match command and worker admission: a configured default-model pin outranks
+  // automatic session auth, but must not cross into another model/provider route.
+  const configuredProfileId =
+    configuredDefaultModel?.provider === provider && configuredDefaultModel.model === model
+      ? configuredDefaultProfile
+      : undefined;
   const resolveRuntimeAuthProfile = async () => {
     if (useFastReplyRuntime) {
       return {
@@ -431,6 +448,7 @@ export async function prepareReplyRunAdmission(context: PreparedReplyRunContext)
       cfg,
       provider,
       modelId: model,
+      ...(configuredProfileId ? { configuredProfileId } : {}),
       ...(agentHarnessPolicy ? { harnessRuntime: agentHarnessPolicy.runtime } : {}),
       agentDir,
       sessionEntry: authSessionEntry,

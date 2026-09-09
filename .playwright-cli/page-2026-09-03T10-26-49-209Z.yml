@@ -1,0 +1,80 @@
+- main [ref=e30]:
+  - complementary [ref=e31]:
+    - generic [ref=e44]:
+      - strong [ref=e45]: OpenClaw
+      - generic [ref=e46]: Enterprise Admin
+    - navigation "Quản trị Enterprise" [ref=e47]:
+      - button "Quản lý tài khoản" [ref=e48]
+      - button "Quản lý agent" [ref=e56]
+      - button "Tri thức doanh nghiệp" [ref=e62]
+      - button "Quản lý skill" [ref=e67]
+      - button "Plugins" [ref=e75]
+      - button "Config" [ref=e81]
+    - generic [ref=e87]:
+      - generic [ref=e88]:
+        - generic [ref=e89]: Q
+        - generic [ref=e90]:
+          - strong [ref=e91]: QA Admin
+          - generic [ref=e92]: "@qaadmin"
+      - button "Đổi mật khẩu" [ref=e93]
+      - button "Đăng xuất" [ref=e100]
+  - generic [ref=e108]:
+    - generic [ref=e109]:
+      - generic [ref=e110]:
+        - heading "Quản lý tài khoản" [level=1] [ref=e111]
+        - paragraph [ref=e112]: 1 tài khoản · quyền truy cập và phiên đăng nhập Enterprise
+      - button "Tạo tài khoản" [ref=e113]
+    - generic [ref=e115]:
+      - searchbox "Tìm tài khoản" [ref=e116]
+      - combobox "Lọc role" [ref=e117]:
+        - option "Tất cả role" [selected]
+        - option "Administrator"
+        - option "Employee"
+      - combobox "Lọc trạng thái" [ref=e118]:
+        - option "Tất cả trạng thái" [selected]
+        - option "Đang hoạt động"
+        - option "Đã khóa"
+      - combobox "Lọc preset" [ref=e119]:
+        - option "Tất cả preset" [selected]
+        - option "Lập trình tiêu chuẩn"
+        - option "Không có preset"
+      - combobox "Lọc personal agent" [ref=e120]:
+        - option "Tất cả personal agent" [selected]
+        - option "Đã bật personal agent"
+        - option "Không có personal agent"
+      - combobox "Sắp xếp" [ref=e121]:
+        - option "Username A–Z" [selected]
+        - option "Mới cập nhật"
+        - option "Đăng nhập gần nhất"
+    - table [ref=e123]:
+      - rowgroup [ref=e124]:
+        - row [ref=e125]:
+          - columnheader [ref=e126]:
+            - checkbox "Chọn tất cả" [ref=e127]
+          - columnheader "Tài khoản" [ref=e128]
+          - columnheader "Role" [ref=e129]
+          - columnheader "Trạng thái" [ref=e130]
+          - columnheader "Agent" [ref=e131]
+          - columnheader "Access preset" [ref=e132]
+          - columnheader "Đăng nhập cuối" [ref=e133]
+          - columnheader "Cập nhật" [ref=e134]
+          - columnheader "Thao tác" [ref=e135]
+      - rowgroup [ref=e136]:
+        - row [ref=e137]:
+          - cell [ref=e138]:
+            - checkbox "Chọn qaadmin" [ref=e139]
+          - cell "QA Admin @qaadmin" [ref=e140]:
+            - strong [ref=e141]: QA Admin
+            - generic [ref=e142]: "@qaadmin"
+          - cell "administrator" [ref=e143]
+          - cell "Hoạt động" [ref=e144]
+          - cell "—" [ref=e146]
+          - cell "Không cấp sẵn công cụ" [ref=e147]
+          - cell "17:26 3 thg 9, 2026" [ref=e149]
+          - cell "17:26 3 thg 9, 2026" [ref=e150]
+          - cell [ref=e151]:
+            - button "Xem" [ref=e152]
+    - generic [ref=e153]:
+      - generic [ref=e154]: Trang 1
+      - button "Trước" [disabled] [ref=e155]
+      - button "Sau" [disabled] [ref=e156]

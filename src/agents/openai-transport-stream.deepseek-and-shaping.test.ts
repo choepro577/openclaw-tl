@@ -445,7 +445,7 @@ describe("openai transport stream", () => {
     expect(sanitized).not.toHaveProperty("prompt_cache_retention");
     expect(sanitized).not.toHaveProperty("service_tier");
     expect(sanitized).not.toHaveProperty("temperature");
-    expect(sanitized.text).toEqual({ verbosity: "low" });
+    expect(sanitized.text).toEqual({ format: { type: "json_object" }, verbosity: "low" });
     expect(sanitized).not.toHaveProperty("top_p");
   });
 

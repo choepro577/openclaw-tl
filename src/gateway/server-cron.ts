@@ -56,7 +56,10 @@ import { resolveCronJobsStorePathFromConfig } from "../cron/store.js";
 import { cronStreamScheduleKey } from "../cron/stream-schedule.js";
 import { createCronScriptRuntime } from "../cron/trigger-script.js";
 import type { CronJob, CronPayload } from "../cron/types.js";
-import { resolveEnterpriseCronExecution } from "../enterprise/automations/enterprise-cron-execution.js";
+import {
+  resolveEnterpriseCronExecution,
+  isEnterpriseCronAgentAvailable,
+} from "../enterprise/automations/enterprise-cron-execution.js";
 import { enterpriseCronOwnerAccountId } from "../enterprise/automations/enterprise-cron-owner.js";
 import { formatErrorMessage } from "../infra/errors.js";
 import { resolveMainScopedEventSessionKey } from "../infra/event-session-routing.js";
@@ -406,8 +409,7 @@ export function buildGatewayCronService(params: {
   const hasConfiguredAgent = (cfg: OpenClawConfig, agentId: string) =>
     Boolean(findAgentEntry(cfg, agentId));
 
-  const resolveCronAgent = (requested?: string | null) => {
-    const runtimeConfig = getRuntimeConfig();
+  const resolveCronAgent = (requested?: string | null, runtimeConfig = getRuntimeConfig()) => {
     const normalized =
       typeof requested === "string" && requested.trim() ? normalizeAgentId(requested) : undefined;
     const defaultAgentId = tryResolveAmbientOwnerAgentId(runtimeConfig);
@@ -463,6 +465,7 @@ export function buildGatewayCronService(params: {
   };
 
   const resolveCronTarget = (opts?: {
+    runtimeConfig?: OpenClawConfig;
     agentId?: string | null;
     sessionKey?: string | null;
     preserveUntargeted?: boolean;
@@ -489,6 +492,7 @@ export function buildGatewayCronService(params: {
         : undefined;
     const { agentId: resolvedAgentId, cfg: runtimeConfig } = resolveCronAgent(
       requestedAgentId ?? derivedAgentId,
+      opts?.runtimeConfig,
     );
     const agentId = resolvedAgentId || undefined;
     const resolvedSessionKey = agentId
@@ -763,7 +767,8 @@ export function buildGatewayCronService(params: {
     },
     isAgentAvailable: (agentId) =>
       !isAgentDeletionBlocked(agentId) &&
-      listAgentIds(getRuntimeConfig()).some((id) => normalizeAgentId(id) === agentId),
+      (listAgentIds(getRuntimeConfig()).some((id) => normalizeAgentId(id) === agentId) ||
+        isEnterpriseCronAgentAvailable(getRuntimeConfig(), agentId)),
     resolveSessionStorePath,
     sessionStorePath,
     enqueueSystemEvent: (text, opts) => {
@@ -831,8 +836,16 @@ export function buildGatewayCronService(params: {
       });
     },
     runHeartbeatOnce: async (opts) => {
+      const scopedConfig = opts?.job
+        ? resolveEnterpriseCronExecution({
+            job: opts.job,
+            agentId: opts.job.agentId ?? "",
+            runtimeConfig: getRuntimeConfig(),
+          }).cfg
+        : undefined;
       const { runtimeConfig, agentId, sessionKey } = resolveCronTarget({
         ...opts,
+        runtimeConfig: scopedConfig,
         preserveUntargeted: true,
       });
       return await runHeartbeatOnce({
@@ -862,12 +875,13 @@ export function buildGatewayCronService(params: {
       onExecutionPhase,
       onLaneWait,
     }) => {
-      const { agentId, cfg: runtimeConfig } = resolveCronAgent(job.agentId);
+      const runtimeConfig = getRuntimeConfig();
       const enterpriseExecution = resolveEnterpriseCronExecution({
         job,
-        agentId,
+        agentId: job.agentId ?? tryResolveAmbientOwnerAgentId(runtimeConfig) ?? "",
         runtimeConfig,
       });
+      const { agentId } = resolveCronAgent(job.agentId, enterpriseExecution.cfg);
       const sessionKey = resolveCronSessionTargetSessionKey(job.sessionTarget) ?? `cron:${job.id}`;
       return await runCronIsolatedAgentTurn({
         cfg: enterpriseExecution.cfg,

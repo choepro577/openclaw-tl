@@ -344,6 +344,16 @@ function listBundledPluginEntrySources(
   );
 }
 
+function buildGatewayHandlerDistEntries(): Record<string, string> {
+  const source = fs.readFileSync("src/gateway/server-methods.ts", "utf8");
+  return Object.fromEntries(
+    [...source.matchAll(/import\("\.\/([^"]+)\.js"\)/gu)].flatMap((match) => {
+      const modulePath = match[1];
+      return modulePath ? [[`gateway/${modulePath}`, `src/gateway/${modulePath}.ts`] as const] : [];
+    }),
+  );
+}
+
 function buildCoreDistEntries(): Record<string, string> {
   return {
     index: "src/index.ts",
@@ -353,6 +363,7 @@ function buildCoreDistEntries(): Record<string, string> {
     "cli/daemon-cli": "src/cli/daemon-cli.ts",
     // Keep long-lived lazy runtime boundaries on stable filenames so rebuilt
     // dist/ trees do not strand already-running gateways on stale hashed chunks.
+    ...buildGatewayHandlerDistEntries(),
     "agents/auth-profiles.runtime": "src/agents/auth-profiles.runtime.ts",
     "agents/model-catalog.runtime": "src/agents/model-catalog.runtime.ts",
     "agents/models-config.runtime": "src/agents/models-config.runtime.ts",

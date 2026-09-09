@@ -1,5 +1,6 @@
 import { html } from "lit";
 import { state } from "lit/decorators.js";
+import { eu } from "../../i18n/enterprise-user.ts";
 import { OpenClawLightDomElement } from "../../lit/openclaw-element.ts";
 import "./components/enterprise-shell.ts";
 import {
@@ -26,7 +27,7 @@ export class EnterprisePage extends OpenClawLightDomElement {
       this.account = me.account;
       this.policy = policy;
     } catch (error) {
-      this.error = error instanceof Error ? error.message : "Không thể tải Enterprise Portal.";
+      this.error = error instanceof Error ? error.message : eu("portalLoadFailed");
     }
   }
 
@@ -38,7 +39,7 @@ export class EnterprisePage extends OpenClawLightDomElement {
     }
     if (!this.account || !this.policy) {
       return html`<section class="enterprise-page">
-        <p class="enterprise-muted">Đang tải Enterprise Portal…</p>
+        <p class="enterprise-muted">${eu("loadingPortal")}</p>
       </section>`;
     }
     return html`<openclaw-enterprise-shell

@@ -1,7 +1,8 @@
 // The system heartbeat monitor payload replaces the dedicated interval
 // scheduler: firing it must only poke the heartbeat wake queue.
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { heartbeatTaskDeclarationKey } from "./heartbeat-task.js";
+import { CronService } from "./service.js";
 import {
   createCronStoreHarness,
   createNoopLogger,
@@ -77,6 +78,59 @@ describe("heartbeat payload execution", () => {
       );
       // The monitor never fabricates a system event; the wake is the whole run.
       expect(enqueueSystemEvent).not.toHaveBeenCalled();
+    } finally {
+      cron.stop();
+      await cleanup();
+    }
+  });
+
+  it("runs account-owned monitors through the scoped heartbeat runtime", async () => {
+    const { storePath, cleanup } = await makeStorePath();
+    const requestHeartbeat = vi.fn();
+    const runHeartbeatOnce = vi.fn(async () => ({ status: "ran" as const, durationMs: 1 }));
+    const cron = new CronService({
+      storePath,
+      cronEnabled: true,
+      log: noopLogger,
+      requestHeartbeat,
+      runHeartbeatOnce,
+      enqueueSystemEvent: vi.fn(),
+      runIsolatedAgentJob: vi.fn(async () => ({ status: "ok" as const })),
+    });
+    try {
+      await cron.start();
+      const added = await cron.add(
+        {
+          name: "heartbeat-main",
+          agentId: "personal",
+          enabled: true,
+          schedule: { kind: "every", everyMs: 1_800_000 },
+          sessionTarget: "main",
+          wakeMode: "next-heartbeat",
+          payload: { kind: "heartbeat" },
+          owner: {
+            accountId: "account-1",
+            agentId: "personal",
+            sessionKey: "enterprise:account-1",
+          },
+        },
+        { systemOwned: true },
+      );
+      const job = "job" in added ? added.job : added;
+      await cron.run(job.id, "force");
+      expect(runHeartbeatOnce).toHaveBeenCalledWith(
+        expect.objectContaining({
+          job: expect.objectContaining({
+            id: job.id,
+            owner: {
+              accountId: "account-1",
+              agentId: "personal",
+              sessionKey: "enterprise:account-1",
+            },
+          }),
+        }),
+      );
+      expect(requestHeartbeat).not.toHaveBeenCalled();
     } finally {
       cron.stop();
       await cleanup();

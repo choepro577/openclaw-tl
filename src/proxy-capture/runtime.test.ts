@@ -1,5 +1,6 @@
 // Proxy capture runtime tests cover session creation and capture lifecycle.
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { runWithPrivateRunObservationScope } from "../infra/private-run-observations.js";
 import { registerSecretValueForRedaction } from "../logging/secret-redaction-registry.js";
 import { resetSecretRedactionRegistryForTest } from "../logging/secret-redaction-registry.test-support.js";
 import type { DebugProxySettings } from "./env.js";
@@ -97,6 +98,56 @@ async function waitForResponseSettled(): Promise<void> {
 }
 
 describe("debug proxy runtime", () => {
+  it("does not persist HTTP/WS private preparation payloads or send through a global capture patch", async () => {
+    const marker = "PRIVATE-PREPARATION-PROXY-MARKER";
+    const persist = vi.fn(deps.persistEventPayload);
+    const network = vi.fn(async () => new Response("ordinary", { status: 200 }));
+    const localFetchTarget = { ...globalThis, fetch: network } as typeof globalThis;
+    const privateDeps = { ...deps, persistEventPayload: persist, fetchTarget: localFetchTarget };
+    initializeDebugProxyCapture("test", settings, privateDeps);
+    try {
+      await runWithPrivateRunObservationScope(async () => {
+        captureHttpExchange(
+          {
+            url: "https://provider.example/v1/responses",
+            method: "POST",
+            requestBody: marker,
+            response: new Response(marker),
+          },
+          settings,
+          privateDeps,
+        );
+        captureWsEvent(
+          {
+            url: "wss://provider.example/v1/realtime",
+            direction: "outbound",
+            kind: "ws-frame",
+            flowId: "private",
+            payload: marker,
+          },
+          settings,
+          privateDeps,
+        );
+        await expect(
+          localFetchTarget.fetch("https://provider.example/v1/responses", {
+            method: "POST",
+            body: marker,
+          }),
+        ).rejects.toThrow("PRIVATE_PREPARATION_CAPTURE_UNAVAILABLE");
+      });
+      expect(network).not.toHaveBeenCalled();
+      expect(persist).not.toHaveBeenCalled();
+      expect(JSON.stringify(events)).not.toContain(marker);
+      await localFetchTarget.fetch("https://provider.example/v1/responses", {
+        method: "POST",
+        body: "ordinary",
+      });
+      expect(network).toHaveBeenCalledTimes(1);
+      expect(persist).toHaveBeenCalled();
+    } finally {
+      finalizeDebugProxyCapture(settings, privateDeps);
+    }
+  });
   beforeEach(() => {
     finalizeDebugProxyCapture(settings, deps);
     events.length = 0;

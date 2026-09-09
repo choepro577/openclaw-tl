@@ -55,6 +55,8 @@ export type SessionObserverState = SessionActivityNoteState & {
   sessionId?: string;
   runId: string;
   agentId: string;
+  /** Run-owned config snapshot; request-scoped enterprise projections stay isolated. */
+  runtimeConfig?: OpenClawConfig;
   utilityModelRef?: string;
   startedAt: number;
   lastActivityAt: number;

@@ -68,6 +68,7 @@ export function createEmbeddedRunSessionPromptState(input: {
     params.onSessionIdChanged?.(activeSessionId);
     registerAgentRunContext(params.runId, {
       sessionId: activeSessionId,
+      runtimeConfig: params.config,
       lifecycleGeneration,
     });
   };

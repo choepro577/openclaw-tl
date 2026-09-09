@@ -1,7 +1,8 @@
 /* @vitest-environment jsdom */
 
 import { nothing, render } from "lit";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { i18n } from "../../i18n/index.ts";
 import type {
   EnterpriseKnowledgeGraphNeighborhood,
   EnterpriseKnowledgeGraphNodeDetail,
@@ -36,6 +37,7 @@ type MutableGraphView = {
   selectedNode?: EnterpriseKnowledgeGraphNodeDetail;
   renderer?: { destroy: () => void };
   abort?: AbortController;
+  error: string;
   updated(changed: Map<string, unknown>): void;
   render(): unknown;
   disconnectedCallback(): void;
@@ -113,7 +115,13 @@ function page(role: MutableGraphView["role"]): MutableGraphView {
 describe("shared Enterprise Knowledge Graph View", () => {
   let container: HTMLDivElement;
 
-  afterEach(() => {
+  beforeEach(async () => {
+    await i18n.setLocale("vi");
+  });
+
+  afterEach(async () => {
+    await i18n.setLocale("en");
+    vi.unstubAllGlobals();
     render(nothing, container);
     container?.remove();
   });
@@ -135,10 +143,30 @@ describe("shared Enterprise Knowledge Graph View", () => {
     const view = page("manager");
     view.snapshot = "candidate";
     render(view.render(), container);
-    expect(container.textContent).toContain("Compare Active–Candidate");
+    expect(container.textContent).toContain("So sánh Active–Candidate");
     expect(container.textContent).toContain("Hàng đợi kiểm duyệt");
     expect(container.textContent).toContain("? Chờ duyệt");
     expect(container.textContent).toContain("Xuất Obsidian ZIP");
+  });
+
+  it("switches shared graph copy between English and Vietnamese at render time", async () => {
+    container = document.createElement("div");
+    const view = page("manager");
+    view.snapshot = "candidate";
+
+    await i18n.setLocale("en");
+    render(view.render(), container);
+    expect(container.textContent).toContain("Knowledge graph · HR");
+    expect(container.querySelector('[role="region"][aria-label="Graph list"]')).not.toBeNull();
+    expect(container.textContent).toContain("Relations");
+    expect(container.textContent).toContain("Proposed");
+
+    await i18n.setLocale("vi");
+    render(view.render(), container);
+    expect(container.textContent).toContain("Bản đồ tri thức · HR");
+    expect(container.querySelector('[role="region"][aria-label="Danh sách graph"]')).not.toBeNull();
+    expect(container.textContent).toContain("Quan hệ");
+    expect(container.textContent).toContain("Chờ duyệt");
   });
 
   it("offers structural and relational views and explains a fan-shaped graph", () => {
@@ -165,7 +193,7 @@ describe("shared Enterprise Knowledge Graph View", () => {
     expect(container.textContent).toContain("Quan hệ nghiệp vụ");
     expect(container.textContent).toContain("Toàn bộ graph");
     expect(container.textContent).toContain("Graph hiện chủ yếu là cấu trúc tài liệu");
-    expect(container.textContent).toContain("Phân tích lại bằng AI Graph V3");
+    expect(container.textContent).toContain("Graph cấu trúc đã sẵn sàng");
     expect(container.textContent).toContain("3D");
     expect(container.textContent).toContain("2D");
     expect(container.textContent).toContain("Danh sách");
@@ -187,6 +215,27 @@ describe("shared Enterprise Knowledge Graph View", () => {
     expect(container.querySelector('[role="tab"][aria-selected="true"]')?.textContent?.trim()).toBe(
       "Candidate",
     );
+  });
+
+  it("explains a missing graph without directing the operator to publish or change policy", async () => {
+    const view = page("manager");
+    view.graph = undefined;
+    view.snapshot = "active";
+    const response = new Response(
+      JSON.stringify({ code: "GRAPH_NOT_BUILT", message: "Graph is not available." }),
+      { status: 422, headers: { "content-type": "application/json" } },
+    );
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => response.clone()),
+    );
+
+    view.updated(new Map([["zoneId", "zone-before"]]));
+    await vi.waitFor(() => expect(view.error).toContain("chưa có graph sẵn sàng"));
+
+    expect(view.error).not.toContain("publish");
+    expect(view.error).not.toContain("Cấu hình");
+    expect(view.error).not.toContain("bật Graph");
   });
 
   it("destroys the renderer and stale requests when the component disconnects", () => {

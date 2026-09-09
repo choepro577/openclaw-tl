@@ -5,6 +5,7 @@ import {
   type OpenClawStateDatabaseOptions,
 } from "../../state/openclaw-state-db.js";
 import { ensureEnterpriseSchema } from "../database/enterprise-schema.js";
+import { deferKnowledgeAccessChange } from "./knowledge-access-changes.js";
 import { appendEnterpriseKnowledgeChangeRow } from "./knowledge-job-store.js";
 import {
   integer,
@@ -157,6 +158,39 @@ export function finishKnowledgeGeneration(
   );
 }
 
+export function retireKnowledgeGeneration(
+  generationId: string,
+  options: OpenClawStateDatabaseOptions = {},
+): void {
+  ensureEnterpriseSchema(options);
+  runOpenClawStateWriteTransaction(
+    ({ db }) => {
+      const now = Date.now();
+      const retired = db
+        .prepare(
+          `UPDATE enterprise_knowledge_index_generations
+           SET status = 'retired', completed_at = ?, retired_at = ?
+           WHERE id = ? AND status = 'building'
+           RETURNING zone_id, build_revision`,
+        )
+        .get(now, now, generationId) as Row | undefined;
+      if (retired) {
+        appendEnterpriseKnowledgeChangeRow(db, {
+          zoneId: text(retired, "zone_id"),
+          entityType: "candidate",
+          entityId: generationId,
+          operation: "completed",
+          revision: integer(retired, "build_revision"),
+          status: "retired",
+          occurredAt: now,
+        });
+      }
+    },
+    options,
+    { operationLabel: "enterprise.knowledge.generation.retire" },
+  );
+}
+
 export function setKnowledgeVersionsVectorStatus(
   versionIds: string[],
   vectorStatus: "ready" | "unavailable" | "error",
@@ -302,7 +336,8 @@ export function publishKnowledgeCandidate(
   ensureEnterpriseSchema(options);
   const publicationId = generateSecureUuid();
   return runOpenClawStateWriteTransaction(
-    ({ db }) => {
+    (database) => {
+      const { db } = database;
       const zone = db
         .prepare("SELECT * FROM enterprise_knowledge_zones WHERE id = ?")
         .get(params.zoneId) as Row | undefined;
@@ -441,6 +476,7 @@ export function publishKnowledgeCandidate(
         stage: "active",
         occurredAt: now,
       });
+      deferKnowledgeAccessChange(database, params.zoneId);
       return { publicationId, publicationNumber: Number(next) };
     },
     options,
@@ -454,7 +490,8 @@ export function rollbackKnowledgePublication(
 ): KnowledgeZone {
   ensureEnterpriseSchema(options);
   runOpenClawStateWriteTransaction(
-    ({ db }) => {
+    (database) => {
+      const { db } = database;
       const zone = db
         .prepare("SELECT revision FROM enterprise_knowledge_zones WHERE id = ?")
         .get(params.zoneId) as Row | undefined;
@@ -516,6 +553,7 @@ export function rollbackKnowledgePublication(
         stage: "active",
         occurredAt: now,
       });
+      deferKnowledgeAccessChange(database, params.zoneId);
     },
     options,
     { operationLabel: "enterprise.knowledge.rollback" },

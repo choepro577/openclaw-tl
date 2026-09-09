@@ -34,6 +34,8 @@ const USER_PORTAL_BROWSER_METHODS = new Set([
   "sessions.resolve",
   "sessions.rewind",
   "sessions.subscribe",
+  "tasks.get",
+  "tasks.list",
 ]);
 
 const USER_PORTAL_SYNTHETIC_METHODS = new Set([
@@ -60,6 +62,7 @@ const USER_SESSION_PATCH_KEYS = new Set([
 ]);
 
 const USER_MODELS_LIST_KEYS = new Set(["agentId", "preparedOnly", "refresh", "view"]);
+const USER_TASKS_LIST_KEYS = new Set(["sessionKey", "agentId", "status", "cursor", "limit"]);
 
 const USER_CHAT_SEND_KEYS = new Set([
   "__controlUiReconnectResume",
@@ -97,6 +100,21 @@ export function enterpriseUserGatewayMethodAllowed(method: string, synthetic = f
 }
 
 export function enterpriseUserGatewayParamsAllowed(method: string, params: unknown): boolean {
+  if (method === "tasks.list" || method === "tasks.get") {
+    if (!params || typeof params !== "object" || Array.isArray(params)) {
+      return false;
+    }
+    const record = params as Record<string, unknown>;
+    // Canonical task handlers additionally check durable session ownership.
+    // Portals cannot enumerate the global registry or mutate task lifecycle.
+    return method === "tasks.list"
+      ? typeof record.sessionKey === "string" &&
+          record.sessionKey.trim().length > 0 &&
+          Object.keys(record).every((key) => USER_TASKS_LIST_KEYS.has(key))
+      : typeof record.taskId === "string" &&
+          record.taskId.trim().length > 0 &&
+          Object.keys(record).every((key) => key === "taskId");
+  }
   if (method === "sessions.files.get" || method === "sessions.files.list") {
     if (!params || typeof params !== "object" || Array.isArray(params)) {
       return false;

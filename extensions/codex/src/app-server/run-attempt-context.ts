@@ -28,6 +28,7 @@ import { joinPresentSections } from "./run-attempt-state.js";
 import type { CodexAttemptTools } from "./run-attempt-tool-setup.js";
 import {
   buildDeveloperInstructions,
+  buildRuntimeModelIdentityInstructions,
   type CodexContextEngineThreadBootstrapProjection,
 } from "./thread-lifecycle.js";
 
@@ -161,6 +162,10 @@ export async function prepareCodexAttemptContext(
     ? (connection.mutable.startupBinding?.agentWorkspaceDeveloperInstructions ??
       workspaceBootstrapContext.threadDeveloperInstructions)
     : undefined;
+  const runtimeModelIdentityInstructions = buildRuntimeModelIdentityInstructions({
+    providerId: effectiveRuntimeProviderId,
+    modelId: effectiveRuntimeModelId,
+  });
   const baseDeveloperInstructions = joinPresentSections(
     buildDeveloperInstructions(runtimeParams, {
       dynamicTools: toolBridge.availableSpecs,
@@ -215,6 +220,7 @@ export async function prepareCodexAttemptContext(
     buildActiveContextEngineRuntimeContext,
     workspaceBootstrapContext,
     agentWorkspaceDeveloperInstructions,
+    runtimeModelIdentityInstructions,
     baseDeveloperInstructions,
     openClawPromptContext,
     skillsCollaborationInstructions,

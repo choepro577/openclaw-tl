@@ -215,6 +215,8 @@ export function cleanTsdownOutputRoots(params: OutputRootParams = {}) {
   const protectedPaths = new Set([
     ...protectedDeclarationPaths,
     ...listExistingPreservedOutputPaths(cwd, env, fsImpl),
+    // A running Gateway can lazy-load these while the replacement build is in progress.
+    ...listExistingGatewayHandlerRuntimePaths(cwd, fsImpl),
   ]);
   for (const rootPath of rootPaths) {
     try {
@@ -287,6 +289,62 @@ function listExistingPreservedOutputPaths(cwd: string, env: NodeJS.ProcessEnv, f
       }
     } catch {
       // Missing preserved outputs are normal on first build.
+    }
+  }
+  return protectedPaths;
+}
+
+function listExistingGatewayHandlerRuntimePaths(cwd: string, fsImpl: typeof fs) {
+  const protectedPaths = new Set<string>();
+  const distRoot = path.resolve(cwd, "dist");
+  let source: string;
+  try {
+    source = fsImpl.readFileSync(path.resolve(cwd, "src/gateway/server-methods.ts"), "utf8");
+  } catch {
+    return protectedPaths;
+  }
+  const stablePaths = [...source.matchAll(/import\("\.\/([^"]+)\.js"\)/gu)].flatMap((match) => {
+    const modulePath = match[1];
+    return modulePath ? [path.resolve(distRoot, "gateway", `${modulePath}.js`)] : [];
+  });
+  const pendingPaths = [...stablePaths];
+  if (stablePaths.some((outputPath) => !fsImpl.existsSync(outputPath))) {
+    try {
+      pendingPaths.push(
+        ...fsImpl
+          .readdirSync(distRoot, { withFileTypes: true })
+          .filter(
+            (entry) => entry.isFile() && /^server-methods-[A-Za-z0-9_-]+\.js$/u.test(entry.name),
+          )
+          .map((entry) => path.resolve(distRoot, entry.name)),
+      );
+    } catch {
+      // A missing dist directory is normal on the first build.
+    }
+  }
+  for (const outputPath of pendingPaths) {
+    if (protectedPaths.has(outputPath)) {
+      continue;
+    }
+    protectedPaths.add(outputPath);
+    let outputSource: string;
+    try {
+      outputSource = fsImpl.readFileSync(outputPath, "utf8");
+    } catch {
+      continue;
+    }
+    for (const match of outputSource.matchAll(
+      /(?:\bfrom\s*|\bimport\s*\(\s*|\bimport\s*)["']([^"']+\.js)["']/gu,
+    )) {
+      const specifier = match[1];
+      if (!specifier?.startsWith(".")) {
+        continue;
+      }
+      const dependencyPath = path.resolve(path.dirname(outputPath), specifier);
+      const relativePath = path.relative(distRoot, dependencyPath);
+      if (!relativePath.startsWith("..") && !path.isAbsolute(relativePath)) {
+        pendingPaths.push(dependencyPath);
+      }
     }
   }
   return protectedPaths;

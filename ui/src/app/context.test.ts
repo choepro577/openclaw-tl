@@ -3,13 +3,21 @@ import { LitElement } from "lit";
 import { afterEach, describe, expect, it } from "vitest";
 import type { RouteId } from "../app-route-paths.ts";
 import { createApplicationContextProvider } from "../test-helpers/application-context.ts";
-import { applicationContext, type ApplicationContext } from "./context.ts";
+import {
+  applicationContext,
+  type ApplicationContext,
+  modelManagementContext,
+  type ModelManagementContext,
+} from "./context.ts";
 
 const CONSUMER_ELEMENT_NAME = "test-application-context-consumer";
 
 class TestApplicationContextConsumer extends LitElement {
   @consume({ context: applicationContext, subscribe: true })
   context?: ApplicationContext<RouteId>;
+
+  @consume({ context: modelManagementContext, subscribe: true })
+  modelContext?: ModelManagementContext;
 }
 
 if (!customElements.get(CONSUMER_ELEMENT_NAME)) {
@@ -33,6 +41,7 @@ describe("application context consumption", () => {
     provider.append(consumer);
     await consumer.updateComplete;
     expect(consumer.context).toBe(initialContext);
+    expect(consumer.modelContext).toBe(initialContext);
 
     consumer.remove();
     provider.setContext(replacementContext);
@@ -40,5 +49,6 @@ describe("application context consumption", () => {
     await consumer.updateComplete;
 
     expect(consumer.context).toBe(replacementContext);
+    expect(consumer.modelContext).toBe(replacementContext);
   });
 });

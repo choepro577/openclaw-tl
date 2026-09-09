@@ -6,13 +6,14 @@
       name="viewport"
       content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content"
     />
-    <title>OpenClaw Control</title>
+    <title>MAAP</title>
     <meta name="color-scheme" content="dark light" />
     <!-- These mirror the claw theme's --bg tokens for first paint; runtime theme application keeps them synchronized. -->
     <meta name="theme-color" media="(prefers-color-scheme: light)" content="#faf9f7" />
     <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0e1015" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
+    <link rel="icon" type="image/x-icon" sizes="32x32" href="/favicon.ico" />
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
     <link rel="manifest" href="/manifest.webmanifest" crossorigin="use-credentials" />
     <script>
@@ -262,23 +263,18 @@
       hidden
     >
       <div class="mount-fallback__panel" tabindex="-1">
-        <p class="mount-fallback__eyebrow">OpenClaw Control UI</p>
+        <p class="mount-fallback__eyebrow">MAAP Control UI</p>
         <h1 id="openclaw-mount-fallback-title">Control UI did not start</h1>
         <p id="openclaw-mount-fallback-summary">
           The browser loaded the static page, but the app bundle did not start. The gateway may be
-          restarting, or this page may reference assets from a different OpenClaw version.
+          restarting, or this page may reference assets from a different app version.
         </p>
         <ul>
-          <li>OpenClaw will retry the current app bundle automatically.</li>
+          <li>MAAP will retry the current app bundle automatically.</li>
           <li>If this persists, reload or try a clean browser profile.</li>
           <li>
-            See
-            <a
-              href="https://docs.openclaw.ai/web/control-ui#blank-control-ui-page"
-              target="_blank"
-              rel="noopener noreferrer"
-              >Control UI troubleshooting</a
-            >.
+            Check that the gateway is running and that this page was loaded from the same app
+            version.
           </li>
         </ul>
         <div class="mount-fallback__actions">
@@ -350,7 +346,7 @@
             return;
           }
           setSummary(
-            "The gateway is not reachable yet. OpenClaw will keep retrying while it restarts.",
+            "The gateway is not reachable yet. MAAP will keep retrying while it restarts.",
           );
           scheduleRecovery();
         }
@@ -382,7 +378,7 @@
           var documentUrl = new URL(window.location.href);
           if (recoveryNavigation) {
             setSummary(
-              "A fresh page still could not start the Control UI. Try again, then check the troubleshooting guide if the problem persists.",
+              "A fresh page still could not start the Control UI. Try again after checking that the gateway is running.",
             );
             return;
           }

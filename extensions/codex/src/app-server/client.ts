@@ -5,6 +5,10 @@
 import { randomUUID } from "node:crypto";
 import { createInterface, type Interface as ReadlineInterface } from "node:readline";
 import { embeddedAgentLog, OPENCLAW_VERSION } from "openclaw/plugin-sdk/agent-harness-runtime";
+import {
+  bindPrivateRunObservationScope,
+  isPrivateRunObservationScope,
+} from "openclaw/plugin-sdk/diagnostic-runtime";
 import { coerceErrorMessage, toStringifiedError } from "openclaw/plugin-sdk/error-runtime";
 import { normalizeOptionalString } from "openclaw/plugin-sdk/string-coerce-runtime";
 import { sliceUtf16Safe, truncateUtf16Safe } from "openclaw/plugin-sdk/text-utility-runtime";
@@ -228,32 +232,71 @@ export class CodexAppServerClient {
   private constructor(child: CodexAppServerTransport) {
     this.child = child;
     this.lines = createInterface({ input: child.stdout });
-    this.lines.on("line", (line) => this.handleLine(line));
-    this.lines.on("error", (error) => this.closeWithError(toStringifiedError(error)));
-    child.stdout.on("error", (error) => this.closeWithError(toStringifiedError(error)));
+    this.lines.on(
+      "line",
+      bindPrivateRunObservationScope((line: string) => this.handleLine(line)),
+    );
+    this.lines.on(
+      "error",
+      bindPrivateRunObservationScope((error: Error) =>
+        this.closeWithError(toStringifiedError(error)),
+      ),
+    );
+    child.stdout.on(
+      "error",
+      bindPrivateRunObservationScope((error: Error) =>
+        this.closeWithError(toStringifiedError(error)),
+      ),
+    );
     child.stderr.setEncoding("utf8");
-    child.stderr.on("data", (text: string) => {
-      this.stderrTail = appendBoundedTail(this.stderrTail, text, CODEX_APP_SERVER_STDERR_TAIL_MAX);
-      const trimmed = text.trim();
-      if (trimmed) {
-        embeddedAgentLog.debug(`codex app-server stderr: ${trimmed}`);
-      }
-    });
+    child.stderr.on(
+      "data",
+      bindPrivateRunObservationScope((text: string) => {
+        if (isPrivateRunObservationScope()) {
+          return;
+        }
+        this.stderrTail = appendBoundedTail(
+          this.stderrTail,
+          text,
+          CODEX_APP_SERVER_STDERR_TAIL_MAX,
+        );
+        const trimmed = text.trim();
+        if (trimmed) {
+          embeddedAgentLog.debug(`codex app-server stderr: ${trimmed}`);
+        }
+      }),
+    );
     // Codex reserves stderr for diagnostics; losing that stream must not tear
     // down an otherwise healthy JSON-RPC connection on stdout.
-    child.stderr.on("error", (error) => {
-      embeddedAgentLog.warn("codex app-server stderr stream failed", { error });
-    });
-    child.once("error", (error) => this.closeWithError(toStringifiedError(error)));
-    child.once("exit", (code, signal) => {
-      this.transportExited = true;
-      this.closeWithError(buildCodexAppServerExitError(code, signal, this.stderrTail));
-    });
+    child.stderr.on(
+      "error",
+      bindPrivateRunObservationScope((error: Error) => {
+        embeddedAgentLog.warn("codex app-server stderr stream failed", { error });
+      }),
+    );
+    child.once(
+      "error",
+      bindPrivateRunObservationScope((error: unknown) =>
+        this.closeWithError(toStringifiedError(error)),
+      ),
+    );
+    child.once(
+      "exit",
+      bindPrivateRunObservationScope((code: unknown, signal: unknown) => {
+        this.transportExited = true;
+        this.closeWithError(buildCodexAppServerExitError(code, signal, this.stderrTail));
+      }),
+    );
     // Guard against unhandled EPIPE / write-after-close errors on the stdin
     // stream. When the child process terminates abruptly the pipe can break
     // before the "exit" event fires, so a pending writeMessage() produces an
     // asynchronous error on stdin that would otherwise crash the gateway.
-    child.stdin.on?.("error", (error) => this.closeWithError(toStringifiedError(error)));
+    child.stdin.on?.(
+      "error",
+      bindPrivateRunObservationScope((error: Error) =>
+        this.closeWithError(toStringifiedError(error)),
+      ),
+    );
   }
 
   /** Starts a new app-server client using resolved runtime start options. */

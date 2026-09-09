@@ -37,3 +37,5 @@ export type {
   MemoryDreamingPhaseName,
   MemoryDreamingStorageConfig,
 } from "../memory-host-sdk/dreaming.js";
+
+export { resolveMemoryDreamingRunConfig } from "../memory-host-sdk/dreaming-run-config.js";

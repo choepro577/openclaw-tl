@@ -147,6 +147,7 @@ export function resolveSessionListSearchModelFields(params: {
 
 type LoadGatewaySessionRowOptions = {
   agentId?: string;
+  cfg?: OpenClawConfig;
   includeDerivedTitles?: boolean;
   includeLastMessage?: boolean;
   now?: number;
@@ -162,6 +163,7 @@ function loadGatewaySessionSnapshot(
   const { cfg, storePath, store, entry, canonicalKey } = loadGatewaySessionEntryReadOnly(
     sessionKey,
     {
+      cfg: options?.cfg,
       clone: false,
       includeStoreChildEntries: true,
       ...(options?.agentId ? { agentId: options.agentId } : {}),

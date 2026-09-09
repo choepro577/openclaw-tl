@@ -1,4 +1,3 @@
-import { formatErrorMessage } from "openclaw/plugin-sdk/error-runtime";
 import type { MemoryReadResult } from "openclaw/plugin-sdk/memory-core-host-engine-storage";
 import { jsonResult } from "openclaw/plugin-sdk/memory-core-host-runtime-core";
 import {
@@ -58,12 +57,14 @@ export async function executeMemoryReadResult(
   if (params.requestedCorpus !== "all") {
     try {
       return jsonResult(await params.read());
-    } catch (error) {
+    } catch {
       return jsonResult({
         path: params.relPath,
         text: "",
         disabled: true,
-        error: formatErrorMessage(error),
+        error: "memory_recall_unavailable",
+        warning:
+          "Memory recall is temporarily unavailable; the requested excerpt could not be read.",
       });
     }
   }

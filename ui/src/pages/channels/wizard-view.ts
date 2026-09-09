@@ -6,7 +6,7 @@ import { handleCopyButton } from "../../components/copy-button.ts";
 import { renderWizardStepControls } from "../../components/wizard-step-controls.ts";
 import { t } from "../../i18n/index.ts";
 import "../../components/modal-dialog.ts";
-import { channelDocsUrl, channelHubMeta } from "./hub-meta.ts";
+import { channelHubMeta } from "./hub-meta.ts";
 import type { ChannelWizardState, ChannelWizardStep } from "./wizard-controller.ts";
 
 type ChannelWizardViewProps = {
@@ -196,9 +196,6 @@ function renderHelperLinks(channel: string | null, step: ChannelWizardStep | nul
   const links = [...(channel ? (channelHubMeta(channel).setupLinks ?? []) : [])];
   if (step?.externalUrl) {
     links.unshift({ label: t("channels.setup.openLink"), url: step.externalUrl });
-  }
-  if (channel) {
-    links.push({ label: t("channels.setup.docs"), url: channelDocsUrl(channel) });
   }
   if (links.length === 0) {
     return nothing;

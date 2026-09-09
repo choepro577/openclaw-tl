@@ -43,6 +43,7 @@ import {
   getLatestKnowledgeCandidate,
   isKnowledgeArtifactReferenced,
   listKnowledgeAgentBindings,
+  listKnowledgeEvidenceTransferGrants,
   listKnowledgeJobs,
   listKnowledgeJobSteps,
   listEnterpriseKnowledgeChanges,
@@ -55,6 +56,7 @@ import {
   purgeKnowledgeZone,
   retryKnowledgeJob,
   replaceKnowledgeAgentBindings,
+  replaceKnowledgeEvidenceTransferGrants,
   replaceKnowledgeZoneMemberships,
   rollbackKnowledgePublication,
   setKnowledgeZoneArchived,
@@ -202,7 +204,7 @@ export async function handleEnterpriseKnowledgeHttpRequest(params: {
                 enabled:
                   typeof graphBody?.enabled === "boolean"
                     ? graphBody.enabled
-                    : params.config.enterprise?.knowledge?.graph?.enabled === true,
+                    : params.config.enterprise?.knowledge?.graph?.enabled !== false,
                 enrichmentEnabled:
                   typeof graphBody?.enrichmentEnabled === "boolean"
                     ? graphBody.enrichmentEnabled
@@ -261,7 +263,7 @@ export async function handleEnterpriseKnowledgeHttpRequest(params: {
           transport: ocrProvider?.transport ?? null,
         },
         graph: {
-          enabled: params.config.enterprise?.knowledge?.graph?.enabled === true,
+          enabled: params.config.enterprise?.knowledge?.graph?.enabled !== false,
           aiAnalysis: params.config.enterprise?.knowledge?.graph?.aiAnalysis ?? "off",
           agentExpansion: params.config.enterprise?.knowledge?.graph?.agentExpansion ?? "off",
           enrichmentReady: Boolean(graphEnrichment),
@@ -486,6 +488,49 @@ export async function handleEnterpriseKnowledgeHttpRequest(params: {
         after: { count: members.length },
       });
       return sendJson(res, 200, { zone: updated, items: listKnowledgeZoneMemberships(zone.id) });
+    }
+    if (
+      parts[1] === "evidence-transfers" &&
+      parts.length === 2 &&
+      (req.method === "GET" || req.method === "PUT")
+    ) {
+      if (audience !== "admin") {
+        throw new EnterpriseKnowledgeError(
+          "FORBIDDEN",
+          403,
+          "Only an administrator can manage evidence transfers.",
+        );
+      }
+      if (req.method === "GET") {
+        return sendJson(res, 200, {
+          items: listKnowledgeEvidenceTransferGrants(zone.id),
+          revision: zone.revision,
+        });
+      }
+      const body = await readJson(req);
+      if (
+        !Array.isArray(body.targetAgentResourceKeys) ||
+        !body.targetAgentResourceKeys.every((value) => typeof value === "string") ||
+        Object.keys(body).some((key) => key !== "baseRevision" && key !== "targetAgentResourceKeys")
+      ) {
+        throw new EnterpriseKnowledgeError(
+          "INVALID_INPUT",
+          422,
+          "targetAgentResourceKeys is invalid.",
+        );
+      }
+      const updated = replaceKnowledgeEvidenceTransferGrants({
+        zoneId: zone.id,
+        targetAgentResourceKeys: body.targetAgentResourceKeys,
+        baseRevision: integerField(body, "baseRevision"),
+        actorAccountId: principal.account.id,
+        config: params.config,
+        audit: { actorSessionId: principal.sessionId, requestId: requestId(req) },
+      });
+      return sendJson(res, 200, {
+        zone: updated,
+        items: listKnowledgeEvidenceTransferGrants(zone.id),
+      });
     }
     if (parts[1] === "agents" && parts.length === 2 && req.method === "GET") {
       if (audience !== "admin") {

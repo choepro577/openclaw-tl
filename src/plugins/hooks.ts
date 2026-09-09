@@ -22,6 +22,7 @@ import { recordRuntimeActionDecision } from "../audit/runtime-action-decision.js
 import { copyReplyPayloadMetadata, type ReplyPayload } from "../auto-reply/reply-payload.js";
 import { formatHookErrorForLog } from "../hooks/fire-and-forget.js";
 import { formatErrorMessage } from "../infra/errors.js";
+import { isPrivateRunObservationScope } from "../infra/private-run-observations.js";
 import { concatOptionalTextSegments } from "../shared/text/join-segments.js";
 import {
   type GateHookResult,
@@ -160,6 +161,19 @@ type HookRunnerOptions = {
    */
   modifyingHookTimeoutMsByHook?: Partial<Record<PluginHookName, number>>;
 };
+
+const PRIVATE_PREPARATION_OBSERVER_HOOKS = new Set<PluginHookName>([
+  "llm_input",
+  "llm_output",
+  "model_call_started",
+  "model_call_ended",
+  "agent_end",
+  "after_tool_call",
+  "before_compaction",
+  "after_compaction",
+  "session_start",
+  "session_end",
+]);
 
 const DEFAULT_VOID_HOOK_TIMEOUT_MS_BY_HOOK: Partial<Record<PluginHookName, number>> = {
   agent_end: 30_000,
@@ -770,6 +784,11 @@ export function createHookRunner(
     event: SyncHookEvent<K> & { message: SyncHookMessage },
     ctx: SyncHookContext<K>,
   ): { message: SyncHookMessage; block?: true } | undefined => {
+    // This execution writes only to its private in-memory transcript. Persistence
+    // hooks must not receive its content as a second, durable storage path.
+    if (isPrivateRunObservationScope()) {
+      return undefined;
+    }
     const hooks = getHooksForName(registry, hookName);
     if (hooks.length === 0) {
       return undefined;
@@ -799,6 +818,9 @@ export function createHookRunner(
     optionsValue: VoidHookRunOptions = {},
     matcherToolName?: string,
   ): Promise<void> {
+    if (isPrivateRunObservationScope() && PRIVATE_PREPARATION_OBSERVER_HOOKS.has(hookName)) {
+      return;
+    }
     const hooks = getHooksForName(registry, hookName, undefined, matcherToolName);
     if (hooks.length === 0) {
       return;
@@ -836,6 +858,11 @@ export function createHookRunner(
     policy: ModifyingHookPolicy<K, TResult> = {},
     matcherToolName?: string,
   ): Promise<TResult | undefined> {
+    // A private intermediate selection is not a user-facing reply to finalize.
+    // All action/input gates, including before_tool_call approvals, still run.
+    if (isPrivateRunObservationScope() && hookName === "before_agent_finalize") {
+      return undefined;
+    }
     const hooks = getHooksForName(registry, hookName, undefined, matcherToolName);
     const selectedHooks = policy.includeRegistration
       ? hooks.filter(policy.includeRegistration)

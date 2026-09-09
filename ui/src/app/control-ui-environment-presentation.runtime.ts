@@ -2,6 +2,7 @@ import {
   CONTROL_UI_ENVIRONMENT_ATTRIBUTE,
   type ControlUiEnvironment,
 } from "../../../src/gateway/control-ui-bootstrap-contract.js";
+import { maskEngineName } from "../branding/display-brand.ts";
 import { applyControlUiOperatorSeamColor } from "./control-ui-presentation.ts";
 
 export function applyControlUiPresentation(params: {
@@ -15,7 +16,7 @@ export function applyControlUiPresentation(params: {
     const previous = root.getAttribute(CONTROL_UI_ENVIRONMENT_ATTRIBUTE);
     if (previous) {
       const previousEnvironment: ControlUiEnvironment = JSON.parse(previous);
-      const suffix = ` · ${previousEnvironment.label}`;
+      const suffix = ` · ${maskEngineName(previousEnvironment.label)}`;
       if (document.title.endsWith(suffix)) {
         document.title = document.title.slice(0, -suffix.length);
       }
@@ -59,8 +60,9 @@ export function applyControlUiPresentation(params: {
     stripe.setAttribute("aria-hidden", "true");
     document.body.prepend(stripe);
   }
-  if (!document.title.endsWith(` · ${environment.label}`)) {
-    document.title = `${document.title} · ${environment.label}`;
+  const displayEnvironmentLabel = maskEngineName(environment.label);
+  if (!document.title.endsWith(` · ${displayEnvironmentLabel}`)) {
+    document.title = `${document.title} · ${displayEnvironmentLabel}`;
   }
 
   const color = getComputedStyle(root)
@@ -69,7 +71,7 @@ export function applyControlUiPresentation(params: {
   if (!color) {
     return;
   }
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120"><path fill="${color}" d="M60 10C30 10 15 35 15 55c0 20 15 40 30 45v10h10v-10h10v10h10v-10c15-5 30-25 30-45 0-20-15-45-45-45Z"/></svg>`;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120"><rect x="4" y="4" width="112" height="112" rx="28" fill="#0F172A"/><path d="M60 22L91 40V78L60 98L29 78V40L60 22ZM60 60L60 22M60 60L91 40M60 60L91 78M60 60L60 98M60 60L29 78M60 60L29 40" fill="none" stroke="${color}" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" opacity=".92"/><circle cx="60" cy="60" r="10" fill="#0F172A" stroke="${color}" stroke-width="3"/><circle cx="60" cy="60" r="4" fill="#F8FAFC"/><circle cx="60" cy="22" r="5.5" fill="${color}"/><circle cx="91" cy="40" r="5.5" fill="${color}"/><circle cx="91" cy="78" r="5.5" fill="${color}"/><circle cx="60" cy="98" r="5.5" fill="${color}"/><circle cx="29" cy="78" r="5.5" fill="${color}"/><circle cx="29" cy="40" r="5.5" fill="${color}"/></svg>`;
   for (const icon of document.querySelectorAll<HTMLLinkElement>('link[rel="icon"]')) {
     icon.dataset.openclawOriginalFavicon ??= JSON.stringify([
       icon.getAttribute("href"),

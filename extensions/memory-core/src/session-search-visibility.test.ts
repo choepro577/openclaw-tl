@@ -75,13 +75,16 @@ describe("filterMemorySearchHitsBySessionVisibility", () => {
         endLine: 2,
       },
     ];
+    const callGateway = vi.fn();
     const filtered = await filterMemorySearchHitsBySessionVisibility({
       cfg,
       requesterSessionKey: "agent:main:main",
       sandboxed: false,
       hits,
+      callGateway,
     });
     expect(filtered).toEqual(hits);
+    expect(callGateway).not.toHaveBeenCalled();
   });
 
   it("keeps memory but hides an unrelated same-agent session from a voice requester", async () => {

@@ -442,17 +442,39 @@ export type CodexDynamicToolBridge = {
   };
 };
 
-function normalizeAcceptedSessionSpawn(result: unknown): {
+function normalizeAcceptedSessionSpawns(result: unknown): Array<{
   runId: string;
   childSessionKey: string;
-} | null {
+}> {
   const details = asOptionalRecord(asOptionalRecord(result)?.details);
-  if (!details || details.status !== "accepted") {
-    return null;
+  if (!details) {
+    return [];
   }
-  const runId = normalizeOptionalString(details.runId);
-  const childSessionKey = normalizeOptionalString(details.childSessionKey);
-  return runId && childSessionKey ? { runId, childSessionKey } : null;
+  if (details.status === "accepted") {
+    const runId = normalizeOptionalString(details.runId);
+    const childSessionKey = normalizeOptionalString(details.childSessionKey);
+    return runId && childSessionKey ? [{ runId, childSessionKey }] : [];
+  }
+  if (!Array.isArray(details.acceptedSessionSpawns)) {
+    return [];
+  }
+  const seen = new Set<string>();
+  const accepted: Array<{ runId: string; childSessionKey: string }> = [];
+  for (const rawSpawn of details.acceptedSessionSpawns.slice(0, 3)) {
+    const spawn = asOptionalRecord(rawSpawn);
+    const runId = normalizeOptionalString(spawn?.runId);
+    const childSessionKey = normalizeOptionalString(spawn?.childSessionKey);
+    if (!runId || !childSessionKey) {
+      continue;
+    }
+    const key = `${runId}\u0000${childSessionKey}`;
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    accepted.push({ runId, childSessionKey });
+  }
+  return accepted;
 }
 
 /** Namespace attached to OpenClaw-owned dynamic tools exposed to Codex. */
@@ -470,6 +492,8 @@ const ALWAYS_DIRECT_DYNAMIC_TOOL_NAMES = new Set([
   "agents_list",
   "sessions_spawn",
   "sessions_yield",
+  "enterprise_delegate",
+  "read",
 ]);
 const EXPLICIT_MESSAGE_PROVIDER_KEYS = ["channel", "provider"];
 const EXPLICIT_MESSAGE_TARGET_KEYS = ["target", "to", "channelId"];
@@ -750,12 +774,12 @@ export function createCodexDynamicToolBridge(params: {
         });
         const resultIsError = rawIsError || isToolResultError(result);
         // A successful spawn is durable before presentation middleware can rewrite details.
-        const acceptedSessionSpawn =
-          toolName === "sessions_spawn" && !rawIsError
-            ? normalizeAcceptedSessionSpawn(telemetryRawResult)
-            : null;
-        if (acceptedSessionSpawn) {
-          telemetry.acceptedSessionSpawns.push(acceptedSessionSpawn);
+        const acceptedSessionSpawns =
+          (toolName === "sessions_spawn" || toolName === "enterprise_delegate") && !rawIsError
+            ? normalizeAcceptedSessionSpawns(telemetryRawResult)
+            : [];
+        if (acceptedSessionSpawns.length > 0) {
+          telemetry.acceptedSessionSpawns.push(...acceptedSessionSpawns);
         }
         const finalResultFailureKind = resolveToolResultFailureKind(result);
         const resultFailureKind = rawResultFailureKind ?? finalResultFailureKind;

@@ -12,7 +12,7 @@ Enterprise Knowledge Zones provide a publication and authorization boundary for 
 - One source belongs to exactly one Zone. Content-addressed storage deduplicates physical bytes only; it never grants cross-Zone access.
 - Source Versions and normalized artifacts are immutable. Updating a Note, replacing a file, or refreshing a URL creates a new version.
 - A candidate generation never replaces the active publication until a Manager or Administrator performs a revision-checked atomic publish.
-- Membership grants human access. Agent access separately requires a valid User session, current account entitlement for the canonical Agent, a current Agent-Zone binding, and an active publication.
+- Membership grants human access. Direct Agent retrieval separately requires a valid User session, current account entitlement for the canonical Agent, a current Agent-Zone binding, and an active publication.
 - The model cannot supply account IDs, Agent IDs, Zone IDs, or access revisions to retrieval tools.
 - External OCR or embedding is disabled for a Zone until an Administrator sets `external_allowed`.
 - Search results are references only. Enterprise evidence enters model context only through `enterprise_knowledge_get` after current authorization is checked again.
@@ -47,6 +47,7 @@ The publication state (`draft`, `published`, `superseded`, `archived`) is distin
 | Grant or remove Manager              | Yes           | No      | No      | No     |
 | Manage Viewer or Curator             | Yes           | Yes     | No      | No     |
 | Bind or unbind Agent                 | Yes           | No      | No      | No     |
+| Grant or revoke excerpt receiving    | Yes           | No      | No      | No     |
 | Add versions, retry, cancel, preview | Yes           | Yes     | Yes     | No     |
 | Publish or rollback                  | Yes           | Yes     | No      | No     |
 | View published content               | Yes           | Yes     | Yes     | Yes    |
@@ -55,7 +56,38 @@ The publication state (`draft`, `published`, `superseded`, `archived`) is distin
 | Manage manual relations              | Yes           | Yes     | Yes     | No     |
 | Export active Obsidian vault         | Yes           | Yes     | No      | No     |
 
-The User API hides foreign Zone and Source identifiers with `404`. User-audience endpoints never grant Manager, bind Agents, archive or purge Zones, or change provider policy.
+The User API hides foreign Zone and Source identifiers with `404`. User-audience endpoints never grant Manager, bind Agents, grant excerpt receiving, archive or purge Zones, or change provider policy.
+
+### Specialist excerpt permissions
+
+The Agent access tab separates direct Zone bindings from specialists allowed to receive relevant excerpts from the primary Agent for the current request. Both lists start empty. Selecting a specialist in either list never selects it in the other: receiving excerpts does not grant search/get tools, direct Zone access, or inherited account permissions.
+
+Administrator-only `GET /api/enterprise/admin/knowledge/:zoneId/evidence-transfers` returns `{ items, revision }`. `PUT` on the same route accepts `{ baseRevision, targetAgentResourceKeys }`, validates exact canonical shared specialist keys against active, valid configured profiles, and replaces only the excerpt grant list. An empty list revokes all excerpt permissions for that Zone. Grant/revoke and its redacted audit commit atomically and increment both Zone `revision` and `access_revision`; stale writes return `409`. Managers cannot manage this list, and Admin mutations retain exact-origin and CSRF checks.
+
+For example, an Administrator may bind the primary Agent to the Contracts Zone and allow the Contract Specialist to receive excerpts without binding that specialist directly. A grant can be configured while the Zone is still a draft, but receive-use resolution remains denied until there is a valid active publication. Archived Zones and revoked grants cannot authorize a new transfer. The runtime additionally checks the current request, recipient authority, and Zone egress policy before delivering evidence.
+
+`enterprise_knowledge_evidence_transfer_grants` stores only Zone/target identity and creation audit metadata. It is a lazy additive table under the unchanged shared schema version; it does not modify the direct binding table or store corpus text.
+
+For hybrid assignments that require Knowledge, the primary Agent performs a
+separate private preparation using its already selected harness/model and exact
+admitted run. Its tool surface is restricted to its granted Knowledge search/get
+tools. It reads citation evidence and returns bounded exact-quote selections;
+host validation rejects invented citations, changed quotes, unrelated assignment
+IDs, and missing receive permissions. The selection and transfer packet remain
+process-only and are never added to the child task, workspace, memory, or log.
+The preparation's hidden incognito transcript and isolated native runtime are
+removed at completion. Unsupported private-preparation harnesses fail closed.
+Debug-proxy capture also blocks preparation before retrieval, rather than sending
+private excerpts through a separately capturing proxy.
+
+Preparation support is distinct from recipient support. The current Codex child
+path does not support the separate private model-context injection contract and
+fails closed before receiving a transfer packet. A successful preparation alone
+does not establish end-to-end Codex specialist handoff support. User-facing
+specialist answers can still be saved normally; this privacy boundary does not
+promise to erase an answer or evidence already shown to a user.
+
+Knowledge access changes publish process-local invalidation only after the outer shared-state transaction commits. Nested savepoint or outer transaction rollback never announces an uncommitted permission change. The notification contains only the Zone ID; consumers must recheck current authority and publication rather than treating the notification itself as authorization.
 
 ## Ingestion formats and boundaries
 
@@ -87,11 +119,13 @@ enterprise_knowledge_search({ query, maxResults?, zoneSlug? })
 enterprise_knowledge_get({ citationId })
 ```
 
-Search opens only authorized active generations and merges Zone-local results. One query vector is reused for all compatible Zones. FTS and vector results use RRF, exact-title boost, deduplication, diversity selection, and a two-hit cap per source. A failed Zone produces `partial: true` and an explicit warning. Citation IDs are signed opaque references to an exact immutable Source Version and locator.
+Search opens only authorized active generations and merges Zone-local results. One query vector is reused for all compatible Zones. FTS and vector results use RRF, exact-title boost, deduplication, diversity selection, and a two-hit cap per source. A bounded blend of accent-preserving and accent-folded query-term coverage breaks ties between independent Zone indexes; FTS considers all unique terms within the query length limit. A failed Zone produces `partial: true` and an explicit warning. Citation IDs are signed opaque references to an exact immutable Source Version and locator.
 
 ## AI Knowledge Graph v3
 
-Artifact v3 preserves structural blocks, heading/numbering hierarchy, table coordinates, bookmarks, passive hyperlinks, textual references, aliases, and exact locators before sanitization; artifacts v1/v2 remain readable and are never rewritten. Native DOCX text is parsed without OCR, while image and scan inputs use OCR only when required. A graph-enabled candidate derives `source`, visible structural `section`, canonical `entity`, `concept`, and evidence-backed `claim` nodes. Ordinary paragraphs, cells, and OCR blocks are evidence by default instead of one visible node per chunk.
+Artifact v3 preserves structural blocks, heading/numbering hierarchy, table coordinates, bookmarks, passive hyperlinks, textual references, aliases, and exact locators before sanitization; artifacts v1/v2 remain readable and are never rewritten. Native DOCX text is parsed without OCR, while image and scan inputs use OCR only when required. Every candidate derives `source`, visible structural `section`, canonical `entity`, `concept`, and evidence-backed `claim` nodes. Ordinary paragraphs, cells, and OCR blocks are evidence by default instead of one visible node per chunk.
+
+Structural graphs are always available after source processing, including when system or Zone graph enrichment is disabled. Opening an older Active or Candidate snapshot automatically derives its missing graph from that exact snapshot, without creating a publication or changing published evidence. AI enrichment remains subject to provider, egress, and review settings.
 
 Deterministic extraction creates `source -> chapter -> article -> clause` containment and resolves exact internal references before AI runs. AI analysis is a bounded map-reduce pipeline over every structural unit: map extraction, Source and Zone canonicalization, a second relation pass constrained to the canonical catalog, bounded ANN/KNN similarity, and evidence/checksum validation. It never silently truncates at a segment count. Capacity exhaustion and provider degradation are explicit job states. Isolated enrichment has no tools or network access beyond the configured provider, must satisfy a strict schema, and every node or relation must resolve to current Source Version evidence.
 

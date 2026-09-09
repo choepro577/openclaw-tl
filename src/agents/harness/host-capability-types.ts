@@ -33,6 +33,14 @@ export type AgentHarnessHostCapabilities = Readonly<{
   version: 1;
   /** Fails closed unless this exact admitted run capability remains active. */
   assertActive: () => void;
+  /** Host-scoped plugin grants. Absence preserves normal host policy; an empty list denies all. */
+  nativePluginGrants?: () => readonly {
+    pluginName: string;
+    marketplaceName: string;
+    capabilityDigest?: string | null;
+  }[];
+  /** Presence only: a plugin without a per-request private-context contract must fail closed. */
+  privateModelContext?: Readonly<{ required: true }>;
   /** Closure-bound event sink backed by the host-owned trajectory recorder. */
   trajectory?: Readonly<{
     recordEvent: (type: string, data?: Record<string, unknown>) => void;

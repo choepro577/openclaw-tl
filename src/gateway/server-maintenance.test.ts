@@ -205,6 +205,37 @@ describe("startGatewayMaintenanceTimers", () => {
     await stopMaintenanceTimers(timers);
   });
 
+  it("prunes Enterprise delegation events at startup and then once per day", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-03-22T00:00:00Z"));
+    const runEnterpriseDelegationEventGc = vi
+      .fn(async () => ({ deletedCount: 7, retentionDays: 90 }))
+      .mockResolvedValueOnce({ deletedCount: 7, retentionDays: 90 })
+      .mockResolvedValue({ deletedCount: 0, retentionDays: 90 });
+    const logHealth = { info: vi.fn(), error: vi.fn() };
+    const { startGatewayMaintenanceTimers } = await import("./server-maintenance.js");
+    const timers = startGatewayMaintenanceTimers({
+      ...createMaintenanceTimerDeps(),
+      getRuntimeConfig: () => ({ enterprise: { enabled: true } }),
+      logHealth,
+      runEnterpriseDelegationEventGc,
+    });
+
+    await vi.advanceTimersByTimeAsync(0);
+    expect(runEnterpriseDelegationEventGc).toHaveBeenCalledTimes(1);
+    expect(logHealth.info).toHaveBeenCalledWith(
+      "enterprise delegation event cleanup completed: deleted=7 retentionDays=90",
+    );
+
+    await vi.advanceTimersByTimeAsync(24 * 60 * 60_000 - 60_000);
+    expect(runEnterpriseDelegationEventGc).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(runEnterpriseDelegationEventGc).toHaveBeenCalledTimes(2);
+    expect(logHealth.error).not.toHaveBeenCalled();
+
+    await stopMaintenanceTimers(timers);
+  });
+
   it("runs playback cache cleanup at startup and hourly without an attachment ttl", async () => {
     vi.useFakeTimers();
     const { startGatewayMaintenanceTimers } = await import("./server-maintenance.js");

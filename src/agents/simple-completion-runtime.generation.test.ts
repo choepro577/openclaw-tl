@@ -1,4 +1,5 @@
 import { beforeEach, expect, it, vi } from "vitest";
+import { markGatewayRequestScopedRuntimeConfig } from "../gateway/request-runtime-config.js";
 import type { Model } from "../llm/types.js";
 import type { resolveModelAsync } from "./embedded-agent-runner/model.js";
 import { AuthStorage, ModelRegistry } from "./sessions/index.js";
@@ -221,6 +222,25 @@ it("selects an explicit agent completion model before runtime acquisition", asyn
     expect.objectContaining({ catalogMode: "static" }),
   );
   expect(modelResolver).toHaveBeenCalledOnce();
+});
+
+it("keeps a synthetic account projection when preparing a router completion", async () => {
+  const cfg = markGatewayRequestScopedRuntimeConfig({ agents: { entries: { "personal-a": {} } } });
+  mocks.getApiKeyForModel.mockResolvedValue({
+    apiKey: "ollama-local",
+    source: "local marker",
+    mode: "api-key",
+  });
+  await prepareSimpleCompletionModelForAgent({
+    cfg,
+    agentId: "personal-a",
+    modelRef: "ollama/qwen3:0.6b",
+    modelResolver: createOllamaModelResolver(),
+  });
+  expect(mocks.acquireRuntimeLease).toHaveBeenCalledWith(
+    expect.objectContaining({ config: cfg, agentId: "personal-a", preserveConfigOnRefresh: true }),
+    expect.objectContaining({ catalogMode: "static" }),
+  );
 });
 
 it("acquires the canonical manifest-derived utility model selection", async () => {

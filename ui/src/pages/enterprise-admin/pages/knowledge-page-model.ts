@@ -1,3 +1,4 @@
+import { kak } from "../../../i18n/enterprise-admin-knowledge.ts";
 import type {
   EnterpriseKnowledgeGraphSettings,
   EnterpriseKnowledgeZone,
@@ -44,7 +45,7 @@ export function emptyKnowledgeZoneDraft(): KnowledgeZoneDraft {
     slug: "",
     description: "",
     egressPolicy: "local_only",
-    graphEnabled: false,
+    graphEnabled: true,
     graphEnrichmentEnabled: true,
     graphAutoApprovalThreshold: 0.92,
     agentResourceKeys: [],
@@ -82,22 +83,22 @@ export function validateKnowledgeZoneDraft(draft: KnowledgeZoneDraft): Knowledge
   const errors: KnowledgeZoneFormErrors = {};
   const name = draft.name.trim();
   if (!name) {
-    errors.name = "Nhập tên vùng tri thức.";
+    errors.name = kak("zoneNameRequired");
   } else if (new TextEncoder().encode(name).byteLength > 160) {
-    errors.name = "Tên không được vượt quá 160 byte.";
+    errors.name = kak("zoneNameTooLong");
   }
   if (!/^[a-z0-9][a-z0-9-]{1,62}[a-z0-9]$/.test(draft.slug.trim())) {
-    errors.slug = "Slug phải có 3–64 ký tự thường, số hoặc dấu gạch ngang.";
+    errors.slug = kak("slugInvalid");
   }
   if (draft.description.length > 4_000) {
-    errors.description = "Mô tả không được vượt quá 4.000 ký tự.";
+    errors.description = kak("descriptionTooLong");
   }
   if (
     !Number.isFinite(draft.graphAutoApprovalThreshold) ||
     draft.graphAutoApprovalThreshold < 0.92 ||
     draft.graphAutoApprovalThreshold > 1
   ) {
-    errors.graphAutoApprovalThreshold = "Ngưỡng tự duyệt phải nằm trong khoảng 0,92–1,00.";
+    errors.graphAutoApprovalThreshold = kak("thresholdInvalid");
   }
   return errors;
 }

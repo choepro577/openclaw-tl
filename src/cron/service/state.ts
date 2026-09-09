@@ -161,6 +161,8 @@ export type CronServiceDeps = {
   runSchedulerOwned?: <T>(run: () => Promise<T>) => Promise<T>;
   requestHeartbeat: (opts: HeartbeatWakeRequest) => void;
   runHeartbeatOnce?: (opts?: {
+    /** Account-owned monitor requiring a request-scoped runtime configuration. */
+    job?: CronJob;
     source?: HeartbeatWakeRequest["source"];
     intent?: HeartbeatWakeRequest["intent"];
     reason?: string;

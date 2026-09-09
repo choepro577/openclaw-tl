@@ -134,6 +134,7 @@ export type ChatThreadProps = {
   enterpriseUserUnavailable?: boolean;
   onModelSetup?: () => void;
   backgroundTasks?: BackgroundTasksProps;
+  delegationTasks?: readonly import("../../../lib/tasks/task-summary.ts").TaskSummary[];
 };
 
 type TranscriptInteractionProps = Pick<

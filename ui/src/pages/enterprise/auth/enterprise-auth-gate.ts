@@ -1,4 +1,5 @@
 import { html } from "lit";
+import { eu } from "../../../i18n/enterprise-user.ts";
 import { OpenClawLightDomElement } from "../../../lit/openclaw-element.ts";
 import "../styles/enterprise.css";
 import { shouldOpenEnterpriseLanding } from "../state/enterprise-auth-navigation.ts";
@@ -75,7 +76,7 @@ export class EnterpriseAuthGate extends OpenClawLightDomElement {
       state.phase === "authenticated"
     ) {
       return html`<main class="enterprise-auth-screen">
-        <p class="enterprise-muted">Đang khởi động OpenClaw…</p>
+        <p class="enterprise-muted">${eu("loadingPortal")}</p>
       </main>`;
     }
     if (state.phase === "error") {
@@ -83,7 +84,7 @@ export class EnterpriseAuthGate extends OpenClawLightDomElement {
         <section class="enterprise-card enterprise-stack">
           <p class="enterprise-error">${state.message}</p>
           <button class="enterprise-button" @click=${() => void enterpriseAuthStore.load()}>
-            Thử lại
+            ${eu("retry")}
           </button>
         </section>
       </main>`;

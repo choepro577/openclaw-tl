@@ -21,6 +21,7 @@ import {
   createChannelTestPluginBase,
   createTestRegistry,
 } from "../../../test-utils/channel-plugins.js";
+import { AGENT_RUN_TERMINAL_REPLY_MAX_CHARS } from "../../agent-run-terminal-reply.js";
 import type {
   EmbeddedAgentQueueMessageOptions,
   EmbeddedAgentQueueMessageOutcome,
@@ -1741,7 +1742,7 @@ describe("deliverSubagentAnnouncement completion delivery", () => {
     expect(content).toContain("Visible completion");
     expect(content).not.toContain("subagent_announce");
     expect(content).not.toContain("video_generate");
-    expect(content.length).toBeLessThanOrEqual(4_096);
+    expect(content.length).toBeLessThanOrEqual(AGENT_RUN_TERMINAL_REPLY_MAX_CHARS);
   });
 
   it("reports direct completion delivery before post-send transcript mirroring settles", async () => {
@@ -4374,6 +4375,45 @@ describe("deliverSubagentAnnouncement completion delivery", () => {
       to: "dm:U123",
     });
     expect(agentParams.sourceReplyDeliveryMode).toBeUndefined();
+  });
+
+  it("accepts a yielded requester's visible transcript final in Web Chat", async () => {
+    const callGateway = createGatewayMock({
+      result: {
+        payloads: [{ text: "The consolidated Web Chat answer." }],
+        deliveryStatus: { status: "suppressed", succeeded: true, resultCount: 0 },
+      },
+    });
+    testing.setDepsForTest({
+      callGateway,
+      getRequesterSessionActivity: () => ({
+        sessionId: "requester-session-webchat",
+        isActive: false,
+      }),
+      getRuntimeConfig: () => ({}) as never,
+    });
+
+    const result = await deliverSubagentAnnouncement({
+      requesterSessionKey: "agent:main:dashboard:session-webchat",
+      targetRequesterSessionKey: "agent:main:dashboard:session-webchat",
+      triggerMessage: "all spawned subagents settled",
+      steerMessage: "all spawned subagents settled",
+      requesterOrigin: { channel: "webchat" },
+      requesterSessionOrigin: { channel: "webchat" },
+      directOrigin: { channel: "webchat" },
+      requesterIsSubagent: false,
+      expectsCompletionMessage: false,
+      requireDirectDelivery: true,
+      requireVisibleReply: true,
+      directIdempotencyKey: "announce-requester-settle-webchat",
+      sourceTool: "subagent_announce",
+    });
+
+    expect(result).toMatchObject({ delivered: true, path: "direct" });
+    expectGatewayAgentParams(callGateway, {
+      deliver: false,
+      channel: "webchat",
+    });
   });
 
   it.each([

@@ -839,7 +839,7 @@ describe("config form renderer", () => {
     expect(descriptions.some((description) => description?.includes("nested-default"))).toBe(false);
   });
 
-  it("renders section help when the top-level hint has a docs URL", () => {
+  it("keeps inline section help without an external guide link", () => {
     const container = document.createElement("div");
     render(
       renderConfigForm({
@@ -858,13 +858,7 @@ describe("config form renderer", () => {
       "section help button",
     );
     expect(button.getAttribute("aria-label")).toBe("Help for Gateway");
-    const link = expectElement(
-      container.querySelector<HTMLAnchorElement>(".settings-section__help-popover a"),
-      "section guide link",
-    );
-    expect(link.getAttribute("href")).toBe("https://docs.openclaw.ai/gateway/configuration");
-    expect(link.getAttribute("target")).toBe("_blank");
-    expect(link.getAttribute("rel")).toBe("noopener noreferrer");
+    expect(container.querySelector(".settings-section__help-popover a")).toBeNull();
   });
 
   it("omits section help when the top-level hint has no docs URL", () => {

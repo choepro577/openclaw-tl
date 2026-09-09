@@ -29,6 +29,7 @@ import {
   resetDiagnosticTracePropagationForTest,
   shouldPrepareDiagnosticTracePropagation,
 } from "./diagnostic-trace-propagation.js";
+import { isPrivateRunObservationScope } from "./private-run-observations.js";
 import { isBlockedObjectKey } from "./prototype-keys.js";
 
 export type DiagnosticSessionState = "idle" | "processing" | "waiting";
@@ -1349,26 +1350,38 @@ function emitDiagnosticEventWithTrust(
   trusted: boolean,
   options: EmitDiagnosticEventOptions = {},
 ) {
+  let observedEvent = event;
+  let observedOptions = options;
+  if (isPrivateRunObservationScope()) {
+    // Action enforcement keeps its canonical security audit, without free-form
+    // payload-bearing annotations. Private preparation has no public telemetry.
+    if (event.type !== "security.event") {
+      return;
+    }
+    const { reason: _reason, attributes: _attributes, ...securityMetadata } = event;
+    observedEvent = securityMetadata;
+    observedOptions = { ...options, privateData: undefined };
+  }
   const state = getDiagnosticEventsState();
-  if (trusted && isToolExecutionEventInput(event)) {
-    dispatchTrustedToolExecutionEvent(state, event);
+  if (trusted && isToolExecutionEventInput(observedEvent)) {
+    dispatchTrustedToolExecutionEvent(state, observedEvent);
   }
   if (!state.enabled) {
     return;
   }
-  if (event.type === "security.event" && options.allowSecurityEvent !== true) {
+  if (observedEvent.type === "security.event" && observedOptions.allowSecurityEvent !== true) {
     return;
   }
 
-  const enriched = enrichDiagnosticEvent(state, event);
-  const { hostPluginId, internal = false, privateData } = options;
-  const trustedTraceContext = options.trustedTraceContext === true;
+  const enriched = enrichDiagnosticEvent(state, observedEvent);
+  const { hostPluginId, internal = false, privateData } = observedOptions;
+  const trustedTraceContext = observedOptions.trustedTraceContext === true;
   const metadata: InternalDiagnosticEventMetadata = {
     ...(internal ? createInternalDiagnosticMetadata(trusted) : { trusted }),
-    ...(options.coreModelRequestLifecycle
-      ? { [CORE_MODEL_REQUEST_LIFECYCLE_METADATA_KEY]: options.coreModelRequestLifecycle }
+    ...(observedOptions.coreModelRequestLifecycle
+      ? { [CORE_MODEL_REQUEST_LIFECYCLE_METADATA_KEY]: observedOptions.coreModelRequestLifecycle }
       : {}),
-    ...(options.coreSemanticRunProgress === true
+    ...(observedOptions.coreSemanticRunProgress === true
       ? { [CORE_SEMANTIC_RUN_PROGRESS_METADATA_KEY]: true }
       : {}),
     ...(trustedTraceContext ? { trustedTraceContext } : {}),
@@ -1479,6 +1492,9 @@ export function emitTrustedSkillUsedDiagnosticEvent(
   event: TrustedSkillUsedEventInput,
   privateData?: DiagnosticEventPrivateData,
 ) {
+  if (isPrivateRunObservationScope()) {
+    return;
+  }
   const state = getDiagnosticEventsState();
   if (state.enabled) {
     emitDiagnosticEventWithTrust(event, true, { privateData });

@@ -1,5 +1,5 @@
-import "../../styles/approval.css";
 import { consume } from "@lit/context";
+import "../../styles/approval.css";
 import { isRecord } from "@openclaw/normalization-core/record-coerce";
 import { html, nothing, type PropertyValues } from "lit";
 import { property, state } from "lit/decorators.js";
@@ -21,6 +21,7 @@ import {
 } from "../../app/context.ts";
 import { readGatewayOperatorAccess } from "../../app/operator-access.ts";
 import { controlUiPublicAssetPath } from "../../app/public-assets.ts";
+import { maskEngineName } from "../../branding/display-brand.ts";
 import { i18n, t } from "../../i18n/index.ts";
 import { OpenClawLightDomElement } from "../../lit/openclaw-element.ts";
 const APPROVAL_POLL_INTERVAL_MS = 2_000;
@@ -738,7 +739,7 @@ export class ApprovalPage extends OpenClawLightDomElement {
                   : t("approvalPage.execTitle")
                 : terminalTitle(this.approval, this.resolutionOrigin)
               : t("approvalPage.loadingTitle");
-    const title = `${pageTitle} — ${t("approvalPage.brandName")}`;
+    const title = `${maskEngineName(pageTitle)} — ${t("approvalPage.brandName")}`;
     document.title = title;
     this.activeDocumentTitle = title;
   }

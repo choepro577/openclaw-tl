@@ -101,6 +101,17 @@ function lastMockCallArg(mock: ReturnType<typeof vi.fn>, argIndex = 0) {
 type ChatHistoryTestRole = "assistant" | "custom" | "system" | "toolResult" | "user";
 type ChatHistoryTestMessage = Record<string, unknown>;
 
+const nonVisibleErrorContents = [
+  {
+    name: "stream-error placeholder",
+    content: [{ type: "text", text: STREAM_ERROR_FALLBACK_TEXT }],
+  },
+  { name: "empty content", content: [] },
+  { name: "whitespace content", content: [{ type: "text", text: " \n " }] },
+  { name: "thinking-only content", content: [{ type: "thinking", thinking: "private reasoning" }] },
+  { name: "reasoning-only content", content: [{ type: "reasoning", text: "private reasoning" }] },
+];
+
 function textHistoryMessage(
   role: ChatHistoryTestRole,
   text: string,
@@ -1457,70 +1468,99 @@ describe("projectRecentChatDisplayMessages", () => {
     expect(JSON.stringify(result)).not.toContain("secret.internal.example");
   });
 
-  it("drops a repaired stream-error placeholder before same-turn assistant content", () => {
-    const result = projectRecentChatDisplayMessages([
-      userHistoryMessage("hello", { timestamp: 1 }),
-      assistantHistoryMessage(STREAM_ERROR_FALLBACK_TEXT, {
-        stopReason: "error",
-        errorMessage: "provider failed before content",
-        timestamp: 2,
-      }),
-      assistantHistoryMessage("actual fallback response", { timestamp: 3 }),
-    ]);
+  it.each(nonVisibleErrorContents)(
+    "drops repaired $name before same-turn assistant content",
+    ({ content }) => {
+      const result = projectRecentChatDisplayMessages([
+        userHistoryMessage("hello", { timestamp: 1 }),
+        assistantHistoryMessage(STREAM_ERROR_FALLBACK_TEXT, {
+          content,
+          stopReason: "error",
+          errorMessage: "provider failed before content",
+          timestamp: 2,
+        }),
+        assistantHistoryMessage("actual fallback response", { timestamp: 3 }),
+      ]);
 
-    expect(result).toEqual([
-      userHistoryMessage("hello", { timestamp: 1 }),
-      assistantHistoryMessage("actual fallback response", { timestamp: 3 }),
-    ]);
-  });
+      expect(result).toEqual([
+        userHistoryMessage("hello", { timestamp: 1 }),
+        assistantHistoryMessage("actual fallback response", { timestamp: 3 }),
+      ]);
+    },
+  );
 
-  it("keeps a genuine failed turn before a new forwarded inter-session turn", () => {
-    const result = projectRecentChatDisplayMessages([
-      assistantHistoryMessage(STREAM_ERROR_FALLBACK_TEXT, {
-        stopReason: "error",
-        timestamp: 1,
-      }),
-      sessionsSendHistoryMessage("forwarded update", 2),
-      assistantHistoryMessage("actual fallback response", { timestamp: 3 }),
-    ]);
+  it.each(nonVisibleErrorContents)(
+    "keeps failed $name before a new forwarded inter-session turn",
+    ({ content }) => {
+      const result = projectRecentChatDisplayMessages([
+        assistantHistoryMessage(STREAM_ERROR_FALLBACK_TEXT, {
+          content,
+          stopReason: "error",
+          timestamp: 1,
+        }),
+        sessionsSendHistoryMessage("forwarded update", 2),
+        assistantHistoryMessage("actual fallback response", { timestamp: 3 }),
+      ]);
 
-    expect(result).toHaveLength(3);
-    expect(result[0]).toMatchObject(
-      assistantHistoryMessage("The agent run failed before producing a reply."),
-    );
-    expect(result[1]).toMatchObject(assistantHistoryMessage("forwarded update"));
-    expect(result[2]).toMatchObject(assistantHistoryMessage("actual fallback response"));
-  });
+      expect(result).toHaveLength(3);
+      expect(result[0]).toMatchObject(
+        assistantHistoryMessage("The agent run failed before producing a reply."),
+      );
+      expect(result[1]).toMatchObject(assistantHistoryMessage("forwarded update"));
+      expect(result[2]).toMatchObject(assistantHistoryMessage("actual fallback response"));
+    },
+  );
 
-  it("keeps genuine stream-error failures when a hidden assistant row has text", () => {
-    const result = projectRecentChatDisplayMessages([
-      assistantHistoryMessage(STREAM_ERROR_FALLBACK_TEXT, { stopReason: "error" }),
-      assistantHistoryMessage("internal-only assistant content", { display: false }),
-    ]);
+  it.each(nonVisibleErrorContents)(
+    "keeps failed $name when a hidden assistant row has text",
+    ({ content }) => {
+      const result = projectRecentChatDisplayMessages([
+        assistantHistoryMessage(STREAM_ERROR_FALLBACK_TEXT, { content, stopReason: "error" }),
+        assistantHistoryMessage("internal-only assistant content", { display: false }),
+      ]);
 
-    expect(result).toEqual([
-      assistantHistoryMessage("The agent run failed before producing a reply.", {
-        stopReason: "error",
-      }),
-    ]);
-  });
+      expect(result).toEqual([
+        assistantHistoryMessage("The agent run failed before producing a reply.", {
+          stopReason: "error",
+        }),
+      ]);
+    },
+  );
 
-  it("keeps a stream-error placeholder when the next user turn starts first", () => {
-    const result = projectRecentChatDisplayMessages([
-      assistantHistoryMessage(STREAM_ERROR_FALLBACK_TEXT, { stopReason: "error", timestamp: 1 }),
-      userHistoryMessage("retry", { timestamp: 2 }),
-      assistantHistoryMessage("fresh answer", { timestamp: 3 }),
-    ]);
+  it.each(nonVisibleErrorContents)(
+    "keeps failed $name when the next user turn starts first",
+    ({ content }) => {
+      const result = projectRecentChatDisplayMessages([
+        assistantHistoryMessage(STREAM_ERROR_FALLBACK_TEXT, {
+          content,
+          stopReason: "error",
+          timestamp: 1,
+        }),
+        userHistoryMessage("retry", { timestamp: 2 }),
+        assistantHistoryMessage("fresh answer", { timestamp: 3 }),
+      ]);
 
-    expect(result).toEqual([
-      assistantHistoryMessage("The agent run failed before producing a reply.", {
-        stopReason: "error",
-        timestamp: 1,
-      }),
-      userHistoryMessage("retry", { timestamp: 2 }),
-      assistantHistoryMessage("fresh answer", { timestamp: 3 }),
-    ]);
-  });
+      expect(result).toEqual([
+        assistantHistoryMessage("The agent run failed before producing a reply.", {
+          stopReason: "error",
+          timestamp: 1,
+        }),
+        userHistoryMessage("retry", { timestamp: 2 }),
+        assistantHistoryMessage("fresh answer", { timestamp: 3 }),
+      ]);
+    },
+  );
+
+  it.each(["Partial answer before interruption", "The agent run failed before producing a reply."])(
+    "keeps actual assistant error text %j before a later same-turn answer",
+    (text) => {
+      const messages = [
+        assistantHistoryMessage(text, { stopReason: "error", timestamp: 1 }),
+        assistantHistoryMessage("continued answer", { timestamp: 2 }),
+      ];
+      expect(projectRecentChatDisplayMessages(messages)).toEqual(messages);
+    },
+  );
 
   it("projects sessions_send inter-session turns as forwarded assistant-side display messages", () => {
     const result = projectRecentChatDisplayMessages([

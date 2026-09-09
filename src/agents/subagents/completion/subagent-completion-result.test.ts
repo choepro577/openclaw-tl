@@ -1,7 +1,17 @@
 import { describe, expect, it } from "vitest";
+import { buildAgentRunTerminalReplySnapshot } from "../../agent-run-terminal-reply.js";
 import { resolveSubagentCompletionResultText } from "./subagent-completion-result.js";
 
 describe("resolveSubagentCompletionResultText", () => {
+  it("keeps a complete specialist roster in terminal evidence", () => {
+    const result = `${"employee row\n".repeat(1_800)}complete-tail`;
+
+    expect(buildAgentRunTerminalReplySnapshot({ visibleText: result })).toEqual({
+      disposition: "visible",
+      text: result,
+    });
+  });
+
   it.each([
     {
       name: "visible",

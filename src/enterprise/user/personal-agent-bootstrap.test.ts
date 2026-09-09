@@ -5,7 +5,10 @@ import { closeOpenClawStateDatabaseForTest } from "../../state/openclaw-state-db
 import { withOpenClawTestState } from "../../test-utils/openclaw-test-state.js";
 import { createEnterpriseAccount } from "../accounts/account-store.js";
 import { hashEnterprisePassword } from "../auth/password.js";
-import { appendEnterpriseUserAgentBootstrap } from "./personal-agent-bootstrap.js";
+import {
+  appendEnterpriseUserAgentBootstrap,
+  buildEnterpriseDelegationTurnPrompt,
+} from "./personal-agent-bootstrap.js";
 import { createPersonalAgentKnowledge } from "./personal-agent-knowledge-store.js";
 import { writePersonalAgentProfile } from "./personal-agent-profile-store.js";
 import { writeSharedAgentRelationship } from "./shared-agent-relationship-store.js";
@@ -13,6 +16,56 @@ import { writeSharedAgentRelationship } from "./shared-agent-relationship-store.
 afterEach(() => closeOpenClawStateDatabaseForTest());
 
 describe("Enterprise Personal Agent bootstrap", () => {
+  it("binds routing instructions to the current turn, not the workspace or observer run", () => {
+    const metadata = {
+      enterpriseDelegation: {
+        accountId: "a",
+        personalAgentId: "personal-a",
+        specialists: [],
+        request: { sessionKey: "session-a", parentRunId: "turn-1" },
+        turn: {
+          outcome: "delegate" as const,
+          source: "explicit" as const,
+          agentNames: ["HR"],
+          decisionId: "first-token",
+          instruction: "Delegate using first-token",
+          reasonCode: "ready",
+        },
+      },
+    };
+    const config = markGatewayRequestScopedRuntimeConfig({}, metadata);
+    const context = { config, agentId: "personal-a", sessionKey: "session-a", runId: "turn-1" };
+    const first = buildEnterpriseDelegationTurnPrompt(context);
+    expect(first).toContain("first-token");
+    expect(first).toContain("Follow the authorized enterprise_delegate tool description");
+    expect(first).not.toContain("sessions_yield");
+    expect(first).toContain("including unverified pagination");
+    expect(first).toContain("do not relabel a grade as a job title");
+    expect(first).toContain("A local routing outcome does not authorize an alternate source");
+    expect(first).toContain("After cancellation, ambiguous assent must clarify the intended task");
+    expect(first).not.toContain("host-owned execution");
+    expect(first).not.toContain("enterprise_delegate accepts");
+    expect(first).toContain(
+      "sourced company rules, calculations, proposals, and points needing confirmation",
+    );
+    expect(first).toContain("warranty");
+    expect(first).toContain("Do not invent an exception");
+    for (const overrides of [
+      { agentId: "shared" },
+      { sessionKey: "session-b" },
+      { runId: "observer" },
+      { runId: undefined },
+    ]) {
+      expect(buildEnterpriseDelegationTurnPrompt({ ...context, ...overrides })).toBe("");
+    }
+    metadata.enterpriseDelegation.request.parentRunId = "turn-2";
+    metadata.enterpriseDelegation.turn.instruction = "Ask which task to handle first";
+    expect(buildEnterpriseDelegationTurnPrompt(context)).toBe("");
+    const next = buildEnterpriseDelegationTurnPrompt({ ...context, runId: "turn-2" });
+    expect(next).toContain("Ask which task");
+    expect(next).not.toContain("first-token");
+  });
+
   it("injects account personalization only into the synthetic Personal runtime", async () => {
     await withOpenClawTestState({ scenario: "minimal", applyEnv: true }, async (state) => {
       const account = createEnterpriseAccount({
@@ -47,6 +100,7 @@ describe("Enterprise Personal Agent bootstrap", () => {
             accountId: account.id,
             displayName: account.displayName,
             personalAgentId: "personal-user-a",
+            personalAgentTemplateId: "main",
           },
         },
       );
@@ -116,6 +170,7 @@ describe("Enterprise Personal Agent bootstrap", () => {
                 accountId: account.id,
                 displayName: account.displayName,
                 personalAgentId: `personal-${account.id}`,
+                personalAgentTemplateId: "main",
               },
             },
           ),

@@ -14,9 +14,11 @@ const CONFIG: OpenClawConfig = {
 
 afterEach(() => closeOpenClawStateDatabaseForTest());
 
-async function server(): Promise<{ server: Server; baseUrl: string }> {
+async function server(
+  config: OpenClawConfig = CONFIG,
+): Promise<{ server: Server; baseUrl: string }> {
   const instance = createServer((req, res) => {
-    void handleEnterpriseHttpRequest(req, res, CONFIG).then((handled) => {
+    void handleEnterpriseHttpRequest(req, res, config).then((handled) => {
       if (!handled && !res.writableEnded) {
         res.statusCode = 404;
         res.end();
@@ -88,6 +90,187 @@ async function login(
 }
 
 describe("Enterprise Knowledge HTTP role contract", () => {
+  it("lets only Admin grant and revoke excerpt transfers without granting direct Zone access", async () => {
+    await withOpenClawTestState({ scenario: "minimal", applyEnv: true }, async () => {
+      const password = "knowledge-transfer-password";
+      const passwordHash = await hashEnterprisePassword(password);
+      createEnterpriseAccount({
+        username: "knowledge.transfer.admin",
+        displayName: "Transfer Admin",
+        passwordHash,
+        role: "administrator",
+        mustChangePassword: false,
+      });
+      const manager = createEnterpriseAccount({
+        username: "knowledge.transfer.manager",
+        displayName: "Transfer Manager",
+        passwordHash,
+        role: "employee",
+        mustChangePassword: false,
+      });
+      const config: OpenClawConfig = {
+        ...CONFIG,
+        agents: {
+          entries: {
+            contracts: {
+              description: "Review contracts, obligations and contractual risks for employees.",
+              delegationTarget: {
+                status: "active",
+                aliases: [],
+                handlingMode: "auto_when_certain",
+                useWhen: ["Review contractual obligations", "Assess liability and penalty clauses"],
+                avoidWhen: [],
+                requiredInputs: [],
+              },
+            },
+            ordinary: {},
+            disabled: {
+              delegationTarget: {
+                status: "disabled",
+                aliases: [],
+                handlingMode: "explicit_only",
+                useWhen: ["Review disabled specialist"],
+                avoidWhen: [],
+                requiredInputs: [],
+              },
+            },
+          },
+        },
+      };
+      const running = await server(config);
+      try {
+        const adminAuth = await login(
+          running.baseUrl,
+          "admin",
+          "knowledge.transfer.admin",
+          password,
+        );
+        const managerAuth = await login(
+          running.baseUrl,
+          "user",
+          "knowledge.transfer.manager",
+          password,
+        );
+        const created = await request(running.baseUrl, "/api/enterprise/admin/knowledge", {
+          method: "POST",
+          ...adminAuth,
+          idempotencyKey: "create-transfer-zone",
+          body: { slug: "transfer-zone", name: "Transfer Zone" },
+        });
+        expect(created.status).toBe(201);
+        const { zone } = (await created.json()) as {
+          zone: { id: string; revision: number; accessRevision: number };
+        };
+        const path = `/api/enterprise/admin/knowledge/${zone.id}/evidence-transfers`;
+        const initial = await request(running.baseUrl, path, adminAuth);
+        expect(initial.status).toBe(200);
+        expect(await initial.json()).toEqual({ items: [], revision: zone.revision });
+
+        const grant = await request(running.baseUrl, path, {
+          method: "PUT",
+          ...adminAuth,
+          body: {
+            baseRevision: zone.revision,
+            targetAgentResourceKeys: ["agent:shared:contracts"],
+          },
+        });
+        expect(grant.status).toBe(200);
+        const granted = (await grant.json()) as {
+          zone: { revision: number; accessRevision: number };
+          items: string[];
+        };
+        expect(granted.items).toEqual(["agent:shared:contracts"]);
+        expect(granted.zone.revision).toBe(zone.revision + 1);
+        expect(granted.zone.accessRevision).toBe(zone.accessRevision + 1);
+        const bindings = await request(
+          running.baseUrl,
+          `/api/enterprise/admin/knowledge/${zone.id}/agents`,
+          adminAuth,
+        );
+        expect(await bindings.json()).toEqual({ items: [], revision: granted.zone.revision });
+        const listed = await request(running.baseUrl, path, adminAuth);
+        expect(await listed.json()).toEqual({
+          items: granted.items,
+          revision: granted.zone.revision,
+        });
+
+        const stale = await request(running.baseUrl, path, {
+          method: "PUT",
+          ...adminAuth,
+          body: { baseRevision: zone.revision, targetAgentResourceKeys: [] },
+        });
+        expect(stale.status).toBe(409);
+        for (const target of [
+          "agent:personal:employee",
+          "agent:shared:missing",
+          "agent:shared:ordinary",
+          "agent:shared:disabled",
+          "contracts",
+        ]) {
+          const invalid = await request(running.baseUrl, path, {
+            method: "PUT",
+            ...adminAuth,
+            body: { baseRevision: granted.zone.revision, targetAgentResourceKeys: [target] },
+          });
+          expect(invalid.status, target).toBe(422);
+        }
+        const badCsrf = await request(running.baseUrl, path, {
+          method: "PUT",
+          cookie: adminAuth.cookie,
+          body: { baseRevision: granted.zone.revision, targetAgentResourceKeys: [] },
+        });
+        expect(badCsrf.status).toBe(403);
+        const foreignAudience = await request(running.baseUrl, path, managerAuth);
+        expect(foreignAudience.status).toBe(401);
+        const membership = await request(
+          running.baseUrl,
+          `/api/enterprise/admin/knowledge/${zone.id}/members`,
+          {
+            method: "PUT",
+            ...adminAuth,
+            body: {
+              baseRevision: granted.zone.revision,
+              members: [{ accountId: manager.id, role: "manager" }],
+            },
+          },
+        );
+        expect(membership.status).toBe(200);
+        const memberBody = (await membership.json()) as {
+          zone: { revision: number; accessRevision: number };
+        };
+        for (const method of ["GET", "PUT"]) {
+          const denied = await request(
+            running.baseUrl,
+            `/api/enterprise/user/v2/knowledge/${zone.id}/evidence-transfers`,
+            {
+              method,
+              ...managerAuth,
+              ...(method === "PUT"
+                ? { body: { baseRevision: memberBody.zone.revision, targetAgentResourceKeys: [] } }
+                : {}),
+            },
+          );
+          expect(denied.status).toBe(403);
+        }
+        const revoked = await request(running.baseUrl, path, {
+          method: "PUT",
+          ...adminAuth,
+          body: { baseRevision: memberBody.zone.revision, targetAgentResourceKeys: [] },
+        });
+        expect(revoked.status).toBe(200);
+        expect(await revoked.json()).toMatchObject({
+          items: [],
+          zone: {
+            revision: memberBody.zone.revision + 1,
+            accessRevision: memberBody.zone.accessRevision + 1,
+          },
+        });
+      } finally {
+        await closeServer(running.server);
+      }
+    });
+  });
+
   it("separates audiences, hides foreign Zones and enforces Admin/Manager/Curator/Viewer actions", async () => {
     await withOpenClawTestState({ scenario: "minimal", applyEnv: true }, async () => {
       const password = "knowledge-http-password";
@@ -211,6 +394,7 @@ describe("Enterprise Knowledge HTTP role contract", () => {
           { cookie: adminAuth.cookie },
         );
         expect(adminGraphSettings.status).toBe(200);
+        expect(await adminGraphSettings.json()).toMatchObject({ settings: { enabled: true } });
         const userGraphSettings = await request(
           running.baseUrl,
           `/api/enterprise/user/v2/knowledge/${zoneId}/graph/settings`,

@@ -6,10 +6,13 @@ import {
 } from "./attempt-client-cleanup.js";
 import { consumeCodexAppServerLiveThread } from "./client-runtime.js";
 import type { CodexAppServerClient } from "./client.js";
+import { collectCodexNativePluginMcpServerOwnersFromPolicyContext } from "./native-plugin-grants.js";
 import { applyCodexNativeSkillIsolation } from "./native-skill-isolation.js";
 import {
   buildCodexPluginAppsConfigPatchFromPolicyContext,
+  collectCodexPluginAppIdsFromPolicyContext,
   mergeCodexThreadConfigs,
+  type CodexPluginThreadConfig,
 } from "./plugin-thread-config.js";
 import type { JsonObject } from "./protocol.js";
 import type {
@@ -48,6 +51,7 @@ type CodexWarmThreadReuseParams = {
   startModelSelection: ReturnType<typeof resolveCodexAppServerThreadModelSelection>;
   throwIfAborted: () => void;
   userMcpServersConfigPatch?: JsonObject;
+  prebuiltPluginThreadConfig?: CodexPluginThreadConfig;
 };
 
 type CodexWarmThreadReuseResult = {
@@ -133,6 +137,18 @@ export async function tryReuseCodexLiveThread(
     throwIfAborted,
     userMcpServersConfigPatch,
   } = options;
+  const pluginAppPolicyContext =
+    options.prebuiltPluginThreadConfig?.policyContext ?? binding.pluginAppPolicyContext;
+  const admittedCodexPluginAppIds =
+    collectCodexPluginAppIdsFromPolicyContext(pluginAppPolicyContext);
+  const nativePluginMcpServerOwners =
+    options.prebuiltPluginThreadConfig?.nativePluginMcpServerOwners ??
+    (pluginAppPolicyContext
+      ? collectCodexNativePluginMcpServerOwnersFromPolicyContext(pluginAppPolicyContext)
+      : undefined);
+  const admittedCodexPluginMcpServerNames = nativePluginMcpServerOwners?.map(
+    (owner) => owner.serverName,
+  );
 
   if (
     !binding.clientId ||
@@ -150,6 +166,12 @@ export async function tryReuseCodexLiveThread(
   const prebuiltFinalConfigPatch = params.buildFinalConfigPatch?.({
     action: "resume",
     binding,
+    ...(nativePluginMcpServerOwners
+      ? {
+          nativePluginMcpServerOwners,
+        }
+      : {}),
+    ...(pluginAppPolicyContext ? { pluginAppPolicyContext } : {}),
   }) ?? {
     configPatch: params.finalConfigPatch,
     nativeHookRelayGeneration: params.nativeHookRelayGeneration,
@@ -183,6 +205,13 @@ export async function tryReuseCodexLiveThread(
       webSearchAllowed: params.webSearchAllowed,
       hostSystemAgentActive,
       restrictedToolSurfaceInheritedMcpServerNames,
+      ...(pluginAppPolicyContext
+        ? {
+            admittedCodexPluginAppIds,
+            admittedCodexPluginMcpServerNames,
+            nativeHookRelayConfig: prebuiltFinalConfigPatch.configPatch,
+          }
+        : {}),
       shellEnvironment: params.shellEnvironment,
       disableLoginShell: params.disableLoginShell,
     }),

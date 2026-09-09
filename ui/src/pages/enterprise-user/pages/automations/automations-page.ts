@@ -11,6 +11,7 @@ import {
 } from "../../../../components/settings-ui.ts";
 import { renderSettingsWorkspace } from "../../../../components/settings-workspace.ts";
 import { eu } from "../../../../i18n/enterprise-user.ts";
+import { i18n } from "../../../../i18n/index.ts";
 import { OpenClawLightDomElement } from "../../../../lit/openclaw-element.ts";
 import type { UserAutomation } from "../../contracts/user-automation.ts";
 import {
@@ -19,11 +20,19 @@ import {
   runUserAutomation,
   updateUserAutomation,
 } from "../../services/user-enterprise-api.ts";
+import { calendarScheduleLabel } from "./automation-schedule.ts";
 
 function scheduleLabel(item: UserAutomation): string {
-  return item.schedule.kind === "once"
-    ? eu("automationOnceAt", { time: new Date(item.schedule.at).toLocaleString() })
-    : eu("automationEvery", { minutes: String(item.schedule.everyMinutes) });
+  if (item.schedule.kind === "once") {
+    return eu("automationOnceAt", {
+      time: new Date(item.schedule.at).toLocaleString(i18n.getLocale()),
+    });
+  }
+  if (item.schedule.kind === "interval") {
+    return eu("automationEvery", { minutes: String(item.schedule.everyMinutes) });
+  }
+  const label = calendarScheduleLabel(item.schedule);
+  return item.schedule.tz ? `${label} · ${item.schedule.tz}` : label;
 }
 
 export class UserAutomationsPage extends OpenClawLightDomElement {
@@ -128,47 +137,53 @@ export class UserAutomationsPage extends OpenClawLightDomElement {
                   renderSettingsRow({
                     title: item.name,
                     description: html`${scheduleLabel(item)} ·
-                    ${item.agentAccess === "removed"
-                      ? html`<strong>${eu("automationAgentRemoved")}</strong>`
-                      : item.enabled
-                        ? eu("automationEnabled")
-                        : eu("automationDisabled")}
+                    ${item.readOnly
+                      ? eu("automationReadOnly")
+                      : item.agentAccess === "removed"
+                        ? html`<strong>${eu("automationAgentRemoved")}</strong>`
+                        : item.enabled
+                          ? eu("automationEnabled")
+                          : eu("automationDisabled")}
                     ${item.nextRunAt
                       ? html` ·
-                        ${eu("automationNext", { time: new Date(item.nextRunAt).toLocaleString() })}`
+                        ${eu("automationNext", {
+                          time: new Date(item.nextRunAt).toLocaleString(i18n.getLocale()),
+                        })}`
                       : nothing}
                     ${item.lastResult
                       ? html` · ${eu("automationLast", { result: item.lastResult })}`
                       : nothing}`,
-                    control: html`<div>
-                      <button class="btn" type="button" @click=${() => this.edit(item.id)}>
-                        ${eu("edit")}
-                      </button>
-                      <button
-                        class="btn"
-                        type="button"
-                        ?disabled=${this.busyId === item.id || item.agentAccess === "removed"}
-                        @click=${() => void this.toggle(item)}
-                      >
-                        ${item.enabled ? eu("disable") : eu("enable")}
-                      </button>
-                      <button
-                        class="btn"
-                        type="button"
-                        ?disabled=${this.busyId === item.id || item.agentAccess === "removed"}
-                        @click=${() => void this.run(item)}
-                      >
-                        ${eu("automationRunNow")}
-                      </button>
-                      <button
-                        class="btn danger"
-                        type="button"
-                        ?disabled=${this.busyId === item.id}
-                        @click=${() => void this.removeAutomation(item)}
-                      >
-                        ${eu("delete")}
-                      </button>
-                    </div>`,
+                    control: item.readOnly
+                      ? nothing
+                      : html`<div>
+                          <button class="btn" type="button" @click=${() => this.edit(item.id)}>
+                            ${eu("edit")}
+                          </button>
+                          <button
+                            class="btn"
+                            type="button"
+                            ?disabled=${this.busyId === item.id || item.agentAccess === "removed"}
+                            @click=${() => void this.toggle(item)}
+                          >
+                            ${item.enabled ? eu("disable") : eu("enable")}
+                          </button>
+                          <button
+                            class="btn"
+                            type="button"
+                            ?disabled=${this.busyId === item.id || item.agentAccess === "removed"}
+                            @click=${() => void this.run(item)}
+                          >
+                            ${eu("automationRunNow")}
+                          </button>
+                          <button
+                            class="btn danger"
+                            type="button"
+                            ?disabled=${this.busyId === item.id}
+                            @click=${() => void this.removeAutomation(item)}
+                          >
+                            ${eu("delete")}
+                          </button>
+                        </div>`,
                   }),
                 )
               : html`<div class="settings-empty">${eu("automationEmpty")}</div>`,

@@ -48,6 +48,7 @@ vi.mock("../../infra/provider-usage.load.js", () => ({
 import {
   clearModelAuthStatusUsageCache,
   readProviderUsageStaleWhileRevalidate,
+  readUsageStatusStaleWhileRevalidate,
 } from "./models-auth-status-usage-cache.js";
 import { getProviderUsageRuntimeSnapshot } from "./provider-usage-runtime.js";
 import { usageHandlers } from "./usage.js";
@@ -146,6 +147,40 @@ describe("usage.status provider usage cache", () => {
       providers: Array<{ accountEmail?: string }>;
     };
     expect(result.providers[0]?.accountEmail).toBe("configured@example.com");
+  });
+
+  it("returns a cold non-blocking snapshot while the provider refresh runs", async () => {
+    let finishRefresh!: (summary: UsageSummary) => void;
+    mocks.loadProviderUsageSummary.mockReturnValueOnce(
+      new Promise<UsageSummary>((resolve) => {
+        finishRefresh = resolve;
+      }),
+    );
+
+    expect(readUsageStatusStaleWhileRevalidate({ config, now })).toEqual({
+      updatedAt: now,
+      providers: [],
+      refreshing: true,
+    });
+    expect(mocks.loadProviderUsageSummary).not.toHaveBeenCalled();
+
+    await vi.waitFor(() => expect(mocks.loadProviderUsageSummary).toHaveBeenCalledTimes(1));
+    finishRefresh({
+      updatedAt: now,
+      providers: [
+        {
+          provider: "openai",
+          displayName: "OpenAI",
+          windows: [{ label: "5h", usedPercent: 25 }],
+        },
+      ],
+    });
+
+    await vi.waitFor(() =>
+      expect(readUsageStatusStaleWhileRevalidate({ config, now })).toMatchObject({
+        providers: [{ provider: "openai" }],
+      }),
+    );
   });
 
   it("reuses byte-identical results within 60s and refreshes stale data in the background", async () => {

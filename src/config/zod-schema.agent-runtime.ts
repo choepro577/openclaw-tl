@@ -899,11 +899,35 @@ export const AgentModelPolicySchema = z
   })
   .strict();
 
-export const AgentEntrySchema = z
+const DelegationTargetTextSchema = z.string().trim().min(5).max(240);
+
+const AgentDelegationTargetSchema = z
+  .object({
+    status: z.enum(["draft", "active", "disabled"]),
+    aliases: z.array(z.string().trim().min(1).max(64)).max(20),
+    handlingMode: z.enum(["auto_when_certain", "confirm_before_handoff", "explicit_only"]),
+    useWhen: z.array(DelegationTargetTextSchema).max(20),
+    avoidWhen: z.array(DelegationTargetTextSchema).max(20),
+    requiredInputs: z
+      .array(
+        z
+          .object({
+            id: z.string().regex(/^[a-z][a-z0-9_-]{0,63}$/),
+            label: z.string().trim().min(1).max(80),
+            question: z.string().trim().min(5).max(240),
+          })
+          .strict(),
+      )
+      .max(20),
+  })
+  .strict();
+
+export const AgentEntryBaseSchema = z
   .object({
     id: z.string(),
     name: z.string().optional(),
     description: z.string().optional(),
+    delegationTarget: AgentDelegationTargetSchema.optional(),
     workspace: z.string().optional(),
     agentDir: z.string().optional(),
     model: AgentModelSchema.optional(),
@@ -960,6 +984,57 @@ export const AgentEntrySchema = z
     runtime: AgentRuntimeSchema,
   })
   .strict();
+
+export function validateAgentDelegationTarget(
+  value: Pick<z.infer<typeof AgentEntryBaseSchema>, "description" | "delegationTarget">,
+  ctx: z.RefinementCtx,
+): void {
+  const target = value.delegationTarget;
+  if (!target) {
+    return;
+  }
+  const duplicate = (values: readonly string[]) =>
+    values.find(
+      (item, index) =>
+        values.findIndex(
+          (candidate) => candidate.toLocaleLowerCase() === item.toLocaleLowerCase(),
+        ) !== index,
+    );
+  if (duplicate(target.aliases)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["delegationTarget", "aliases"],
+      message: "delegationTarget aliases must be unique",
+    });
+  }
+  if (duplicate(target.useWhen)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["delegationTarget", "useWhen"],
+      message: "delegationTarget useWhen examples must be unique",
+    });
+  }
+  if (target.status !== "active") {
+    return;
+  }
+  const description = value.description?.trim() ?? "";
+  if (description.length < 20 || description.length > 500) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["description"],
+      message: "active delegationTarget requires a 20-500 character description",
+    });
+  }
+  if (target.useWhen.length < 2) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["delegationTarget", "useWhen"],
+      message: "active delegationTarget requires at least two useWhen examples",
+    });
+  }
+}
+
+export const AgentEntrySchema = AgentEntryBaseSchema.superRefine(validateAgentDelegationTarget);
 
 export const ToolsSchema = z
   .object({

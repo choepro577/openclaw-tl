@@ -9,9 +9,14 @@ import { resolveAgentDir } from "openclaw/plugin-sdk/agent-runtime";
 import {
   createDiagnosticTraceContextFromActiveScope,
   freezeDiagnosticTraceContext,
+  isPrivateRunObservationScope,
   resolveDiagnosticModelContentCapturePolicy,
 } from "openclaw/plugin-sdk/diagnostic-runtime";
 import { loadExecApprovals } from "openclaw/plugin-sdk/exec-approvals-runtime";
+import {
+  isDebugProxyGlobalFetchPatchInstalled,
+  resolveDebugProxySettings,
+} from "openclaw/plugin-sdk/proxy-capture";
 import { resolveCodexAppServerForModelProvider } from "./app-server-policy.js";
 import {
   resolveCodexAppServerAuthProfileId,
@@ -57,11 +62,14 @@ import { rotateOversizedCodexAppServerStartupBinding } from "./startup-binding.j
 
 export async function prepareCodexAttemptConnection({ params, options }: CodexRunAttemptInput) {
   const attemptStartedAt = Date.now();
-  const profilerEnabled = isCodexAppServerProfilerEnabled(params.config);
+  const privatePreparation = isPrivateRunObservationScope();
+  const profilerEnabled = !privatePreparation && isCodexAppServerProfilerEnabled(params.config);
   const codexModelCallTrace = freezeDiagnosticTraceContext(
     createDiagnosticTraceContextFromActiveScope(),
   );
-  const codexModelContentCapture = resolveDiagnosticModelContentCapturePolicy(params.config);
+  const codexModelContentCapture = resolveDiagnosticModelContentCapturePolicy(
+    privatePreparation ? undefined : params.config,
+  );
   const codexModelCallId = `${params.runId}:codex-model:1`;
   const fastModeAutoStartedAtMs =
     typeof params.fastModeStartedAtMs === "number" && Number.isFinite(params.fastModeStartedAtMs)
@@ -104,11 +112,12 @@ export async function prepareCodexAttemptConnection({ params, options }: CodexRu
           workspaceDir: resolvedWorkspace,
         });
   // Upstream cannot remove registered environments, so node leases own one disposable client.
-  const attemptClientFactory =
-    options.clientFactory ??
-    (isCodexPairedNodeRemoteExecPlacementSandbox(sandbox)
-      ? createIsolatedCodexAppServerClient
-      : getLeasedSharedCodexAppServerClient);
+  const attemptClientFactory = privatePreparation
+    ? createIsolatedCodexAppServerClient
+    : (options.clientFactory ??
+      (isCodexPairedNodeRemoteExecPlacementSandbox(sandbox)
+        ? createIsolatedCodexAppServerClient
+        : getLeasedSharedCodexAppServerClient));
   preDynamicStartupStages.mark("sandbox");
   const execPolicy = resolveOpenClawExecPolicyForCodexAppServer({
     // Explicit modes replace legacy fields; full also replaces approval-file floors.
@@ -360,7 +369,17 @@ export async function prepareCodexAttemptConnection({ params, options }: CodexRu
       env: process.env,
       agentDir,
     });
-    return { session, appServer: withPreparedProcessEnv(trusted) };
+    const appServer = withPreparedProcessEnv(trusted);
+    // Child-process capture escapes the host ALS scope. Check the actual launch
+    // environment, including configured/prepared overlays, before creating it.
+    if (
+      privatePreparation &&
+      (resolveDebugProxySettings({ ...process.env, ...appServer.start.env }).enabled ||
+        isDebugProxyGlobalFetchPatchInstalled())
+    ) {
+      throw new Error("PRIVATE_PREPARATION_CAPTURE_UNAVAILABLE");
+    }
+    return { session, appServer };
   };
   let resolvedAppServer = resolveFinalAppServer(configuredAppServer, reviewerPolicyContext);
   let appServer = resolvedAppServer.appServer;

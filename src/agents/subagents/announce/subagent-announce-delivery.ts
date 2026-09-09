@@ -31,9 +31,9 @@ import {
   summarizeDeliveryError,
 } from "./subagent-announce-delivery-retry.js";
 import {
-  getSubagentAnnounceRuntimeConfig,
   loadRequesterSessionEntry,
   loadSessionEntryByKey,
+  resolveSubagentAnnounceRuntimeConfig,
   setSubagentAnnounceDeliveryDepsForTest,
   type SubagentAnnounceDeliveryDeps,
 } from "./subagent-announce-delivery.runtime.js";
@@ -115,7 +115,7 @@ export async function deliverSubagentAnnouncement(params: {
   let durableQueueClaimed = false;
   if (durableGeneratedMediaHandoff) {
     try {
-      const cfg = getSubagentAnnounceRuntimeConfig();
+      const cfg = resolveSubagentAnnounceRuntimeConfig(params.resolveGatewayContext);
       const canonicalSessionKey = resolveRequesterStoreKey(
         cfg,
         params.targetRequesterSessionKey,
@@ -136,6 +136,7 @@ export async function deliverSubagentAnnouncement(params: {
       const requesterEntry = loadRequesterSessionEntry(
         params.targetRequesterSessionKey,
         params.requesterAgentId,
+        cfg,
       ).entry;
       // No external route exists for an internal-only handoff. Let the normal
       // agent final enter the owning transcript instead of requiring a message tool target.
@@ -229,12 +230,15 @@ export async function deliverSubagentAnnouncement(params: {
         return { status: "source_owner_changed" };
       }
       return await maybeSteerSubagentAnnounce({
-        deliveryTimeoutMs: resolveSubagentAnnounceTimeoutMs(getSubagentAnnounceRuntimeConfig()),
+        deliveryTimeoutMs: resolveSubagentAnnounceTimeoutMs(
+          resolveSubagentAnnounceRuntimeConfig(params.resolveGatewayContext),
+        ),
         requesterSessionKey: params.requesterSessionKey,
         requesterAgentId: params.requesterAgentId,
         steerMessage: params.steerMessage,
         signal: params.signal,
         isSourceSessionEffectsAllowed: params.isSourceSessionEffectsAllowed,
+        resolveGatewayContext: params.resolveGatewayContext,
       });
     },
     direct: async () => {

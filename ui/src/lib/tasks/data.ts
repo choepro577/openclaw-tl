@@ -184,11 +184,18 @@ export function normalizeTasksListResult(
   };
 }
 
-export function normalizeTasksGetResult(value: unknown): TaskSummary | null {
+export function normalizeTasksGetDetailResult(
+  value: unknown,
+): { task: TaskSummary; toolMessages: unknown[] } | null {
   if (!Value.Check(TasksGetResultSchema, value)) {
     return null;
   }
-  return normalizeTaskSummary(value.task);
+  const task = normalizeTaskSummary(value.task);
+  return task ? { task, toolMessages: value.toolMessages ?? [] } : null;
+}
+
+export function normalizeTasksGetResult(value: unknown): TaskSummary | null {
+  return normalizeTasksGetDetailResult(value)?.task ?? null;
 }
 
 // The ledger pages newest-first, so one page can hide long-running tasks behind

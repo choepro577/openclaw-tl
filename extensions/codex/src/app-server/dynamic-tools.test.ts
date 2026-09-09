@@ -735,6 +735,26 @@ describe("createCodexDynamicToolBridge", () => {
     expect(bridge.resultContentSourceForTool("message")).toBeUndefined();
   });
 
+  it("exposes authorized delegation and skill reading without a discovery round", () => {
+    const bridge = createCodexDynamicToolBridge({
+      tools: [createTool({ name: "enterprise_delegate" }), createTool({ name: "read" })],
+      signal: new AbortController().signal,
+      loading: "searchable",
+    });
+    const specs = flattenSpecsWithNamespace(bridge.specs);
+    expect(specs.map((tool) => tool.name)).toEqual(["enterprise_delegate", "read"]);
+    for (const spec of specs) {
+      expectNoNamespace(spec);
+      expect(spec.deferLoading).not.toBe(true);
+    }
+    const denied = createCodexDynamicToolBridge({
+      tools: [],
+      signal: new AbortController().signal,
+      loading: "searchable",
+    });
+    expect(denied.specs).toEqual([]);
+  });
+
   it("keeps configured direct tools in the initial Codex tool context", () => {
     const bridge = createCodexDynamicToolBridge({
       tools: [createTool({ name: "message" }), createTool({ name: "web_search" })],
@@ -999,6 +1019,34 @@ describe("createCodexDynamicToolBridge", () => {
     expect(result).toEqual(expectInputText("Child launch recorded."));
     expect(bridge.telemetry.acceptedSessionSpawns).toEqual([
       { runId: "run_compacted", childSessionKey: "child-compacted" },
+    ]);
+  });
+
+  it("tracks all managed enterprise_delegate children for sessions_yield settlement", async () => {
+    const bridge = createBridgeWithToolResult(
+      "enterprise_delegate",
+      textToolResult("Delegation started.", {
+        outcome: "delegated",
+        acceptedSessionSpawns: [
+          { runId: "run-contract", childSessionKey: "agent:contract:subagent:one" },
+          { runId: "run-finance", childSessionKey: "agent:finance:subagent:two" },
+        ],
+      }),
+    );
+
+    const result = await bridge.handleToolCall({
+      threadId: "thread-1",
+      turnId: "turn-1",
+      callId: "call-managed-delegate",
+      namespace: null,
+      tool: "enterprise_delegate",
+      arguments: { decisionId: "server-issued" },
+    });
+
+    expect(result.success).toBe(true);
+    expect(bridge.telemetry.acceptedSessionSpawns).toEqual([
+      { runId: "run-contract", childSessionKey: "agent:contract:subagent:one" },
+      { runId: "run-finance", childSessionKey: "agent:finance:subagent:two" },
     ]);
   });
 

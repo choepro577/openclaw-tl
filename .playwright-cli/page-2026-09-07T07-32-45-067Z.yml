@@ -1,0 +1,20 @@
+- main [ref=f2e4]:
+  - generic [ref=f2e5]:
+    - generic [ref=f2e8]:
+      - strong [ref=f2e9]: MAAP
+      - generic [ref=f2e10]: MAAP Admin
+    - generic [ref=f2e11]:
+      - generic [ref=f2e12]: Language
+      - combobox "Language" [ref=f2e13]:
+        - option "Tiếng Việt"
+        - option "English" [selected]
+    - heading "Administrator sign-in" [level=1] [ref=f2e14]
+    - paragraph [ref=f2e15]: Only administrator accounts can access this portal.
+    - generic [ref=f2e16]:
+      - generic [ref=f2e17]:
+        - text: Username
+        - textbox "Username" [active] [ref=f2e18]
+      - generic [ref=f2e19]:
+        - text: Password
+        - textbox "Password" [ref=f2e20]
+      - button "Sign in as administrator" [ref=f2e21]

@@ -5,6 +5,9 @@
  * copies instead of reusing host-path snapshots.
  */
 import path from "node:path";
+import type { OpenClawConfig } from "../../config/types.openclaw.js";
+import { buildSkillSnapshot } from "../../skills/loading/workspace-skill-prompt.js";
+import { resolveEmbeddedRunSkillEntries } from "../../skills/runtime/embedded-run-entries.js";
 import type {
   SkillEligibilityContext,
   SkillSnapshot,
@@ -21,6 +24,54 @@ type SandboxSkillRuntimeContext = Pick<SandboxContext, "enabled"> &
       "skillsEligibility" | "skillsWorkspaceDir" | "containerWorkdir" | "workspaceAccess"
     >
   >;
+
+/** Prepares the skill catalog passed to a plugin-owned harness. */
+export function resolveHarnessSkillSnapshot(params: {
+  sandbox?: SandboxSkillRuntimeContext | null;
+  skillsAnchorWorkspace: string;
+  skillsSnapshot?: SkillSnapshot;
+  config?: OpenClawConfig;
+  agentId?: string;
+}): SkillSnapshot | undefined {
+  if (
+    !params.sandbox?.enabled &&
+    (!params.skillsSnapshot || params.skillsSnapshot.resolvedSkills)
+  ) {
+    return params.skillsSnapshot;
+  }
+  const inputs = resolveSandboxSkillRuntimeInputs(params);
+  const eligibility =
+    inputs.skillsEligibility ??
+    (params.skillsSnapshot?.nodeSkillsEligibility
+      ? { nodeSkills: params.skillsSnapshot.nodeSkillsEligibility }
+      : undefined);
+  const { skillEntries, preserveEntryOrder } = resolveEmbeddedRunSkillEntries({
+    workspaceDir: inputs.skillsWorkspaceDir,
+    skillsSnapshot: inputs.skillsSnapshot,
+    config: params.config,
+    agentId: params.agentId,
+    eligibility,
+    workspaceOnly: inputs.workspaceOnly,
+  });
+  const grantedNames = params.skillsSnapshot
+    ? new Set(params.skillsSnapshot.skills.map((skill) => skill.name))
+    : undefined;
+  const entries = mapSandboxSkillEntriesForPrompt({
+    entries: skillEntries.filter((entry) => !grantedNames || grantedNames.has(entry.skill.name)),
+    skillsWorkspaceDir: inputs.skillsWorkspaceDir,
+    skillsPromptWorkspaceDir: inputs.skillsPromptWorkspaceDir,
+  });
+  return buildSkillSnapshot(inputs.skillsPromptWorkspaceDir, {
+    entries,
+    config: params.config,
+    agentId: params.agentId,
+    eligibility,
+    skillFilter: params.skillsSnapshot?.skillFilter,
+    skillOverrides: params.skillsSnapshot?.skillOverrides,
+    snapshotVersion: params.skillsSnapshot?.version,
+    preserveEntryOrder,
+  });
+}
 
 function containerJoin(root: string, ...parts: string[]): string {
   const normalizedRoot = root.replace(/\\/g, "/").replace(/\/+$/, "") || "/";

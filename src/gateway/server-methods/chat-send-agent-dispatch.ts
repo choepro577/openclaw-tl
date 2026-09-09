@@ -7,14 +7,25 @@ import {
 import { ErrorCodes, errorShape } from "../../../packages/gateway-protocol/src/index.js";
 import { resolveProviderIdForAuth } from "../../agents/provider-auth-aliases.js";
 import { dispatchInboundMessageWithProjectedDispatcher } from "../../auto-reply/dispatch.js";
+import { hasPendingFollowupQueueWork } from "../../auto-reply/reply/queue/state.js";
+import { createReplyDispatcher } from "../../auto-reply/reply/reply-dispatcher.js";
 import type { ReplyMessageInjectionAttempt } from "../../auto-reply/reply/reply-run-registry.js";
+import { readRecentSessionTranscriptActiveEvents } from "../../config/sessions/session-accessor.js";
+import {
+  enterpriseDelegationConversationInputs,
+  enterpriseDelegationConversationResults,
+} from "../../enterprise/delegation/delegation-router-context.js";
+import { prepareEnterpriseDelegationTurn } from "../../enterprise/delegation/delegation-router.js";
 import { measureDiagnosticsTimelineSpan } from "../../infra/diagnostics-timeline.js";
+import { normalizeAgentId } from "../../routing/session-key.js";
+import { isCompetingSessionWorkAdmissionActive } from "../../sessions/session-lifecycle-admission.js";
 import type { SkillWorkshopProposalRevisionConstraint } from "../../skills/workshop/types.js";
 import { isOperatorUiClient } from "../../utils/message-channel.js";
 import { setGatewayDedupeEntry } from "../agent-turn/agent-job.js";
 import { updateChatRunProvider } from "../chat-abort.js";
 import { discardPreparedInboundMedia } from "../chat-attachments.js";
 import { chatRunBelongsToSelectedAgent } from "../chat-run-owner.js";
+import { readGatewayRequestRuntimeMetadata } from "../request-runtime-config.js";
 import type { ChatRunTiming } from "../server-chat-state.js";
 import { tryResolveSessionCompatibilityOwnerAgentId } from "../session-request-agent.js";
 import { broadcastChatError, broadcastChatFinal } from "./chat-broadcast.js";
@@ -81,6 +92,28 @@ type StartChatDispatchParams = {
   turn: ReturnType<typeof prepareChatSendUserTurn>;
   userTurn: ReturnType<typeof createGatewayChatUserTurnController>;
 };
+
+function resolveEnterpriseClarificationQuestion(
+  session: Pick<PreparedChatSendSession, "cfg" | "agentId" | "sessionKey" | "clientRunId">,
+): string | undefined {
+  const metadata = readGatewayRequestRuntimeMetadata(session.cfg);
+  const user = metadata?.enterpriseUser;
+  const delegation = metadata?.enterpriseDelegation;
+  if (
+    !user ||
+    !delegation ||
+    !session.agentId ||
+    user.accountId !== delegation.accountId ||
+    normalizeAgentId(user.personalAgentId) !== normalizeAgentId(session.agentId) ||
+    normalizeAgentId(delegation.personalAgentId) !== normalizeAgentId(session.agentId) ||
+    delegation.request?.sessionKey !== session.sessionKey ||
+    delegation.request.parentRunId !== session.clientRunId ||
+    delegation.turn?.outcome !== "clarify"
+  ) {
+    return undefined;
+  }
+  return delegation.turn.clarificationQuestion?.trim() || undefined;
+}
 
 export function startChatDispatch(params: StartChatDispatchParams): void {
   const {
@@ -240,6 +273,68 @@ export function startChatDispatch(params: StartChatDispatchParams): void {
             }
           }
           applyChatSendManagedMedia(ctx, await pluginBoundMediaPromise);
+          if (request.turnKind === "main" && !request.stopCommand) {
+            const delegation = readGatewayRequestRuntimeMetadata(cfg)?.enterpriseDelegation;
+            const transcriptEvents =
+              delegation &&
+              backingSessionId &&
+              normalizeAgentId(delegation.personalAgentId) === normalizeAgentId(agentId)
+                ? readRecentSessionTranscriptActiveEvents(
+                    {
+                      agentId,
+                      sessionKey,
+                      sessionId: backingSessionId,
+                      storePath: session.storePath,
+                    },
+                    128,
+                  )
+                : undefined;
+            const conversationInputs = transcriptEvents
+              ? enterpriseDelegationConversationInputs(transcriptEvents)
+              : undefined;
+            const conversationResults = transcriptEvents
+              ? enterpriseDelegationConversationResults(transcriptEvents)
+              : undefined;
+            await prepareEnterpriseDelegationTurn({
+              config: cfg,
+              agentId,
+              sessionKey,
+              parentRunId: clientRunId,
+              prompt: request.rawMessage,
+              conversationInputs,
+              conversationResults,
+              contextualPlanning: true,
+            });
+            const clarificationQuestion = resolveEnterpriseClarificationQuestion(session);
+            if (clarificationQuestion) {
+              activeRunAbort.controller.signal.throwIfAborted();
+              const sessionIdentities = [
+                activeRunScopeKey,
+                sessionKey,
+                backingSessionId,
+                admittedSessionId,
+              ];
+              // This shortcut owns idle questions only. Existing competing or queued
+              // turns must still pass through normal queue admission and adoption.
+              if (
+                !isCompetingSessionWorkAdmissionActive(session.storePath, sessionIdentities) &&
+                !hasPendingFollowupQueueWork(sessionIdentities)
+              ) {
+                const dispatcher = createReplyDispatcher(replyDispatch.dispatcherOptions);
+                let queuedFinal = false;
+                try {
+                  queuedFinal = dispatcher.sendFinalReply({ text: clarificationQuestion });
+                } finally {
+                  dispatcher.markComplete();
+                }
+                await dispatcher.waitForIdle();
+                activeRunAbort.controller.signal.throwIfAborted();
+                // The existing non-agent finalizer below owns user/assistant persistence,
+                // final broadcast, dedupe and the admitted run's terminal cleanup.
+                return { queuedFinal, counts: { tool: 0, block: 0, final: queuedFinal ? 1 : 0 } };
+              }
+            }
+          }
           const dispatchInbound = () =>
             dispatchInboundMessageWithProjectedDispatcher({
               ctx,

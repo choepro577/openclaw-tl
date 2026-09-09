@@ -12,6 +12,10 @@ import {
 } from "../agents/agent-run-terminal-outcome.js";
 import { isTimeoutError, resolveFailoverReasonFromError } from "../agents/failover-error.js";
 import type { FailoverReason } from "../agents/failover/signal.js";
+import {
+  INTERNAL_RUNTIME_CONTEXT_BEGIN,
+  INTERNAL_RUNTIME_CONTEXT_END,
+} from "../agents/internal-runtime-context.js";
 import { resolveToolSearchCodeDisplayTarget } from "../agents/tool-display-common.js";
 import { readToolValidationErrorSummary } from "../agents/tool-error-summary.js";
 import { DEFAULT_HEARTBEAT_ACK_MAX_CHARS, stripHeartbeatToken } from "../auto-reply/heartbeat.js";
@@ -225,6 +229,18 @@ function normalizeHeartbeatChatFinalText(params: {
  */
 const AGENT_LIFECYCLE_ERROR_RETRY_GRACE_MS = 15_000;
 const LIVE_TEXT_PACING_MS = 75;
+
+function hasUnclosedDisplayControlMarker(text: string): boolean {
+  return (
+    text.lastIndexOf(INTERNAL_RUNTIME_CONTEXT_BEGIN) >
+      text.lastIndexOf(INTERNAL_RUNTIME_CONTEXT_END) ||
+    text.lastIndexOf("<<<") > text.lastIndexOf(">>>") ||
+    text.lastIndexOf("[[") > text.lastIndexOf("]]") ||
+    text.endsWith("<") ||
+    text.endsWith("<<") ||
+    text.endsWith("[")
+  );
+}
 
 export type ChatEventBroadcast = GatewayBroadcastFn;
 
@@ -633,9 +649,7 @@ export function createAgentEventHandler({
     const clearsLastRunId =
       Object.hasOwn(lifecyclePatch, "lastRunId") && lifecyclePatch.lastRunId === undefined;
     const projectedRow = row
-      ? lifecycleProjection
-        ? buildGatewaySessionEventRow(row, { lifecycle: true })
-        : row
+      ? buildGatewaySessionEventRow(row, { lifecycle: lifecycleProjection })
       : undefined;
     const session = projectedRow
       ? {
@@ -1038,6 +1052,9 @@ export function createAgentEventHandler({
   ) => {
     const run = internalChatRunRecord(chatRunState.getOrCreate(clientRunId));
     const flush = () => {
+      if (hasUnclosedDisplayControlMarker(run.rawBuffer ?? "")) {
+        return;
+      }
       const projected = chatRunState.resolveBuffer(clientRunId);
       if (projected.suppress || shouldHideHeartbeatChatOutput(clientRunId, sourceRunId)) {
         return;
@@ -1073,14 +1090,20 @@ export function createAgentEventHandler({
     run.rawBuffer = mergedRawText;
     run.bufferUpdatedAt = now;
     const waitedMs = now - (run.deltaSentAt ?? 0);
-    if (waitedMs < LIVE_TEXT_PACING_MS) {
+    // The browser already batches paints to one animation frame. Forward its
+    // text immediately; keep pacing only for non-Control-UI channel subscribers.
+    const pacingMs =
+      opts?.controlUiVisible === false || hasUnclosedDisplayControlMarker(mergedRawText)
+        ? LIVE_TEXT_PACING_MS
+        : 0;
+    if (waitedMs < pacingMs) {
       scheduleChatDeltaFlush(
         sessionKey,
         agentId,
         clientRunId,
         sourceRunId,
         seq,
-        LIVE_TEXT_PACING_MS - waitedMs,
+        pacingMs - waitedMs,
         opts?.controlUiVisible,
       );
       return;

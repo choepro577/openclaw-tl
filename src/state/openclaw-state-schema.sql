@@ -2671,6 +2671,29 @@ CREATE TABLE IF NOT EXISTS secret_store_entries (
 CREATE INDEX IF NOT EXISTS secret_store_entries_live_idx
   ON secret_store_entries (scope_kind, scope_id, name) WHERE deleted_at_ms IS NULL;
 
+CREATE TABLE IF NOT EXISTS enterprise_agent_access_requests (
+  id TEXT NOT NULL PRIMARY KEY,
+  requester_account_id TEXT NOT NULL,
+  agent_resource_key TEXT NOT NULL,
+  agent_id TEXT NOT NULL,
+  state TEXT NOT NULL CHECK (state IN ('pending', 'approved', 'rejected', 'cancelled')),
+  reviewer_account_id TEXT,
+  decision_reason TEXT,
+  revision INTEGER NOT NULL DEFAULT 1,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL,
+  decided_at INTEGER,
+  FOREIGN KEY (requester_account_id) REFERENCES enterprise_accounts(id) ON DELETE CASCADE,
+  FOREIGN KEY (reviewer_account_id) REFERENCES enterprise_accounts(id) ON DELETE SET NULL
+) STRICT;
+CREATE INDEX IF NOT EXISTS idx_enterprise_agent_access_requests_account
+  ON enterprise_agent_access_requests(requester_account_id, agent_resource_key, updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_enterprise_agent_access_requests_admin
+  ON enterprise_agent_access_requests(state, created_at ASC);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_enterprise_agent_access_requests_pending
+  ON enterprise_agent_access_requests(requester_account_id, agent_resource_key)
+  WHERE state = 'pending';
+
 CREATE TABLE IF NOT EXISTS enterprise_knowledge_zones (
   id TEXT NOT NULL PRIMARY KEY,
   slug TEXT NOT NULL UNIQUE,
@@ -2719,6 +2742,16 @@ CREATE TABLE IF NOT EXISTS enterprise_knowledge_agent_zone_bindings (
 ) STRICT;
 CREATE INDEX IF NOT EXISTS idx_enterprise_knowledge_bindings_agent
   ON enterprise_knowledge_agent_zone_bindings(agent_resource_key, zone_id);
+
+CREATE TABLE IF NOT EXISTS enterprise_knowledge_evidence_transfer_grants (
+  zone_id TEXT NOT NULL,
+  target_agent_resource_key TEXT NOT NULL,
+  created_by_account_id TEXT,
+  created_at INTEGER NOT NULL,
+  PRIMARY KEY (zone_id, target_agent_resource_key),
+  FOREIGN KEY (zone_id) REFERENCES enterprise_knowledge_zones(id) ON DELETE CASCADE,
+  FOREIGN KEY (created_by_account_id) REFERENCES enterprise_accounts(id) ON DELETE SET NULL
+) STRICT;
 
 CREATE TABLE IF NOT EXISTS enterprise_knowledge_sources (
   id TEXT NOT NULL PRIMARY KEY,

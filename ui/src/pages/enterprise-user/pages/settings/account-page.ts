@@ -6,7 +6,8 @@ import {
   renderSettingsSection,
 } from "../../../../components/settings-ui.ts";
 import { renderSettingsWorkspace } from "../../../../components/settings-workspace.ts";
-import { eu } from "../../../../i18n/enterprise-user.ts";
+import { enterpriseErrorMessage } from "../../../../i18n/enterprise-errors.ts";
+import { eu, type EnterpriseUserCopyKey } from "../../../../i18n/enterprise-user.ts";
 import { OpenClawLightDomElement } from "../../../../lit/openclaw-element.ts";
 import { processProfileAvatar } from "../../../profile/avatar-processing.ts";
 import {
@@ -23,8 +24,9 @@ import { userBootstrapStore } from "../../state/user-bootstrap-store.ts";
 export class UserAccountPage extends OpenClawLightDomElement {
   @state() private displayName = "";
   @state() private busy = false;
-  @state() private error = "";
+  @state() private error: unknown = "";
   @state() private saved = "";
+  private errorFallback: EnterpriseUserCopyKey = "profileSaveFailed";
   private unsubscribe?: () => void;
 
   override connectedCallback(): void {
@@ -48,6 +50,7 @@ export class UserAccountPage extends OpenClawLightDomElement {
     this.busy = true;
     this.error = "";
     this.saved = "";
+    this.errorFallback = "profileSaveFailed";
     try {
       const result = await updateEnterpriseUserAccount(this.displayName.trim());
       setEnterpriseUserSessionAccount(result.account);
@@ -55,7 +58,7 @@ export class UserAccountPage extends OpenClawLightDomElement {
       await userBootstrapStore.load(true);
       this.saved = eu("displayNameSaved");
     } catch (error) {
-      this.error = error instanceof Error ? error.message : eu("profileSaveFailed");
+      this.error = error;
     } finally {
       this.busy = false;
     }
@@ -70,6 +73,7 @@ export class UserAccountPage extends OpenClawLightDomElement {
     }
     this.busy = true;
     this.error = "";
+    this.errorFallback = "avatarSaveFailed";
     try {
       const avatar = await processProfileAvatar(file);
       await updateEnterpriseUserAvatar({
@@ -78,7 +82,7 @@ export class UserAccountPage extends OpenClawLightDomElement {
       });
       this.saved = eu("avatarSaved");
     } catch (error) {
-      this.error = error instanceof Error ? error.message : eu("avatarSaveFailed");
+      this.error = error;
     } finally {
       this.busy = false;
     }
@@ -100,11 +104,12 @@ export class UserAccountPage extends OpenClawLightDomElement {
     }
     this.busy = true;
     this.error = "";
+    this.errorFallback = "passwordUpdateFailed";
     try {
       await changeEnterpriseUserPassword(currentPassword, newPassword);
       globalThis.location.reload();
     } catch (error) {
-      this.error = error instanceof Error ? error.message : eu("passwordUpdateFailed");
+      this.error = error;
       this.busy = false;
     }
   }
@@ -120,7 +125,11 @@ export class UserAccountPage extends OpenClawLightDomElement {
           <p>${eu("profileDescription")}</p>
         </div>
       </header>
-      ${this.error ? html`<div class="callout danger" role="alert">${this.error}</div>` : nothing}
+      ${this.error
+        ? html`<div class="callout danger" role="alert">
+            ${enterpriseErrorMessage(this.error, eu(this.errorFallback))}
+          </div>`
+        : nothing}
       ${this.saved ? html`<div class="callout success" role="status">${this.saved}</div>` : nothing}
       ${renderSettingsSection(
         { title: eu("account") },
@@ -167,7 +176,9 @@ export class UserAccountPage extends OpenClawLightDomElement {
           ${renderSettingsRow({
             title: eu("role"),
             description: eu("roleDescription"),
-            control: html`<span>${account?.role ?? "employee"}</span>`,
+            control: html`<span>
+              ${account?.role === "administrator" ? eu("roleAdministrator") : eu("roleEmployee")}
+            </span>`,
           })}
         `,
       )}

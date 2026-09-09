@@ -1,5 +1,14 @@
 import { html, nothing, type PropertyValues, type TemplateResult } from "lit";
 import { property, state } from "lit/decorators.js";
+import {
+  enterpriseKnowledgeGraphCopy as gk,
+  graphEdgeLabel,
+  graphNodeLabel,
+  graphOriginLabel,
+  graphReviewLabel,
+  graphStatusLabel,
+} from "../../i18n/enterprise-knowledge-graph.ts";
+import { i18n } from "../../i18n/index.ts";
 import { OpenClawLightDomElement } from "../../lit/openclaw-element.ts";
 import {
   EnterpriseApiError,
@@ -69,45 +78,8 @@ const REVIEW_STATUSES: EnterpriseKnowledgeGraphReviewStatus[] = [
   "rejected",
 ];
 
-const NODE_LABELS: Record<EnterpriseKnowledgeGraphNodeKind, string> = {
-  source: "Nguồn",
-  section: "Mục",
-  entity: "Thực thể",
-  concept: "Khái niệm",
-  claim: "Nhận định",
-};
-const EDGE_LABELS: Record<EnterpriseKnowledgeGraphEdgeKind, string> = {
-  contains: "chứa",
-  references: "tham chiếu",
-  mentions: "đề cập",
-  similar: "tương tự",
-  supports: "hỗ trợ",
-  contradicts: "mâu thuẫn",
-  supersedes: "thay thế",
-  depends_on: "phụ thuộc",
-  applies_to: "áp dụng cho",
-  custom: "tùy chỉnh",
-};
-const ORIGIN_LABELS: Record<EnterpriseKnowledgeGraphOrigin, string> = {
-  deterministic: "Xác định",
-  semantic: "Ngữ nghĩa",
-  ai: "AI",
-  manual: "Thủ công",
-};
-const REVIEW_LABELS: Record<EnterpriseKnowledgeGraphReviewStatus, string> = {
-  accepted: "Đã duyệt",
-  proposed: "Chờ duyệt",
-  rejected: "Đã từ chối",
-};
-const GRAPH_STATUS_LABELS: Record<EnterpriseKnowledgeGraphSummary["status"], string> = {
-  ready: "Sẵn sàng",
-  degraded: "Giới hạn",
-  not_built: "Chưa tạo",
-  corrupt: "Hỏng dữ liệu",
-};
-
 function message(error: unknown): string {
-  return error instanceof Error ? error.message : "Không thể tải bản đồ tri thức.";
+  return error instanceof Error ? error.message : gk("errorLoad");
 }
 
 function graphErrorMessage(error: unknown, snapshot: EnterpriseKnowledgeGraphSnapshot): string {
@@ -115,18 +87,18 @@ function graphErrorMessage(error: unknown, snapshot: EnterpriseKnowledgeGraphSna
     return message(error);
   }
   if (error.code === "PUBLICATION_NOT_FOUND") {
-    return "Zone chưa có publication đang hoạt động. Hãy publish Candidate trước khi xem Active Graph.";
+    return gk("errorPublicationNotFound");
   }
   if (error.code === "CANDIDATE_NOT_READY") {
-    return "Zone chưa có Candidate. Hãy tải nguồn lên và tạo Candidate mới.";
+    return gk("errorCandidateNotReady");
   }
   if (error.code === "GRAPH_NOT_BUILT") {
-    return snapshot === "active"
-      ? "Publication hiện tại chưa có Graph. Hãy tạo và publish một Candidate Graph mới."
-      : "Candidate hiện tại được tạo khi Knowledge Graph đang tắt. Hãy bật Graph trong Cấu hình và tạo Candidate mới.";
+    return gk("errorGraphNotBuilt", {
+      snapshot: gk(snapshot === "active" ? "snapshotActive" : "snapshotCandidate"),
+    });
   }
   if (error.code === "GRAPH_INTEGRITY_FAILED") {
-    return "Graph không vượt qua kiểm tra toàn vẹn. Hãy tạo lại Candidate và kiểm tra tác vụ lỗi.";
+    return gk("errorGraphIntegrity");
   }
   return message(error);
 }
@@ -216,6 +188,7 @@ export class OpenClawKnowledgeGraphView extends OpenClawLightDomElement {
 
   private abort?: AbortController;
   private renderer?: GraphRendererAdapter;
+  private rendererLocale = i18n.getLocale();
   private renderSequence = 0;
   private reducedMotion?: MediaQueryList;
   private themeObserver?: MutationObserver;
@@ -314,6 +287,13 @@ export class OpenClawKnowledgeGraphView extends OpenClawLightDomElement {
       this.snapshotAvailable(this.snapshot)
     ) {
       void this.loadGraph();
+    }
+    // The i18n controller requests an update without changing a Lit property. Rebuild a
+    // canvas renderer so Sigma's cached edge labels use the newly selected locale as well.
+    if (i18n.getLocale() !== this.rendererLocale) {
+      this.rendererLocale = i18n.getLocale();
+      void this.renderCanvas();
+      return;
     }
     if (changed.has("graph") || changed.has("renderMode") || changed.has("topologyMode")) {
       void this.renderCanvas();
@@ -465,7 +445,7 @@ export class OpenClawKnowledgeGraphView extends OpenClawLightDomElement {
             if (sequence !== this.renderSequence || this.renderMode === "list") {
               return;
             }
-            this.warning = "WebGL bị gián đoạn; đã chuyển sang chế độ danh sách an toàn.";
+            this.warning = gk("warningContextLost");
             this.renderMode = "list";
           },
         },
@@ -499,10 +479,10 @@ export class OpenClawKnowledgeGraphView extends OpenClawLightDomElement {
     } catch (error) {
       this.destroyRenderer();
       if (this.renderMode === "3d" && this.webGlAvailable()) {
-        this.warning = `Không thể khởi tạo 3D (${message(error)}). Đã chuyển sang đồ thị 2D.`;
+        this.warning = gk("warningRenderer3d", { error: message(error) });
         this.renderMode = "2d";
       } else {
-        this.warning = `Không thể khởi tạo WebGL (${message(error)}). Đã chuyển sang danh sách.`;
+        this.warning = gk("warningRendererWebgl", { error: message(error) });
         this.renderMode = "list";
       }
     }
@@ -612,8 +592,7 @@ export class OpenClawKnowledgeGraphView extends OpenClawLightDomElement {
         });
       }
       if (graph.nodes.length >= 500 || graph.edges.length >= 1_500 || graph.truncated) {
-        this.warning =
-          "Graph lớn đã được giới hạn trên màn hình. Chọn một node và dùng chế độ lân cận để khám phá chính xác hơn.";
+        this.warning = gk("warningTruncated");
       }
       if (this.viewMode === "local" && !localRoot && graph.nodes[0]) {
         this.localRootNodeRef = graph.nodes[0].nodeRef;
@@ -772,7 +751,7 @@ export class OpenClawKnowledgeGraphView extends OpenClawLightDomElement {
       this.currentRevision = result.zone.revision;
       this.selectedReviews = new Set();
       this.reviewNote = "";
-      this.warning = "Quyết định đã được lưu. Candidate mới đang được rebuild theo batch.";
+      this.warning = gk("warningReviewSaved");
       this.dispatchEvent(
         new CustomEvent("knowledge-graph-changed", {
           bubbles: true,
@@ -790,7 +769,7 @@ export class OpenClawKnowledgeGraphView extends OpenClawLightDomElement {
   private async createManualEdge(event: SubmitEvent): Promise<void> {
     event.preventDefault();
     if (!this.selectedNode?.evidence[0]) {
-      this.error = "Chọn node có evidence trước khi tạo quan hệ thủ công.";
+      this.error = gk("errorManualNoEvidence");
       return;
     }
     if (!(event.currentTarget instanceof HTMLFormElement)) {
@@ -800,7 +779,7 @@ export class OpenClawKnowledgeGraphView extends OpenClawLightDomElement {
     const data = new FormData(form);
     const targetNodeRef = String(data.get("targetNodeRef") ?? "");
     if (!targetNodeRef || targetNodeRef === this.selectedNode.nodeRef) {
-      this.error = "Chọn một node đích khác node nguồn.";
+      this.error = gk("errorManualSameNode");
       return;
     }
     const evidence = this.selectedNode.evidence[0];
@@ -818,7 +797,7 @@ export class OpenClawKnowledgeGraphView extends OpenClawLightDomElement {
       });
       this.currentRevision = result.zone.revision;
       form.reset();
-      this.warning = "Quan hệ thủ công đã được lưu; candidate mới đang được dựng.";
+      this.warning = gk("warningManualSaved");
       this.dispatchEvent(
         new CustomEvent("knowledge-graph-changed", {
           bubbles: true,
@@ -843,7 +822,7 @@ export class OpenClawKnowledgeGraphView extends OpenClawLightDomElement {
         this.zoneId,
         result.export.id,
       );
-      this.warning = `Vault đã sẵn sàng: ${result.export.entryCount} tệp, hết hạn sau 15 phút.`;
+      this.warning = gk("warningVaultReady", { count: String(result.export.entryCount) });
     } catch (error) {
       this.error = message(error);
     } finally {
@@ -854,7 +833,7 @@ export class OpenClawKnowledgeGraphView extends OpenClawLightDomElement {
   private setRenderMode(mode: GraphRenderMode): void {
     this.renderModeUserSelected = true;
     if (mode !== "list" && !this.webGlAvailable()) {
-      this.warning = "Thiết bị không hỗ trợ WebGL; đang giữ chế độ danh sách an toàn.";
+      this.warning = gk("warningWebglUnsupported");
       this.renderMode = "list";
       this.paused = true;
       return;
@@ -886,7 +865,7 @@ export class OpenClawKnowledgeGraphView extends OpenClawLightDomElement {
     try {
       await shell.requestFullscreen();
     } catch {
-      this.warning = "Trình duyệt không cho phép mở toàn màn hình.";
+      this.warning = gk("warningFullscreenDenied");
     }
   }
 
@@ -906,14 +885,14 @@ export class OpenClawKnowledgeGraphView extends OpenClawLightDomElement {
     if (!summary) {
       return nothing;
     }
-    return html`<div class="knowledge-graph-kpis" aria-label="Thống kê graph">
-      <span><strong>${summary.nodeCount}</strong> node</span>
-      <span><strong>${summary.edgeCount}</strong> cạnh</span>
-      <span><strong>${summary.proposedCount}</strong> chờ duyệt</span>
-      <span><strong>${summary.orphanCount}</strong> orphan</span>
-      <span><strong>${summary.componentCount}</strong> cụm</span>
+    return html`<div class="knowledge-graph-kpis" aria-label=${gk("graphStatsAria")}>
+      <span><strong>${summary.nodeCount}</strong> ${gk("labelNode")}</span>
+      <span><strong>${summary.edgeCount}</strong> ${gk("labelEdge")}</span>
+      <span><strong>${summary.proposedCount}</strong> ${gk("labelPendingReview")}</span>
+      <span><strong>${summary.orphanCount}</strong> ${gk("labelOrphan")}</span>
+      <span><strong>${summary.componentCount}</strong> ${gk("labelComponent")}</span>
       <span class="knowledge-graph-status is-${summary.status}"
-        >${GRAPH_STATUS_LABELS[summary.status]}</span
+        >${graphStatusLabel(summary.status)}</span
       >
     </div>`;
   }
@@ -925,20 +904,20 @@ export class OpenClawKnowledgeGraphView extends OpenClawLightDomElement {
     }
     if (analysis.diagnosis === "mostly_structural") {
       return html`<div class="knowledge-graph-banner" role="status">
-        <strong>Graph hiện chủ yếu là cấu trúc tài liệu.</strong>
+        <strong>${gk("analysisMostlyStructuralTitle")}</strong>
         <span>
           ${analysis.aiAnalysisStatus === "off"
-            ? "AI enrichment chưa tạo quan hệ nghiệp vụ. Hãy chạy Phân tích lại bằng AI Graph V3 trên Source Version."
-            : "Hầu hết cạnh đang là quan hệ chứa; hãy chuyển sang chế độ Quan hệ để xem entity, khái niệm và nhận định."}
+            ? gk("analysisStructuralAiOff")
+            : gk("analysisStructuralRelations")}
         </span>
       </div>`;
     }
     if (analysis.diagnosis === "ai_degraded") {
       return html`<div class="knowledge-graph-banner is-warning" role="status">
-        <strong>AI enrichment đang ở trạng thái giới hạn.</strong>
+        <strong>${gk("analysisAiDegradedTitle")}</strong>
         <span>
-          Deterministic graph vẫn dùng được. Nguyên nhân:
-          ${analysis.degradationReasons.join(", ") || "provider chưa sẵn sàng"}.
+          ${gk("analysisDeterministicAvailable")}
+          ${analysis.degradationReasons.join(", ") || gk("analysisProviderNotReady")}.
         </span>
       </div>`;
     }
@@ -972,9 +951,9 @@ export class OpenClawKnowledgeGraphView extends OpenClawLightDomElement {
   }
 
   private renderFilters(): TemplateResult {
-    return html`<aside class="knowledge-graph-filter-rail" aria-label="Bộ lọc graph">
+    return html`<aside class="knowledge-graph-filter-rail" aria-label=${gk("filterAria")}>
       <div class="knowledge-graph-filter-heading">
-        <strong>Bộ lọc</strong>
+        <strong>${gk("filterHeading")}</strong>
         <button
           class="knowledge-graph-text-button"
           type="button"
@@ -987,45 +966,45 @@ export class OpenClawKnowledgeGraphView extends OpenClawLightDomElement {
             void this.loadGraph();
           }}
         >
-          Đặt lại
+          ${gk("reset")}
         </button>
       </div>
       ${this.topologyMode === "all"
         ? this.renderMultiFilter(
-            "Loại node",
+            gk("nodeType"),
             NODE_KINDS,
             this.nodeKinds,
-            (value) => NODE_LABELS[value],
+            graphNodeLabel,
             (next) => (this.nodeKinds = next),
           )
         : nothing}
       ${this.topologyMode === "all"
         ? this.renderMultiFilter(
-            "Quan hệ",
+            gk("relationType"),
             EDGE_KINDS,
             this.edgeKinds,
-            (value) => EDGE_LABELS[value],
+            graphEdgeLabel,
             (next) => (this.edgeKinds = next),
           )
         : nothing}
       ${this.renderMultiFilter(
-        "Nguồn tạo",
+        gk("originType"),
         ORIGINS,
         this.origins,
-        (value) => ORIGIN_LABELS[value],
+        graphOriginLabel,
         (next) => (this.origins = next),
       )}
       ${this.snapshot !== "active"
         ? this.renderMultiFilter(
-            "Review",
+            gk("reviewType"),
             REVIEW_STATUSES,
             this.reviewStatuses,
-            (value) => REVIEW_LABELS[value],
+            graphReviewLabel,
             (next) => (this.reviewStatuses = next),
           )
         : nothing}
       <label class="knowledge-graph-range">
-        Confidence tối thiểu <strong>${this.minConfidence.toFixed(2)}</strong>
+        ${gk("minimumConfidence")} <strong>${this.minConfidence.toFixed(2)}</strong>
         <input
           type="range"
           min="0"
@@ -1045,8 +1024,8 @@ export class OpenClawKnowledgeGraphView extends OpenClawLightDomElement {
     const graph = this.graph;
     if (!graph?.nodes.length && !this.loading) {
       return html`<div class="knowledge-graph-empty">
-        <strong>Graph chưa có dữ liệu phù hợp</strong>
-        <span>Thử bỏ bớt bộ lọc hoặc tạo Candidate Graph mới.</span>
+        <strong>${gk("emptyGraphTitle")}</strong>
+        <span>${gk("emptyGraphHint")}</span>
       </div>`;
     }
     if (this.renderMode !== "list") {
@@ -1056,23 +1035,25 @@ export class OpenClawKnowledgeGraphView extends OpenClawLightDomElement {
           data-knowledge-graph-canvas
           data-render-mode=${this.renderMode}
           role="img"
-          aria-label=${`Bản đồ ${this.renderMode.toUpperCase()} gồm ${graph?.nodes.length ?? 0} node và ${graph?.edges.length ?? 0} cạnh. Dùng chế độ danh sách để điều hướng bằng bàn phím.`}
+          aria-label=${gk("canvasAria", {
+            mode: this.renderMode.toUpperCase(),
+            nodes: String(graph?.nodes.length ?? 0),
+            edges: String(graph?.edges.length ?? 0),
+          })}
         ></div>
         <div class="knowledge-graph-navigation-help" aria-hidden="true">
-          ${this.renderMode === "3d"
-            ? "Kéo để xoay · cuộn để zoom · kéo phải để pan"
-            : "Kéo để pan · cuộn để zoom"}
+          ${this.renderMode === "3d" ? gk("navigation3d") : gk("navigation2d")}
         </div>
       </div>`;
     }
-    return html`<div class="knowledge-graph-list" role="region" aria-label="Danh sách graph">
+    return html`<div class="knowledge-graph-list" role="region" aria-label=${gk("listAria")}>
       <table>
         <thead>
           <tr>
-            <th>Node</th>
-            <th>Loại</th>
-            <th>Nguồn</th>
-            <th>Liên kết</th>
+            <th>${gk("tableNode")}</th>
+            <th>${gk("tableType")}</th>
+            <th>${gk("tableSource")}</th>
+            <th>${gk("tableLinks")}</th>
           </tr>
         </thead>
         <tbody>
@@ -1083,14 +1064,14 @@ export class OpenClawKnowledgeGraphView extends OpenClawLightDomElement {
                   ${node.label}
                 </button>
               </td>
-              <td>${NODE_LABELS[node.kind]}</td>
+              <td>${graphNodeLabel(node.kind)}</td>
               <td>${node.sourceTitle}</td>
               <td>${node.degree}</td>
             </tr>`,
           )}
         </tbody>
       </table>
-      <h4>Quan hệ</h4>
+      <h4>${gk("relationsHeading")}</h4>
       <ul>
         ${(graph?.edges ?? []).map((edge) => {
           const source = graph?.nodes.find((node) => node.nodeRef === edge.sourceNodeRef)?.label;
@@ -1098,9 +1079,9 @@ export class OpenClawKnowledgeGraphView extends OpenClawLightDomElement {
           return html`<li>
             <button type="button" @click=${() => void this.selectEdge(edge.edgeRef)}>
               <span aria-hidden="true">${edgeSymbol(edge)}</span>
-              <strong>${source ?? "Node"}</strong> ${EDGE_LABELS[edge.kind]}
-              <strong>${target ?? "Node"}</strong> · ${REVIEW_LABELS[edge.reviewStatus]} ·
-              ${edge.confidence.toFixed(2)}
+              <strong>${source ?? gk("fallbackNode")}</strong> ${graphEdgeLabel(edge.kind)}
+              <strong>${target ?? gk("fallbackNode")}</strong> ·
+              ${graphReviewLabel(edge.reviewStatus)} · ${edge.confidence.toFixed(2)}
             </button>
           </li>`;
         })}
@@ -1114,46 +1095,48 @@ export class OpenClawKnowledgeGraphView extends OpenClawLightDomElement {
     const edgeSource = this.graph?.nodes.find((item) => item.nodeRef === edge?.sourceNodeRef);
     const edgeTarget = this.graph?.nodes.find((item) => item.nodeRef === edge?.targetNodeRef);
     const proposed = this.graph?.edges.filter((item) => item.reviewStatus === "proposed") ?? [];
-    return html`<aside class="knowledge-graph-inspector" aria-label="Chi tiết graph">
+    return html`<aside class="knowledge-graph-inspector" aria-label=${gk("inspectorAria")}>
       ${node
         ? html`<div class="knowledge-graph-inspector-heading">
               <span class="knowledge-graph-node-dot is-${node.kind}"></span>
-              <div><strong>${node.label}</strong><small>${NODE_LABELS[node.kind]}</small></div>
+              <div><strong>${node.label}</strong><small>${graphNodeLabel(node.kind)}</small></div>
               <button
                 type="button"
-                aria-label="Đóng inspector"
+                aria-label=${gk("closeInspector")}
                 @click=${() => (this.selectedNode = undefined)}
               >
                 ×
               </button>
             </div>
             ${node.aliases.length
-              ? html`<p class="knowledge-graph-aliases">Alias: ${node.aliases.join(", ")}</p>`
+              ? html`<p class="knowledge-graph-aliases">
+                  ${gk("alias")}: ${node.aliases.join(", ")}
+                </p>`
               : nothing}
             <dl class="knowledge-graph-facts">
               <div>
-                <dt>Nguồn</dt>
+                <dt>${gk("source")}</dt>
                 <dd>${node.sourceTitle}</dd>
               </div>
               <div>
-                <dt>Nguồn tạo</dt>
-                <dd>${ORIGIN_LABELS[node.origin]}</dd>
+                <dt>${gk("origin")}</dt>
+                <dd>${graphOriginLabel(node.origin)}</dd>
               </div>
               <div>
-                <dt>Confidence</dt>
+                <dt>${gk("confidence")}</dt>
                 <dd>${node.confidence.toFixed(2)}</dd>
               </div>
               <div>
-                <dt>Incoming</dt>
+                <dt>${gk("incoming")}</dt>
                 <dd>${node.incoming.length}</dd>
               </div>
               <div>
-                <dt>Outgoing</dt>
+                <dt>${gk("outgoing")}</dt>
                 <dd>${node.outgoing.length}</dd>
               </div>
             </dl>
             <details open>
-              <summary>Evidence & locator (${node.evidence.length})</summary>
+              <summary>${gk("evidenceLocator", { count: String(node.evidence.length) })}</summary>
               <div class="knowledge-graph-evidence-list">
                 ${node.evidence.map(
                   (evidence) => html`<button
@@ -1172,26 +1155,26 @@ export class OpenClawKnowledgeGraphView extends OpenClawLightDomElement {
                   class="knowledge-graph-manual"
                   @submit=${(event: SubmitEvent) => void this.createManualEdge(event)}
                 >
-                  <h4>Tạo quan hệ có evidence</h4>
-                  <p>Node nguồn: <strong>${node.label}</strong></p>
+                  <h4>${gk("manualEdgeHeading")}</h4>
+                  <p>${gk("sourceNode")}: <strong>${node.label}</strong></p>
                   <label
-                    >Node đích<select name="targetNodeRef" required>
-                      <option value="">Chọn node…</option>
+                    >${gk("targetNode")}<select name="targetNodeRef" required>
+                      <option value="">${gk("selectNode")}</option>
                       ${(this.graph?.nodes ?? [])
                         .filter((item) => item.nodeRef !== node.nodeRef)
                         .map((item) => html`<option value=${item.nodeRef}>${item.label}</option>`)}
                     </select></label
                   >
                   <label
-                    >Quan hệ<select name="edgeKind" required>
+                    >${gk("relation")}<select name="edgeKind" required>
                       ${EDGE_KINDS.filter((kind) => !["contains", "similar"].includes(kind)).map(
-                        (kind) => html`<option value=${kind}>${EDGE_LABELS[kind]}</option>`,
+                        (kind) => html`<option value=${kind}>${graphEdgeLabel(kind)}</option>`,
                       )}
                     </select></label
                   >
-                  <label>Ghi chú<input name="note" maxlength="1000" /></label>
+                  <label>${gk("note")}<input name="note" maxlength="1000" /></label>
                   <button type="submit" ?disabled=${this.loading || !node.evidence.length}>
-                    Lưu & rebuild candidate
+                    ${gk("saveAndRebuild")}
                   </button>
                 </form>`
               : nothing}`
@@ -1201,12 +1184,12 @@ export class OpenClawKnowledgeGraphView extends OpenClawLightDomElement {
                   >${edgeSymbol(edge)}</span
                 >
                 <div>
-                  <strong>${EDGE_LABELS[edge.kind]}</strong
-                  ><small>${REVIEW_LABELS[edge.reviewStatus]}</small>
+                  <strong>${graphEdgeLabel(edge.kind)}</strong
+                  ><small>${graphReviewLabel(edge.reviewStatus)}</small>
                 </div>
                 <button
                   type="button"
-                  aria-label="Đóng inspector"
+                  aria-label=${gk("closeInspector")}
                   @click=${() => {
                     this.selectedEdge = undefined;
                     this.selectedEdgeEvidence = undefined;
@@ -1216,36 +1199,35 @@ export class OpenClawKnowledgeGraphView extends OpenClawLightDomElement {
                 </button>
               </div>
               <p class="knowledge-graph-edge-path">
-                <strong>${edgeSource?.label ?? "Node nguồn"}</strong>
-                <span>${edgeSymbol(edge)} ${EDGE_LABELS[edge.kind]}</span>
-                <strong>${edgeTarget?.label ?? "Node đích"}</strong>
+                <strong>${edgeSource?.label ?? gk("fallbackSourceNode")}</strong>
+                <span>${edgeSymbol(edge)} ${graphEdgeLabel(edge.kind)}</span>
+                <strong>${edgeTarget?.label ?? gk("fallbackTargetNode")}</strong>
               </p>
               <dl class="knowledge-graph-facts">
                 <div>
-                  <dt>Nguồn tạo</dt>
-                  <dd>${ORIGIN_LABELS[edge.origin]}</dd>
+                  <dt>${gk("origin")}</dt>
+                  <dd>${graphOriginLabel(edge.origin)}</dd>
                 </div>
                 <div>
-                  <dt>Kiểm duyệt</dt>
-                  <dd>${REVIEW_LABELS[edge.reviewStatus]}</dd>
+                  <dt>${gk("reviewType")}</dt>
+                  <dd>${graphReviewLabel(edge.reviewStatus)}</dd>
                 </div>
                 <div>
-                  <dt>Confidence</dt>
+                  <dt>${gk("confidence")}</dt>
                   <dd>${edge.confidence.toFixed(2)}</dd>
                 </div>
                 <div>
-                  <dt>Snapshot</dt>
+                  <dt>${gk("snapshotLabel")}</dt>
                   <dd>${this.graphSnapshot()}</dd>
                 </div>
               </dl>
               <details open>
                 <summary>
-                  Evidence & locator (${this.selectedEdgeEvidence?.evidence.length ?? 0})
+                  ${gk("evidenceLocator", {
+                    count: String(this.selectedEdgeEvidence?.evidence.length ?? 0),
+                  })}
                 </summary>
-                <p class="knowledge-graph-help">
-                  Evidence được phân giải từ node nguồn trong cùng generation; mọi trích dẫn vẫn
-                  phải mở qua Source Version.
-                </p>
+                <p class="knowledge-graph-help">${gk("evidenceResolvedHelp")}</p>
                 <div class="knowledge-graph-evidence-list">
                   ${(this.selectedEdgeEvidence?.evidence ?? []).map(
                     (evidence) => html`<button
@@ -1261,19 +1243,18 @@ export class OpenClawKnowledgeGraphView extends OpenClawLightDomElement {
               </details>
               ${this.snapshot !== "active" && edge.reviewStatus === "proposed"
                 ? html`<button type="button" @click=${() => this.toggleReview(edge.edgeRef, true)}>
-                    Chọn cạnh này để review
+                    ${gk("selectEdgeForReview")}
                   </button>`
                 : nothing}`
           : html`<div class="knowledge-graph-inspector-empty">
-              <strong>Chọn một node hoặc cạnh</strong>
-              <span
-                >Inspector sẽ hiển thị provenance, backlink, evidence và locator OCR/parser.</span
-              >
+              <strong>${gk("emptyInspectorTitle")}</strong>
+              <span>${gk("emptyInspectorHelp")}</span>
             </div>`}
       ${this.snapshot !== "active" && this.canCandidate && proposed.length
         ? html`<section class="knowledge-graph-review">
             <div>
-              <strong>Hàng đợi kiểm duyệt</strong><span>${proposed.length} cạnh đang chờ</span>
+              <strong>${gk("reviewQueue")}</strong
+              ><span>${proposed.length} ${gk("pendingEdges")}</span>
             </div>
             <div class="knowledge-graph-review-list">
               ${proposed.map(
@@ -1289,9 +1270,9 @@ export class OpenClawKnowledgeGraphView extends OpenClawLightDomElement {
                       )}
                   />
                   <span
-                    ><strong>${edgeSymbol(reviewEdge)} ${EDGE_LABELS[reviewEdge.kind]}</strong
+                    ><strong>${edgeSymbol(reviewEdge)} ${graphEdgeLabel(reviewEdge.kind)}</strong
                     ><small
-                      >${ORIGIN_LABELS[reviewEdge.origin]} ·
+                      >${graphOriginLabel(reviewEdge.origin)} ·
                       ${reviewEdge.confidence.toFixed(2)}</small
                     ></span
                   >
@@ -1300,19 +1281,19 @@ export class OpenClawKnowledgeGraphView extends OpenClawLightDomElement {
             </div>
             <div class="knowledge-graph-review-actions">
               <select
-                aria-label="Loại quan hệ thay thế"
+                aria-label=${gk("replacementRelation")}
                 .value=${this.reviewReplacement}
                 @change=${(event: Event) =>
                   (this.reviewReplacement = graphEdgeKind(selectValue(event)))}
               >
                 ${EDGE_KINDS.map(
-                  (kind) => html`<option value=${kind}>${EDGE_LABELS[kind]}</option>`,
+                  (kind) => html`<option value=${kind}>${graphEdgeLabel(kind)}</option>`,
                 )}
               </select>
               <input
-                aria-label="Ghi chú review"
+                aria-label=${gk("reviewNote")}
                 maxlength="1000"
-                placeholder="Ghi chú…"
+                placeholder=${gk("reviewNotePlaceholder")}
                 .value=${this.reviewNote}
                 @input=${(event: Event) => (this.reviewNote = inputValue(event))}
               />
@@ -1321,14 +1302,14 @@ export class OpenClawKnowledgeGraphView extends OpenClawLightDomElement {
                 ?disabled=${!this.selectedReviews.size || this.loading}
                 @click=${() => void this.decideReviews("reject")}
               >
-                Từ chối
+                ${gk("reject")}
               </button>
               <button
                 type="button"
                 ?disabled=${!this.selectedReviews.size || this.loading}
                 @click=${() => void this.decideReviews("change_kind")}
               >
-                Đổi loại
+                ${gk("changeType")}
               </button>
               <button
                 class="is-primary"
@@ -1336,7 +1317,7 @@ export class OpenClawKnowledgeGraphView extends OpenClawLightDomElement {
                 ?disabled=${!this.selectedReviews.size || this.loading}
                 @click=${() => void this.decideReviews("approve")}
               >
-                Phê duyệt
+                ${gk("approve")}
               </button>
             </div>
           </section>`
@@ -1348,12 +1329,9 @@ export class OpenClawKnowledgeGraphView extends OpenClawLightDomElement {
     return html`<section class="knowledge-graph-shell">
       <header class="knowledge-graph-header">
         <div>
-          <span class="knowledge-graph-eyebrow">Knowledge Vault · AI Graph V3</span>
-          <h3>Bản đồ tri thức${this.zoneName ? ` · ${this.zoneName}` : ""}</h3>
-          <p>
-            Khám phá quan hệ có provenance; graph active là chỉ đọc và Agent chỉ dùng evidence đã
-            publish.
-          </p>
+          <span class="knowledge-graph-eyebrow">${gk("eyebrow")}</span>
+          <h3>${gk("title")}${this.zoneName ? ` · ${this.zoneName}` : ""}</h3>
+          <p>${gk("description")}</p>
         </div>
         ${this.canExport
           ? html`<div class="knowledge-graph-export">
@@ -1362,13 +1340,19 @@ export class OpenClawKnowledgeGraphView extends OpenClawLightDomElement {
                 ?disabled=${this.exporting || !this.hasActivePublication}
                 @click=${() => void this.exportObsidian()}
               >
-                ${this.exporting ? "Đang xuất…" : "Xuất Obsidian ZIP"}
+                ${this.exporting ? gk("exporting") : gk("exportObsidian")}
               </button>
-              ${this.exportUrl ? html`<a href=${this.exportUrl}>Tải vault</a>` : nothing}
+              ${this.exportUrl
+                ? html`<a href=${this.exportUrl}>${gk("downloadVault")}</a>`
+                : nothing}
             </div>`
           : nothing}
       </header>
-      <div class="knowledge-graph-snapshot-tabs" role="tablist" aria-label="Graph snapshot">
+      <div
+        class="knowledge-graph-snapshot-tabs"
+        role="tablist"
+        aria-label=${gk("snapshotTabsAria")}
+      >
         <button
           role="tab"
           aria-selected=${this.snapshot === "active"}
@@ -1376,7 +1360,7 @@ export class OpenClawKnowledgeGraphView extends OpenClawLightDomElement {
           ?disabled=${!this.hasActivePublication}
           @click=${() => void this.changeSnapshot("active")}
         >
-          Active
+          ${gk("snapshotActive")}
         </button>
         ${this.canCandidate
           ? html`<button
@@ -1386,7 +1370,7 @@ export class OpenClawKnowledgeGraphView extends OpenClawLightDomElement {
                 ?disabled=${!this.hasCandidate}
                 @click=${() => void this.changeSnapshot("candidate")}
               >
-                Candidate
+                ${gk("snapshotCandidate")}
               </button>
               <button
                 role="tab"
@@ -1395,13 +1379,15 @@ export class OpenClawKnowledgeGraphView extends OpenClawLightDomElement {
                 ?disabled=${!this.hasCandidate || !this.hasActivePublication}
                 @click=${() => void this.changeSnapshot("compare")}
               >
-                Compare Active–Candidate
+                ${gk("compareActiveCandidate")}
               </button>`
           : nothing}
         ${this.compareCounts
           ? html`<span class="knowledge-graph-compare-legend"
-              ><b>+</b> ${this.compareCounts.added} thêm · <b>−</b> ${this.compareCounts.removed} bỏ
-              · <b>~</b> ${this.compareCounts.changed} đổi</span
+              ><b>+</b> ${this.compareCounts.added} ${gk("compareAdded")} · <b>−</b> ${this
+                .compareCounts.removed}
+              ${gk("compareRemoved")} · <b>~</b> ${this.compareCounts.changed}
+              ${gk("compareChanged")}</span
             >`
           : nothing}
       </div>
@@ -1411,13 +1397,13 @@ export class OpenClawKnowledgeGraphView extends OpenClawLightDomElement {
       >
         <input
           type="search"
-          placeholder="Tìm node, alias hoặc nguồn…"
+          placeholder=${gk("searchPlaceholder")}
           .value=${this.query}
           @input=${(event: Event) => (this.query = inputValue(event))}
         />
-        <button class="is-primary" ?disabled=${this.loading}>Tìm</button>
+        <button class="is-primary" ?disabled=${this.loading}>${gk("search")}</button>
         <select
-          aria-label="Kiểu bản đồ"
+          aria-label=${gk("mapTypeAria")}
           .value=${this.topologyMode}
           @change=${(event: Event) => {
             const value = selectValue(event);
@@ -1429,34 +1415,34 @@ export class OpenClawKnowledgeGraphView extends OpenClawLightDomElement {
             void this.loadGraph();
           }}
         >
-          <option value="structure">Cấu trúc tài liệu</option>
-          <option value="relations">Quan hệ nghiệp vụ</option>
-          <option value="all">Toàn bộ graph</option>
+          <option value="structure">${gk("topologyStructure")}</option>
+          <option value="relations">${gk("topologyRelations")}</option>
+          <option value="all">${gk("topologyAll")}</option>
         </select>
         <select
-          aria-label="Phạm vi graph"
+          aria-label=${gk("scopeAria")}
           .value=${this.viewMode}
           @change=${(event: Event) => {
             this.viewMode = selectValue(event) === "local" ? "local" : "global";
             void this.loadGraph();
           }}
         >
-          <option value="global">Toàn Zone</option>
-          <option value="local">Lân cận node</option>
+          <option value="global">${gk("scopeGlobal")}</option>
+          <option value="local">${gk("scopeLocal")}</option>
         </select>
         <select
-          aria-label="Độ sâu"
+          aria-label=${gk("depthAria")}
           .value=${String(this.depth)}
           @change=${(event: Event) => {
             this.depth = selectValue(event) === "2" ? 2 : 1;
             void this.loadGraph();
           }}
         >
-          <option value="1">1 hop</option>
-          <option value="2">2 hop</option>
+          <option value="1">${gk("hopOne")}</option>
+          <option value="2">${gk("hopTwo")}</option>
         </select>
         <span class="knowledge-graph-toolbar-divider"></span>
-        <div class="knowledge-graph-render-modes" role="group" aria-label="Chế độ hiển thị">
+        <div class="knowledge-graph-render-modes" role="group" aria-label=${gk("displayMode")}>
           ${(["3d", "2d", "list"] as const).map(
             (mode) => html`<button
               type="button"
@@ -1464,7 +1450,7 @@ export class OpenClawKnowledgeGraphView extends OpenClawLightDomElement {
               aria-pressed=${this.renderMode === mode}
               @click=${() => this.setRenderMode(mode)}
             >
-              ${mode === "3d" ? "3D" : mode === "2d" ? "2D" : "Danh sách"}
+              ${mode === "3d" ? "3D" : mode === "2d" ? "2D" : gk("list")}
             </button>`,
           )}
         </div>
@@ -1473,16 +1459,16 @@ export class OpenClawKnowledgeGraphView extends OpenClawLightDomElement {
           ?disabled=${this.renderMode === "list"}
           @click=${() => this.toggleLayout()}
         >
-          ${this.paused ? "Tiếp tục" : "Tạm dừng"}
+          ${this.paused ? gk("resume") : gk("pause")}
         </button>
         <button
           type="button"
           ?disabled=${this.renderMode === "list"}
           @click=${() => this.fitGraph()}
         >
-          Fit
+          ${gk("fit")}
         </button>
-        <button type="button" @click=${() => void this.fullscreen()}>Toàn màn hình</button>
+        <button type="button" @click=${() => void this.fullscreen()}>${gk("fullscreen")}</button>
       </form>
       ${this.renderSummary(this.graph?.summary)} ${this.renderAnalysis()}
       ${this.error
@@ -1492,22 +1478,19 @@ export class OpenClawKnowledgeGraphView extends OpenClawLightDomElement {
         ? html`<div class="knowledge-graph-banner" role="status">${this.warning}</div>`
         : nothing}
       ${this.searchResults.length > 1
-        ? html`<div class="knowledge-graph-search-results" aria-label="Kết quả tìm node">
+        ? html`<div class="knowledge-graph-search-results" aria-label=${gk("searchResultsAria")}>
             ${this.searchResults
               .slice(0, 12)
               .map(
                 (node) =>
                   html`<button type="button" @click=${() => void this.selectNode(node.nodeRef)}>
-                    ${node.label}<small>${NODE_LABELS[node.kind]} · ${node.sourceTitle}</small>
+                    ${node.label}<small>${graphNodeLabel(node.kind)} · ${node.sourceTitle}</small>
                   </button>`,
               )}
           </div>`
         : nothing}
       ${this.snapshot === "compare" && (this.compareNodes.length || this.compareEdges.length)
-        ? html`<div
-            class="knowledge-graph-diff-list"
-            aria-label="Thay đổi node và quan hệ giữa Active và Candidate"
-          >
+        ? html`<div class="knowledge-graph-diff-list" aria-label=${gk("diffAria")}>
             ${this.compareNodes
               .slice(0, 40)
               .map(
@@ -1516,15 +1499,15 @@ export class OpenClawKnowledgeGraphView extends OpenClawLightDomElement {
                     ><b
                       >${node.changed === "added" ? "+" : node.changed === "removed" ? "−" : "~"}</b
                     >
-                    ${node.label}<small>${NODE_LABELS[node.kind]}</small></span
+                    ${node.label}<small>${graphNodeLabel(node.kind)}</small></span
                   >`,
               )}
             ${this.compareEdges.slice(0, 40).map(
               (edge) =>
                 html`<span class="is-${edge.changed} is-edge"
                   ><b>${edge.changed === "added" ? "+" : edge.changed === "removed" ? "−" : "~"}</b>
-                  Quan hệ ${EDGE_LABELS[edge.kind]}
-                  <small>${ORIGIN_LABELS[edge.origin]}</small></span
+                  ${gk("relationPrefix")} ${graphEdgeLabel(edge.kind)}
+                  <small>${graphOriginLabel(edge.origin)}</small></span
                 >`,
             )}
           </div>`
@@ -1537,20 +1520,21 @@ export class OpenClawKnowledgeGraphView extends OpenClawLightDomElement {
         ${this.renderFilters()}
         <div class="knowledge-graph-stage" aria-busy=${this.loading}>
           ${this.loading
-            ? html`<div class="knowledge-graph-loading">Đang tải graph…</div>`
+            ? html`<div class="knowledge-graph-loading">${gk("loading")}</div>`
             : nothing}
           ${this.renderCanvasOrList()}
         </div>
         ${this.renderInspector()}
       </div>
       <footer class="knowledge-graph-footer">
-        <span><i class="knowledge-graph-node-dot is-source"></i>Nguồn</span>
-        <span><i class="knowledge-graph-node-dot is-section"></i>Mục</span>
-        <span><i class="knowledge-graph-node-dot is-entity"></i>Thực thể</span>
-        <span><i class="knowledge-graph-node-dot is-concept"></i>Khái niệm</span>
-        <span><i class="knowledge-graph-node-dot is-claim"></i>Nhận định</span>
-        <span>→ Đã duyệt</span><span>? Chờ duyệt</span><span>× Đã từ chối</span>
-        ${this.graph?.truncated ? html`<strong>Đã giới hạn dữ liệu hiển thị</strong>` : nothing}
+        <span><i class="knowledge-graph-node-dot is-source"></i>${graphNodeLabel("source")}</span>
+        <span><i class="knowledge-graph-node-dot is-section"></i>${graphNodeLabel("section")}</span>
+        <span><i class="knowledge-graph-node-dot is-entity"></i>${graphNodeLabel("entity")}</span>
+        <span><i class="knowledge-graph-node-dot is-concept"></i>${graphNodeLabel("concept")}</span>
+        <span><i class="knowledge-graph-node-dot is-claim"></i>${graphNodeLabel("claim")}</span>
+        <span>→ ${gk("approvedSymbol")}</span><span>? ${gk("proposedSymbol")}</span
+        ><span>× ${gk("rejectedSymbol")}</span>
+        ${this.graph?.truncated ? html`<strong>${gk("truncated")}</strong>` : nothing}
       </footer>
     </section>`;
   }

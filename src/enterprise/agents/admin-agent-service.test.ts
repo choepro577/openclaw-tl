@@ -7,7 +7,13 @@ import type { GatewayRequestContext } from "../../gateway/server-methods/types.j
 import { closeOpenClawStateDatabaseForTest } from "../../state/openclaw-state-db.js";
 import { withOpenClawTestState } from "../../test-utils/openclaw-test-state.js";
 import { createEnterpriseAccount } from "../accounts/account-store.js";
+import {
+  readEnterpriseAccountToolPolicy,
+  writeEnterpriseAccountToolPolicy,
+} from "../accounts/account-tool-policy-store.js";
 import { hashEnterprisePassword } from "../auth/password.js";
+import { writeEnterpriseDelegationPolicy } from "../delegation/delegation-store.js";
+import { replaceEnterpriseEntitlements } from "../entitlements/entitlement-store.js";
 import {
   readEnterpriseAgentFile,
   readEnterpriseAgentPanel,
@@ -42,7 +48,137 @@ async function createWorkspaceConfig(): Promise<{ config: OpenClawConfig; worksp
   };
 }
 
+async function createDelegationToolsFixture(workspace: string) {
+  const account = createEnterpriseAccount({
+    username: "personal.tools.delegation",
+    displayName: "Delegation Tools",
+    passwordHash: await hashEnterprisePassword("enterprise-password"),
+    role: "employee",
+    accessPresetKey: "standard-coding@1",
+    mustChangePassword: false,
+    personalAgentEnabled: true,
+  });
+  replaceEnterpriseEntitlements(account.id, [
+    { resourceType: "agent", resourceId: "agent:shared:contracts", effect: "allow" },
+  ]);
+  writeEnterpriseDelegationPolicy(0, {
+    rollout: "on",
+    routerModel: "test/router-model",
+    autoThreshold: 0.9,
+    clarifyThreshold: 0.7,
+    minimumMargin: 0.15,
+    maxDelegatesPerTurn: 3,
+    eventRetentionDays: 90,
+  });
+  const config: OpenClawConfig = {
+    enterprise: { enabled: true, personalAgent: { templateAgentId: "main" } },
+    tools: { profile: "coding", sandbox: { tools: { alsoAllow: ["web_search"] } } },
+    agents: {
+      entries: {
+        main: { workspace },
+        contracts: {
+          description: "Reviews business contract terms, obligations, and risks.",
+          delegationTarget: {
+            status: "active",
+            aliases: ["contract specialist"],
+            handlingMode: "auto_when_certain",
+            useWhen: ["review a contract penalty clause", "assess risks before signing"],
+            avoidWhen: [],
+            requiredInputs: [],
+          },
+        },
+      },
+    },
+  };
+  return { account, config };
+}
+
 describe("Enterprise admin agent service", () => {
+  it.each([
+    { specialist: "unassigned", profile: "coding", yieldAllowed: false },
+    { specialist: "draft", profile: "coding", yieldAllowed: false },
+    { specialist: "active", profile: "coding", yieldAllowed: true },
+    { specialist: "active", profile: "minimal", yieldAllowed: true },
+  ] as const)(
+    "preserves managed tools on an unchanged save: $specialist specialist, $profile profile",
+    async ({ specialist, profile, yieldAllowed }) => {
+      await withOpenClawTestState({ scenario: "minimal", applyEnv: true }, async (state) => {
+        const { account, config } = await createDelegationToolsFixture(state.workspaceDir);
+        if (profile === "minimal") {
+          config.agents!.entries!.main!.tools = { profile };
+        }
+        if (specialist === "unassigned") {
+          replaceEnterpriseEntitlements(account.id, []);
+        } else if (specialist === "draft") {
+          config.agents!.entries!.contracts!.delegationTarget!.status = "draft";
+        }
+        const sourceConfig = structuredClone(config);
+        const before = await readEnterpriseAgentPanel(config, "personal", account.id, "tools");
+        if (!("policy" in before)) {
+          throw new Error("expected tools panel");
+        }
+        const beforeToolIds = before.effectiveTools.groups
+          .flatMap((group) => group.tools.map((tool) => tool.id))
+          .toSorted();
+        expect(beforeToolIds.includes("sessions_yield")).toBe(yieldAllowed);
+        expect(beforeToolIds).not.toContain("web_search");
+
+        await updateEnterpriseAgentTools(config, "personal", account.id, {
+          profile: before.policy.profile,
+          alsoAllow: before.policy.alsoAllow ?? [],
+          deny: before.policy.deny ?? [],
+          baseRevision: before.policyRevision ?? undefined,
+        });
+        const after = await readEnterpriseAgentPanel(config, "personal", account.id, "tools");
+        if (!("policy" in after)) {
+          throw new Error("expected tools panel");
+        }
+        expect(
+          after.effectiveTools.groups
+            .flatMap((group) => group.tools.map((tool) => tool.id))
+            .toSorted(),
+        ).toEqual(beforeToolIds);
+        expect(after.sandboxState.tools.find((tool) => tool.id === "sessions_yield")?.status).toBe(
+          yieldAllowed ? "open" : "blocked",
+        );
+        expect(config).toEqual(sourceConfig);
+      });
+    },
+  );
+
+  it.each(["sessions_yield", "group:sessions", "*"])(
+    "preserves an explicit stored delegation deny %s while reading the tools panel",
+    async (deny) => {
+      await withOpenClawTestState({ scenario: "minimal", applyEnv: true }, async (state) => {
+        const { account, config } = await createDelegationToolsFixture(state.workspaceDir);
+        const stored = writeEnterpriseAccountToolPolicy(account.id, 0, {
+          profile: "coding",
+          alsoAllow: ["web_search"],
+          deny: [deny, "write"],
+        });
+        const result = await readEnterpriseAgentPanel(config, "personal", account.id, "tools");
+        if (!("policy" in result)) {
+          throw new Error("expected tools panel");
+        }
+        expect(result.policy).toMatchObject({
+          profile: stored.profile,
+          alsoAllow: stored.alsoAllow,
+          deny: expect.arrayContaining(stored.deny),
+        });
+        expect(
+          result.sandboxState.tools.find((tool) => tool.id === "sessions_yield"),
+        ).toMatchObject({
+          status: "blocked",
+          reason: "ADMIN_POLICY_DENY",
+        });
+        expect(
+          result.effectiveTools.groups.flatMap((group) => group.tools.map((tool) => tool.id)),
+        ).not.toContain("sessions_yield");
+        expect(readEnterpriseAccountToolPolicy(account.id)).toEqual(stored);
+      });
+    },
+  );
+
   it("reads, creates, and revision-checks canonical workspace files", async () => {
     const { config } = await createWorkspaceConfig();
     const missing = await readEnterpriseAgentFile(config, "shared", "main", "SOUL.md");

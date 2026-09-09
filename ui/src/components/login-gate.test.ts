@@ -53,7 +53,7 @@ describe("login gate failure recovery", () => {
       Array.from(element.querySelectorAll(".login-gate__failure-steps code"), (entry) =>
         entry.textContent?.trim(),
       ),
-    ).toEqual(["openclaw gateway auth-token --show", "openclaw doctor --generate-gateway-token"]);
+    ).toEqual(["******* gateway auth-token --show", "******* doctor --generate-gateway-token"]);
   });
 
   it("offers page refresh for a protocol mismatch and reloads when selected", async () => {
@@ -71,7 +71,7 @@ describe("login gate failure recovery", () => {
 
     expect(refresh?.textContent?.trim()).toBe("Refresh page");
     expect(failure?.querySelector(".login-gate__failure-steps")).not.toBeNull();
-    expect(failure?.querySelector(".login-gate__failure-docs")).not.toBeNull();
+    expect(failure?.querySelector(".login-gate__failure-docs")).toBeNull();
 
     refresh?.click();
     expect(reload).toHaveBeenCalledOnce();
@@ -107,9 +107,9 @@ describe("login gate failure recovery", () => {
       (entry) => entry.textContent?.replace(/\s+/g, " ").trim(),
     );
     expect(steps).toHaveLength(4);
-    expect(steps[0]).toContain("On the Gateway host, run openclaw dashboard");
+    expect(steps[0]).toContain("On the Gateway host, run ******* dashboard");
     expect(steps[0]).toContain("to open a secure one-time pairing link.");
-    expect(steps[1]).toContain("Run openclaw devices list");
+    expect(steps[1]).toContain("Run ******* devices list");
     expect(steps[1]).toContain("on the Gateway host.");
     expect(steps[2]).toBe("Approve the pending browser/device request from that list.");
     expect(steps[3]).toBe("Reconnect after the approval completes.");
@@ -117,7 +117,7 @@ describe("login gate failure recovery", () => {
       Array.from(element.querySelectorAll(".login-gate__failure-steps code"), (entry) =>
         entry.textContent?.trim(),
       ),
-    ).toEqual(["openclaw dashboard", "openclaw devices list"]);
+    ).toEqual(["******* dashboard", "******* devices list"]);
   });
 
   it("renders only a normalized pairing request in an approval command", async () => {
@@ -130,7 +130,7 @@ describe("login gate failure recovery", () => {
       Array.from(safe.querySelectorAll(".login-gate__failure-steps code"), (entry) =>
         entry.textContent?.trim(),
       ),
-    ).toContain("openclaw devices approve req-123");
+    ).toContain("******* devices approve req-123");
     safe.remove();
 
     const unsafe = await mountFailure(
@@ -142,7 +142,7 @@ describe("login gate failure recovery", () => {
       (entry) => entry.textContent?.trim(),
     );
 
-    expect(unsafeCommands.some((command) => command?.startsWith("openclaw devices approve"))).toBe(
+    expect(unsafeCommands.some((command) => command?.startsWith("******* devices approve"))).toBe(
       false,
     );
     expect(unsafe.textContent).toContain(
@@ -160,7 +160,7 @@ describe("login gate failure recovery", () => {
       Array.from(element.querySelectorAll(".login-gate__failure-steps code"), (entry) =>
         entry.textContent?.trim(),
       ),
-    ).toEqual(["openclaw status", "openclaw gateway run", "openclaw dashboard --no-open"]);
+    ).toEqual(["******* status", "******* gateway run", "******* dashboard --no-open"]);
   });
 
   it("offers only supported recovery for an insecure browser context", async () => {

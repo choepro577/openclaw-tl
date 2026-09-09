@@ -1,10 +1,37 @@
 // Control UI tests cover collapsed tool-group summary labels.
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { i18n } from "../../i18n/index.ts";
 import { summarizeToolGroup } from "./tool-call-grouping.ts";
+import { toolCardSkippedLabel } from "./tool-cards.ts";
 
 type ToolGroupSummaryInput = Parameters<typeof summarizeToolGroup>[0][number];
 
+afterEach(() => vi.restoreAllMocks());
+
 describe("summarizeToolGroup", () => {
+  it.each([
+    {
+      locale: "en",
+      skipped: "Not performed",
+      updated: "Not performed because a newer message arrived",
+      group: "Skipped requests: 2",
+    },
+    {
+      locale: "vi",
+      skipped: "Không thực hiện",
+      updated: "Không thực hiện do có cập nhật mới",
+      group: "Yêu cầu không thực hiện: 2",
+    },
+  ] as const)("preserves $locale skipped labels and group counts in chat-only copy", (copy) => {
+    vi.spyOn(i18n, "getLocale").mockReturnValue(copy.locale);
+    const card = { id: "skipped", name: "bash", details: { status: "skipped" } };
+    expect(toolCardSkippedLabel(card)).toBe(copy.skipped);
+    expect(
+      toolCardSkippedLabel({ ...card, details: { status: "skipped", deniedReason: "steering" } }),
+    ).toBe(copy.updated);
+    expect(summarizeToolGroup([card, card])).toBe(copy.group);
+  });
+
   it.each<[string, ToolGroupSummaryInput[], string]>([
     ["a single command", [{ name: "bash", args: { command: "ls" } }], "Ran a command"],
     [

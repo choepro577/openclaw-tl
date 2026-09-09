@@ -1,4 +1,6 @@
 import { html, nothing, type TemplateResult } from "lit";
+import { kak } from "../../../i18n/enterprise-admin-knowledge.ts";
+import { enterpriseDomainCopy } from "../../../i18n/enterprise-domain.ts";
 import type { EnterpriseAccount } from "../../enterprise/services/enterprise-api.ts";
 import type {
   EnterpriseKnowledgeAgentCatalog,
@@ -55,13 +57,13 @@ export function renderKnowledgeZoneEditorFields(props: ZoneEditorProps): Templat
       <div class="knowledge-section-heading">
         <div>
           <span class="knowledge-step">01</span>
-          <h3>Thông tin vùng tri thức</h3>
+          <h3>${kak("zoneInfo")}</h3>
         </div>
-        <p>Slug là định danh ổn định và không thể đổi sau khi tạo.</p>
+        <p>${kak("slugImmutable")}</p>
       </div>
       <div class="ea-form-grid">
         <label class="ea-field ea-form-grid__full">
-          Tên vùng tri thức
+          ${kak("zoneName")}
           <input
             class="ea-input"
             name="name"
@@ -74,7 +76,7 @@ export function renderKnowledgeZoneEditorFields(props: ZoneEditorProps): Templat
           ${fieldError("name", props.errors.name)}
         </label>
         <label class="ea-field ea-form-grid__full">
-          Slug
+          ${kak("slug")}
           <input
             class="ea-input ea-code-input"
             name="slug"
@@ -88,7 +90,7 @@ export function renderKnowledgeZoneEditorFields(props: ZoneEditorProps): Templat
           ${fieldError("slug", props.errors.slug)}
         </label>
         <label class="ea-field ea-form-grid__full">
-          Mô tả
+          ${kak("description")}
           <textarea
             class="ea-textarea"
             name="description"
@@ -108,9 +110,9 @@ export function renderKnowledgeZoneEditorFields(props: ZoneEditorProps): Templat
       <div class="knowledge-section-heading">
         <div>
           <span class="knowledge-step">02</span>
-          <h3>Xử lý dữ liệu & OCR</h3>
+          <h3>${kak("dataAndOcr")}</h3>
         </div>
-        <p>OCR tự động chạy khi ảnh hoặc tài liệu scan không có đủ lớp text.</p>
+        <p>${kak("ocrDescription")}</p>
       </div>
       <div class="knowledge-policy-options">
         <label class="knowledge-policy-option">
@@ -123,8 +125,7 @@ export function renderKnowledgeZoneEditorFields(props: ZoneEditorProps): Templat
             @change=${() => props.onEgressPolicy("local_only")}
           />
           <span
-            ><strong>Chỉ xử lý nội bộ</strong
-            ><small>Không gửi nội dung ra provider ngoài.</small></span
+            ><strong>${kak("localOnlyStrong")}</strong><small>${kak("localOnlySmall")}</small></span
           >
         </label>
         <label class="knowledge-policy-option">
@@ -137,8 +138,7 @@ export function renderKnowledgeZoneEditorFields(props: ZoneEditorProps): Templat
             @change=${() => props.onEgressPolicy("external_allowed")}
           />
           <span
-            ><strong>Cho phép provider ngoài</strong
-            ><small>Dùng image model/OCR remote đã cấu hình khi cần.</small></span
+            ><strong>${kak("externalStrong")}</strong><small>${kak("externalSmall")}</small></span
           >
         </label>
       </div>
@@ -150,38 +150,33 @@ export function renderKnowledgeZoneEditorFields(props: ZoneEditorProps): Templat
               ? "ea-badge--warn"
               : "ea-badge--bad"}"
           >${ocrPermitted
-            ? "OCR sẵn sàng"
+            ? kak("ocrReady")
             : ocr?.ready
-              ? "OCR bị policy chặn"
-              : "OCR chưa cấu hình"}</span
+              ? kak("ocrBlocked")
+              : kak("ocrNotConfigured")}</span
         >
-        <span class="ea-muted"
-          >${ocr?.provider ?? "Chưa tìm thấy image model hoặc OCR provider"}</span
-        >
+        <span class="ea-muted">${ocr?.provider ?? kak("imageProviderMissing")}</span>
         ${!ocr?.ready
           ? html`<button
               class="ea-button ea-button--small"
               type="button"
               @click=${props.onOpenModelSetup}
             >
-              Cấu hình model OCR
+              ${kak("configureOcrModel")}
             </button>`
           : nothing}
       </div>
       ${ocr?.transport === "remote" && props.draft.egressPolicy === "local_only"
-        ? html`<div class="ea-banner">
-            Provider OCR hiện tại là remote. Chọn “Cho phép provider ngoài” hoặc cấu hình provider
-            OCR nội bộ để xử lý tài liệu scan trong zone này.
-          </div>`
+        ? html`<div class="ea-banner">${kak("remoteProviderBanner")}</div>`
         : nothing}
     </section>
     <section class="knowledge-editor-section">
       <div class="knowledge-section-heading">
         <div>
           <span class="knowledge-step">03</span>
-          <h3>Candidate Graph & enrichment</h3>
+          <h3>${kak("graphSection")}</h3>
         </div>
-        <p>Graph là derived index riêng của Zone; thay đổi cấu hình sẽ tạo generation mới.</p>
+        <p>${kak("graphSectionDescription")}</p>
       </div>
       <div class="knowledge-policy-options">
         <label class="knowledge-policy-option">
@@ -196,8 +191,8 @@ export function renderKnowledgeZoneEditorFields(props: ZoneEditorProps): Templat
               )}
           />
           <span
-            ><strong>Bật Knowledge Graph</strong
-            ><small>Sinh node, backlink và quan hệ có evidence cho mỗi candidate.</small></span
+            ><strong>${kak("graphEnrichmentStrong")}</strong
+            ><small>${kak("graphEnrichmentSmall")}</small></span
           >
         </label>
         <label class="knowledge-policy-option">
@@ -212,14 +207,14 @@ export function renderKnowledgeZoneEditorFields(props: ZoneEditorProps): Templat
               )}
           />
           <span
-            ><strong>AI enrichment có kiểm duyệt</strong
-            ><small>Quan hệ nhạy cảm luôn ở proposed; không tự đi vào Agent traversal.</small></span
+            ><strong>${kak("moderatedEnrichmentStrong")}</strong
+            ><small>${kak("moderatedEnrichmentSmall")}</small></span
           >
         </label>
       </div>
       <div class="ea-form-grid knowledge-graph-settings-grid">
         <label class="ea-field">
-          Ngưỡng tự duyệt quan hệ ít rủi ro
+          ${kak("threshold")}
           <input
             class="ea-input"
             type="number"
@@ -241,28 +236,21 @@ export function renderKnowledgeZoneEditorFields(props: ZoneEditorProps): Templat
               ? "ea-badge--good"
               : "ea-badge--warn"}"
             >${props.readiness?.graph.enrichmentReady
-              ? "Enrichment sẵn sàng"
-              : "Deterministic-only"}</span
+              ? kak("enrichmentReady")
+              : kak("deterministicOnly")}</span
           >
           <span class="ea-muted"
-            >${props.readiness?.graph.enrichmentProvider ??
-            "Không có enrichment provider; graph vẫn build từ link và semantic."}</span
+            >${props.readiness?.graph.enrichmentProvider ?? kak("noEnrichmentProvider")}</span
           >
         </div>
       </div>
-      ${!props.readiness?.graph.enabled
-        ? html`<div class="ea-banner">
-            Global feature <code>enterprise.knowledge.graph.enabled</code> đang tắt. Cấu hình Zone
-            được giữ nhưng sẽ không build graph cho đến khi Admin bật feature.
-          </div>`
+      ${props.readiness && !props.readiness.graph.enabled
+        ? html`<div class="ea-banner">${kak("graphDisabledBanner")}</div>`
         : nothing}
       ${props.draft.graphEnrichmentEnabled &&
       props.readiness?.graph.enrichmentTransport === "remote" &&
       props.draft.egressPolicy === "local_only"
-        ? html`<div class="ea-banner">
-            Enrichment provider là remote nhưng Zone đang “Chỉ xử lý nội bộ”. Hệ thống sẽ không gửi
-            dữ liệu ra ngoài và build graph ở trạng thái deterministic/semantic degraded.
-          </div>`
+        ? html`<div class="ea-banner">${kak("graphRemotePolicyBanner")}</div>`
         : nothing}
     </section>
   `;
@@ -276,6 +264,7 @@ type AgentChecklistProps = {
   error: string;
   disabled: boolean;
   compact?: boolean;
+  purpose?: "evidence_transfer";
   onQuery: (value: string) => void;
   onToggle: (resourceKey: string, checked: boolean) => void;
 };
@@ -308,9 +297,15 @@ export function renderKnowledgeAgentChecklist(props: AgentChecklistProps): Templ
       .map((resourceKey) => ({
         kind: "Orphaned",
         resourceKey,
-        name: "Binding không còn trong catalog",
+        name:
+          props.purpose === "evidence_transfer"
+            ? enterpriseDomainCopy("enterpriseKnowledge.evidenceTransferUnavailable")
+            : kak("bindingMissing"),
         identity: resourceKey,
-        detail: "Bỏ chọn để thu hồi binding cũ.",
+        detail:
+          props.purpose === "evidence_transfer"
+            ? enterpriseDomainCopy("enterpriseKnowledge.evidenceTransferRevokeHint")
+            : kak("bindingRevokeHint"),
         available: false,
       })),
   ].filter((row) =>
@@ -323,23 +318,29 @@ export function renderKnowledgeAgentChecklist(props: AgentChecklistProps): Templ
       <div class="knowledge-section-heading">
         <div>
           <span class="knowledge-step">${props.compact ? "04" : "03"}</span>
-          <h3>Agent được phép truy cập</h3>
+          <h3>
+            ${props.purpose === "evidence_transfer"
+              ? enterpriseDomainCopy("enterpriseKnowledge.evidenceTransferHeading")
+              : kak("agentsAllowed")}
+          </h3>
         </div>
         <p>
-          Binding này độc lập với quyền của người dùng và có hiệu lực sau khi zone được publish.
+          ${props.purpose === "evidence_transfer"
+            ? enterpriseDomainCopy("enterpriseKnowledge.evidenceTransferDescription")
+            : kak("bindingDescription")}
         </p>
       </div>
       ${props.error ? html`<div class="ea-banner ea-banner--error">${props.error}</div>` : nothing}
       <input
         class="ea-input"
         type="search"
-        placeholder="Tìm theo tên, ID hoặc loại Agent…"
+        placeholder=${kak("searchAgentPlaceholder")}
         .value=${props.query}
         ?disabled=${props.disabled}
         @input=${(event: Event) => props.onQuery(inputFromEvent(event)?.value ?? "")}
       />
       ${props.loading
-        ? html`<div class="ea-loading">Đang tải danh sách Agent…</div>`
+        ? html`<div class="ea-loading">${kak("loadingAgents")}</div>`
         : rows.length
           ? html`<div class="knowledge-access-list">
               ${rows.map((row) => {
@@ -361,13 +362,17 @@ export function renderKnowledgeAgentChecklist(props: AgentChecklistProps): Templ
                     ><small>${row.identity} · ${row.detail}</small></span
                   >
                   <span class="ea-badge ${row.available ? "ea-badge--good" : "ea-badge--warn"}"
-                    >${row.kind}</span
+                    >${row.kind === "Shared"
+                      ? kak("shared")
+                      : row.kind === "Personal"
+                        ? kak("personal")
+                        : kak("orphaned")}</span
                   >
                 </label>`;
               })}
             </div>`
-          : html`<div class="ea-empty knowledge-empty-small">Không tìm thấy Agent phù hợp.</div>`}
-      <p class="ea-muted">Đã chọn ${props.selected.length} Agent.</p>
+          : html`<div class="ea-empty knowledge-empty-small">${kak("noMatchingAgents")}</div>`}
+      <p class="ea-muted">${kak("selectedAgents", { count: String(props.selected.length) })}</p>
     </section>
   `;
 }
@@ -397,7 +402,7 @@ export function renderKnowledgeMemberAccess(props: MemberAccessProps): TemplateR
       .filter((accountId) => !knownIds.has(accountId))
       .map((accountId) => ({
         id: accountId,
-        name: "Tài khoản không còn trong catalog",
+        name: kak("accountMissing"),
         identity: accountId,
         enabled: false,
       })),
@@ -407,20 +412,20 @@ export function renderKnowledgeMemberAccess(props: MemberAccessProps): TemplateR
   return html`
     <section class="knowledge-access-section">
       <div class="knowledge-section-heading">
-        <div><h3>Thành viên và vai trò</h3></div>
-        <p>Viewer chỉ đọc; Curator nạp/kiểm thử; Manager được publish và quản lý thành viên.</p>
+        <div><h3>${kak("membersRoles")}</h3></div>
+        <p>${kak("memberRolesDescription")}</p>
       </div>
       ${props.error ? html`<div class="ea-banner ea-banner--error">${props.error}</div>` : nothing}
       <input
         class="ea-input"
         type="search"
-        placeholder="Tìm tài khoản…"
+        placeholder=${kak("searchAccountPlaceholder")}
         .value=${props.query}
         ?disabled=${props.disabled}
         @input=${(event: Event) => props.onQuery(inputFromEvent(event)?.value ?? "")}
       />
       ${props.loading
-        ? html`<div class="ea-loading">Đang tải tài khoản…</div>`
+        ? html`<div class="ea-loading">${kak("loadingAccounts")}</div>`
         : html`<div class="knowledge-member-list">
             ${rows.map(
               (row) => html`<div class="knowledge-member-item">
@@ -430,20 +435,20 @@ export function renderKnowledgeMemberAccess(props: MemberAccessProps): TemplateR
                 <span class="knowledge-access-copy"
                   ><strong>${row.name}</strong
                   ><small
-                    >${row.identity} · ${row.enabled ? "Đang hoạt động" : "Đã tắt"}</small
+                    >${row.identity} · ${row.enabled ? kak("enabled") : kak("disabled")}</small
                   ></span
                 >
                 <select
                   class="ea-select"
-                  aria-label=${`Vai trò của ${row.name}`}
+                  aria-label=${kak("roleFor", { name: row.name })}
                   .value=${props.draft[row.id] ?? "none"}
                   ?disabled=${props.disabled}
                   @change=${(event: Event) => props.onRole(row.id, roleFromEvent(event))}
                 >
-                  <option value="none">Không có quyền</option>
-                  <option value="viewer">Viewer</option>
-                  <option value="curator">Curator</option>
-                  <option value="manager">Manager</option>
+                  <option value="none">${kak("noAccess")}</option>
+                  <option value="viewer">${kak("viewer")}</option>
+                  <option value="curator">${kak("curator")}</option>
+                  <option value="manager">${kak("manager")}</option>
                 </select>
               </div>`,
             )}

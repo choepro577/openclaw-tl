@@ -155,9 +155,21 @@ export function updateTask(taskId: string, patch: Partial<TaskRecord>): TaskReco
   if (!current) {
     return null;
   }
+  const deliveryStatusChanged =
+    patch.deliveryStatus !== undefined && patch.deliveryStatus !== current.deliveryStatus;
+  const currentEventAt =
+    current.lastEventAt ?? current.endedAt ?? current.startedAt ?? current.createdAt ?? 0;
+  const deliveryEventAt = deliveryStatusChanged
+    ? Math.max(
+        Date.now(),
+        currentEventAt + 1,
+        typeof patch.lastEventAt === "number" ? patch.lastEventAt : 0,
+      )
+    : undefined;
   const next = normalizeTaskTimestamps({
     ...current,
     ...patch,
+    ...(deliveryEventAt !== undefined ? { lastEventAt: deliveryEventAt } : {}),
     ...(patch.detail !== undefined ? { detail: structuredClone(patch.detail) } : {}),
   });
   if (Object.hasOwn(patch, "error") && patch.error === undefined) {

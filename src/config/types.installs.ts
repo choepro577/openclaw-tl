@@ -14,6 +14,8 @@ export type InstallRecordBase = {
   installedAt?: string;
   clawhubUrl?: string;
   clawhubPackage?: string;
+  /** Resolved registry release, which may differ from the embedded package version. */
+  clawhubVersion?: string;
   clawhubFamily?: "code-plugin" | "bundle-plugin";
   clawhubChannel?: "official" | "community" | "private";
   clawhubTrustDisposition?: "clean" | "review-recommended" | "review-required" | "blocked";

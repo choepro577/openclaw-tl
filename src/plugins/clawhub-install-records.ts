@@ -7,6 +7,7 @@ export type ClawHubPluginInstallRecordFields = {
   source: "clawhub";
   clawhubUrl: string;
   clawhubPackage: string;
+  clawhubVersion?: string;
   clawhubFamily: Exclude<ClawHubPackageFamily, "skill">;
   clawhubChannel?: ClawHubPackageChannel;
   clawhubTrustDisposition?: "clean" | "review-recommended" | "review-required" | "blocked";
@@ -40,6 +41,7 @@ export function buildClawHubPluginInstallRecordFields(
   | "source"
   | "clawhubUrl"
   | "clawhubPackage"
+  | "clawhubVersion"
   | "clawhubFamily"
   | "clawhubChannel"
   | "clawhubTrustDisposition"
@@ -68,6 +70,7 @@ export function buildClawHubPluginInstallRecordFields(
     source: "clawhub",
     clawhubUrl: fields.clawhubUrl,
     clawhubPackage: fields.clawhubPackage,
+    ...(fields.clawhubVersion ? { clawhubVersion: fields.clawhubVersion } : {}),
     clawhubFamily: fields.clawhubFamily,
     ...(fields.clawhubChannel ? { clawhubChannel: fields.clawhubChannel } : {}),
     ...(fields.clawhubTrustDisposition

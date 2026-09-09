@@ -1,0 +1,474 @@
+{
+  "capturedAt": "2026-09-04T16:00:25.373Z",
+  "parentAgent": "enterprise-personal-2ae2cbc2deecdb86fe86",
+  "accountId": "68264167-a2d8-48b1-a00a-d31a06a7fd92",
+  "sessionKey": "agent:enterprise-personal-2ae2cbc2deecdb86fe86:dashboard:9daee8ef-4232-4cbf-82c6-8ddbc670283d",
+  "transcriptId": "8170cc2b-b4c3-4f80-8f34-7413be52e76d",
+  "sessionHash": "c9180354b001565555d786b8506857b53abdf99b3df4c96cf0882306d4b83f3c",
+  "collectionMode": "sqlite3 -readonly; no runtime mutations",
+  "privateBodiesOmitted": true,
+  "parent": {
+    "session_key": "agent:enterprise-personal-2ae2cbc2deecdb86fe86:dashboard:9daee8ef-4232-4cbf-82c6-8ddbc670283d",
+    "current_session_id": "8170cc2b-b4c3-4f80-8f34-7413be52e76d",
+    "status": "done",
+    "agent": "enterprise-personal-2ae2cbc2deecdb86fe86",
+    "events": [
+      {
+        "seq": 1,
+        "at": "2026-09-04T15:58:39.555Z",
+        "messageTimestamp": 1788537513476,
+        "recordedAt": 1788537519555,
+        "role": "user",
+        "userRunCorrelationId": "ac844711-8096-4c3d-b11f-c3e6eaf146a8",
+        "content": [
+          {
+            "type": "text",
+            "text": "Mình có 540 triệu để mở một điểm bán nhỏ, dự kiến sửa chỗ bán hết 240 triệu và đặt cọc 60 triệu. Hằng tháng trả 18 triệu tiền thuê, 42 triệu lương, thêm 12 triệu chi phí khác; hàng bán ra có giá vốn bằng 40% doanh thu. Nếu mỗi tháng bán được 100 triệu hoặc 150 triệu thì tiền còn lại sau 3 tháng thế nào? Cần doanh thu bao nhiêu để hòa vốn, và có gì nên thay đổi trước khi mình quyết?"
+          }
+        ]
+      },
+      {
+        "seq": 2,
+        "at": "2026-09-04T15:58:39.558Z",
+        "messageTimestamp": 1788537519558,
+        "recordedAt": 1788537519558,
+        "role": "assistant",
+        "model": "gateway-injected",
+        "provider": "openclaw",
+        "stopReason": "stop",
+        "content": [
+          {
+            "type": "text",
+            "text": "Bạn có đồng ý giao các phần việc đã nêu cho Chuyên gia Tài chính & Ngân sách không?"
+          }
+        ]
+      },
+      {
+        "seq": 3,
+        "at": "2026-09-04T15:59:06.031Z",
+        "messageTimestamp": 1788537531049,
+        "recordedAt": 1788537546031,
+        "role": "user",
+        "userRunCorrelationId": "b695cab7-28f8-4048-87f8-2cc4e92da630",
+        "content": [
+          {
+            "type": "text",
+            "text": "Ừ, bạn xem giúp mình nhé."
+          }
+        ]
+      },
+      {
+        "seq": 4,
+        "at": "2026-09-04T15:59:07.388Z",
+        "messageTimestamp": 1788537547387,
+        "recordedAt": 1788537547388,
+        "role": "assistant",
+        "model": "host-response",
+        "provider": "openclaw",
+        "stopReason": "stop",
+        "runId": "b695cab7-28f8-4048-87f8-2cc4e92da630",
+        "content": [
+          {
+            "type": "text",
+            "text": "Đã chuyển phần việc đã xác nhận đến chuyên gia. Tôi đang chờ kết quả để tổng hợp."
+          }
+        ]
+      },
+      {
+        "seq": 5,
+        "at": "2026-09-04T15:59:28.157Z",
+        "messageTimestamp": 1788537568155,
+        "recordedAt": 1788537568157,
+        "role": "user",
+        "content": [
+          {
+            "type": "internalEventMetadata",
+            "bodyOmitted": true,
+            "sha256": "4a907f30849d9a0f7a72ca90564a449980450b8ed5620679a4829e59fcdbf38e",
+            "characters": 1181,
+            "hasDelegatedTask": false
+          }
+        ]
+      },
+      {
+        "seq": 8,
+        "at": "2026-09-04T15:59:53.592Z",
+        "messageTimestamp": 1788537568915,
+        "recordedAt": 1788537593592,
+        "role": "assistant",
+        "model": "gpt-5.6-sol",
+        "provider": "openai",
+        "stopReason": "stop",
+        "runId": "announce:requester-settle:enterprise-personal-2ae2cbc2deecdb86fe86:agent:enterprise-personal-2ae2cbc2deecdb86fe86:dashboard:9daee8ef-4232-4cbf-82c6-8ddbc670283d:6a907c65-c0d8-4006-8397-65405aa75c6c:yield-1",
+        "content": [
+          {
+            "type": "text",
+            "text": "Mình tính theo **dòng tiền**, chưa gồm thuế, khấu hao, lãi vay và các chi phí phát sinh chưa nêu.\n\n### 1. Tiền còn lại sau đầu tư ban đầu\n\n- Vốn: **540 triệu**\n- Sửa chữa: **240 triệu**\n- Đặt cọc: **60 triệu**\n- Tiền mặt còn để vận hành: **240 triệu**\n\nChi phí cố định mỗi tháng:\n\n- Thuê: 18 triệu\n- Lương: 42 triệu\n- Khác: 12 triệu  \n→ **Tổng: 72 triệu/tháng**\n\nGiá vốn bằng 40% doanh thu nên biên lợi nhuận gộp là **60%**.\n\n| Doanh thu/tháng | Lãi gộp | Lãi/lỗ mỗi tháng | Tiền mặt sau 3 tháng |\n|---:|---:|---:|---:|\n| 100 triệu | 60 triệu | **lỗ 12 triệu** | **204 triệu** |\n| 150 triệu | 90 triệu | **lãi 18 triệu** | **294 triệu** |\n\nKhoản cọc 60 triệu chưa tính vào tiền mặt sử dụng, nhưng vẫn là tài sản có thể thu hồi nếu hợp đồng cho phép.\n\n### 2. Doanh thu hòa vốn\n\nCông thức:\n\n**Doanh thu × 60% = 72 triệu**\n\n→ Doanh thu hòa vốn là **120 triệu/tháng**, tương đương khoảng:\n\n- **4 triệu/ngày** nếu bán đủ 30 ngày\n- **4,6 triệu/ngày** nếu bán 26 ngày\n\nĐây chỉ là hòa vốn vận hành. Ở mức doanh thu 150 triệu, lãi 18 triệu/tháng thì cần khoảng **13,3 tháng** để bù lại 240 triệu tiền sửa chữa.\n\n### 3. Điều nên xem lại trước khi quyết\n\n1. **Chi phí sửa chữa đang khá lớn:** 240 triệu chiếm 44% tổng vốn. Nên thử giảm, chia thành nhiều giai đoạn hoặc yêu cầu chủ nhà hỗ trợ/thời gian miễn tiền thuê.\n2. **Dự phòng chưa thật dày:** 240 triệu chỉ đủ khoảng **3,3 tháng chi phí cố định nếu chưa có doanh thu**.\n3. **Kiểm tra lại khoản “12 triệu chi phí khác”:** cần chắc rằng đã có điện nước, marketing, phần mềm, phí thanh toán, hao hụt, bảo trì, thuế và lương của chính mình.\n4. **Xác minh khả năng đạt 120 triệu:** nên khảo sát lưu lượng khách, giá trị đơn trung bình và số đơn cần có. Ví dụ đơn trung bình 200.000 đồng thì cần khoảng **20 đơn/ngày** để hòa vốn.\n5. **Đọc kỹ hợp đồng thuê:** thời hạn thuê phải đủ dài để thu hồi tiền sửa chữa; làm rõ tăng giá thuê, hoàn cọc và xử lý tài sản sửa chữa khi kết thúc hợp đồng.\n\n**Khuyến nghị:** chưa nên quyết chỉ dựa trên kịch bản 150 triệu. Hãy coi **120 triệu là mức tối thiểu**, còn mục tiêu an toàn nên gần **140–150 triệu/tháng**, đồng thời cố giảm chi phí sửa chữa và giữ thêm dự phòng. Kịch bản 100 triệu vẫn chịu được trong ngắn hạn nhưng mô hình đang lỗ.",
+            "phase": "final_answer"
+          }
+        ]
+      }
+    ]
+  },
+  "children": [
+    {
+      "runId": "6a907c65-c0d8-4006-8397-65405aa75c6c",
+      "childSessionKey": "agent:enterprise-finance-specialist:subagent:def04fd0-883b-4908-8673-a6951f081b55",
+      "createdAt": 1788537547380,
+      "startedAt": 1788537547500,
+      "sessionStartedAt": 1788537547380,
+      "endedAt": 1788537567955,
+      "registryAccepted": true,
+      "outcome": {
+        "status": "ok"
+      },
+      "endedReason": "subagent-complete",
+      "requesterSettleWakeStatus": null,
+      "completionAnnouncedAt": 1788537593671,
+      "frozenVisibleResult": "### Phân tích dòng tiền\n\n**Vốn ban đầu:** 540 triệu đồng\n\n| Khoản đầu tư ban đầu | Số tiền |\n|---|---:|\n| Sửa chữa | 240 triệu |\n| Đặt cọc | 60 triệu |\n| **Tiền còn lại để vận hành** | **240 triệu** |\n\nChi phí cố định hàng tháng: **18 + 42 + 12 = 72 triệu**.  \nGiá vốn = **40% doanh thu**, nên lãi gộp đóng góp = **60% doanh thu**.\n\n| Doanh thu/tháng | Lãi gộp | Chi phí cố định | Dòng tiền ròng/tháng | Tiền còn sau 3 tháng |\n|---:|---:|---:|---:|---:|\n| 100 triệu | 60 triệu | 72 triệu | **-12 triệu** | **204 triệu** |\n| 150 triệu | 90 triệu | 72 triệu | **+18 triệu** | **294 triệu** |\n\n### Doanh thu hòa vốn\n\n\\[\n\\text{Doanh thu hòa vốn}=\\frac{72}{60\\%}=\\mathbf{120\\ triệu/tháng}\n\\]\n\nMức này chỉ là **hòa vốn hoạt động hàng tháng**, chưa tính thu hồi vốn sửa chữa và đặt cọc.\n\n### Điều nên cân nhắc trước khi quyết định\n\n- Doanh thu 100 triệu/tháng làm mất **12 triệu/tháng**, nên vốn vận hành 240 triệu sẽ giảm dần.\n- Cần có kế hoạch đạt tối thiểu **120 triệu/tháng**, tốt hơn nên đặt mục tiêu **trên 130–150 triệu** để có vùng an toàn.\n- Kiểm tra khả năng giảm chi phí cố định, đặc biệt là **lương 42 triệu/tháng**, hoặc giảm chi phí sửa chữa ban đầu.\n- Xác nhận giá vốn thực tế có ổn định ở 40% hay không; nếu giá vốn tăng, doanh thu hòa vốn sẽ cao hơn.\n- Với lợi nhuận 18 triệu/tháng ở doanh thu 150 triệu, riêng 300 triệu chi phí sửa chữa và đặt cọc cần khoảng **16,7 tháng** để thu hồi, chưa tính rủi ro kinh doanh.\n\nCác tính toán trên **chưa bao gồm thuế, phí thanh toán, tồn kho, hao hụt, marketing, chi phí phát sinh và vốn lưu động**. Assumption là doanh thu được thu tiền và giá vốn phát sinh trong cùng tháng.",
+      "transcript": {
+        "session_key": "agent:enterprise-finance-specialist:subagent:def04fd0-883b-4908-8673-a6951f081b55",
+        "current_session_id": "7b0551d7-a2f1-4f7a-9b53-d709f610d370",
+        "status": "done",
+        "agent": "enterprise-finance-specialist",
+        "events": [
+          {
+            "seq": 1,
+            "at": "2026-09-04T15:59:07.371Z",
+            "messageTimestamp": 1788537547370,
+            "recordedAt": 1788537547371,
+            "role": "user",
+            "userRunCorrelationId": "6a907c65-c0d8-4006-8397-65405aa75c6c",
+            "content": [
+              {
+                "type": "internalEventMetadata",
+                "bodyOmitted": true,
+                "sha256": "96d325ce0e44d5323b5d2ab663d19b0ff2227114106d1bafc1a3ccfb4cf0cc5d",
+                "characters": 1829,
+                "hasDelegatedTask": true
+              }
+            ]
+          },
+          {
+            "seq": 2,
+            "at": "2026-09-04T15:59:27.734Z",
+            "messageTimestamp": 1788537567733,
+            "recordedAt": 1788537567734,
+            "role": "assistant",
+            "model": "gpt-5.6-luna",
+            "provider": "openai",
+            "stopReason": "stop",
+            "runId": "6a907c65-c0d8-4006-8397-65405aa75c6c",
+            "content": [
+              {
+                "type": "text",
+                "text": "### Phân tích dòng tiền\n\n**Vốn ban đầu:** 540 triệu đồng\n\n| Khoản đầu tư ban đầu | Số tiền |\n|---|---:|\n| Sửa chữa | 240 triệu |\n| Đặt cọc | 60 triệu |\n| **Tiền còn lại để vận hành** | **240 triệu** |\n\nChi phí cố định hàng tháng: **18 + 42 + 12 = 72 triệu**.  \nGiá vốn = **40% doanh thu**, nên lãi gộp đóng góp = **60% doanh thu**.\n\n| Doanh thu/tháng | Lãi gộp | Chi phí cố định | Dòng tiền ròng/tháng | Tiền còn sau 3 tháng |\n|---:|---:|---:|---:|---:|\n| 100 triệu | 60 triệu | 72 triệu | **-12 triệu** | **204 triệu** |\n| 150 triệu | 90 triệu | 72 triệu | **+18 triệu** | **294 triệu** |\n\n### Doanh thu hòa vốn\n\n\\[\n\\text{Doanh thu hòa vốn}=\\frac{72}{60\\%}=\\mathbf{120\\ triệu/tháng}\n\\]\n\nMức này chỉ là **hòa vốn hoạt động hàng tháng**, chưa tính thu hồi vốn sửa chữa và đặt cọc.\n\n### Điều nên cân nhắc trước khi quyết định\n\n- Doanh thu 100 triệu/tháng làm mất **12 triệu/tháng**, nên vốn vận hành 240 triệu sẽ giảm dần.\n- Cần có kế hoạch đạt tối thiểu **120 triệu/tháng**, tốt hơn nên đặt mục tiêu **trên 130–150 triệu** để có vùng an toàn.\n- Kiểm tra khả năng giảm chi phí cố định, đặc biệt là **lương 42 triệu/tháng**, hoặc giảm chi phí sửa chữa ban đầu.\n- Xác nhận giá vốn thực tế có ổn định ở 40% hay không; nếu giá vốn tăng, doanh thu hòa vốn sẽ cao hơn.\n- Với lợi nhuận 18 triệu/tháng ở doanh thu 150 triệu, riêng 300 triệu chi phí sửa chữa và đặt cọc cần khoảng **16,7 tháng** để thu hồi, chưa tính rủi ro kinh doanh.\n\nCác tính toán trên **chưa bao gồm thuế, phí thanh toán, tồn kho, hao hụt, marketing, chi phí phát sinh và vốn lưu động**. Assumption là doanh thu được thu tiền và giá vốn phát sinh trong cùng tháng."
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "routing": [
+    {
+      "id": "5f531eba-4073-4be7-91b4-0bcea7e7330e",
+      "account_id": "68264167-a2d8-48b1-a00a-d31a06a7fd92",
+      "parent_run_id_hash": "49e755305ec63d7869ff173f58e4ce3bc7de0498a4ec96ba72111cac231e678f",
+      "outcome": "clarified",
+      "decision_source": "ai",
+      "reason_code": "handoff_confirmation_required",
+      "confirmation_state": "pending",
+      "policy_revision": 2,
+      "latency_ms": 6055,
+      "created_at": 1788537519545,
+      "targetAgentIds": [
+        "enterprise-finance-specialist"
+      ],
+      "childRunIds": []
+    },
+    {
+      "id": "3f36e370-e25b-4723-b47b-0d9c8f159c1e",
+      "account_id": "68264167-a2d8-48b1-a00a-d31a06a7fd92",
+      "parent_run_id_hash": "43c12c3f91d6f046818c616e8b07d4bb64ded592fd2ffbb296e570a7c99fd455",
+      "outcome": "delegated",
+      "decision_source": "ai",
+      "reason_code": "delegate_started",
+      "confirmation_state": "approved",
+      "policy_revision": 2,
+      "latency_ms": 45,
+      "created_at": 1788537547386,
+      "targetAgentIds": [
+        "enterprise-finance-specialist"
+      ],
+      "childRunIds": [
+        "6a907c65-c0d8-4006-8397-65405aa75c6c"
+      ]
+    }
+  ],
+  "planAudits": [
+    {
+      "id": "b6bf2925-40dc-40ff-be12-ee5e42f4de90",
+      "action": "delegation.plan.selected",
+      "target_id": "347b5d2a-4f59-4cb2-ab86-5b7ce19d3005",
+      "outcome": "success",
+      "created_at": 1788537519544,
+      "detail": {
+        "planId": "347b5d2a-4f59-4cb2-ab86-5b7ce19d3005",
+        "planRevision": 1,
+        "handling": "specialist",
+        "targetAgentIds": [
+          "enterprise-finance-specialist"
+        ],
+        "targetCount": 1,
+        "policyRevision": 2,
+        "accountPolicyRevision": 4,
+        "parentRunHash": "49e755305ec63d7869ff173f58e4ce3bc7de0498a4ec96ba72111cac231e678f",
+        "sessionHash": "c9180354b001565555d786b8506857b53abdf99b3df4c96cf0882306d4b83f3c"
+      }
+    },
+    {
+      "id": "f6a6b087-5eb8-41a7-9862-72d63392d596",
+      "action": "delegation.plan.confirmed",
+      "target_id": "347b5d2a-4f59-4cb2-ab86-5b7ce19d3005",
+      "outcome": "success",
+      "created_at": 1788537545515,
+      "detail": {
+        "planId": "347b5d2a-4f59-4cb2-ab86-5b7ce19d3005",
+        "planRevision": 1,
+        "handling": "specialist",
+        "targetAgentIds": [
+          "enterprise-finance-specialist"
+        ],
+        "targetCount": 1,
+        "policyRevision": 2,
+        "accountPolicyRevision": 4,
+        "parentRunHash": "43c12c3f91d6f046818c616e8b07d4bb64ded592fd2ffbb296e570a7c99fd455",
+        "sessionHash": "c9180354b001565555d786b8506857b53abdf99b3df4c96cf0882306d4b83f3c"
+      }
+    }
+  ],
+  "counts": {
+    "routingEvents": 2,
+    "selectedPlans": 1,
+    "confirmedPlans": 1,
+    "acceptedChildren": 1,
+    "endedChildren": 1,
+    "routedChildIds": 1
+  },
+  "environment": {
+    "account": [
+      {
+        "id": "68264167-a2d8-48b1-a00a-d31a06a7fd92",
+        "username": "hieu",
+        "display_name": "Hiếu DZ",
+        "role": "employee",
+        "enabled": 1,
+        "personal_agent_enabled": 1,
+        "policy_revision": 4
+      }
+    ],
+    "parentAgent": "enterprise-personal-2ae2cbc2deecdb86fe86",
+    "zones": [
+      {
+        "id": "0ee8b68b-8b2d-46db-87c2-d7c624abd7f9",
+        "slug": "qa-phap-che-20260904",
+        "name": "[KIỂM THỬ] Pháp chế & Mua sắm",
+        "status": "active",
+        "revision": 7,
+        "access_revision": 2,
+        "source_set_revision": 3,
+        "build_revision": 4,
+        "active_publication_id": "f746a0fb-083b-4114-99ec-ab202fdb4ff8",
+        "egress_policy": "external_allowed",
+        "updated_at": 1788505995879,
+        "publication_number": 2,
+        "generation_id": "9ac391d8-606e-468d-a543-d6111060e6d3",
+        "vector_status": "ready",
+        "published_at": 1788505995879
+      },
+      {
+        "id": "26f44d58-4a43-46f2-85a7-09f10c9c833d",
+        "slug": "qa-van-hanh-20260904",
+        "name": "[KIỂM THỬ] Dự án & Vận hành",
+        "status": "active",
+        "revision": 9,
+        "access_revision": 2,
+        "source_set_revision": 4,
+        "build_revision": 5,
+        "active_publication_id": "0f4ee7c5-d421-4383-9166-6abd5242cef9",
+        "egress_policy": "external_allowed",
+        "updated_at": 1788506267375,
+        "publication_number": 3,
+        "generation_id": "c0c2adec-66cf-4496-a324-fe8880b875dc",
+        "vector_status": "ready",
+        "published_at": 1788506267375
+      },
+      {
+        "id": "58f2e858-97bf-4953-965f-2637158b0169",
+        "slug": "qa-nhan-su-20260904",
+        "name": "[KIỂM THỬ] Nhân sự & Onboarding",
+        "status": "active",
+        "revision": 10,
+        "access_revision": 2,
+        "source_set_revision": 4,
+        "build_revision": 5,
+        "active_publication_id": "b3e8dbbc-012d-4df3-9049-7bf768861e34",
+        "egress_policy": "external_allowed",
+        "updated_at": 1788506190584,
+        "publication_number": 3,
+        "generation_id": "1fd693b9-451f-4dfe-b200-a557b79520b3",
+        "vector_status": "ready",
+        "published_at": 1788506190584
+      },
+      {
+        "id": "766b3227-d307-4c04-9c47-4e79d392ea2f",
+        "slug": "qa-tai-chinh-20260904",
+        "name": "[KIỂM THỬ] Tài chính & Chi phí",
+        "status": "active",
+        "revision": 7,
+        "access_revision": 2,
+        "source_set_revision": 3,
+        "build_revision": 4,
+        "active_publication_id": "b1c002af-74a6-4790-9abf-4e99b3809965",
+        "egress_policy": "external_allowed",
+        "updated_at": 1788506214938,
+        "publication_number": 2,
+        "generation_id": "7744be78-9af5-4a6b-b778-75431f4c2f28",
+        "vector_status": "ready",
+        "published_at": 1788506214938
+      },
+      {
+        "id": "dab5a778-619c-424d-9c60-c67d19634bda",
+        "slug": "qa-cntt-20260904",
+        "name": "[KIỂM THỬ] CNTT & An toàn thông tin",
+        "status": "active",
+        "revision": 9,
+        "access_revision": 4,
+        "source_set_revision": 3,
+        "build_revision": 4,
+        "active_publication_id": "094dafcd-2713-4c0d-826a-cd645390cb27",
+        "egress_policy": "external_allowed",
+        "updated_at": 1788506165191,
+        "publication_number": 2,
+        "generation_id": "5c17c548-b7b0-4668-b91b-7d78399f0228",
+        "vector_status": "ready",
+        "published_at": 1788506165191
+      },
+      {
+        "id": "ec9cfb6f-7eb6-49e1-bcf0-7d671ed199d5",
+        "slug": "qa-san-pham-20260904",
+        "name": "[KIỂM THỬ] Sản phẩm & Chăm sóc khách hàng",
+        "status": "active",
+        "revision": 7,
+        "access_revision": 2,
+        "source_set_revision": 3,
+        "build_revision": 4,
+        "active_publication_id": "feeba391-8313-43bd-bed3-1de6a910a4bf",
+        "egress_policy": "external_allowed",
+        "updated_at": 1788506242229,
+        "publication_number": 2,
+        "generation_id": "c9ce31ae-ed89-426c-b10d-8faf75ee740f",
+        "vector_status": "ready",
+        "published_at": 1788506242229
+      }
+    ],
+    "directBindings": [
+      {
+        "zone_id": "0ee8b68b-8b2d-46db-87c2-d7c624abd7f9",
+        "agent_resource_key": "agent:personal:68264167-a2d8-48b1-a00a-d31a06a7fd92",
+        "created_at": 1788464482803
+      },
+      {
+        "zone_id": "26f44d58-4a43-46f2-85a7-09f10c9c833d",
+        "agent_resource_key": "agent:personal:68264167-a2d8-48b1-a00a-d31a06a7fd92",
+        "created_at": 1788488889915
+      },
+      {
+        "zone_id": "58f2e858-97bf-4953-965f-2637158b0169",
+        "agent_resource_key": "agent:personal:68264167-a2d8-48b1-a00a-d31a06a7fd92",
+        "created_at": 1788464399970
+      },
+      {
+        "zone_id": "766b3227-d307-4c04-9c47-4e79d392ea2f",
+        "agent_resource_key": "agent:personal:68264167-a2d8-48b1-a00a-d31a06a7fd92",
+        "created_at": 1788464480699
+      },
+      {
+        "zone_id": "dab5a778-619c-424d-9c60-c67d19634bda",
+        "agent_resource_key": "agent:personal:68264167-a2d8-48b1-a00a-d31a06a7fd92",
+        "created_at": 1788466071120
+      },
+      {
+        "zone_id": "ec9cfb6f-7eb6-49e1-bcf0-7d671ed199d5",
+        "agent_resource_key": "agent:personal:68264167-a2d8-48b1-a00a-d31a06a7fd92",
+        "created_at": 1788464495855
+      }
+    ],
+    "evidenceTransferTableExists": true,
+    "evidenceTransferGrants": [],
+    "delegationPolicy": [
+      {
+        "rollout": "on",
+        "router_model": "openai/gpt-5.6-luna",
+        "auto_threshold": 0.9,
+        "clarify_threshold": 0.7,
+        "minimum_margin": 0.15,
+        "max_delegates_per_turn": 3,
+        "event_retention_days": 90,
+        "revision": 2,
+        "updated_at": 1788455885818
+      }
+    ],
+    "delegationOverrides": [],
+    "agentEntitlements": [
+      {
+        "resource_id": "agent:shared:enterprise-contract-specialist",
+        "resource_state": "active",
+        "effect": "allow",
+        "updated_at": 1788455749303
+      },
+      {
+        "resource_id": "agent:shared:enterprise-finance-specialist",
+        "resource_state": "active",
+        "effect": "allow",
+        "updated_at": 1788455749303
+      },
+      {
+        "resource_id": "agent:shared:enterprise-hr-specialist",
+        "resource_state": "active",
+        "effect": "allow",
+        "updated_at": 1788455749303
+      },
+      {
+        "resource_id": "agent:shared:main",
+        "resource_state": "active",
+        "effect": "allow",
+        "updated_at": 1788410872301
+      }
+    ],
+    "personalProfileRevision": [],
+    "sharedRelationshipRevisions": [],
+    "excluded": [
+      "profile_json",
+      "credentials",
+      "published source bodies",
+      "private paths"
+    ],
+    "fingerprintSha256": "a11a3d464e14edcd36dacfe562fa1635ab3bd774b858ab1f5abec0aada1b446d"
+  },
+  "evidenceAuditBoundary": "Private evidence audits do not persist a parent-session or child-run join. They are not exported by account/time inference.",
+  "acceptance": {
+    "routing": "PASS",
+    "actualChild": "PASS",
+    "content": "PASS",
+    "singleAcknowledgement": "PASS",
+    "noSpuriousReplyUI": "PASS",
+    "historyAfterReload": "PASS",
+    "notes": [
+      "Chrome User tab1369521721; session9daee8ef; natural B-C03 prompt and exactlyone assent.",
+      "Externally served build at22:55 contained phase fix; this assistant didnot rebuild/restart live gateway.",
+      "Screenshot personally inspected duringchildwait:oneACK,noReplyingquote. Final Worked disclosurecontainsoneACK."
+    ]
+  }
+}

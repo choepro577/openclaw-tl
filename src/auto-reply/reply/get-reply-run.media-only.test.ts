@@ -2100,6 +2100,91 @@ describe("runPreparedReply media-only handling", () => {
 
     expect(getActiveReplyRunCount()).toBe(activeBefore);
   });
+
+  it.each([
+    { name: "default", agentPrimary: undefined, expectedProfile: "anthropic:configured" },
+    {
+      name: "agent-specific",
+      agentPrimary: "anthropic/claude-opus-4-1@anthropic:agent-configured",
+      expectedProfile: "anthropic:agent-configured",
+    },
+  ])(
+    "forwards the $name configured model pin during reply admission",
+    async ({ agentPrimary, expectedProfile }) => {
+      const { resolveSessionAuthSelection } =
+        await import("../../agents/auth-profiles/session-override.js");
+      const { resolveDefaultModelForAgent } = await import("../../agents/model-selection.js");
+      const defaultModelMock = vi.mocked(resolveDefaultModelForAgent);
+      const originalDefaultModel = defaultModelMock.getMockImplementation();
+      defaultModelMock.mockReturnValue({ provider: "anthropic", model: "claude-opus-4-1" });
+      const sessionEntry: SessionEntry = {
+        sessionId: "configured-profile-reply",
+        updatedAt: 1,
+        authProfileOverride: "anthropic:automatic",
+        authProfileOverrideSource: "auto",
+      };
+      try {
+        await runPrepared({
+          cfg: {
+            agents: {
+              defaults: { model: "anthropic/claude-opus-4-1@anthropic:configured" },
+              ...(agentPrimary ? { entries: { default: { model: agentPrimary } } } : {}),
+            },
+          },
+          sessionEntry,
+          sessionStore: { "session-key": sessionEntry },
+          isNewSession: false,
+        });
+
+        expect(vi.mocked(resolveSessionAuthSelection)).toHaveBeenCalledWith(
+          expect.objectContaining({
+            provider: "anthropic",
+            modelId: "claude-opus-4-1",
+            configuredProfileId: expectedProfile,
+            sessionEntry: expect.objectContaining({
+              authProfileOverride: "anthropic:automatic",
+              authProfileOverrideSource: "auto",
+            }),
+          }),
+        );
+      } finally {
+        defaultModelMock.mockReset();
+        if (originalDefaultModel) {
+          defaultModelMock.mockImplementation(originalDefaultModel);
+        }
+      }
+    },
+  );
+
+  it.each([
+    { provider: "anthropic", model: "claude-sonnet-4-6" },
+    { provider: "another-provider", model: "claude-opus-4-1" },
+  ])(
+    "does not apply a configured model pin from $provider/$model to another reply route",
+    async ({ provider, model }) => {
+      const { resolveSessionAuthSelection } =
+        await import("../../agents/auth-profiles/session-override.js");
+      const { resolveDefaultModelForAgent } = await import("../../agents/model-selection.js");
+      const defaultModelMock = vi.mocked(resolveDefaultModelForAgent);
+      const originalDefaultModel = defaultModelMock.getMockImplementation();
+      defaultModelMock.mockReturnValue({ provider, model });
+      try {
+        await runPrepared({
+          cfg: { agents: { defaults: { model: `${provider}/${model}@profile:configured` } } },
+        });
+
+        const selection = vi.mocked(resolveSessionAuthSelection).mock.calls.at(-1)?.[0];
+        expect(selection).toMatchObject({ provider: "anthropic", modelId: "claude-opus-4-1" });
+        expect(selection).not.toHaveProperty("configuredProfileId");
+      } finally {
+        defaultModelMock.mockReset();
+        if (originalDefaultModel) {
+          defaultModelMock.mockImplementation(originalDefaultModel);
+        }
+      }
+    },
+  );
+
   it("waits for the previous active run to clear before registering a new reply operation", async () => {
     const queueSettings = await import("./queue/settings-runtime.js");
     vi.mocked(queueSettings.resolveQueueSettings).mockReturnValueOnce({ mode: "interrupt" });

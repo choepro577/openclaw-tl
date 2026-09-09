@@ -11,6 +11,7 @@ import {
   lineNumbers,
 } from "@codemirror/view";
 import { classHighlighter } from "@lezer/highlight";
+import { editorDisplayBranding } from "../../../branding/editor-display.ts";
 
 export type FileEditorDecorations = {
   targetLine?: number | null;
@@ -102,6 +103,7 @@ export async function createFileEditorView(params: {
         ...(language ? [language] : []),
         editable.of([EditorState.readOnly.of(!isEditable), EditorView.editable.of(isEditable)]),
         lineDecorations,
+        editorDisplayBranding,
         EditorView.updateListener.of((update) => {
           if (update.docChanged) {
             docChanged?.(update.state.sliceDoc());

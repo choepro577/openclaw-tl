@@ -1,0 +1,15 @@
+- main [ref=e57]:
+  - generic [ref=e58]:
+    - generic [ref=e71]:
+      - strong [ref=e72]: OpenClaw
+      - generic [ref=e73]: Enterprise Admin
+    - heading "Đăng nhập quản trị" [level=1] [ref=e74]
+    - paragraph [ref=e75]: Chỉ tài khoản administrator có thể truy cập portal này.
+    - generic [ref=e76]:
+      - generic [ref=e77]:
+        - text: Username
+        - textbox "Username" [ref=e78]
+      - generic [ref=e79]:
+        - text: Mật khẩu
+        - textbox "Mật khẩu" [ref=e80]
+      - button "Đăng nhập Admin" [ref=e81]

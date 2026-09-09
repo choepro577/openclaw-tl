@@ -2,6 +2,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { i18n } from "../i18n/index.ts";
+import { setEnterpriseUiAccountRole } from "../pages/enterprise/state/enterprise-ui-access.ts";
 import { createStorageMock } from "../test-helpers/storage.ts";
 import "./app-host.ts";
 import type { ApplicationContext } from "./context.ts";
@@ -20,11 +21,13 @@ type ShellServerPreferencesState = {
 
 describe("OpenClaw shell locale preferences", () => {
   beforeEach(() => {
+    setEnterpriseUiAccountRole(undefined);
     vi.stubGlobal("localStorage", createStorageMock());
     resetServerUiPrefsSync();
   });
 
   afterEach(() => {
+    setEnterpriseUiAccountRole(undefined);
     resetServerUiPrefsSync();
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
@@ -71,6 +74,33 @@ describe("OpenClaw shell locale preferences", () => {
     expect(useSystemLocale).toHaveBeenCalledOnce();
     expect(loadSettings().locale).toBeUndefined();
   });
+
+  it.each([{}, { locale: "en" }])(
+    "keeps the Enterprise browser language when legacy chat loads server prefs %j",
+    (prefs) => {
+      setEnterpriseUiAccountRole("employee");
+      localStorage.setItem("openclaw.i18n.locale", "vi");
+      const setLocale = vi.spyOn(i18n, "setLocale").mockResolvedValue();
+      const useSystemLocale = vi.spyOn(i18n, "useSystemLocale").mockResolvedValue();
+      const runtimeConfig = {
+        state: { configSnapshot: { config: { ui: { prefs } }, hash: "enterprise-locale" } },
+      } as unknown as ApplicationContext["runtimeConfig"];
+      const context = {
+        gateway: { connection: { gatewayUrl: "ws://locale.test" } },
+        navigation: { update: vi.fn() },
+        theme: { refresh: vi.fn() },
+        runtimeConfig,
+      } as unknown as ApplicationContext;
+      const shell = document.createElement(
+        "openclaw-app-shell",
+      ) as unknown as ShellServerPreferencesState;
+      shell.runtime = { context };
+      shell.reconcileServerUiPrefs(runtimeConfig);
+      expect(setLocale).not.toHaveBeenCalled();
+      expect(useSystemLocale).not.toHaveBeenCalled();
+      expect(localStorage.getItem("openclaw.i18n.locale")).toBe("vi");
+    },
+  );
 
   it("keeps a retained device-local locale instead of realigning to the rejected server value", () => {
     const setLocale = vi.spyOn(i18n, "setLocale").mockResolvedValue();

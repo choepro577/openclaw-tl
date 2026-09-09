@@ -1,0 +1,3559 @@
+{
+  "capturedAt": "2026-09-04T14:29:20.392Z",
+  "parentAgent": "enterprise-personal-2ae2cbc2deecdb86fe86",
+  "accountId": "68264167-a2d8-48b1-a00a-d31a06a7fd92",
+  "sessionKey": "agent:enterprise-personal-2ae2cbc2deecdb86fe86:dashboard:c66f48cd-0eaf-4aa4-a18b-5fbdfd76b90f",
+  "transcriptId": "ef05d618-e4be-4762-9203-6ad7c6e72fc9",
+  "sessionHash": "c23a4d3c0ae01febe3c0c50a9091c2d1efde8d4a8881dddbc9469728aacb33c4",
+  "collectionMode": "sqlite3 -readonly; no runtime mutations",
+  "privateBodiesOmitted": true,
+  "parent": {
+    "session_key": "agent:enterprise-personal-2ae2cbc2deecdb86fe86:dashboard:c66f48cd-0eaf-4aa4-a18b-5fbdfd76b90f",
+    "current_session_id": "ef05d618-e4be-4762-9203-6ad7c6e72fc9",
+    "status": "done",
+    "agent": "enterprise-personal-2ae2cbc2deecdb86fe86",
+    "events": [
+      {
+        "seq": 1,
+        "at": "2026-09-04T14:11:03.376Z",
+        "messageTimestamp": 1788531060321,
+        "recordedAt": 1788531063376,
+        "role": "user",
+        "userRunCorrelationId": "05761ad5-deb6-41f7-8d67-72e39d0fa5cb",
+        "content": [
+          {
+            "type": "text",
+            "text": "Mình cần thanh toán 27 phần nước, giá 14 nghìn một phần. Tổng cộng là bao nhiêu vậy?"
+          }
+        ]
+      },
+      {
+        "seq": 4,
+        "at": "2026-09-04T14:11:09.570Z",
+        "messageTimestamp": 1788531065949,
+        "recordedAt": 1788531069570,
+        "role": "assistant",
+        "model": "gpt-5.6-sol",
+        "provider": "openai",
+        "stopReason": "stop",
+        "runId": "05761ad5-deb6-41f7-8d67-72e39d0fa5cb",
+        "content": [
+          {
+            "type": "text",
+            "text": "27 × 14.000 = **378.000 đồng**.",
+            "phase": "final_answer"
+          }
+        ]
+      },
+      {
+        "seq": 5,
+        "at": "2026-09-04T14:11:45.391Z",
+        "messageTimestamp": 1788531097581,
+        "recordedAt": 1788531105391,
+        "role": "user",
+        "userRunCorrelationId": "4bc25674-493e-4e9b-bd5b-8a2e951417ea",
+        "content": [
+          {
+            "type": "text",
+            "text": "Nhóm mình tuần sau đi công tác 3 người, ở 2 đêm và làm việc 3 ngày. Phòng nghỉ đang báo 900 nghìn/người/đêm, ăn uống dự trù 240 nghìn/người/ngày. Công ty cho tính tối đa bao nhiêu cho ăn ở, dự trù này dư ra bao nhiêu và sau chuyến đi phải nộp chứng từ trong bao lâu?"
+          }
+        ]
+      },
+      {
+        "seq": 6,
+        "at": "2026-09-04T14:11:45.396Z",
+        "messageTimestamp": 1788531105396,
+        "recordedAt": 1788531105396,
+        "role": "assistant",
+        "model": "gateway-injected",
+        "provider": "openclaw",
+        "stopReason": "stop",
+        "content": [
+          {
+            "type": "text",
+            "text": "Bạn có đồng ý giao các phần việc đã nêu cho Chuyên gia Tài chính & Ngân sách không?"
+          }
+        ]
+      },
+      {
+        "seq": 7,
+        "at": "2026-09-04T14:16:28.513Z",
+        "messageTimestamp": 1788531376113,
+        "recordedAt": 1788531388513,
+        "role": "user",
+        "userRunCorrelationId": "b0d7897f-ba10-4ffb-8198-43f37881cb2c",
+        "content": [
+          {
+            "type": "text",
+            "text": "Ừ, bạn xem giúp mình nhé."
+          }
+        ]
+      },
+      {
+        "seq": 8,
+        "at": "2026-09-04T14:16:35.538Z",
+        "messageTimestamp": 1788531395536,
+        "recordedAt": 1788531395538,
+        "role": "assistant",
+        "model": "host-response",
+        "provider": "openclaw",
+        "stopReason": "stop",
+        "runId": "b0d7897f-ba10-4ffb-8198-43f37881cb2c",
+        "content": [
+          {
+            "type": "text",
+            "text": "Chưa khởi chạy được Chuyên gia Tài chính & Ngân sách (chưa tìm thấy chứng cứ phù hợp trong nguồn được phép). Phần chuyên gia chưa hoàn tất; tôi chưa có kết quả bàn giao để tổng hợp."
+          }
+        ]
+      },
+      {
+        "seq": 9,
+        "at": "2026-09-04T14:16:59.765Z",
+        "messageTimestamp": 1788531412181,
+        "recordedAt": 1788531419765,
+        "role": "user",
+        "userRunCorrelationId": "8aad9310-0c57-4aaf-92cf-83477fca3db0",
+        "content": [
+          {
+            "type": "text",
+            "text": "Mình có 540 triệu để mở một điểm bán nhỏ, dự kiến sửa chỗ bán hết 240 triệu và đặt cọc 60 triệu. Hằng tháng trả 18 triệu tiền thuê, 42 triệu lương, thêm 12 triệu chi phí khác; hàng bán ra có giá vốn bằng 40% doanh thu. Nếu mỗi tháng bán được 100 triệu hoặc 150 triệu thì tiền còn lại sau 3 tháng thế nào? Cần doanh thu bao nhiêu để hòa vốn, và có gì nên thay đổi trước khi mình quyết?"
+          }
+        ]
+      },
+      {
+        "seq": 10,
+        "at": "2026-09-04T14:16:59.775Z",
+        "messageTimestamp": 1788531419775,
+        "recordedAt": 1788531419775,
+        "role": "assistant",
+        "model": "gateway-injected",
+        "provider": "openclaw",
+        "stopReason": "stop",
+        "content": [
+          {
+            "type": "text",
+            "text": "Bạn có đồng ý giao các phần việc đã nêu cho Chuyên gia Tài chính & Ngân sách không?"
+          }
+        ]
+      },
+      {
+        "seq": 11,
+        "at": "2026-09-04T14:17:25.560Z",
+        "messageTimestamp": 1788531432268,
+        "recordedAt": 1788531445560,
+        "role": "user",
+        "userRunCorrelationId": "22794d28-39ee-4a66-83c2-3fab326867f2",
+        "content": [
+          {
+            "type": "text",
+            "text": "Ừ, bạn xem giúp mình nhé."
+          }
+        ]
+      },
+      {
+        "seq": 12,
+        "at": "2026-09-04T14:17:26.767Z",
+        "messageTimestamp": 1788531446766,
+        "recordedAt": 1788531446767,
+        "role": "assistant",
+        "model": "host-response",
+        "provider": "openclaw",
+        "stopReason": "stop",
+        "runId": "22794d28-39ee-4a66-83c2-3fab326867f2",
+        "content": [
+          {
+            "type": "text",
+            "text": "Đã chuyển phần việc đã xác nhận đến chuyên gia. Tôi đang chờ kết quả để tổng hợp."
+          }
+        ]
+      },
+      {
+        "seq": 13,
+        "at": "2026-09-04T14:17:26.885Z",
+        "messageTimestamp": 1788531446885,
+        "recordedAt": 1788531446885,
+        "role": "assistant",
+        "model": "gateway-injected",
+        "provider": "openclaw",
+        "stopReason": "stop",
+        "content": [
+          {
+            "type": "text",
+            "text": "Đã chuyển phần việc đã xác nhận đến chuyên gia. Tôi đang chờ kết quả để tổng hợp."
+          }
+        ]
+      },
+      {
+        "seq": 14,
+        "at": "2026-09-04T14:17:46.177Z",
+        "messageTimestamp": 1788531466176,
+        "recordedAt": 1788531466177,
+        "role": "user",
+        "content": [
+          {
+            "type": "internalEventMetadata",
+            "bodyOmitted": true,
+            "sha256": "5b41f7c1028f01bb9a228451e7a083fb356affe31a9648e3882fc6d0b56f9cde",
+            "characters": 1181,
+            "hasDelegatedTask": false
+          }
+        ]
+      },
+      {
+        "seq": 15,
+        "at": "2026-09-04T14:18:16.260Z",
+        "messageTimestamp": 1788531496259,
+        "recordedAt": 1788531496260,
+        "role": "user",
+        "content": [
+          {
+            "type": "internalEventMetadata",
+            "bodyOmitted": true,
+            "sha256": "5b41f7c1028f01bb9a228451e7a083fb356affe31a9648e3882fc6d0b56f9cde",
+            "characters": 1181,
+            "hasDelegatedTask": false
+          }
+        ]
+      },
+      {
+        "seq": 16,
+        "at": "2026-09-04T14:20:16.347Z",
+        "messageTimestamp": 1788531616345,
+        "recordedAt": 1788531616347,
+        "role": "user",
+        "content": [
+          {
+            "type": "internalEventMetadata",
+            "bodyOmitted": true,
+            "sha256": "5b41f7c1028f01bb9a228451e7a083fb356affe31a9648e3882fc6d0b56f9cde",
+            "characters": 1181,
+            "hasDelegatedTask": false
+          }
+        ]
+      },
+      {
+        "seq": 17,
+        "at": "2026-09-04T14:20:17.624Z",
+        "messageTimestamp": 1788531603183,
+        "recordedAt": 1788531617624,
+        "role": "user",
+        "userRunCorrelationId": "1d7cf933-a2b3-41b6-8d96-c8e98c33baae",
+        "content": [
+          {
+            "type": "text",
+            "text": "Về đợt triển khai ở chi nhánh Bến Tre, bên mình có đủ 30 người tham gia và dự trù tổng cộng 60 triệu. Báo giá dịch vụ là 48 triệu chưa thuế, nhà cung cấp sẽ tiếp xúc dữ liệu khách hàng. Chuyến đi vẫn là 3 người trong 3 ngày 2 đêm với chi phí ăn ở đã nói lúc nãy. Dự thảo BT-0904 yêu cầu ứng 80%, chưa ghi thời hạn họ phải khắc phục nếu chậm tiến độ, và trách nhiệm bồi thường của họ chỉ tối đa 2 triệu. Bạn xem giúp ngân sách còn lại có ổn không, khoản ứng có rủi ro gì và những điều khoản nào cần sửa. Bên mình còn phải chuẩn bị gì trước triển khai, xếp đào tạo và bàn giao ra sao? Như vậy đã nên chốt chưa?"
+          }
+        ]
+      },
+      {
+        "seq": 18,
+        "at": "2026-09-04T14:20:24.289Z",
+        "messageTimestamp": 1788531618920,
+        "recordedAt": 1788531624289,
+        "role": "assistant",
+        "model": "gpt-5.6-sol",
+        "provider": "openai",
+        "stopReason": "stop",
+        "runId": "1d7cf933-a2b3-41b6-8d96-c8e98c33baae",
+        "content": [
+          {
+            "type": "text",
+            "text": "Bạn có đồng ý giao các phần việc đã nêu cho Chuyên gia Hợp đồng & Pháp chế, Chuyên gia Tài chính & Ngân sách không?",
+            "phase": "final_answer"
+          }
+        ]
+      },
+      {
+        "seq": 19,
+        "at": "2026-09-04T14:20:38.709Z",
+        "messageTimestamp": 1788531635732,
+        "recordedAt": 1788531638709,
+        "role": "user",
+        "userRunCorrelationId": "aaad044a-7650-43fe-a46c-5c5f08877768",
+        "content": [
+          {
+            "type": "text",
+            "text": "Ừ, bạn xem giúp mình nhé."
+          }
+        ]
+      },
+      {
+        "seq": 20,
+        "at": "2026-09-04T14:20:44.396Z",
+        "messageTimestamp": 1788531639891,
+        "recordedAt": 1788531644396,
+        "role": "assistant",
+        "model": "gpt-5.6-sol",
+        "provider": "openai",
+        "stopReason": "toolUse",
+        "runId": "aaad044a-7650-43fe-a46c-5c5f08877768",
+        "content": [
+          {
+            "type": "toolCall",
+            "id": "call_UxSz1sEplcBWwOiAsBOzg4v7|fc_02c7a464337757cb016a9ad3bc5cdc87d0a9367cd35dbe49f9",
+            "name": "enterprise_specialists_list",
+            "argumentKeys": [],
+            "argumentsOmitted": true
+          }
+        ]
+      },
+      {
+        "seq": 21,
+        "at": "2026-09-04T14:20:44.430Z",
+        "messageTimestamp": 1788531644429,
+        "recordedAt": 1788531644430,
+        "role": "toolResult",
+        "toolName": "enterprise_specialists_list",
+        "toolCallId": "call_UxSz1sEplcBWwOiAsBOzg4v7|fc_02c7a464337757cb016a9ad3bc5cdc87d0a9367cd35dbe49f9",
+        "isError": false,
+        "status": "ok",
+        "runId": "aaad044a-7650-43fe-a46c-5c5f08877768",
+        "content": [
+          {
+            "type": "toolResultMetadata",
+            "status": "ok",
+            "isError": false,
+            "rawTextSha256": "b00e1b77da1265cdba5b97f03adab6fb898097f70685792b19caba1213456942",
+            "rawTextCharacters": 872,
+            "bodyOmitted": true
+          }
+        ]
+      },
+      {
+        "seq": 22,
+        "at": "2026-09-04T14:20:52.812Z",
+        "messageTimestamp": 1788531644433,
+        "recordedAt": 1788531652812,
+        "role": "assistant",
+        "model": "gpt-5.6-sol",
+        "provider": "openai",
+        "stopReason": "toolUse",
+        "runId": "aaad044a-7650-43fe-a46c-5c5f08877768",
+        "content": [
+          {
+            "type": "toolCall",
+            "id": "call_Ly7tddU0onBzuudWjIzNpHEP|fc_0547e09094057a55016a9ad3c43a0887d0925b9cf6e79eea25",
+            "name": "enterprise_knowledge_search",
+            "argumentKeys": [
+              "query",
+              "maxResults",
+              "zoneSlug"
+            ],
+            "argumentsOmitted": true
+          },
+          {
+            "type": "toolCall",
+            "id": "call_uunXkDD5uTeWCuGjitvNEDwH|fc_0547e09094057a55016a9ad3c43a1887d09bd21d8b83613181",
+            "name": "enterprise_knowledge_search",
+            "argumentKeys": [
+              "query",
+              "maxResults",
+              "zoneSlug"
+            ],
+            "argumentsOmitted": true
+          },
+          {
+            "type": "toolCall",
+            "id": "call_y5uLygBL5uTAuMe90Qzl8IDy|fc_0547e09094057a55016a9ad3c43a2487d0bb6b858493d3dba6",
+            "name": "enterprise_knowledge_search",
+            "argumentKeys": [
+              "query",
+              "maxResults",
+              "zoneSlug"
+            ],
+            "argumentsOmitted": true
+          },
+          {
+            "type": "toolCall",
+            "id": "call_zZDuVsqE8Su5GlfWAizwl1qh|fc_0547e09094057a55016a9ad3c43a2c87d095d5f56541c05ca3",
+            "name": "enterprise_knowledge_search",
+            "argumentKeys": [
+              "query",
+              "maxResults",
+              "zoneSlug"
+            ],
+            "argumentsOmitted": true
+          }
+        ]
+      },
+      {
+        "seq": 23,
+        "at": "2026-09-04T14:20:55.762Z",
+        "messageTimestamp": 1788531655760,
+        "recordedAt": 1788531655762,
+        "role": "toolResult",
+        "toolName": "enterprise_knowledge_search",
+        "toolCallId": "call_Ly7tddU0onBzuudWjIzNpHEP|fc_0547e09094057a55016a9ad3c43a0887d0925b9cf6e79eea25",
+        "isError": false,
+        "runId": "aaad044a-7650-43fe-a46c-5c5f08877768",
+        "content": [
+          {
+            "type": "toolResultMetadata",
+            "isError": false,
+            "rawTextSha256": "a45f963237349be0fcc17e56f3faf8ea39812600abbee409debff611c711a183",
+            "rawTextCharacters": 19407,
+            "bodyOmitted": true,
+            "partial": false,
+            "hits": [
+              {
+                "citation": {
+                  "sourceTitle": "[QA] FIN-01 — Công tác phí và hoàn ứng",
+                  "zoneLabel": "[KIỂM THỬ] Tài chính & Chi phí",
+                  "sourceVersion": 1,
+                  "publishedAt": "2026-09-04T07:16:54.938Z"
+                },
+                "score": 0.046278948737965134
+              },
+              {
+                "citation": {
+                  "sourceTitle": "[QA] LEG-01 — Quy trình thẩm định hợp đồng",
+                  "zoneLabel": "[KIỂM THỬ] Pháp chế & Mua sắm",
+                  "sourceVersion": 1,
+                  "publishedAt": "2026-09-04T07:13:15.879Z"
+                },
+                "score": 0.04032656778558418
+              },
+              {
+                "citation": {
+                  "sourceTitle": "[QA] FIN-02 — Ngân sách đào tạo và ngưỡng mua sắm",
+                  "zoneLabel": "[KIỂM THỬ] Tài chính & Chi phí",
+                  "sourceVersion": 1,
+                  "publishedAt": "2026-09-04T07:16:54.938Z"
+                },
+                "score": 0.04019457245263697
+              },
+              {
+                "citation": {
+                  "sourceTitle": "[QA] OPS-01 — Kế hoạch triển khai chi nhánh Bến Tre",
+                  "zoneLabel": "[KIỂM THỬ] Dự án & Vận hành",
+                  "sourceVersion": 1,
+                  "publishedAt": "2026-09-04T07:17:47.375Z"
+                },
+                "score": 0.039665332023872485
+              },
+              {
+                "citation": {
+                  "sourceTitle": "[QA] PROD-01 — Aurora Desk: gói dịch vụ",
+                  "zoneLabel": "[KIỂM THỬ] Sản phẩm & Chăm sóc khách hàng",
+                  "sourceVersion": 1,
+                  "publishedAt": "2026-09-04T07:17:22.229Z"
+                },
+                "score": 0.03887168123022169
+              },
+              {
+                "citation": {
+                  "sourceTitle": "[QA] IT-02 — MFA và truy cập nhà cung cấp",
+                  "zoneLabel": "[KIỂM THỬ] CNTT & An toàn thông tin",
+                  "sourceVersion": 1,
+                  "publishedAt": "2026-09-04T07:16:05.191Z"
+                },
+                "score": 0.03873926619828259
+              },
+              {
+                "citation": {
+                  "sourceTitle": "[QA] OPS-02 — Đào tạo và bàn giao chi nhánh",
+                  "zoneLabel": "[KIỂM THỬ] Dự án & Vận hành",
+                  "sourceVersion": 2,
+                  "publishedAt": "2026-09-04T07:17:47.375Z"
+                },
+                "score": 0.038078030436570896
+              },
+              {
+                "citation": {
+                  "sourceTitle": "[QA] CS-01 — SLA khách hàng và chính sách hoàn phí",
+                  "zoneLabel": "[KIỂM THỬ] Sản phẩm & Chăm sóc khách hàng",
+                  "sourceVersion": 1,
+                  "publishedAt": "2026-09-04T07:17:22.229Z"
+                },
+                "score": 0.0376812050397455
+              },
+              {
+                "citation": {
+                  "sourceTitle": "[QA] HR-02 — Nghỉ phép, đào tạo và làm việc từ xa",
+                  "zoneLabel": "[KIỂM THỬ] Nhân sự & Onboarding",
+                  "sourceVersion": 1,
+                  "publishedAt": "2026-09-04T07:16:30.584Z"
+                },
+                "score": 0.0375487900078064
+              },
+              {
+                "citation": {
+                  "sourceTitle": "[QA] HR-01 — Sổ tay onboarding Sao Mai",
+                  "zoneLabel": "[KIỂM THỬ] Nhân sự & Onboarding",
+                  "sourceVersion": 2,
+                  "publishedAt": "2026-09-04T07:16:30.584Z"
+                },
+                "score": 0.036226318484383
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "seq": 24,
+        "at": "2026-09-04T14:20:55.767Z",
+        "messageTimestamp": 1788531655765,
+        "recordedAt": 1788531655767,
+        "role": "toolResult",
+        "toolName": "enterprise_knowledge_search",
+        "toolCallId": "call_uunXkDD5uTeWCuGjitvNEDwH|fc_0547e09094057a55016a9ad3c43a1887d09bd21d8b83613181",
+        "isError": false,
+        "runId": "aaad044a-7650-43fe-a46c-5c5f08877768",
+        "content": [
+          {
+            "type": "toolResultMetadata",
+            "isError": false,
+            "rawTextSha256": "7383c7cac0a7878965394da7a768e642e4cb4a2555d44a4b6c9db9ab7b714876",
+            "rawTextCharacters": 19406,
+            "bodyOmitted": true,
+            "partial": false,
+            "hits": [
+              {
+                "citation": {
+                  "sourceTitle": "[QA] OPS-01 — Kế hoạch triển khai chi nhánh Bến Tre",
+                  "zoneLabel": "[KIỂM THỬ] Dự án & Vận hành",
+                  "sourceVersion": 1,
+                  "publishedAt": "2026-09-04T07:17:47.375Z"
+                },
+                "score": 0.045680369617857444
+              },
+              {
+                "citation": {
+                  "sourceTitle": "[QA] OPS-02 — Đào tạo và bàn giao chi nhánh",
+                  "zoneLabel": "[KIỂM THỬ] Dự án & Vận hành",
+                  "sourceVersion": 2,
+                  "publishedAt": "2026-09-04T07:17:47.375Z"
+                },
+                "score": 0.043925983652945165
+              },
+              {
+                "citation": {
+                  "sourceTitle": "[QA] HR-01 — Sổ tay onboarding Sao Mai",
+                  "zoneLabel": "[KIỂM THỬ] Nhân sự & Onboarding",
+                  "sourceVersion": 2,
+                  "publishedAt": "2026-09-04T07:16:30.584Z"
+                },
+                "score": 0.039804429105550765
+              },
+              {
+                "citation": {
+                  "sourceTitle": "[QA] FIN-02 — Ngân sách đào tạo và ngưỡng mua sắm",
+                  "zoneLabel": "[KIỂM THỬ] Tài chính & Chi phí",
+                  "sourceVersion": 1,
+                  "publishedAt": "2026-09-04T07:16:54.938Z"
+                },
+                "score": 0.03892723612309462
+              },
+              {
+                "citation": {
+                  "sourceTitle": "[QA] IT-01 — Thiết bị và hỗ trợ kỹ thuật",
+                  "zoneLabel": "[KIỂM THỬ] CNTT & An toàn thông tin",
+                  "sourceVersion": 1,
+                  "publishedAt": "2026-09-04T07:16:05.191Z"
+                },
+                "score": 0.03892723612309462
+              },
+              {
+                "citation": {
+                  "sourceTitle": "[QA] CS-01 — SLA khách hàng và chính sách hoàn phí",
+                  "zoneLabel": "[KIỂM THỬ] Sản phẩm & Chăm sóc khách hàng",
+                  "sourceVersion": 1,
+                  "publishedAt": "2026-09-04T07:17:22.229Z"
+                },
+                "score": 0.038050043140638486
+              },
+              {
+                "citation": {
+                  "sourceTitle": "[QA] IT-02 — MFA và truy cập nhà cung cấp",
+                  "zoneLabel": "[KIỂM THỬ] CNTT & An toàn thông tin",
+                  "sourceVersion": 1,
+                  "publishedAt": "2026-09-04T07:16:05.191Z"
+                },
+                "score": 0.03795981890209394
+              },
+              {
+                "citation": {
+                  "sourceTitle": "[QA] LEG-02 — NDA và tiếp nhận nhà cung cấp",
+                  "zoneLabel": "[KIỂM THỬ] Pháp chế & Mua sắm",
+                  "sourceVersion": 1,
+                  "publishedAt": "2026-09-04T07:13:15.879Z"
+                },
+                "score": 0.03734703628452411
+              },
+              {
+                "citation": {
+                  "sourceTitle": "[QA] HR-02 — Nghỉ phép, đào tạo và làm việc từ xa",
+                  "zoneLabel": "[KIỂM THỬ] Nhân sự & Onboarding",
+                  "sourceVersion": 1,
+                  "publishedAt": "2026-09-04T07:16:30.584Z"
+                },
+                "score": 0.035328239954725525
+              },
+              {
+                "citation": {
+                  "sourceTitle": "[QA] FIN-01 — Công tác phí và hoàn ứng",
+                  "zoneLabel": "[KIỂM THỬ] Tài chính & Chi phí",
+                  "sourceVersion": 1,
+                  "publishedAt": "2026-09-04T07:16:54.938Z"
+                },
+                "score": 0.034889643463497454
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "seq": 25,
+        "at": "2026-09-04T14:20:55.771Z",
+        "messageTimestamp": 1788531655769,
+        "recordedAt": 1788531655771,
+        "role": "toolResult",
+        "toolName": "enterprise_knowledge_search",
+        "toolCallId": "call_y5uLygBL5uTAuMe90Qzl8IDy|fc_0547e09094057a55016a9ad3c43a2487d0bb6b858493d3dba6",
+        "isError": false,
+        "runId": "aaad044a-7650-43fe-a46c-5c5f08877768",
+        "content": [
+          {
+            "type": "toolResultMetadata",
+            "isError": false,
+            "rawTextSha256": "dd66aaf5119c72c37ee7cb3675ec92198aeb2d6f20b405cd75a93583ea6dbf31",
+            "rawTextCharacters": 19400,
+            "bodyOmitted": true,
+            "partial": false,
+            "hits": [
+              {
+                "citation": {
+                  "sourceTitle": "[QA] CS-01 — SLA khách hàng và chính sách hoàn phí",
+                  "zoneLabel": "[KIỂM THỬ] Sản phẩm & Chăm sóc khách hàng",
+                  "sourceVersion": 1,
+                  "publishedAt": "2026-09-04T07:17:22.229Z"
+                },
+                "score": 0.04250910746812386
+              },
+              {
+                "citation": {
+                  "sourceTitle": "[QA] LEG-02 — NDA và tiếp nhận nhà cung cấp",
+                  "zoneLabel": "[KIỂM THỬ] Pháp chế & Mua sắm",
+                  "sourceVersion": 1,
+                  "publishedAt": "2026-09-04T07:13:15.879Z"
+                },
+                "score": 0.04085580821434867
+              },
+              {
+                "citation": {
+                  "sourceTitle": "[QA] FIN-01 — Công tác phí và hoàn ứng",
+                  "zoneLabel": "[KIỂM THỬ] Tài chính & Chi phí",
+                  "sourceVersion": 1,
+                  "publishedAt": "2026-09-04T07:16:54.938Z"
+                },
+                "score": 0.04077299635701275
+              },
+              {
+                "citation": {
+                  "sourceTitle": "[QA] OPS-01 — Kế hoạch triển khai chi nhánh Bến Tre",
+                  "zoneLabel": "[KIỂM THỬ] Dự án & Vận hành",
+                  "sourceVersion": 1,
+                  "publishedAt": "2026-09-04T07:17:47.375Z"
+                },
+                "score": 0.04042577413479053
+              },
+              {
+                "citation": {
+                  "sourceTitle": "[QA] IT-02 — MFA và truy cập nhà cung cấp",
+                  "zoneLabel": "[KIỂM THỬ] CNTT & An toàn thông tin",
+                  "sourceVersion": 1,
+                  "publishedAt": "2026-09-04T07:16:05.191Z"
+                },
+                "score": 0.04042577413479053
+              },
+              {
+                "citation": {
+                  "sourceTitle": "[QA] LEG-01 — Quy trình thẩm định hợp đồng",
+                  "zoneLabel": "[KIỂM THỬ] Pháp chế & Mua sắm",
+                  "sourceVersion": 1,
+                  "publishedAt": "2026-09-04T07:13:15.879Z"
+                },
+                "score": 0.03981414154768201
+              },
+              {
+                "citation": {
+                  "sourceTitle": "[QA] PROD-01 — Aurora Desk: gói dịch vụ",
+                  "zoneLabel": "[KIỂM THỬ] Sản phẩm & Chăm sóc khách hàng",
+                  "sourceVersion": 1,
+                  "publishedAt": "2026-09-04T07:17:22.229Z"
+                },
+                "score": 0.0395497311827957
+              },
+              {
+                "citation": {
+                  "sourceTitle": "[QA] HR-01 — Sổ tay onboarding Sao Mai",
+                  "zoneLabel": "[KIỂM THỬ] Nhân sự & Onboarding",
+                  "sourceVersion": 2,
+                  "publishedAt": "2026-09-04T07:16:30.584Z"
+                },
+                "score": 0.0383424408014572
+              },
+              {
+                "citation": {
+                  "sourceTitle": "[QA] IT-01 — Thiết bị và hỗ trợ kỹ thuật",
+                  "zoneLabel": "[KIỂM THỬ] CNTT & An toàn thông tin",
+                  "sourceVersion": 1,
+                  "publishedAt": "2026-09-04T07:16:05.191Z"
+                },
+                "score": 0.03746639784946237
+              },
+              {
+                "citation": {
+                  "sourceTitle": "[QA] FIN-02 — Ngân sách đào tạo và ngưỡng mua sắm",
+                  "zoneLabel": "[KIỂM THỬ] Tài chính & Chi phí",
+                  "sourceVersion": 1,
+                  "publishedAt": "2026-09-04T07:16:54.938Z"
+                },
+                "score": 0.03711917562724014
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "seq": 26,
+        "at": "2026-09-04T14:20:55.775Z",
+        "messageTimestamp": 1788531655773,
+        "recordedAt": 1788531655775,
+        "role": "toolResult",
+        "toolName": "enterprise_knowledge_search",
+        "toolCallId": "call_zZDuVsqE8Su5GlfWAizwl1qh|fc_0547e09094057a55016a9ad3c43a2c87d095d5f56541c05ca3",
+        "isError": false,
+        "runId": "aaad044a-7650-43fe-a46c-5c5f08877768",
+        "content": [
+          {
+            "type": "toolResultMetadata",
+            "isError": false,
+            "rawTextSha256": "439e30afd228228583f25b010293e6f07e1b927714d33aa91e5fbf41f5ff860f",
+            "rawTextCharacters": 19390,
+            "bodyOmitted": true,
+            "partial": false,
+            "hits": [
+              {
+                "citation": {
+                  "sourceTitle": "[QA] OPS-01 — Kế hoạch triển khai chi nhánh Bến Tre",
+                  "zoneLabel": "[KIỂM THỬ] Dự án & Vận hành",
+                  "sourceVersion": 1,
+                  "publishedAt": "2026-09-04T07:17:47.375Z"
+                },
+                "score": 0.04632855191256831
+              },
+              {
+                "citation": {
+                  "sourceTitle": "[QA] LEG-02 — NDA và tiếp nhận nhà cung cấp",
+                  "zoneLabel": "[KIỂM THỬ] Pháp chế & Mua sắm",
+                  "sourceVersion": 1,
+                  "publishedAt": "2026-09-04T07:13:15.879Z"
+                },
+                "score": 0.04216188524590164
+              },
+              {
+                "citation": {
+                  "sourceTitle": "[QA] OPS-02 — Đào tạo và bàn giao chi nhánh",
+                  "zoneLabel": "[KIỂM THỬ] Dự án & Vận hành",
+                  "sourceVersion": 2,
+                  "publishedAt": "2026-09-04T07:17:47.375Z"
+                },
+                "score": 0.04163306451612903
+              },
+              {
+                "citation": {
+                  "sourceTitle": "[QA] IT-02 — MFA và truy cập nhà cung cấp",
+                  "zoneLabel": "[KIỂM THỬ] CNTT & An toàn thông tin",
+                  "sourceVersion": 1,
+                  "publishedAt": "2026-09-04T07:16:05.191Z"
+                },
+                "score": 0.03955771857923497
+              },
+              {
+                "citation": {
+                  "sourceTitle": "[QA] LEG-01 — Quy trình thẩm định hợp đồng",
+                  "zoneLabel": "[KIỂM THỬ] Pháp chế & Mua sắm",
+                  "sourceVersion": 1,
+                  "publishedAt": "2026-09-04T07:13:15.879Z"
+                },
+                "score": 0.0395497311827957
+              },
+              {
+                "citation": {
+                  "sourceTitle": "[QA] FIN-02 — Ngân sách đào tạo và ngưỡng mua sắm",
+                  "zoneLabel": "[KIỂM THỬ] Tài chính & Chi phí",
+                  "sourceVersion": 1,
+                  "publishedAt": "2026-09-04T07:16:54.938Z"
+                },
+                "score": 0.03903688524590164
+              },
+              {
+                "citation": {
+                  "sourceTitle": "[QA] HR-01 — Sổ tay onboarding Sao Mai",
+                  "zoneLabel": "[KIỂM THỬ] Nhân sự & Onboarding",
+                  "sourceVersion": 2,
+                  "publishedAt": "2026-09-04T07:16:30.584Z"
+                },
+                "score": 0.03877247488101534
+              },
+              {
+                "citation": {
+                  "sourceTitle": "[QA] PROD-01 — Aurora Desk: gói dịch vụ",
+                  "zoneLabel": "[KIỂM THỬ] Sản phẩm & Chăm sóc khách hàng",
+                  "sourceVersion": 1,
+                  "publishedAt": "2026-09-04T07:17:22.229Z"
+                },
+                "score": 0.03851605191256831
+              },
+              {
+                "citation": {
+                  "sourceTitle": "[QA] FIN-01 — Công tác phí và hoàn ứng",
+                  "zoneLabel": "[KIỂM THỬ] Tài chính & Chi phí",
+                  "sourceVersion": 1,
+                  "publishedAt": "2026-09-04T07:16:54.938Z"
+                },
+                "score": 0.03850806451612903
+              },
+              {
+                "citation": {
+                  "sourceTitle": "[QA] CS-01 — SLA khách hàng và chính sách hoàn phí",
+                  "zoneLabel": "[KIỂM THỬ] Sản phẩm & Chăm sóc khách hàng",
+                  "sourceVersion": 1,
+                  "publishedAt": "2026-09-04T07:17:22.229Z"
+                },
+                "score": 0.0379872311827957
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "seq": 27,
+        "at": "2026-09-04T14:21:33.835Z",
+        "messageTimestamp": 1788531655782,
+        "recordedAt": 1788531693835,
+        "role": "assistant",
+        "model": "gpt-5.6-sol",
+        "provider": "openai",
+        "stopReason": "toolUse",
+        "runId": "aaad044a-7650-43fe-a46c-5c5f08877768",
+        "content": [
+          {
+            "type": "toolCall",
+            "id": "call_SdNvGONO6xtfuFCOZvRIkfhs|fc_01c0eb109312de95016a9ad3edc30c87d0a6bdb2dba580d058",
+            "name": "enterprise_knowledge_get",
+            "argumentKeys": [
+              "citationId"
+            ],
+            "argumentsOmitted": true
+          },
+          {
+            "type": "toolCall",
+            "id": "call_iPA1UEYgOrM59ovEKZoW4Mmn|fc_01c0eb109312de95016a9ad3edc31c87d08b81d5d8d76f517d",
+            "name": "enterprise_knowledge_get",
+            "argumentKeys": [
+              "citationId"
+            ],
+            "argumentsOmitted": true
+          },
+          {
+            "type": "toolCall",
+            "id": "call_hCzRjUpeDXIDbGF9fJsjpzQk|fc_01c0eb109312de95016a9ad3edc32887d0bfa5eaba322ee1bd",
+            "name": "enterprise_knowledge_get",
+            "argumentKeys": [
+              "citationId"
+            ],
+            "argumentsOmitted": true
+          },
+          {
+            "type": "toolCall",
+            "id": "call_ewRFyRUi2tm7q8WZMYYyLpC5|fc_01c0eb109312de95016a9ad3edc33087d0bd4abc9ceffd4dcc",
+            "name": "enterprise_knowledge_get",
+            "argumentKeys": [
+              "citationId"
+            ],
+            "argumentsOmitted": true
+          },
+          {
+            "type": "toolCall",
+            "id": "call_eT5AU3ElaAkAd6R9EuOB2T7E|fc_01c0eb109312de95016a9ad3edc33c87d0bb84a5439fa2f46c",
+            "name": "enterprise_knowledge_get",
+            "argumentKeys": [
+              "citationId"
+            ],
+            "argumentsOmitted": true
+          },
+          {
+            "type": "toolCall",
+            "id": "call_AQUuAfSH0XGlBINErsR73NEI|fc_01c0eb109312de95016a9ad3edc34487d09fd094f88b5265f4",
+            "name": "enterprise_knowledge_get",
+            "argumentKeys": [
+              "citationId"
+            ],
+            "argumentsOmitted": true
+          },
+          {
+            "type": "toolCall",
+            "id": "call_NebnIN6Uz1CPLKPXsVHhNPyp|fc_01c0eb109312de95016a9ad3edc34c87d0a95fc459a4ebc580",
+            "name": "enterprise_knowledge_get",
+            "argumentKeys": [
+              "citationId"
+            ],
+            "argumentsOmitted": true
+          }
+        ]
+      },
+      {
+        "seq": 28,
+        "at": "2026-09-04T14:21:33.911Z",
+        "messageTimestamp": 1788531693910,
+        "recordedAt": 1788531693911,
+        "role": "toolResult",
+        "toolName": "enterprise_knowledge_get",
+        "toolCallId": "call_SdNvGONO6xtfuFCOZvRIkfhs|fc_01c0eb109312de95016a9ad3edc30c87d0a6bdb2dba580d058",
+        "isError": false,
+        "runId": "aaad044a-7650-43fe-a46c-5c5f08877768",
+        "content": [
+          {
+            "type": "toolResultMetadata",
+            "isError": false,
+            "rawTextSha256": "6a29f32bb49ae7128c075310d110fd85e8464dd00de7726f077f20e5db944c6e",
+            "rawTextCharacters": 1511,
+            "bodyOmitted": true,
+            "citation": {
+              "sourceTitle": "[QA] FIN-01 — Công tác phí và hoàn ứng",
+              "zoneLabel": "[KIỂM THỬ] Tài chính & Chi phí",
+              "sourceVersion": 1,
+              "publishedAt": "2026-09-04T07:16:54.938Z"
+            },
+            "evidenceCharacters": 772,
+            "evidenceSha256": "31c45fe9717fcace91804df9862749253aa67dcb99c7c633c75f94153ab1c070"
+          }
+        ]
+      },
+      {
+        "seq": 29,
+        "at": "2026-09-04T14:21:33.913Z",
+        "messageTimestamp": 1788531693912,
+        "recordedAt": 1788531693913,
+        "role": "toolResult",
+        "toolName": "enterprise_knowledge_get",
+        "toolCallId": "call_iPA1UEYgOrM59ovEKZoW4Mmn|fc_01c0eb109312de95016a9ad3edc31c87d08b81d5d8d76f517d",
+        "isError": false,
+        "runId": "aaad044a-7650-43fe-a46c-5c5f08877768",
+        "content": [
+          {
+            "type": "toolResultMetadata",
+            "isError": false,
+            "rawTextSha256": "cbf9b1c3b557ab9239c701f49c7db280cb5aee6875291e867d0137d25e6567ee",
+            "rawTextCharacters": 1479,
+            "bodyOmitted": true,
+            "citation": {
+              "sourceTitle": "[QA] FIN-02 — Ngân sách đào tạo và ngưỡng mua sắm",
+              "zoneLabel": "[KIỂM THỬ] Tài chính & Chi phí",
+              "sourceVersion": 1,
+              "publishedAt": "2026-09-04T07:16:54.938Z"
+            },
+            "evidenceCharacters": 731,
+            "evidenceSha256": "f1922f499ccf468d308f83fdd4d3d5b23950c624e6789ab80359a7227703b4ad"
+          }
+        ]
+      },
+      {
+        "seq": 30,
+        "at": "2026-09-04T14:21:33.916Z",
+        "messageTimestamp": 1788531693915,
+        "recordedAt": 1788531693916,
+        "role": "toolResult",
+        "toolName": "enterprise_knowledge_get",
+        "toolCallId": "call_hCzRjUpeDXIDbGF9fJsjpzQk|fc_01c0eb109312de95016a9ad3edc32887d0bfa5eaba322ee1bd",
+        "isError": false,
+        "runId": "aaad044a-7650-43fe-a46c-5c5f08877768",
+        "content": [
+          {
+            "type": "toolResultMetadata",
+            "isError": false,
+            "rawTextSha256": "75928094326e476e933502af11320a7cbc45bee339240f242dbaba367100a31c",
+            "rawTextCharacters": 2070,
+            "bodyOmitted": true,
+            "citation": {
+              "sourceTitle": "[QA] OPS-01 — Kế hoạch triển khai chi nhánh Bến Tre",
+              "zoneLabel": "[KIỂM THỬ] Dự án & Vận hành",
+              "sourceVersion": 1,
+              "publishedAt": "2026-09-04T07:17:47.375Z"
+            },
+            "evidenceCharacters": 1315,
+            "evidenceSha256": "508f6a1b317cf06142ab04b99e4171da98d78532acbd01b5e36cb27e45871b44"
+          }
+        ]
+      },
+      {
+        "seq": 31,
+        "at": "2026-09-04T14:21:33.918Z",
+        "messageTimestamp": 1788531693917,
+        "recordedAt": 1788531693918,
+        "role": "toolResult",
+        "toolName": "enterprise_knowledge_get",
+        "toolCallId": "call_ewRFyRUi2tm7q8WZMYYyLpC5|fc_01c0eb109312de95016a9ad3edc33087d0bd4abc9ceffd4dcc",
+        "isError": false,
+        "runId": "aaad044a-7650-43fe-a46c-5c5f08877768",
+        "content": [
+          {
+            "type": "toolResultMetadata",
+            "isError": false,
+            "rawTextSha256": "0b1e8d3a045f1d63d423fd127c9053e11614c9d47787022bd9aef26dfc083ec4",
+            "rawTextCharacters": 1742,
+            "bodyOmitted": true,
+            "citation": {
+              "sourceTitle": "[QA] OPS-02 — Đào tạo và bàn giao chi nhánh",
+              "zoneLabel": "[KIỂM THỬ] Dự án & Vận hành",
+              "sourceVersion": 2,
+              "publishedAt": "2026-09-04T07:17:47.375Z"
+            },
+            "evidenceCharacters": 997,
+            "evidenceSha256": "dc0fad686162628fa47f37b91c34048c9f2ccb338b23d381a568e5aa7bda0ac6"
+          }
+        ]
+      },
+      {
+        "seq": 32,
+        "at": "2026-09-04T14:21:33.919Z",
+        "messageTimestamp": 1788531693919,
+        "recordedAt": 1788531693919,
+        "role": "toolResult",
+        "toolName": "enterprise_knowledge_get",
+        "toolCallId": "call_eT5AU3ElaAkAd6R9EuOB2T7E|fc_01c0eb109312de95016a9ad3edc33c87d0bb84a5439fa2f46c",
+        "isError": false,
+        "runId": "aaad044a-7650-43fe-a46c-5c5f08877768",
+        "content": [
+          {
+            "type": "toolResultMetadata",
+            "isError": false,
+            "rawTextSha256": "a17a74c1396d3746adb3765d6862a1159ae39033cb50e8b924eaf186146b0064",
+            "rawTextCharacters": 1583,
+            "bodyOmitted": true,
+            "citation": {
+              "sourceTitle": "[QA] LEG-01 — Quy trình thẩm định hợp đồng",
+              "zoneLabel": "[KIỂM THỬ] Pháp chế & Mua sắm",
+              "sourceVersion": 1,
+              "publishedAt": "2026-09-04T07:13:15.879Z"
+            },
+            "evidenceCharacters": 841,
+            "evidenceSha256": "20ada0cfc870887bfae87b1ee313f85abdeb03b2e3fa6a24a86db83811142ca0"
+          }
+        ]
+      },
+      {
+        "seq": 33,
+        "at": "2026-09-04T14:21:33.921Z",
+        "messageTimestamp": 1788531693921,
+        "recordedAt": 1788531693921,
+        "role": "toolResult",
+        "toolName": "enterprise_knowledge_get",
+        "toolCallId": "call_AQUuAfSH0XGlBINErsR73NEI|fc_01c0eb109312de95016a9ad3edc34487d09fd094f88b5265f4",
+        "isError": false,
+        "runId": "aaad044a-7650-43fe-a46c-5c5f08877768",
+        "content": [
+          {
+            "type": "toolResultMetadata",
+            "isError": false,
+            "rawTextSha256": "03003aa149e61216132733a446d6d3be93cca50a14b7f52b4d741dcd6c602c13",
+            "rawTextCharacters": 1423,
+            "bodyOmitted": true,
+            "citation": {
+              "sourceTitle": "[QA] LEG-02 — NDA và tiếp nhận nhà cung cấp",
+              "zoneLabel": "[KIỂM THỬ] Pháp chế & Mua sắm",
+              "sourceVersion": 1,
+              "publishedAt": "2026-09-04T07:13:15.879Z"
+            },
+            "evidenceCharacters": 682,
+            "evidenceSha256": "f1b4ba21ba4ca09cc533bee1a208f468a1d76b87cfe706bdb331b4e956f76ce1"
+          }
+        ]
+      },
+      {
+        "seq": 34,
+        "at": "2026-09-04T14:21:33.922Z",
+        "messageTimestamp": 1788531693922,
+        "recordedAt": 1788531693922,
+        "role": "toolResult",
+        "toolName": "enterprise_knowledge_get",
+        "toolCallId": "call_NebnIN6Uz1CPLKPXsVHhNPyp|fc_01c0eb109312de95016a9ad3edc34c87d0a95fc459a4ebc580",
+        "isError": false,
+        "runId": "aaad044a-7650-43fe-a46c-5c5f08877768",
+        "content": [
+          {
+            "type": "toolResultMetadata",
+            "isError": false,
+            "rawTextSha256": "11bb7d07230610940f4e5704021be4bfd0ac228ec68c3de5501e92854a8ffb1a",
+            "rawTextCharacters": 1511,
+            "bodyOmitted": true,
+            "citation": {
+              "sourceTitle": "[QA] IT-02 — MFA và truy cập nhà cung cấp",
+              "zoneLabel": "[KIỂM THỬ] CNTT & An toàn thông tin",
+              "sourceVersion": 1,
+              "publishedAt": "2026-09-04T07:16:05.191Z"
+            },
+            "evidenceCharacters": 764,
+            "evidenceSha256": "d5bf6663542d945f03ec0b2f77079187615553b7df61ada9cf826e397782680e"
+          }
+        ]
+      },
+      {
+        "seq": 35,
+        "at": "2026-09-04T14:21:45.926Z",
+        "messageTimestamp": 1788531693927,
+        "recordedAt": 1788531705926,
+        "role": "assistant",
+        "model": "gpt-5.6-sol",
+        "provider": "openai",
+        "stopReason": "toolUse",
+        "runId": "aaad044a-7650-43fe-a46c-5c5f08877768",
+        "content": [
+          {
+            "type": "toolCall",
+            "id": "call_lg1AVNcu145DWHfP48Tfs6WB|fc_077baebc8284319e016a9ad3f9cba487d0b975f57617f540cb",
+            "name": "enterprise_knowledge_search",
+            "argumentKeys": [
+              "query",
+              "maxResults",
+              "zoneSlug"
+            ],
+            "argumentsOmitted": true
+          }
+        ]
+      },
+      {
+        "seq": 36,
+        "at": "2026-09-04T14:21:46.492Z",
+        "messageTimestamp": 1788531706489,
+        "recordedAt": 1788531706492,
+        "role": "toolResult",
+        "toolName": "enterprise_knowledge_search",
+        "toolCallId": "call_lg1AVNcu145DWHfP48Tfs6WB|fc_077baebc8284319e016a9ad3f9cba487d0b975f57617f540cb",
+        "isError": false,
+        "runId": "aaad044a-7650-43fe-a46c-5c5f08877768",
+        "content": [
+          {
+            "type": "toolResultMetadata",
+            "isError": false,
+            "rawTextSha256": "7dcd2ae8db32e2280828bd1ca122b6021625f168feba05952b1f6333edc20546",
+            "rawTextCharacters": 19404,
+            "bodyOmitted": true,
+            "partial": false,
+            "hits": [
+              {
+                "citation": {
+                  "sourceTitle": "[QA] OPS-01 — Kế hoạch triển khai chi nhánh Bến Tre",
+                  "zoneLabel": "[KIỂM THỬ] Dự án & Vận hành",
+                  "sourceVersion": 1,
+                  "publishedAt": "2026-09-04T07:17:47.375Z"
+                },
+                "score": 0.03764799635701275
+              },
+              {
+                "citation": {
+                  "sourceTitle": "[QA] LEG-01 — Quy trình thẩm định hợp đồng",
+                  "zoneLabel": "[KIỂM THỬ] Pháp chế & Mua sắm",
+                  "sourceVersion": 1,
+                  "publishedAt": "2026-09-04T07:13:15.879Z"
+                },
+                "score": 0.036689141547682005
+              },
+              {
+                "citation": {
+                  "sourceTitle": "[QA] FIN-01 — Công tác phí và hoàn ứng",
+                  "zoneLabel": "[KIỂM THỬ] Tài chính & Chi phí",
+                  "sourceVersion": 1,
+                  "publishedAt": "2026-09-04T07:16:54.938Z"
+                },
+                "score": 0.036689141547682005
+              },
+              {
+                "citation": {
+                  "sourceTitle": "[QA] IT-02 — MFA và truy cập nhà cung cấp",
+                  "zoneLabel": "[KIỂM THỬ] CNTT & An toàn thông tin",
+                  "sourceVersion": 1,
+                  "publishedAt": "2026-09-04T07:16:05.191Z"
+                },
+                "score": 0.036689141547682005
+              },
+              {
+                "citation": {
+                  "sourceTitle": "[QA] CS-01 — SLA khách hàng và chính sách hoàn phí",
+                  "zoneLabel": "[KIỂM THỬ] Sản phẩm & Chăm sóc khách hàng",
+                  "sourceVersion": 1,
+                  "publishedAt": "2026-09-04T07:17:22.229Z"
+                },
+                "score": 0.036689141547682005
+              },
+              {
+                "citation": {
+                  "sourceTitle": "[QA] HR-02 — Nghỉ phép, đào tạo và làm việc từ xa",
+                  "zoneLabel": "[KIỂM THỬ] Nhân sự & Onboarding",
+                  "sourceVersion": 1,
+                  "publishedAt": "2026-09-04T07:16:30.584Z"
+                },
+                "score": 0.03599469710323756
+              },
+              {
+                "citation": {
+                  "sourceTitle": "[QA] HR-01 — Sổ tay onboarding Sao Mai",
+                  "zoneLabel": "[KIỂM THỬ] Nhân sự & Onboarding",
+                  "sourceVersion": 2,
+                  "publishedAt": "2026-09-04T07:16:30.584Z"
+                },
+                "score": 0.03599469710323756
+              },
+              {
+                "citation": {
+                  "sourceTitle": "[QA] IT-01 — Thiết bị và hỗ trợ kỹ thuật",
+                  "zoneLabel": "[KIỂM THỬ] CNTT & An toàn thông tin",
+                  "sourceVersion": 1,
+                  "publishedAt": "2026-09-04T07:16:05.191Z"
+                },
+                "score": 0.03599469710323756
+              },
+              {
+                "citation": {
+                  "sourceTitle": "[QA] FIN-02 — Ngân sách đào tạo và ngưỡng mua sắm",
+                  "zoneLabel": "[KIỂM THỬ] Tài chính & Chi phí",
+                  "sourceVersion": 1,
+                  "publishedAt": "2026-09-04T07:16:54.938Z"
+                },
+                "score": 0.035300252658793115
+              },
+              {
+                "citation": {
+                  "sourceTitle": "[QA] OPS-02 — Đào tạo và bàn giao chi nhánh",
+                  "zoneLabel": "[KIỂM THỬ] Dự án & Vận hành",
+                  "sourceVersion": 2,
+                  "publishedAt": "2026-09-04T07:17:47.375Z"
+                },
+                "score": 0.035035842293906806
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "seq": 37,
+        "at": "2026-09-04T14:22:31.429Z",
+        "messageTimestamp": 1788531706500,
+        "recordedAt": 1788531751429,
+        "role": "assistant",
+        "model": "gpt-5.6-sol",
+        "provider": "openai",
+        "stopReason": "stop",
+        "runId": "aaad044a-7650-43fe-a46c-5c5f08877768",
+        "content": [
+          {
+            "type": "text",
+            "text": "**Kết luận: chưa nên chốt BT-0904.** Ngân sách gần như không có dự phòng, ứng 80% quá cao, còn thiếu cơ chế xử lý chậm tiến độ và mức trách nhiệm 2 triệu không tương xứng với rủi ro dữ liệu khách hàng.\n\n### 1. Ngân sách 60 triệu\n\nChi phí ăn ở hiện dự trù:\n\n- Phòng: 900.000 × 3 người × 2 đêm = **5,40 triệu**\n- Ăn: 240.000 × 3 người × 3 ngày = **2,16 triệu**\n- Tổng: **7,56 triệu**\n\nTheo tài liệu tham chiếu, mức tối đa là 850.000/người/đêm và 220.000/người/ngày, tức **7,08 triệu**; dự trù hiện vượt **480.000 đồng**. Phần vượt cần phê duyệt trước, nếu không chưa chắc được hoàn. Hồ sơ hoàn ứng phải nộp trong **5 ngày làm việc sau chuyến đi**.【[QA] FIN-01 — Công tác phí và hoàn ứng】\n\nVì báo giá 48 triệu **chưa thuế**, ngân sách sẽ như sau:\n\n- Nếu VAT 8%: 51,84 + 7,56 = **59,40 triệu**, còn **600.000 đồng**\n- Nếu VAT 10%: 52,80 + 7,56 = **60,36 triệu**, thiếu **360.000 đồng**\n\nNgay cả khi giảm ăn ở đúng hạn mức, chỉ còn **1,08 triệu** nếu VAT 8% hoặc **120.000 đồng** nếu VAT 10%. Chưa tính đi lại, thiết bị và phát sinh nên **ngân sách chưa an toàn**. Cần xác nhận thuế suất và bổ sung dự phòng hoặc giảm giá/phạm vi dịch vụ.\n\n### 2. Khoản ứng 80%\n\nNếu tính trên giá chưa thuế, phải ứng **38,4 triệu** trước khi có kết quả nghiệm thu. Rủi ro lớn vì:\n\n- Chưa có mốc bàn giao và tiêu chí nghiệm thu tương ứng;\n- Chưa có thời hạn khắc phục khi chậm hoặc sản phẩm không đạt;\n- Trách nhiệm chỉ tối đa 2 triệu, thấp hơn rất nhiều khoản ứng;\n- Nhà cung cấp tiếp xúc dữ liệu khách hàng nhưng chưa thấy thỏa thuận xử lý dữ liệu.\n\n**Đề xuất đàm phán**, không phải chính sách đã phê duyệt:\n\n- Chỉ ứng khoảng **20–30%**, phần còn lại trả theo các mốc cấu hình, UAT, vận hành và bàn giao;\n- Nếu buộc phải ứng 80%: yêu cầu bảo lãnh hoàn ứng, thời hạn hoàn tiền rõ ràng và quyền chấm dứt/thu hồi tiền khi không đạt mốc;\n- Giữ lại ít nhất **10–20% đến hết nghiệm thu hoặc thời gian ổn định ban đầu**.\n\n### 3. Điều khoản cần sửa trước khi ký\n\n1. **Phạm vi và nghiệm thu:** hỗ trợ đủ 30 người sau mở rộng; liệt kê cấu hình, dữ liệu chuyển đổi, tài liệu, đào tạo và tiêu chí UAT.\n2. **Tiến độ:** ghi ngày hoàn thành từng mốc, thời hạn thông báo chậm và số ngày phải khắc phục.\n3. **Chế tài:** phạt/chế tài chậm tiến độ, quyền thuê bên khác, chấm dứt và hoàn lại khoản ứng.\n4. **Giới hạn trách nhiệm:** không nên giữ mức 2 triệu; tăng lên mức phù hợp với giá trị hợp đồng. Cân nhắc loại trừ khỏi giới hạn đối với vi phạm bảo mật, dữ liệu cá nhân, sở hữu trí tuệ, gian lận hoặc lỗi nghiêm trọng.\n5. **Dữ liệu khách hàng:** bổ sung thỏa thuận xử lý dữ liệu, mục đích/phạm vi truy cập, biện pháp bảo mật, thông báo sự cố, nhà thầu phụ, hoàn trả/xóa dữ liệu và hỗ trợ điều tra.\n6. **NDA và quyền hệ thống:** NDA phải hoàn thành trước khi truy cập; tài khoản nhà cung cấp tối đa 14 ngày, quyền tối thiểu, có người bảo trợ nội bộ và lưu log.【[QA] LEG-02 — NDA và tiếp nhận nhà cung cấp】【[QA] IT-02 — MFA và truy cập nhà cung cấp】\n7. **Bảo hành/hỗ trợ:** ghi rõ bảo hành cấu hình **60 ngày theo lịch từ biên bản nghiệm thu**, phạm vi chỉ gồm cấu hình đã thống nhất; tính năng mới báo giá riêng.【[QA] OPS-02 — Đào tạo và bàn giao chi nhánh】\n\nDo có xử lý dữ liệu khách hàng, hồ sơ phải qua Pháp chế dù giá trị dưới 50 triệu; đồng thời khoản mua từ 30 triệu trở lên cần 3 báo giá và duyệt của Tài chính cùng Giám đốc điều hành theo tài liệu tham chiếu.【[QA] LEG-01 — Quy trình thẩm định hợp đồng】【[QA] FIN-02 — Ngân sách đào tạo và ngưỡng mua sắm】\n\n### 4. Chuẩn bị triển khai, đào tạo và bàn giao\n\n- Nguồn hiện ghi ngày vận hành dự kiến **18/09/2026**.\n- Đăng ký đào tạo trước ít nhất **9 ngày làm việc**.\n- 30 người phải chia tối thiểu **2 lớp**, mỗi lớp tối đa 18 người; mỗi buổi 150 phút.\n- Bài thực hành 20 tình huống, đạt từ **18/20**; người chưa đạt được học lại miễn phí một lần trong 10 ngày làm việc.\n- Hoàn tất UAT và chữ ký quản lý chi nhánh ít nhất **2 ngày làm việc trước vận hành**.\n- Sao lưu và diễn tập hoàn tác trước chuyển đổi.\n- Sau lớp cuối, gửi danh sách học viên, kết quả và biên bản bàn giao trong **2 ngày làm việc**.\n- Trực tăng cường **10 ngày làm việc sau vận hành**, báo cáo hằng ngày lúc 16:30.【[QA] OPS-01 — Kế hoạch triển khai chi nhánh Bến Tre】【[QA] OPS-02 — Đào tạo và bàn giao chi nhánh】\n\n**Khuyến nghị:** chỉ chốt sau khi xác nhận VAT, tạo thêm ngân sách dự phòng, giảm hoặc bảo đảm khoản ứng, sửa các điều khoản trên và hoàn tất duyệt Tài chính–Pháp chế–CNTT.\n\n*Lưu ý: các nguồn nội bộ truy xuất được đều tự ghi là dữ liệu QA/kiểm thử, không phải chính sách production. Vì vậy các mốc trên cần được người có thẩm quyền xác nhận lại trước khi ký hoặc triển khai.*",
+            "phase": "final_answer"
+          }
+        ]
+      },
+      {
+        "seq": 38,
+        "at": "2026-09-04T14:22:52.319Z",
+        "messageTimestamp": 1788531768961,
+        "recordedAt": 1788531772319,
+        "role": "user",
+        "userRunCorrelationId": "b6f4a32a-b338-4658-8d8b-71d961e076bf",
+        "content": [
+          {
+            "type": "text",
+            "text": "Bạn gom lại đúng 5 việc cần ưu tiên để mình đem trao đổi trong cuộc họp nhé. Việc nào đã chắc và việc nào vẫn cần xác nhận thì nói rõ giúp mình."
+          }
+        ]
+      },
+      {
+        "seq": 39,
+        "at": "2026-09-04T14:23:04.423Z",
+        "messageTimestamp": 1788531773580,
+        "recordedAt": 1788531784423,
+        "role": "assistant",
+        "model": "gpt-5.6-sol",
+        "provider": "openai",
+        "stopReason": "stop",
+        "runId": "b6f4a32a-b338-4658-8d8b-71d961e076bf",
+        "content": [
+          {
+            "type": "text",
+            "text": "1. **Chốt lại ngân sách và VAT — Cần xác nhận**  \n   Xác nhận thuế suất 8% hay 10%, chi phí đi lại/thiết bị và khoản dự phòng. Với dự trù hiện tại, ngân sách 60 triệu chỉ còn 600.000 hoặc thiếu 360.000 đồng.\n\n2. **Giảm hoặc bảo đảm khoản ứng 80% — Chắc chắn cần sửa**  \n   Đề nghị ứng 20–30% và thanh toán theo mốc nghiệm thu. Nếu vẫn ứng 80%, phải có bảo lãnh hoàn ứng, thời hạn hoàn tiền và quyền chấm dứt rõ ràng.\n\n3. **Bổ sung chế tài và trách nhiệm nhà cung cấp — Chắc chắn cần sửa**  \n   Ghi hạn hoàn thành, thời gian khắc phục, hậu quả khi chậm và nâng mức trách nhiệm khỏi 2 triệu; đặc biệt không giới hạn quá thấp với vi phạm dữ liệu, bảo mật và sở hữu trí tuệ.\n\n4. **Hoàn tất kiểm soát dữ liệu và phê duyệt nội bộ — Chắc về nhu cầu, quy trình cần xác nhận**  \n   Cần NDA, thỏa thuận xử lý dữ liệu, tài khoản giới hạn quyền/thời gian và lưu log. Đồng thời xác nhận yêu cầu 3 báo giá cùng phê duyệt của Tài chính, Pháp chế, CNTT và người có thẩm quyền.\n\n5. **Khóa lịch đào tạo–UAT–bàn giao trước khi ký — Khung việc đã rõ, ngày cụ thể cần xác nhận**  \n   Chia 30 người thành ít nhất 2 lớp; hoàn tất UAT trước vận hành; quy định hồ sơ bàn giao, tiêu chí nghiệm thu, kế hoạch hoàn tác, trực sau triển khai và bảo hành 60 ngày.\n\n**Thông điệp chốt tại cuộc họp:** chưa ký BT-0904 cho đến khi xử lý xong cả 5 việc. Các con số và quy trình tham chiếu hiện lấy từ tài liệu QA/kiểm thử, nên vẫn phải được các đầu mối có thẩm quyền xác nhận.",
+            "phase": "final_answer"
+          }
+        ]
+      },
+      {
+        "seq": 40,
+        "at": "2026-09-04T14:23:50.108Z",
+        "messageTimestamp": 1788531826576,
+        "recordedAt": 1788531830108,
+        "role": "user",
+        "userRunCorrelationId": "172d245e-63fd-4090-b277-688f1bd02432",
+        "content": [
+          {
+            "type": "text",
+            "text": "Slide của mình có tiêu đề ‘Phân tích ngân sách và rủi ro hợp đồng’. Dịch sang tiếng Anh sao cho ngắn gọn nhỉ?"
+          }
+        ]
+      },
+      {
+        "seq": 41,
+        "at": "2026-09-04T14:23:54.901Z",
+        "messageTimestamp": 1788531831328,
+        "recordedAt": 1788531834901,
+        "role": "assistant",
+        "model": "gpt-5.6-sol",
+        "provider": "openai",
+        "stopReason": "stop",
+        "runId": "172d245e-63fd-4090-b277-688f1bd02432",
+        "content": [
+          {
+            "type": "text",
+            "text": "**Budget & Contract Risk Analysis**",
+            "phase": "final_answer"
+          }
+        ]
+      },
+      {
+        "seq": 42,
+        "at": "2026-09-04T14:24:19.194Z",
+        "messageTimestamp": 1788531856341,
+        "recordedAt": 1788531859194,
+        "role": "user",
+        "userRunCorrelationId": "4e540753-51be-4bff-8dd1-8d9791be7a30",
+        "content": [
+          {
+            "type": "text",
+            "text": "Nhân viên sinh bé thứ hai thì công ty hỗ trợ khoản tiền bao nhiêu vậy bạn? Hồ sơ phải gửi trong mấy ngày?"
+          }
+        ]
+      },
+      {
+        "seq": 43,
+        "at": "2026-09-04T14:24:24.900Z",
+        "messageTimestamp": 1788531860431,
+        "recordedAt": 1788531864900,
+        "role": "assistant",
+        "model": "gpt-5.6-sol",
+        "provider": "openai",
+        "stopReason": "toolUse",
+        "runId": "4e540753-51be-4bff-8dd1-8d9791be7a30",
+        "content": [
+          {
+            "type": "toolCall",
+            "id": "call_V0dlYxvxcRUeuIbqZuih1WQZ|fc_0fb64a9fe070de9c016a9ad4978ccc87d0a967a70c1b39fb54",
+            "name": "enterprise_knowledge_search",
+            "argumentKeys": [
+              "query",
+              "maxResults",
+              "zoneSlug"
+            ],
+            "argumentsOmitted": true
+          }
+        ]
+      },
+      {
+        "seq": 44,
+        "at": "2026-09-04T14:24:25.678Z",
+        "messageTimestamp": 1788531865676,
+        "recordedAt": 1788531865678,
+        "role": "toolResult",
+        "toolName": "enterprise_knowledge_search",
+        "toolCallId": "call_V0dlYxvxcRUeuIbqZuih1WQZ|fc_0fb64a9fe070de9c016a9ad4978ccc87d0a967a70c1b39fb54",
+        "isError": false,
+        "runId": "4e540753-51be-4bff-8dd1-8d9791be7a30",
+        "content": [
+          {
+            "type": "toolResultMetadata",
+            "isError": false,
+            "rawTextSha256": "7e31c9d4fe432b50d7e5098ad352eb45351b3fa38d404e0c24bca8609c88b884",
+            "rawTextCharacters": 19410,
+            "bodyOmitted": true,
+            "partial": false,
+            "hits": [
+              {
+                "citation": {
+                  "sourceTitle": "[QA] IT-01 — Thiết bị và hỗ trợ kỹ thuật",
+                  "zoneLabel": "[KIỂM THỬ] CNTT & An toàn thông tin",
+                  "sourceVersion": 1,
+                  "publishedAt": "2026-09-04T07:16:05.191Z"
+                },
+                "score": 0.04283590485374478
+              },
+              {
+                "citation": {
+                  "sourceTitle": "[QA] HR-02 — Nghỉ phép, đào tạo và làm việc từ xa",
+                  "zoneLabel": "[KIỂM THỬ] Nhân sự & Onboarding",
+                  "sourceVersion": 1,
+                  "publishedAt": "2026-09-04T07:16:30.584Z"
+                },
+                "score": 0.040902353655487694
+              },
+              {
+                "citation": {
+                  "sourceTitle": "[QA] CS-01 — SLA khách hàng và chính sách hoàn phí",
+                  "zoneLabel": "[KIỂM THỬ] Sản phẩm & Chăm sóc khách hàng",
+                  "sourceVersion": 1,
+                  "publishedAt": "2026-09-04T07:17:22.229Z"
+                },
+                "score": 0.040902353655487694
+              },
+              {
+                "citation": {
+                  "sourceTitle": "[QA] OPS-01 — Kế hoạch triển khai chi nhánh Bến Tre",
+                  "zoneLabel": "[KIỂM THỬ] Dự án & Vận hành",
+                  "sourceVersion": 1,
+                  "publishedAt": "2026-09-04T07:17:47.375Z"
+                },
+                "score": 0.04043939069252474
+              },
+              {
+                "citation": {
+                  "sourceTitle": "[QA] FIN-01 — Công tác phí và hoàn ứng",
+                  "zoneLabel": "[KIỂM THỬ] Tài chính & Chi phí",
+                  "sourceVersion": 1,
+                  "publishedAt": "2026-09-04T07:16:54.938Z"
+                },
+                "score": 0.040174980327638436
+              },
+              {
+                "citation": {
+                  "sourceTitle": "[QA] LEG-02 — NDA và tiếp nhận nhà cung cấp",
+                  "zoneLabel": "[KIỂM THỬ] Pháp chế & Mua sắm",
+                  "sourceVersion": 1,
+                  "publishedAt": "2026-09-04T07:13:15.879Z"
+                },
+                "score": 0.03994919461409336
+              },
+              {
+                "citation": {
+                  "sourceTitle": "[QA] OPS-02 — Đào tạo và bàn giao chi nhánh",
+                  "zoneLabel": "[KIỂM THỬ] Dự án & Vận hành",
+                  "sourceVersion": 2,
+                  "publishedAt": "2026-09-04T07:17:47.375Z"
+                },
+                "score": 0.03942037388432075
+              },
+              {
+                "citation": {
+                  "sourceTitle": "[QA] IT-02 — MFA và truy cập nhà cung cấp",
+                  "zoneLabel": "[KIỂM THỬ] CNTT & An toàn thông tin",
+                  "sourceVersion": 1,
+                  "publishedAt": "2026-09-04T07:16:05.191Z"
+                },
+                "score": 0.038957410921357793
+              },
+              {
+                "citation": {
+                  "sourceTitle": "[QA] PROD-01 — Aurora Desk: gói dịch vụ",
+                  "zoneLabel": "[KIỂM THỬ] Sản phẩm & Chăm sóc khách hàng",
+                  "sourceVersion": 1,
+                  "publishedAt": "2026-09-04T07:17:22.229Z"
+                },
+                "score": 0.03849444795839482
+              },
+              {
+                "citation": {
+                  "sourceTitle": "[QA] LEG-01 — Quy trình thẩm định hợp đồng",
+                  "zoneLabel": "[KIỂM THỬ] Pháp chế & Mua sắm",
+                  "sourceVersion": 1,
+                  "publishedAt": "2026-09-04T07:13:15.879Z"
+                },
+                "score": 0.03800425187996345
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "seq": 45,
+        "at": "2026-09-04T14:24:33.295Z",
+        "messageTimestamp": 1788531865687,
+        "recordedAt": 1788531873295,
+        "role": "assistant",
+        "model": "gpt-5.6-sol",
+        "provider": "openai",
+        "stopReason": "toolUse",
+        "runId": "4e540753-51be-4bff-8dd1-8d9791be7a30",
+        "content": [
+          {
+            "type": "toolCall",
+            "id": "call_8h8rHDAUQwwtkX3BYJXTuoEh|fc_0b63f770314b1585016a9ad49cfb2487d0838242392d6db581",
+            "name": "enterprise_knowledge_get",
+            "argumentKeys": [
+              "citationId"
+            ],
+            "argumentsOmitted": true
+          }
+        ]
+      },
+      {
+        "seq": 46,
+        "at": "2026-09-04T14:24:33.325Z",
+        "messageTimestamp": 1788531873324,
+        "recordedAt": 1788531873325,
+        "role": "toolResult",
+        "toolName": "enterprise_knowledge_get",
+        "toolCallId": "call_8h8rHDAUQwwtkX3BYJXTuoEh|fc_0b63f770314b1585016a9ad49cfb2487d0838242392d6db581",
+        "isError": false,
+        "runId": "4e540753-51be-4bff-8dd1-8d9791be7a30",
+        "content": [
+          {
+            "type": "toolResultMetadata",
+            "isError": false,
+            "rawTextSha256": "f4084bdb5058277e3b066c7f1a7d8930c665ac5281b03466bc47b5866b584d94",
+            "rawTextCharacters": 1562,
+            "bodyOmitted": true,
+            "citation": {
+              "sourceTitle": "[QA] HR-02 — Nghỉ phép, đào tạo và làm việc từ xa",
+              "zoneLabel": "[KIỂM THỬ] Nhân sự & Onboarding",
+              "sourceVersion": 1,
+              "publishedAt": "2026-09-04T07:16:30.584Z"
+            },
+            "evidenceCharacters": 811,
+            "evidenceSha256": "310f8fda4459be8bdd20d3fbb211c46fded5ccba066e215935fd853723fcb9c2"
+          }
+        ]
+      },
+      {
+        "seq": 47,
+        "at": "2026-09-04T14:24:38.439Z",
+        "messageTimestamp": 1788531873337,
+        "recordedAt": 1788531878439,
+        "role": "assistant",
+        "model": "gpt-5.6-sol",
+        "provider": "openai",
+        "stopReason": "toolUse",
+        "runId": "4e540753-51be-4bff-8dd1-8d9791be7a30",
+        "content": [
+          {
+            "type": "toolCall",
+            "id": "call_2WIDUh5UwkX45hQ2n6Ld20RG|fc_02a8bcd3ac9b3792016a9ad4a672a487d0a4d8f04f42005308",
+            "name": "enterprise_knowledge_search",
+            "argumentKeys": [
+              "query",
+              "maxResults",
+              "zoneSlug"
+            ],
+            "argumentsOmitted": true
+          },
+          {
+            "type": "toolCall",
+            "id": "call_FeZIQe5LBjFcfTQBOGFq98wA|fc_02a8bcd3ac9b3792016a9ad4a672b487d084e916521def5cfb",
+            "name": "enterprise_knowledge_search",
+            "argumentKeys": [
+              "query",
+              "maxResults",
+              "zoneSlug"
+            ],
+            "argumentsOmitted": true
+          },
+          {
+            "type": "toolCall",
+            "id": "call_FGD3HarqX64ByeTbpFfGmDOn|fc_02a8bcd3ac9b3792016a9ad4a672bc87d0b77d7b0998f2cdd7",
+            "name": "enterprise_knowledge_search",
+            "argumentKeys": [
+              "query",
+              "maxResults",
+              "zoneSlug"
+            ],
+            "argumentsOmitted": true
+          }
+        ]
+      },
+      {
+        "seq": 48,
+        "at": "2026-09-04T14:24:39.082Z",
+        "messageTimestamp": 1788531879080,
+        "recordedAt": 1788531879082,
+        "role": "toolResult",
+        "toolName": "enterprise_knowledge_search",
+        "toolCallId": "call_2WIDUh5UwkX45hQ2n6Ld20RG|fc_02a8bcd3ac9b3792016a9ad4a672a487d0a4d8f04f42005308",
+        "isError": false,
+        "runId": "4e540753-51be-4bff-8dd1-8d9791be7a30",
+        "content": [
+          {
+            "type": "toolResultMetadata",
+            "isError": false,
+            "rawTextSha256": "09ea4d6de6681b6d42740a0349f1208977e095c15e46ca6803351ec7ca29eece",
+            "rawTextCharacters": 19423,
+            "bodyOmitted": true,
+            "partial": false,
+            "hits": [
+              {
+                "citation": {
+                  "sourceTitle": "[QA] FIN-01 — Công tác phí và hoàn ứng",
+                  "zoneLabel": "[KIỂM THỬ] Tài chính & Chi phí",
+                  "sourceVersion": 1,
+                  "publishedAt": "2026-09-04T07:16:54.938Z"
+                },
+                "score": 0.04042577413479053
+              },
+              {
+                "citation": {
+                  "sourceTitle": "[QA] LEG-02 — NDA và tiếp nhận nhà cung cấp",
+                  "zoneLabel": "[KIỂM THỬ] Pháp chế & Mua sắm",
+                  "sourceVersion": 1,
+                  "publishedAt": "2026-09-04T07:13:15.879Z"
+                },
+                "score": 0.03946691932545979
+              },
+              {
+                "citation": {
+                  "sourceTitle": "[QA] HR-02 — Nghỉ phép, đào tạo và làm việc từ xa",
+                  "zoneLabel": "[KIỂM THỬ] Nhân sự & Onboarding",
+                  "sourceVersion": 1,
+                  "publishedAt": "2026-09-04T07:16:30.584Z"
+                },
+                "score": 0.03877247488101534
+              },
+              {
+                "citation": {
+                  "sourceTitle": "[QA] IT-02 — MFA và truy cập nhà cung cấp",
+                  "zoneLabel": "[KIỂM THỬ] CNTT & An toàn thông tin",
+                  "sourceVersion": 1,
+                  "publishedAt": "2026-09-04T07:16:05.191Z"
+                },
+                "score": 0.03877247488101534
+              },
+              {
+                "citation": {
+                  "sourceTitle": "[QA] CS-01 — SLA khách hàng và chính sách hoàn phí",
+                  "zoneLabel": "[KIỂM THỬ] Sản phẩm & Chăm sóc khách hàng",
+                  "sourceVersion": 1,
+                  "publishedAt": "2026-09-04T07:17:22.229Z"
+                },
+                "score": 0.0383424408014572
+              },
+              {
+                "citation": {
+                  "sourceTitle": "[QA] LEG-01 — Quy trình thẩm định hợp đồng",
+                  "zoneLabel": "[KIỂM THỬ] Pháp chế & Mua sắm",
+                  "sourceVersion": 1,
+                  "publishedAt": "2026-09-04T07:13:15.879Z"
+                },
+                "score": 0.038078030436570896
+              },
+              {
+                "citation": {
+                  "sourceTitle": "[QA] PROD-01 — Aurora Desk: gói dịch vụ",
+                  "zoneLabel": "[KIỂM THỬ] Sản phẩm & Chăm sóc khách hàng",
+                  "sourceVersion": 1,
+                  "publishedAt": "2026-09-04T07:17:22.229Z"
+                },
+                "score": 0.03781362007168459
+              },
+              {
+                "citation": {
+                  "sourceTitle": "[QA] OPS-01 — Kế hoạch triển khai chi nhánh Bến Tre",
+                  "zoneLabel": "[KIỂM THỬ] Dự án & Vận hành",
+                  "sourceVersion": 1,
+                  "publishedAt": "2026-09-04T07:17:47.375Z"
+                },
+                "score": 0.03738358599212645
+              },
+              {
+                "citation": {
+                  "sourceTitle": "[QA] IT-01 — Thiết bị và hỗ trợ kỹ thuật",
+                  "zoneLabel": "[KIỂM THỬ] CNTT & An toàn thông tin",
+                  "sourceVersion": 1,
+                  "publishedAt": "2026-09-04T07:16:05.191Z"
+                },
+                "score": 0.03738358599212645
+              },
+              {
+                "citation": {
+                  "sourceTitle": "[QA] FIN-02 — Ngân sách đào tạo và ngưỡng mua sắm",
+                  "zoneLabel": "[KIỂM THỬ] Tài chính & Chi phí",
+                  "sourceVersion": 1,
+                  "publishedAt": "2026-09-04T07:16:54.938Z"
+                },
+                "score": 0.0364247311827957
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "seq": 49,
+        "at": "2026-09-04T14:24:39.088Z",
+        "messageTimestamp": 1788531879086,
+        "recordedAt": 1788531879088,
+        "role": "toolResult",
+        "toolName": "enterprise_knowledge_search",
+        "toolCallId": "call_FeZIQe5LBjFcfTQBOGFq98wA|fc_02a8bcd3ac9b3792016a9ad4a672b487d084e916521def5cfb",
+        "isError": false,
+        "runId": "4e540753-51be-4bff-8dd1-8d9791be7a30",
+        "content": [
+          {
+            "type": "toolResultMetadata",
+            "isError": false,
+            "rawTextSha256": "78bc18716e5302ecdf090b37afa26e9057a27fe33071b1a33279bea3cc18f0b1",
+            "rawTextCharacters": 19390,
+            "bodyOmitted": true,
+            "partial": false,
+            "hits": [
+              {
+                "citation": {
+                  "sourceTitle": "[QA] HR-02 — Nghỉ phép, đào tạo và làm việc từ xa",
+                  "zoneLabel": "[KIỂM THỬ] Nhân sự & Onboarding",
+                  "sourceVersion": 1,
+                  "publishedAt": "2026-09-04T07:16:30.584Z"
+                },
+                "score": 0.04002247488101534
+              },
+              {
+                "citation": {
+                  "sourceTitle": "[QA] IT-02 — MFA và truy cập nhà cung cấp",
+                  "zoneLabel": "[KIỂM THỬ] CNTT & An toàn thông tin",
+                  "sourceVersion": 1,
+                  "publishedAt": "2026-09-04T07:16:05.191Z"
+                },
+                "score": 0.03778688524590164
+              },
+              {
+                "citation": {
+                  "sourceTitle": "[QA] CS-01 — SLA khách hàng và chính sách hoàn phí",
+                  "zoneLabel": "[KIỂM THỬ] Sản phẩm & Chăm sóc khách hàng",
+                  "sourceVersion": 1,
+                  "publishedAt": "2026-09-04T07:17:22.229Z"
+                },
+                "score": 0.03778688524590164
+              },
+              {
+                "citation": {
+                  "sourceTitle": "[QA] IT-01 — Thiết bị và hỗ trợ kỹ thuật",
+                  "zoneLabel": "[KIỂM THỬ] CNTT & An toàn thông tin",
+                  "sourceVersion": 1,
+                  "publishedAt": "2026-09-04T07:16:05.191Z"
+                },
+                "score": 0.037258064516129036
+              },
+              {
+                "citation": {
+                  "sourceTitle": "[QA] OPS-02 — Đào tạo và bàn giao chi nhánh",
+                  "zoneLabel": "[KIỂM THỬ] Dự án & Vận hành",
+                  "sourceVersion": 2,
+                  "publishedAt": "2026-09-04T07:17:47.375Z"
+                },
+                "score": 0.036120218579234975
+              },
+              {
+                "citation": {
+                  "sourceTitle": "[QA] LEG-01 — Quy trình thẩm định hợp đồng",
+                  "zoneLabel": "[KIỂM THỬ] Pháp chế & Mua sắm",
+                  "sourceVersion": 1,
+                  "publishedAt": "2026-09-04T07:13:15.879Z"
+                },
+                "score": 0.035855808214348674
+              },
+              {
+                "citation": {
+                  "sourceTitle": "[QA] FIN-01 — Công tác phí và hoàn ứng",
+                  "zoneLabel": "[KIỂM THỬ] Tài chính & Chi phí",
+                  "sourceVersion": 1,
+                  "publishedAt": "2026-09-04T07:16:54.938Z"
+                },
+                "score": 0.035591397849462365
+              },
+              {
+                "citation": {
+                  "sourceTitle": "[QA] FIN-02 — Ngân sách đào tạo và ngưỡng mua sắm",
+                  "zoneLabel": "[KIỂM THỬ] Tài chính & Chi phí",
+                  "sourceVersion": 1,
+                  "publishedAt": "2026-09-04T07:16:54.938Z"
+                },
+                "score": 0.03528688524590164
+              },
+              {
+                "citation": {
+                  "sourceTitle": "[QA] LEG-02 — NDA và tiếp nhận nhà cung cấp",
+                  "zoneLabel": "[KIỂM THỬ] Pháp chế & Mua sắm",
+                  "sourceVersion": 1,
+                  "publishedAt": "2026-09-04T07:13:15.879Z"
+                },
+                "score": 0.03502247488101534
+              },
+              {
+                "citation": {
+                  "sourceTitle": "[QA] HR-01 — Sổ tay onboarding Sao Mai",
+                  "zoneLabel": "[KIỂM THỬ] Nhân sự & Onboarding",
+                  "sourceVersion": 2,
+                  "publishedAt": "2026-09-04T07:16:30.584Z"
+                },
+                "score": 0.03502247488101534
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "seq": 50,
+        "at": "2026-09-04T14:24:39.093Z",
+        "messageTimestamp": 1788531879091,
+        "recordedAt": 1788531879093,
+        "role": "toolResult",
+        "toolName": "enterprise_knowledge_search",
+        "toolCallId": "call_FGD3HarqX64ByeTbpFfGmDOn|fc_02a8bcd3ac9b3792016a9ad4a672bc87d0b77d7b0998f2cdd7",
+        "isError": false,
+        "runId": "4e540753-51be-4bff-8dd1-8d9791be7a30",
+        "content": [
+          {
+            "type": "toolResultMetadata",
+            "isError": false,
+            "rawTextSha256": "fdb1f35a707df161890825b6d99978fdf7465c7cd72eba34a7c7e4d0ddf7b658",
+            "rawTextCharacters": 19414,
+            "bodyOmitted": true,
+            "partial": false,
+            "hits": [
+              {
+                "citation": {
+                  "sourceTitle": "[QA] OPS-01 — Kế hoạch triển khai chi nhánh Bến Tre",
+                  "zoneLabel": "[KIỂM THỬ] Dự án & Vận hành",
+                  "sourceVersion": 1,
+                  "publishedAt": "2026-09-04T07:17:47.375Z"
+                },
+                "score": 0.04168914154768201
+              },
+              {
+                "citation": {
+                  "sourceTitle": "[QA] IT-01 — Thiết bị và hỗ trợ kỹ thuật",
+                  "zoneLabel": "[KIỂM THỬ] CNTT & An toàn thông tin",
+                  "sourceVersion": 1,
+                  "publishedAt": "2026-09-04T07:16:05.191Z"
+                },
+                "score": 0.03945355191256831
+              },
+              {
+                "citation": {
+                  "sourceTitle": "[QA] PROD-01 — Aurora Desk: gói dịch vụ",
+                  "zoneLabel": "[KIỂM THỬ] Sản phẩm & Chăm sóc khách hàng",
+                  "sourceVersion": 1,
+                  "publishedAt": "2026-09-04T07:17:22.229Z"
+                },
+                "score": 0.03918914154768201
+              },
+              {
+                "citation": {
+                  "sourceTitle": "[QA] HR-02 — Nghỉ phép, đào tạo và làm việc từ xa",
+                  "zoneLabel": "[KIỂM THỬ] Nhân sự & Onboarding",
+                  "sourceVersion": 1,
+                  "publishedAt": "2026-09-04T07:16:30.584Z"
+                },
+                "score": 0.03835580821434867
+              },
+              {
+                "citation": {
+                  "sourceTitle": "[QA] FIN-01 — Công tác phí và hoàn ứng",
+                  "zoneLabel": "[KIỂM THỬ] Tài chính & Chi phí",
+                  "sourceVersion": 1,
+                  "publishedAt": "2026-09-04T07:16:54.938Z"
+                },
+                "score": 0.037522474881015344
+              },
+              {
+                "citation": {
+                  "sourceTitle": "[QA] LEG-02 — NDA và tiếp nhận nhà cung cấp",
+                  "zoneLabel": "[KIỂM THỬ] Pháp chế & Mua sắm",
+                  "sourceVersion": 1,
+                  "publishedAt": "2026-09-04T07:13:15.879Z"
+                },
+                "score": 0.03752247488101534
+              },
+              {
+                "citation": {
+                  "sourceTitle": "[QA] CS-01 — SLA khách hàng và chính sách hoàn phí",
+                  "zoneLabel": "[KIỂM THỬ] Sản phẩm & Chăm sóc khách hàng",
+                  "sourceVersion": 1,
+                  "publishedAt": "2026-09-04T07:17:22.229Z"
+                },
+                "score": 0.03752247488101534
+              },
+              {
+                "citation": {
+                  "sourceTitle": "[QA] OPS-02 — Đào tạo và bàn giao chi nhánh",
+                  "zoneLabel": "[KIỂM THỬ] Dự án & Vận hành",
+                  "sourceVersion": 2,
+                  "publishedAt": "2026-09-04T07:17:47.375Z"
+                },
+                "score": 0.035855808214348674
+              },
+              {
+                "citation": {
+                  "sourceTitle": "[QA] LEG-01 — Quy trình thẩm định hợp đồng",
+                  "zoneLabel": "[KIỂM THỬ] Pháp chế & Mua sắm",
+                  "sourceVersion": 1,
+                  "publishedAt": "2026-09-04T07:13:15.879Z"
+                },
+                "score": 0.03502247488101534
+              },
+              {
+                "citation": {
+                  "sourceTitle": "[QA] FIN-02 — Ngân sách đào tạo và ngưỡng mua sắm",
+                  "zoneLabel": "[KIỂM THỬ] Tài chính & Chi phí",
+                  "sourceVersion": 1,
+                  "publishedAt": "2026-09-04T07:16:54.938Z"
+                },
+                "score": 0.03502247488101534
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "seq": 51,
+        "at": "2026-09-04T14:24:44.175Z",
+        "messageTimestamp": 1788531879101,
+        "recordedAt": 1788531884175,
+        "role": "assistant",
+        "model": "gpt-5.6-sol",
+        "provider": "openai",
+        "stopReason": "stop",
+        "runId": "4e540753-51be-4bff-8dd1-8d9791be7a30",
+        "content": [
+          {
+            "type": "text",
+            "text": "Mình **chưa xác nhận được mức hỗ trợ và hạn nộp hồ sơ**. Nguồn Nhân sự hiện có ghi rõ **không quy định trợ cấp sinh con**, và toàn bộ nguồn đang là dữ liệu QA/kiểm thử chứ không phải chính sách thật.【[QA] HR-02 — Nghỉ phép, đào tạo và làm việc từ xa】\n\nVì vậy, hai thông tin này cần hỏi trực tiếp HR/C&B theo chính sách phúc lợi hiện hành; mình không nên đoán con số hoặc thời hạn.",
+            "phase": "final_answer"
+          }
+        ]
+      },
+      {
+        "seq": 52,
+        "at": "2026-09-04T14:25:07.402Z",
+        "messageTimestamp": 1788531903128,
+        "recordedAt": 1788531907402,
+        "role": "user",
+        "userRunCorrelationId": "4c4446e8-56f1-4f21-a700-fd88a57648f0",
+        "content": [
+          {
+            "type": "text",
+            "text": "Mình có thêm một hợp đồng thuê kho khác nữa. Bạn xem phần phạt trong hợp đồng đó có hợp lý không?"
+          }
+        ]
+      },
+      {
+        "seq": 53,
+        "at": "2026-09-04T14:25:07.411Z",
+        "messageTimestamp": 1788531907411,
+        "recordedAt": 1788531907411,
+        "role": "assistant",
+        "model": "gateway-injected",
+        "provider": "openclaw",
+        "stopReason": "stop",
+        "content": [
+          {
+            "type": "text",
+            "text": "Bạn cần kiểm tra hợp đồng số nào?"
+          }
+        ]
+      },
+      {
+        "seq": 54,
+        "at": "2026-09-04T14:25:34.748Z",
+        "messageTimestamp": 1788531929219,
+        "recordedAt": 1788531934748,
+        "role": "user",
+        "userRunCorrelationId": "8c7afb18-f63c-40e4-989a-9de792bd710c",
+        "content": [
+          {
+            "type": "text",
+            "text": "Hợp đồng thuê kho cứ để sau đã nhé. Mình muốn hỏi dữ liệu xóa nhầm cách đây 31 ngày có còn nằm trong thời hạn giữ bản sao của công ty không?"
+          }
+        ]
+      },
+      {
+        "seq": 55,
+        "at": "2026-09-04T14:25:41.946Z",
+        "messageTimestamp": 1788531937302,
+        "recordedAt": 1788531941946,
+        "role": "assistant",
+        "model": "gpt-5.6-sol",
+        "provider": "openai",
+        "stopReason": "toolUse",
+        "runId": "8c7afb18-f63c-40e4-989a-9de792bd710c",
+        "content": [
+          {
+            "type": "toolCall",
+            "id": "call_6VGCjtwtvJmXFIU0nOVb7e9W|fc_00457c0aa9acd483016a9ad4e5c62c87d094828e754d147b82",
+            "name": "enterprise_knowledge_search",
+            "argumentKeys": [
+              "query",
+              "maxResults",
+              "zoneSlug"
+            ],
+            "argumentsOmitted": true
+          }
+        ]
+      },
+      {
+        "seq": 56,
+        "at": "2026-09-04T14:25:43.110Z",
+        "messageTimestamp": 1788531943107,
+        "recordedAt": 1788531943110,
+        "role": "toolResult",
+        "toolName": "enterprise_knowledge_search",
+        "toolCallId": "call_6VGCjtwtvJmXFIU0nOVb7e9W|fc_00457c0aa9acd483016a9ad4e5c62c87d094828e754d147b82",
+        "isError": false,
+        "runId": "8c7afb18-f63c-40e4-989a-9de792bd710c",
+        "content": [
+          {
+            "type": "toolResultMetadata",
+            "isError": false,
+            "rawTextSha256": "70e4c35f79a7a6e19591da6905d4bf5b64acd14c716cdaee125212d7a53cc940",
+            "rawTextCharacters": 19379,
+            "bodyOmitted": true,
+            "partial": false,
+            "hits": [
+              {
+                "citation": {
+                  "sourceTitle": "[QA] IT-02 — MFA và truy cập nhà cung cấp",
+                  "zoneLabel": "[KIỂM THỬ] CNTT & An toàn thông tin",
+                  "sourceVersion": 1,
+                  "publishedAt": "2026-09-04T07:16:05.191Z"
+                },
+                "score": 0.044245218579234975
+              },
+              {
+                "citation": {
+                  "sourceTitle": "[QA] LEG-01 — Quy trình thẩm định hợp đồng",
+                  "zoneLabel": "[KIỂM THỬ] Pháp chế & Mua sắm",
+                  "sourceVersion": 1,
+                  "publishedAt": "2026-09-04T07:13:15.879Z"
+                },
+                "score": 0.04112021857923497
+              },
+              {
+                "citation": {
+                  "sourceTitle": "[QA] PROD-01 — Aurora Desk: gói dịch vụ",
+                  "zoneLabel": "[KIỂM THỬ] Sản phẩm & Chăm sóc khách hàng",
+                  "sourceVersion": 1,
+                  "publishedAt": "2026-09-04T07:17:22.229Z"
+                },
+                "score": 0.04007855191256831
+              },
+              {
+                "citation": {
+                  "sourceTitle": "[QA] IT-01 — Thiết bị và hỗ trợ kỹ thuật",
+                  "zoneLabel": "[KIỂM THỬ] CNTT & An toàn thông tin",
+                  "sourceVersion": 1,
+                  "publishedAt": "2026-09-04T07:16:05.191Z"
+                },
+                "score": 0.0395497311827957
+              },
+              {
+                "citation": {
+                  "sourceTitle": "[QA] FIN-01 — Công tác phí và hoàn ứng",
+                  "zoneLabel": "[KIỂM THỬ] Tài chính & Chi phí",
+                  "sourceVersion": 1,
+                  "publishedAt": "2026-09-04T07:16:54.938Z"
+                },
+                "score": 0.03903688524590164
+              },
+              {
+                "citation": {
+                  "sourceTitle": "[QA] OPS-01 — Kế hoạch triển khai chi nhánh Bến Tre",
+                  "zoneLabel": "[KIỂM THỬ] Dự án & Vận hành",
+                  "sourceVersion": 1,
+                  "publishedAt": "2026-09-04T07:17:47.375Z"
+                },
+                "score": 0.03877247488101534
+              },
+              {
+                "citation": {
+                  "sourceTitle": "[QA] HR-01 — Sổ tay onboarding Sao Mai",
+                  "zoneLabel": "[KIỂM THỬ] Nhân sự & Onboarding",
+                  "sourceVersion": 2,
+                  "publishedAt": "2026-09-04T07:16:30.584Z"
+                },
+                "score": 0.037730808214348675
+              },
+              {
+                "citation": {
+                  "sourceTitle": "[QA] HR-02 — Nghỉ phép, đào tạo và làm việc từ xa",
+                  "zoneLabel": "[KIỂM THỬ] Nhân sự & Onboarding",
+                  "sourceVersion": 1,
+                  "publishedAt": "2026-09-04T07:16:30.584Z"
+                },
+                "score": 0.037730808214348675
+              },
+              {
+                "citation": {
+                  "sourceTitle": "[QA] FIN-02 — Ngân sách đào tạo và ngưỡng mua sắm",
+                  "zoneLabel": "[KIỂM THỬ] Tài chính & Chi phí",
+                  "sourceVersion": 1,
+                  "publishedAt": "2026-09-04T07:16:54.938Z"
+                },
+                "score": 0.03746639784946237
+              },
+              {
+                "citation": {
+                  "sourceTitle": "[QA] OPS-02 — Đào tạo và bàn giao chi nhánh",
+                  "zoneLabel": "[KIỂM THỬ] Dự án & Vận hành",
+                  "sourceVersion": 2,
+                  "publishedAt": "2026-09-04T07:17:47.375Z"
+                },
+                "score": 0.036689141547682005
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "seq": 57,
+        "at": "2026-09-04T14:25:52.013Z",
+        "messageTimestamp": 1788531943122,
+        "recordedAt": 1788531952013,
+        "role": "assistant",
+        "model": "gpt-5.6-sol",
+        "provider": "openai",
+        "stopReason": "toolUse",
+        "runId": "8c7afb18-f63c-40e4-989a-9de792bd710c",
+        "content": [
+          {
+            "type": "toolCall",
+            "id": "call_RezGXducplq5r15ptmhSpH5d|fc_09e6062b5be32214016a9ad4eb7de087d0a972dfcf0b1f4acd",
+            "name": "enterprise_knowledge_get",
+            "argumentKeys": [
+              "citationId"
+            ],
+            "argumentsOmitted": true
+          }
+        ]
+      },
+      {
+        "seq": 58,
+        "at": "2026-09-04T14:25:52.086Z",
+        "messageTimestamp": 1788531952085,
+        "recordedAt": 1788531952086,
+        "role": "toolResult",
+        "toolName": "enterprise_knowledge_get",
+        "toolCallId": "call_RezGXducplq5r15ptmhSpH5d|fc_09e6062b5be32214016a9ad4eb7de087d0a972dfcf0b1f4acd",
+        "isError": false,
+        "runId": "8c7afb18-f63c-40e4-989a-9de792bd710c",
+        "content": [
+          {
+            "type": "toolResultMetadata",
+            "isError": false,
+            "rawTextSha256": "11bb7d07230610940f4e5704021be4bfd0ac228ec68c3de5501e92854a8ffb1a",
+            "rawTextCharacters": 1511,
+            "bodyOmitted": true,
+            "citation": {
+              "sourceTitle": "[QA] IT-02 — MFA và truy cập nhà cung cấp",
+              "zoneLabel": "[KIỂM THỬ] CNTT & An toàn thông tin",
+              "sourceVersion": 1,
+              "publishedAt": "2026-09-04T07:16:05.191Z"
+            },
+            "evidenceCharacters": 764,
+            "evidenceSha256": "d5bf6663542d945f03ec0b2f77079187615553b7df61ada9cf826e397782680e"
+          }
+        ]
+      },
+      {
+        "seq": 59,
+        "at": "2026-09-04T14:25:57.728Z",
+        "messageTimestamp": 1788531952098,
+        "recordedAt": 1788531957728,
+        "role": "assistant",
+        "model": "gpt-5.6-sol",
+        "provider": "openai",
+        "stopReason": "stop",
+        "runId": "8c7afb18-f63c-40e4-989a-9de792bd710c",
+        "content": [
+          {
+            "type": "text",
+            "text": "Hợp đồng thuê kho mình để lại sau nhé.\n\nTheo tài liệu tham chiếu, bản sao lưu vận hành được giữ **35 ngày**. Dữ liệu xóa **31 ngày trước** về lý thuyết vẫn còn trong hạn, khoảng **4 ngày** nữa.【[QA] IT-02 — MFA và truy cập nhà cung cấp】\n\nTuy nhiên, nguồn này là dữ liệu QA/kiểm thử và không bảo đảm dữ liệu cụ thể đã được sao lưu. Bạn nên báo CNTT **ngay** để xác nhận và yêu cầu khôi phục trước khi hết hạn.",
+            "phase": "final_answer"
+          }
+        ]
+      },
+      {
+        "seq": 60,
+        "at": "2026-09-04T14:26:52.856Z",
+        "messageTimestamp": 1788532008945,
+        "recordedAt": 1788532012856,
+        "role": "user",
+        "userRunCorrelationId": "aa36d116-c770-49f3-b963-fd685102f770",
+        "content": [
+          {
+            "type": "text",
+            "text": "Tháng sau nhóm mình đón hai nhân viên mới, trong đó một bạn muốn làm ở nhà suốt tuần. Mình cần lo máy tính, tài khoản và người kèm từ lúc nào, tuần đầu theo dõi những gì? Làm ở nhà cả tuần như vậy có phù hợp không?"
+          }
+        ]
+      },
+      {
+        "seq": 61,
+        "at": "2026-09-04T14:27:00.286Z",
+        "messageTimestamp": 1788532014087,
+        "recordedAt": 1788532020286,
+        "role": "assistant",
+        "model": "gpt-5.6-sol",
+        "provider": "openai",
+        "stopReason": "toolUse",
+        "runId": "aa36d116-c770-49f3-b963-fd685102f770",
+        "content": [
+          {
+            "type": "toolCall",
+            "id": "call_g9Ak1ANrqKxjqHexTMnlQ8WB|fc_0e36873986c46109016a9ad5344bc887d0b887ab83a1e9bb1c",
+            "name": "enterprise_knowledge_search",
+            "argumentKeys": [
+              "query",
+              "maxResults",
+              "zoneSlug"
+            ],
+            "argumentsOmitted": true
+          },
+          {
+            "type": "toolCall",
+            "id": "call_f5aW5RGgt8QcFNEsAUBznafu|fc_0e36873986c46109016a9ad5344bdc87d09ca63e4481fa1d4e",
+            "name": "enterprise_knowledge_search",
+            "argumentKeys": [
+              "query",
+              "maxResults",
+              "zoneSlug"
+            ],
+            "argumentsOmitted": true
+          },
+          {
+            "type": "toolCall",
+            "id": "call_tj5XSBx4wPd0m7Ez0OgnMxKf|fc_0e36873986c46109016a9ad5344be887d0bb77880305f3e3be",
+            "name": "enterprise_knowledge_search",
+            "argumentKeys": [
+              "query",
+              "maxResults",
+              "zoneSlug"
+            ],
+            "argumentsOmitted": true
+          }
+        ]
+      },
+      {
+        "seq": 62,
+        "at": "2026-09-04T14:27:01.167Z",
+        "messageTimestamp": 1788532021165,
+        "recordedAt": 1788532021167,
+        "role": "toolResult",
+        "toolName": "enterprise_knowledge_search",
+        "toolCallId": "call_g9Ak1ANrqKxjqHexTMnlQ8WB|fc_0e36873986c46109016a9ad5344bc887d0b887ab83a1e9bb1c",
+        "isError": false,
+        "runId": "aa36d116-c770-49f3-b963-fd685102f770",
+        "content": [
+          {
+            "type": "toolResultMetadata",
+            "isError": false,
+            "rawTextSha256": "d16211bc63d244642ece1d39037bd9fe236542644168b24b4682324ded56f185",
+            "rawTextCharacters": 19385,
+            "bodyOmitted": true,
+            "partial": false,
+            "hits": [
+              {
+                "citation": {
+                  "sourceTitle": "[QA] IT-01 — Thiết bị và hỗ trợ kỹ thuật",
+                  "zoneLabel": "[KIỂM THỬ] CNTT & An toàn thông tin",
+                  "sourceVersion": 1,
+                  "publishedAt": "2026-09-04T07:16:05.191Z"
+                },
+                "score": 0.04129440470557674
+              },
+              {
+                "citation": {
+                  "sourceTitle": "[QA] IT-02 — MFA và truy cập nhà cung cấp",
+                  "zoneLabel": "[KIỂM THỬ] CNTT & An toàn thông tin",
+                  "sourceVersion": 1,
+                  "publishedAt": "2026-09-04T07:16:05.191Z"
+                },
+                "score": 0.04085580821434867
+              },
+              {
+                "citation": {
+                  "sourceTitle": "[QA] OPS-02 — Đào tạo và bàn giao chi nhánh",
+                  "zoneLabel": "[KIỂM THỬ] Dự án & Vận hành",
+                  "sourceVersion": 2,
+                  "publishedAt": "2026-09-04T07:17:47.375Z"
+                },
+                "score": 0.04068162208800691
+              },
+              {
+                "citation": {
+                  "sourceTitle": "[QA] HR-02 — Nghỉ phép, đào tạo và làm việc từ xa",
+                  "zoneLabel": "[KIỂM THỬ] Nhân sự & Onboarding",
+                  "sourceVersion": 1,
+                  "publishedAt": "2026-09-04T07:16:30.584Z"
+                },
+                "score": 0.03997861523189253
+              },
+              {
+                "citation": {
+                  "sourceTitle": "[QA] HR-01 — Sổ tay onboarding Sao Mai",
+                  "zoneLabel": "[KIỂM THỬ] Nhân sự & Onboarding",
+                  "sourceVersion": 2,
+                  "publishedAt": "2026-09-04T07:16:30.584Z"
+                },
+                "score": 0.03997861523189253
+              },
+              {
+                "citation": {
+                  "sourceTitle": "[QA] OPS-01 — Kế hoạch triển khai chi nhánh Bến Tre",
+                  "zoneLabel": "[KIỂM THỬ] Dự án & Vận hành",
+                  "sourceVersion": 1,
+                  "publishedAt": "2026-09-04T07:17:47.375Z"
+                },
+                "score": 0.039275608375778155
+              },
+              {
+                "citation": {
+                  "sourceTitle": "[QA] LEG-01 — Quy trình thẩm định hợp đồng",
+                  "zoneLabel": "[KIỂM THỬ] Pháp chế & Mua sắm",
+                  "sourceVersion": 1,
+                  "publishedAt": "2026-09-04T07:13:15.879Z"
+                },
+                "score": 0.03910142224943639
+              },
+              {
+                "citation": {
+                  "sourceTitle": "[QA] CS-01 — SLA khách hàng và chính sách hoàn phí",
+                  "zoneLabel": "[KIỂM THỬ] Sản phẩm & Chăm sóc khách hàng",
+                  "sourceVersion": 1,
+                  "publishedAt": "2026-09-04T07:17:22.229Z"
+                },
+                "score": 0.03892723612309462
+              },
+              {
+                "citation": {
+                  "sourceTitle": "[QA] LEG-02 — NDA và tiếp nhận nhà cung cấp",
+                  "zoneLabel": "[KIỂM THỬ] Pháp chế & Mua sắm",
+                  "sourceVersion": 1,
+                  "publishedAt": "2026-09-04T07:13:15.879Z"
+                },
+                "score": 0.03822422926698025
+              },
+              {
+                "citation": {
+                  "sourceTitle": "[QA] FIN-01 — Công tác phí và hoàn ứng",
+                  "zoneLabel": "[KIỂM THỬ] Tài chính & Chi phí",
+                  "sourceVersion": 1,
+                  "publishedAt": "2026-09-04T07:16:54.938Z"
+                },
+                "score": 0.03734703628452411
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "seq": 63,
+        "at": "2026-09-04T14:27:01.173Z",
+        "messageTimestamp": 1788532021171,
+        "recordedAt": 1788532021173,
+        "role": "toolResult",
+        "toolName": "enterprise_knowledge_search",
+        "toolCallId": "call_f5aW5RGgt8QcFNEsAUBznafu|fc_0e36873986c46109016a9ad5344bdc87d09ca63e4481fa1d4e",
+        "isError": false,
+        "runId": "aa36d116-c770-49f3-b963-fd685102f770",
+        "content": [
+          {
+            "type": "toolResultMetadata",
+            "isError": false,
+            "rawTextSha256": "742b3cba14970d5c1ec73d4d0d21370da06f726acb1836922fb7852fc78fcd2d",
+            "rawTextCharacters": 19398,
+            "bodyOmitted": true,
+            "partial": false,
+            "hits": [
+              {
+                "citation": {
+                  "sourceTitle": "[QA] HR-02 — Nghỉ phép, đào tạo và làm việc từ xa",
+                  "zoneLabel": "[KIỂM THỬ] Nhân sự & Onboarding",
+                  "sourceVersion": 1,
+                  "publishedAt": "2026-09-04T07:16:30.584Z"
+                },
+                "score": 0.04684938524590164
+              },
+              {
+                "citation": {
+                  "sourceTitle": "[QA] LEG-01 — Quy trình thẩm định hợp đồng",
+                  "zoneLabel": "[KIỂM THỬ] Pháp chế & Mua sắm",
+                  "sourceVersion": 1,
+                  "publishedAt": "2026-09-04T07:13:15.879Z"
+                },
+                "score": 0.044245218579234975
+              },
+              {
+                "citation": {
+                  "sourceTitle": "[QA] OPS-02 — Đào tạo và bàn giao chi nhánh",
+                  "zoneLabel": "[KIỂM THỬ] Dự án & Vận hành",
+                  "sourceVersion": 2,
+                  "publishedAt": "2026-09-04T07:17:47.375Z"
+                },
+                "score": 0.04372438524590164
+              },
+              {
+                "citation": {
+                  "sourceTitle": "[QA] FIN-01 — Công tác phí và hoàn ứng",
+                  "zoneLabel": "[KIỂM THỬ] Tài chính & Chi phí",
+                  "sourceVersion": 1,
+                  "publishedAt": "2026-09-04T07:16:54.938Z"
+                },
+                "score": 0.04216188524590164
+              },
+              {
+                "citation": {
+                  "sourceTitle": "[QA] IT-02 — MFA và truy cập nhà cung cấp",
+                  "zoneLabel": "[KIỂM THỬ] CNTT & An toàn thông tin",
+                  "sourceVersion": 1,
+                  "publishedAt": "2026-09-04T07:16:05.191Z"
+                },
+                "score": 0.04216188524590164
+              },
+              {
+                "citation": {
+                  "sourceTitle": "[QA] CS-01 — SLA khách hàng và chính sách hoàn phí",
+                  "zoneLabel": "[KIỂM THỬ] Sản phẩm & Chăm sóc khách hàng",
+                  "sourceVersion": 1,
+                  "publishedAt": "2026-09-04T07:17:22.229Z"
+                },
+                "score": 0.04216188524590164
+              },
+              {
+                "citation": {
+                  "sourceTitle": "[QA] HR-01 — Sổ tay onboarding Sao Mai",
+                  "zoneLabel": "[KIỂM THỬ] Nhân sự & Onboarding",
+                  "sourceVersion": 2,
+                  "publishedAt": "2026-09-04T07:16:30.584Z"
+                },
+                "score": 0.04059139784946236
+              },
+              {
+                "citation": {
+                  "sourceTitle": "[QA] IT-01 — Thiết bị và hỗ trợ kỹ thuật",
+                  "zoneLabel": "[KIỂM THỬ] CNTT & An toàn thông tin",
+                  "sourceVersion": 1,
+                  "publishedAt": "2026-09-04T07:16:05.191Z"
+                },
+                "score": 0.04059139784946236
+              },
+              {
+                "citation": {
+                  "sourceTitle": "[QA] OPS-01 — Kế hoạch triển khai chi nhánh Bến Tre",
+                  "zoneLabel": "[KIỂM THỬ] Dự án & Vận hành",
+                  "sourceVersion": 1,
+                  "publishedAt": "2026-09-04T07:17:47.375Z"
+                },
+                "score": 0.0395497311827957
+              },
+              {
+                "citation": {
+                  "sourceTitle": "[QA] FIN-02 — Ngân sách đào tạo và ngưỡng mua sắm",
+                  "zoneLabel": "[KIỂM THỬ] Tài chính & Chi phí",
+                  "sourceVersion": 1,
+                  "publishedAt": "2026-09-04T07:16:54.938Z"
+                },
+                "score": 0.03850806451612903
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "seq": 64,
+        "at": "2026-09-04T14:27:01.177Z",
+        "messageTimestamp": 1788532021175,
+        "recordedAt": 1788532021177,
+        "role": "toolResult",
+        "toolName": "enterprise_knowledge_search",
+        "toolCallId": "call_tj5XSBx4wPd0m7Ez0OgnMxKf|fc_0e36873986c46109016a9ad5344be887d0bb77880305f3e3be",
+        "isError": false,
+        "runId": "aa36d116-c770-49f3-b963-fd685102f770",
+        "content": [
+          {
+            "type": "toolResultMetadata",
+            "isError": false,
+            "rawTextSha256": "4d82069b433cfb1ee0176cfabc78c4ae661871ac5179cb39044c1e1a6016a975",
+            "rawTextCharacters": 19410,
+            "bodyOmitted": true,
+            "partial": false,
+            "hits": [
+              {
+                "citation": {
+                  "sourceTitle": "[QA] IT-02 — MFA và truy cập nhà cung cấp",
+                  "zoneLabel": "[KIỂM THỬ] CNTT & An toàn thông tin",
+                  "sourceVersion": 1,
+                  "publishedAt": "2026-09-04T07:16:05.191Z"
+                },
+                "score": 0.044691647150663545
+              },
+              {
+                "citation": {
+                  "sourceTitle": "[QA] CS-01 — SLA khách hàng và chính sách hoàn phí",
+                  "zoneLabel": "[KIỂM THỬ] Sản phẩm & Chăm sóc khách hàng",
+                  "sourceVersion": 1,
+                  "publishedAt": "2026-09-04T07:17:22.229Z"
+                },
+                "score": 0.04112021857923497
+              },
+              {
+                "citation": {
+                  "sourceTitle": "[QA] IT-01 — Thiết bị và hỗ trợ kỹ thuật",
+                  "zoneLabel": "[KIỂM THỬ] CNTT & An toàn thông tin",
+                  "sourceVersion": 1,
+                  "publishedAt": "2026-09-04T07:16:05.191Z"
+                },
+                "score": 0.04059139784946236
+              },
+              {
+                "citation": {
+                  "sourceTitle": "[QA] LEG-01 — Quy trình thẩm định hợp đồng",
+                  "zoneLabel": "[KIỂM THỬ] Pháp chế & Mua sắm",
+                  "sourceVersion": 1,
+                  "publishedAt": "2026-09-04T07:13:15.879Z"
+                },
+                "score": 0.04052498048399688
+              },
+              {
+                "citation": {
+                  "sourceTitle": "[QA] OPS-02 — Đào tạo và bàn giao chi nhánh",
+                  "zoneLabel": "[KIỂM THỬ] Dự án & Vận hành",
+                  "sourceVersion": 2,
+                  "publishedAt": "2026-09-04T07:17:47.375Z"
+                },
+                "score": 0.039929742388758786
+              },
+              {
+                "citation": {
+                  "sourceTitle": "[QA] HR-02 — Nghỉ phép, đào tạo và làm việc từ xa",
+                  "zoneLabel": "[KIỂM THỬ] Nhân sự & Onboarding",
+                  "sourceVersion": 1,
+                  "publishedAt": "2026-09-04T07:16:30.584Z"
+                },
+                "score": 0.039070093928634385
+              },
+              {
+                "citation": {
+                  "sourceTitle": "[QA] OPS-01 — Kế hoạch triển khai chi nhánh Bến Tre",
+                  "zoneLabel": "[KIỂM THỬ] Dự án & Vận hành",
+                  "sourceVersion": 1,
+                  "publishedAt": "2026-09-04T07:17:47.375Z"
+                },
+                "score": 0.03880568356374808
+              },
+              {
+                "citation": {
+                  "sourceTitle": "[QA] HR-01 — Sổ tay onboarding Sao Mai",
+                  "zoneLabel": "[KIỂM THỬ] Nhân sự & Onboarding",
+                  "sourceVersion": 2,
+                  "publishedAt": "2026-09-04T07:16:30.584Z"
+                },
+                "score": 0.03847485583339629
+              },
+              {
+                "citation": {
+                  "sourceTitle": "[QA] LEG-02 — NDA và tiếp nhận nhà cung cấp",
+                  "zoneLabel": "[KIỂM THỬ] Pháp chế & Mua sắm",
+                  "sourceVersion": 1,
+                  "publishedAt": "2026-09-04T07:13:15.879Z"
+                },
+                "score": 0.03761520737327189
+              },
+              {
+                "citation": {
+                  "sourceTitle": "[QA] FIN-02 — Ngân sách đào tạo và ngưỡng mua sắm",
+                  "zoneLabel": "[KIỂM THỬ] Tài chính & Chi phí",
+                  "sourceVersion": 1,
+                  "publishedAt": "2026-09-04T07:16:54.938Z"
+                },
+                "score": 0.036689141547682005
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "seq": 65,
+        "at": "2026-09-04T14:27:24.865Z",
+        "messageTimestamp": 1788532021187,
+        "recordedAt": 1788532044865,
+        "role": "assistant",
+        "model": "gpt-5.6-sol",
+        "provider": "openai",
+        "stopReason": "toolUse",
+        "runId": "aa36d116-c770-49f3-b963-fd685102f770",
+        "content": [
+          {
+            "type": "toolCall",
+            "id": "call_Uhm2fSVy6exQanElvd8fzTAL|fc_072a7b63907de118016a9ad54cb1f887d08880bd3da3285361",
+            "name": "enterprise_knowledge_get",
+            "argumentKeys": [
+              "citationId"
+            ],
+            "argumentsOmitted": true
+          },
+          {
+            "type": "toolCall",
+            "id": "call_KszJv4ECxCmhVHKCZMJnRfn7|fc_072a7b63907de118016a9ad54cb21487d08708b710ba5ff0fd",
+            "name": "enterprise_knowledge_get",
+            "argumentKeys": [
+              "citationId"
+            ],
+            "argumentsOmitted": true
+          },
+          {
+            "type": "toolCall",
+            "id": "call_lCpgM0QD8OSsclcia03gWtWf|fc_072a7b63907de118016a9ad54cb22487d0ad3d409cb7a5ec0f",
+            "name": "enterprise_knowledge_get",
+            "argumentKeys": [
+              "citationId"
+            ],
+            "argumentsOmitted": true
+          },
+          {
+            "type": "toolCall",
+            "id": "call_f1HsOj5thwaz5IXyH8gndhdX|fc_072a7b63907de118016a9ad54cb22c87d08288fc9c8cf16246",
+            "name": "enterprise_knowledge_get",
+            "argumentKeys": [
+              "citationId"
+            ],
+            "argumentsOmitted": true
+          }
+        ]
+      },
+      {
+        "seq": 66,
+        "at": "2026-09-04T14:27:24.921Z",
+        "messageTimestamp": 1788532044920,
+        "recordedAt": 1788532044921,
+        "role": "toolResult",
+        "toolName": "enterprise_knowledge_get",
+        "toolCallId": "call_Uhm2fSVy6exQanElvd8fzTAL|fc_072a7b63907de118016a9ad54cb1f887d08880bd3da3285361",
+        "isError": false,
+        "runId": "aa36d116-c770-49f3-b963-fd685102f770",
+        "content": [
+          {
+            "type": "toolResultMetadata",
+            "isError": false,
+            "rawTextSha256": "a5bd34b2c936af8270b40c7cc6e260119e635bfc23d1af3a57dfa9d13e319471",
+            "rawTextCharacters": 1678,
+            "bodyOmitted": true,
+            "citation": {
+              "sourceTitle": "[QA] HR-01 — Sổ tay onboarding Sao Mai",
+              "zoneLabel": "[KIỂM THỬ] Nhân sự & Onboarding",
+              "sourceVersion": 2,
+              "publishedAt": "2026-09-04T07:16:30.584Z"
+            },
+            "evidenceCharacters": 938,
+            "evidenceSha256": "d6a404964519950c74167c34c8d52ef69c78a6476d0c357d9c3ef69095d7728a"
+          }
+        ]
+      },
+      {
+        "seq": 67,
+        "at": "2026-09-04T14:27:24.923Z",
+        "messageTimestamp": 1788532044922,
+        "recordedAt": 1788532044923,
+        "role": "toolResult",
+        "toolName": "enterprise_knowledge_get",
+        "toolCallId": "call_KszJv4ECxCmhVHKCZMJnRfn7|fc_072a7b63907de118016a9ad54cb21487d08708b710ba5ff0fd",
+        "isError": false,
+        "runId": "aa36d116-c770-49f3-b963-fd685102f770",
+        "content": [
+          {
+            "type": "toolResultMetadata",
+            "isError": false,
+            "rawTextSha256": "8ec2cec6d0229efdafcba27a5ab3f92b3d743b8c91d7123b06619802177b3b8a",
+            "rawTextCharacters": 1536,
+            "bodyOmitted": true,
+            "citation": {
+              "sourceTitle": "[QA] IT-01 — Thiết bị và hỗ trợ kỹ thuật",
+              "zoneLabel": "[KIỂM THỬ] CNTT & An toàn thông tin",
+              "sourceVersion": 1,
+              "publishedAt": "2026-09-04T07:16:05.191Z"
+            },
+            "evidenceCharacters": 790,
+            "evidenceSha256": "446d51fda757325dc678989838f2f59dc22d4b8e42bf2d2ca8e13a39d8e9bd5f"
+          }
+        ]
+      },
+      {
+        "seq": 68,
+        "at": "2026-09-04T14:27:24.924Z",
+        "messageTimestamp": 1788532044924,
+        "recordedAt": 1788532044924,
+        "role": "toolResult",
+        "toolName": "enterprise_knowledge_get",
+        "toolCallId": "call_lCpgM0QD8OSsclcia03gWtWf|fc_072a7b63907de118016a9ad54cb22487d0ad3d409cb7a5ec0f",
+        "isError": false,
+        "runId": "aa36d116-c770-49f3-b963-fd685102f770",
+        "content": [
+          {
+            "type": "toolResultMetadata",
+            "isError": false,
+            "rawTextSha256": "f4084bdb5058277e3b066c7f1a7d8930c665ac5281b03466bc47b5866b584d94",
+            "rawTextCharacters": 1562,
+            "bodyOmitted": true,
+            "citation": {
+              "sourceTitle": "[QA] HR-02 — Nghỉ phép, đào tạo và làm việc từ xa",
+              "zoneLabel": "[KIỂM THỬ] Nhân sự & Onboarding",
+              "sourceVersion": 1,
+              "publishedAt": "2026-09-04T07:16:30.584Z"
+            },
+            "evidenceCharacters": 811,
+            "evidenceSha256": "310f8fda4459be8bdd20d3fbb211c46fded5ccba066e215935fd853723fcb9c2"
+          }
+        ]
+      },
+      {
+        "seq": 69,
+        "at": "2026-09-04T14:27:24.926Z",
+        "messageTimestamp": 1788532044926,
+        "recordedAt": 1788532044926,
+        "role": "toolResult",
+        "toolName": "enterprise_knowledge_get",
+        "toolCallId": "call_f1HsOj5thwaz5IXyH8gndhdX|fc_072a7b63907de118016a9ad54cb22c87d08288fc9c8cf16246",
+        "isError": false,
+        "runId": "aa36d116-c770-49f3-b963-fd685102f770",
+        "content": [
+          {
+            "type": "toolResultMetadata",
+            "isError": false,
+            "rawTextSha256": "11bb7d07230610940f4e5704021be4bfd0ac228ec68c3de5501e92854a8ffb1a",
+            "rawTextCharacters": 1511,
+            "bodyOmitted": true,
+            "citation": {
+              "sourceTitle": "[QA] IT-02 — MFA và truy cập nhà cung cấp",
+              "zoneLabel": "[KIỂM THỬ] CNTT & An toàn thông tin",
+              "sourceVersion": 1,
+              "publishedAt": "2026-09-04T07:16:05.191Z"
+            },
+            "evidenceCharacters": 764,
+            "evidenceSha256": "d5bf6663542d945f03ec0b2f77079187615553b7df61ada9cf826e397782680e"
+          }
+        ]
+      },
+      {
+        "seq": 70,
+        "at": "2026-09-04T14:27:41.246Z",
+        "messageTimestamp": 1788532044937,
+        "recordedAt": 1788532061246,
+        "role": "assistant",
+        "model": "gpt-5.6-sol",
+        "provider": "openai",
+        "stopReason": "stop",
+        "runId": "aa36d116-c770-49f3-b963-fd685102f770",
+        "content": [
+          {
+            "type": "text",
+            "text": "### Trước ngày bắt đầu\n\n- **Laptop:** HR gửi yêu cầu cho CNTT ít nhất **4 ngày làm việc trước ngày nhận việc**. Máy phải được mã hóa, cài phần mềm quản lý và có biên bản bàn giao.【[QA] IT-01 — Thiết bị và hỗ trợ kỹ thuật】\n- **Tài khoản:** nguồn không nêu thời hạn tạo trước bao lâu; cần bảo đảm sẵn vào ngày đầu và bật **MFA ngay trong ngày 1**.【[QA] IT-02 — MFA và truy cập nhà cung cấp】\n- **Buddy/người kèm:** chỉ định trước ngày nhận việc; buddy đồng hành **30 ngày đầu**. Thời điểm chỉ định cụ thể chưa được nguồn quy định.【[QA] HR-01 — Sổ tay onboarding Sao Mai】\n\n### Tuần đầu cần theo dõi\n\n- Ngày 1: nhận máy, ký bàn giao, đăng nhập và bật MFA.\n- Ngày 2: hoàn thành đào tạo bảo mật.\n- Ngày 3–4: học sản phẩm.\n- Ngày 5: thực hành xử lý ticket.\n- Theo dõi thêm: quyền truy cập có đúng vai trò không, lỗi thiết bị/tài khoản, mức độ tham gia, kết quả thực hành, vướng mắc và check-in với buddy.\n\nChương trình đầy đủ kéo dài 9 ngày; ngày 6 kiểm tra 20 câu, cần đạt **16/20**. Không đạt thì học bổ sung và thi lại sau 2 ngày làm việc.【[QA] HR-01 — Sổ tay onboarding Sao Mai】\n\n### Làm ở nhà cả tuần\n\n**Không phù hợp với quy định tham chiếu:** làm từ xa tối đa **2 ngày/tuần**, đăng ký trước 16:00 ngày làm việc liền trước; giờ phối hợp là 09:30–11:30 và 14:00–16:00. Nguồn không nêu ngoại lệ cho làm ở nhà cả tuần.【[QA] HR-02 — Nghỉ phép, đào tạo và làm việc từ xa】\n\nCác nguồn hiện đều được gắn nhãn QA/kiểm thử, nên HR và CNTT vẫn cần xác nhận đây có phải quy trình thực tế đang áp dụng hay không.",
+            "phase": "final_answer"
+          }
+        ]
+      },
+      {
+        "seq": 71,
+        "at": "2026-09-04T14:28:08.337Z",
+        "messageTimestamp": 1788532084239,
+        "recordedAt": 1788532088337,
+        "role": "user",
+        "userRunCorrelationId": "2a77e24f-149c-407c-a408-d06c00796d81",
+        "content": [
+          {
+            "type": "text",
+            "text": "Còn để hai bạn ấy được xác nhận hoàn tất hội nhập thì phải đáp ứng đầy đủ những điều kiện nào? Nếu làm bài kiểm tra chưa đạt thì xử lý thế nào, khi nào được thi lại và ai xác nhận hoàn tất?"
+          }
+        ]
+      },
+      {
+        "seq": 72,
+        "at": "2026-09-04T14:28:15.043Z",
+        "messageTimestamp": 1788532089598,
+        "recordedAt": 1788532095043,
+        "role": "assistant",
+        "model": "gpt-5.6-sol",
+        "provider": "openai",
+        "stopReason": "toolUse",
+        "runId": "2a77e24f-149c-407c-a408-d06c00796d81",
+        "content": [
+          {
+            "type": "toolCall",
+            "id": "call_Js8av8QEhNXnIBvENWWWeJLP|fc_05a1b0668cb6d6ad016a9ad57ee06887d0a93ea57701b8a478",
+            "name": "enterprise_knowledge_search",
+            "argumentKeys": [
+              "query",
+              "maxResults",
+              "zoneSlug"
+            ],
+            "argumentsOmitted": true
+          }
+        ]
+      },
+      {
+        "seq": 73,
+        "at": "2026-09-04T14:28:15.642Z",
+        "messageTimestamp": 1788532095639,
+        "recordedAt": 1788532095642,
+        "role": "toolResult",
+        "toolName": "enterprise_knowledge_search",
+        "toolCallId": "call_Js8av8QEhNXnIBvENWWWeJLP|fc_05a1b0668cb6d6ad016a9ad57ee06887d0a93ea57701b8a478",
+        "isError": false,
+        "runId": "2a77e24f-149c-407c-a408-d06c00796d81",
+        "content": [
+          {
+            "type": "toolResultMetadata",
+            "isError": false,
+            "rawTextSha256": "cf06525468cd071022e43f596e9ca7f543a6c3acb7d47eaa184b4ccdfa2005e3",
+            "rawTextCharacters": 19384,
+            "bodyOmitted": true,
+            "partial": false,
+            "hits": [
+              {
+                "citation": {
+                  "sourceTitle": "[QA] HR-01 — Sổ tay onboarding Sao Mai",
+                  "zoneLabel": "[KIỂM THỬ] Nhân sự & Onboarding",
+                  "sourceVersion": 2,
+                  "publishedAt": "2026-09-04T07:16:30.584Z"
+                },
+                "score": 0.046278948737965134
+              },
+              {
+                "citation": {
+                  "sourceTitle": "[QA] CS-01 — SLA khách hàng và chính sách hoàn phí",
+                  "zoneLabel": "[KIỂM THỬ] Sản phẩm & Chăm sóc khách hàng",
+                  "sourceVersion": 1,
+                  "publishedAt": "2026-09-04T07:17:22.229Z"
+                },
+                "score": 0.04032656778558418
+              },
+              {
+                "citation": {
+                  "sourceTitle": "[QA] FIN-01 — Công tác phí và hoàn ứng",
+                  "zoneLabel": "[KIỂM THỬ] Tài chính & Chi phí",
+                  "sourceVersion": 1,
+                  "publishedAt": "2026-09-04T07:16:54.938Z"
+                },
+                "score": 0.039929742388758786
+              },
+              {
+                "citation": {
+                  "sourceTitle": "[QA] OPS-02 — Đào tạo và bàn giao chi nhánh",
+                  "zoneLabel": "[KIỂM THỬ] Dự án & Vận hành",
+                  "sourceVersion": 2,
+                  "publishedAt": "2026-09-04T07:17:47.375Z"
+                },
+                "score": 0.039532916991933384
+              },
+              {
+                "citation": {
+                  "sourceTitle": "[QA] LEG-02 — NDA và tiếp nhận nhà cung cấp",
+                  "zoneLabel": "[KIỂM THỬ] Pháp chế & Mua sắm",
+                  "sourceVersion": 1,
+                  "publishedAt": "2026-09-04T07:13:15.879Z"
+                },
+                "score": 0.03926850662704709
+              },
+              {
+                "citation": {
+                  "sourceTitle": "[QA] IT-02 — MFA và truy cập nhà cung cấp",
+                  "zoneLabel": "[KIỂM THỬ] CNTT & An toàn thông tin",
+                  "sourceVersion": 1,
+                  "publishedAt": "2026-09-04T07:16:05.191Z"
+                },
+                "score": 0.03873926619828259
+              },
+              {
+                "citation": {
+                  "sourceTitle": "[QA] OPS-01 — Kế hoạch triển khai chi nhánh Bến Tre",
+                  "zoneLabel": "[KIỂM THỬ] Dự án & Vận hành",
+                  "sourceVersion": 1,
+                  "publishedAt": "2026-09-04T07:17:47.375Z"
+                },
+                "score": 0.03781362007168459
+              },
+              {
+                "citation": {
+                  "sourceTitle": "[QA] LEG-01 — Quy trình thẩm định hợp đồng",
+                  "zoneLabel": "[KIỂM THỬ] Pháp chế & Mua sắm",
+                  "sourceVersion": 1,
+                  "publishedAt": "2026-09-04T07:13:15.879Z"
+                },
+                "score": 0.0372843796429201
+              },
+              {
+                "citation": {
+                  "sourceTitle": "[QA] FIN-02 — Ngân sách đào tạo và ngưỡng mua sắm",
+                  "zoneLabel": "[KIỂM THỬ] Tài chính & Chi phí",
+                  "sourceVersion": 1,
+                  "publishedAt": "2026-09-04T07:16:54.938Z"
+                },
+                "score": 0.03701996927803379
+              },
+              {
+                "citation": {
+                  "sourceTitle": "[QA] IT-01 — Thiết bị và hỗ trợ kỹ thuật",
+                  "zoneLabel": "[KIỂM THỬ] CNTT & An toàn thông tin",
+                  "sourceVersion": 1,
+                  "publishedAt": "2026-09-04T07:16:05.191Z"
+                },
+                "score": 0.03701996927803379
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "seq": 74,
+        "at": "2026-09-04T14:28:24.499Z",
+        "messageTimestamp": 1788532095655,
+        "recordedAt": 1788532104499,
+        "role": "assistant",
+        "model": "gpt-5.6-sol",
+        "provider": "openai",
+        "stopReason": "toolUse",
+        "runId": "2a77e24f-149c-407c-a408-d06c00796d81",
+        "content": [
+          {
+            "type": "toolCall",
+            "id": "call_V6cbKooBVsipwaEblD4lQ9ia|fc_0de6c1eb818b81a5016a9ad583880c87d08a30b4253bd730fb",
+            "name": "enterprise_knowledge_get",
+            "argumentKeys": [
+              "citationId"
+            ],
+            "argumentsOmitted": true
+          }
+        ]
+      },
+      {
+        "seq": 75,
+        "at": "2026-09-04T14:28:24.530Z",
+        "messageTimestamp": 1788532104529,
+        "recordedAt": 1788532104530,
+        "role": "toolResult",
+        "toolName": "enterprise_knowledge_get",
+        "toolCallId": "call_V6cbKooBVsipwaEblD4lQ9ia|fc_0de6c1eb818b81a5016a9ad583880c87d08a30b4253bd730fb",
+        "isError": false,
+        "runId": "2a77e24f-149c-407c-a408-d06c00796d81",
+        "content": [
+          {
+            "type": "toolResultMetadata",
+            "isError": false,
+            "rawTextSha256": "a5bd34b2c936af8270b40c7cc6e260119e635bfc23d1af3a57dfa9d13e319471",
+            "rawTextCharacters": 1678,
+            "bodyOmitted": true,
+            "citation": {
+              "sourceTitle": "[QA] HR-01 — Sổ tay onboarding Sao Mai",
+              "zoneLabel": "[KIỂM THỬ] Nhân sự & Onboarding",
+              "sourceVersion": 2,
+              "publishedAt": "2026-09-04T07:16:30.584Z"
+            },
+            "evidenceCharacters": 938,
+            "evidenceSha256": "d6a404964519950c74167c34c8d52ef69c78a6476d0c357d9c3ef69095d7728a"
+          }
+        ]
+      },
+      {
+        "seq": 76,
+        "at": "2026-09-04T14:28:35.101Z",
+        "messageTimestamp": 1788532104548,
+        "recordedAt": 1788532115101,
+        "role": "assistant",
+        "model": "gpt-5.6-sol",
+        "provider": "openai",
+        "stopReason": "stop",
+        "runId": "2a77e24f-149c-407c-a408-d06c00796d81",
+        "content": [
+          {
+            "type": "text",
+            "text": "Để được xác nhận hoàn tất hội nhập, mỗi bạn cần:\n\n1. Hoàn thành chương trình **9 ngày làm việc**:\n   - Ngày 1: nhận laptop, kích hoạt MFA;\n   - Ngày 2: học bảo mật;\n   - Ngày 3–4: học sản phẩm;\n   - Ngày 5: thực hành xử lý ticket;\n   - Ngày 6: làm bài kiểm tra;\n   - Ngày 7–8: thực hành bổ sung;\n   - Ngày 9: họp phản hồi với buddy.\n2. Bài kiểm tra đạt ít nhất **16/20 câu, tương đương 80%**.\n3. **Quản lý trực tiếp xác nhận hoàn thành**; nhân viên không được tự đánh dấu hoàn tất. HR phụ trách lịch trình.\n4. Buddy tiếp tục đồng hành trong **30 ngày đầu**, nhưng tài liệu không nói đây là điều kiện phải chờ đủ 30 ngày mới được xác nhận hội nhập.\n\nNếu chưa đạt bài kiểm tra:\n\n- Học bổ sung;\n- Thi lại **sau 2 ngày làm việc**;\n- Chỉ được xác nhận hoàn tất khi đã đạt yêu cầu và có xác nhận của quản lý trực tiếp.【[QA] HR-01 — Sổ tay onboarding Sao Mai】\n\nLưu ý: đây vẫn là tài liệu QA/kiểm thử, cần HR xác nhận trước khi áp dụng thực tế.",
+            "phase": "final_answer"
+          }
+        ]
+      }
+    ]
+  },
+  "children": [
+    {
+      "runId": "78efd186-e93b-4b4f-bb2c-87b07cd835c9",
+      "childSessionKey": "agent:enterprise-finance-specialist:subagent:86870836-6b30-4886-a0e3-3d9ccabf978e",
+      "createdAt": 1788531446757,
+      "startedAt": 1788531446963,
+      "sessionStartedAt": 1788531446757,
+      "endedAt": 1788531466051,
+      "registryAccepted": true,
+      "outcome": {
+        "status": "ok"
+      },
+      "endedReason": "subagent-complete",
+      "requesterSettleWakeStatus": null,
+      "completionAnnouncedAt": null,
+      "frozenVisibleResult": "### Phân tích tài chính\n\n**Vốn ban đầu:** 540 triệu đồng\n\n| Khoản mục | Số tiền |\n|---|---:|\n| Sửa chữa | 240 triệu |\n| Đặt cọc | 60 triệu |\n| **Tiền còn lại để vận hành** | **240 triệu** |\n\n*Lưu ý: tiền đặt cọc thường là khoản có thể thu hồi cuối kỳ thuê, nhưng vẫn làm giảm tiền mặt ban đầu.*\n\n### Dòng tiền sau 3 tháng\n\nCông thức:\n\n- Giá vốn: **40% doanh thu**\n- Lãi gộp: **60% doanh thu**\n- Chi phí cố định: 18 + 42 + 12 = **72 triệu/tháng**\n- Dòng tiền ròng tháng = Doanh thu × 60% − 72 triệu\n\n| Kịch bản | Lãi gộp/tháng | Dòng tiền ròng/tháng | Dòng tiền ròng 3 tháng | Tiền còn lại cuối tháng 3 |\n|---|---:|---:|---:|---:|\n| Doanh thu 100 triệu/tháng | 60 triệu | **-12 triệu** | **-36 triệu** | **204 triệu** |\n| Doanh thu 150 triệu/tháng | 90 triệu | **+18 triệu** | **+54 triệu** | **294 triệu** |\n\nCác số trên chưa tính thuế, phí thanh toán, hao hụt, marketing, bảo trì, lãi vay hoặc chi phí phát sinh khác.\n\n### Doanh thu hòa vốn\n\n\\[\n72 \\div (1 - 40\\%) = 120\\text{ triệu đồng/tháng}\n\\]\n\nĐiểm bán cần đạt **120 triệu đồng doanh thu/tháng**, tương đương khoảng **4 triệu đồng/ngày** nếu tính 30 ngày.\n\n### Điều chỉnh nên cân nhắc\n\n1. **Không nên quyết định chỉ dựa trên kịch bản 150 triệu**; ở mức 100 triệu, điểm bán đang lỗ 12 triệu/tháng.\n2. Giữ riêng quỹ dự phòng tối thiểu **6 tháng chi phí cố định**:  \n   72 × 6 = **432 triệu**, trong khi vốn lưu động hiện chỉ còn 240 triệu.\n3. Đàm phán giảm chi phí cố định, đặc biệt là **lương 42 triệu/tháng** và tiền thuê; mỗi 10 triệu giảm chi phí cố định sẽ hạ doanh thu hòa vốn khoảng **16,7 triệu/tháng**.\n4. Kiểm soát giá vốn: nếu giảm từ 40% xuống 35%, doanh thu hòa vốn giảm còn khoảng **110,8 triệu/tháng**.\n5. Chia nhỏ ngân sách sửa chữa 240 triệu, chỉ thực hiện hạng mục thực sự cần thiết; nên có báo giá và khoản dự phòng phát sinh.\n6. Trước khi mở, nên kiểm chứng khả năng đạt tối thiểu **120 triệu/tháng**, tốt hơn là đặt mục tiêu an toàn **140–150 triệu/tháng**.",
+      "transcript": {
+        "session_key": "agent:enterprise-finance-specialist:subagent:86870836-6b30-4886-a0e3-3d9ccabf978e",
+        "current_session_id": "7282550c-c1bd-47c0-b037-fc71f7023a84",
+        "status": "done",
+        "agent": "enterprise-finance-specialist",
+        "events": [
+          {
+            "seq": 1,
+            "at": "2026-09-04T14:17:26.752Z",
+            "messageTimestamp": 1788531446752,
+            "recordedAt": 1788531446752,
+            "role": "user",
+            "userRunCorrelationId": "78efd186-e93b-4b4f-bb2c-87b07cd835c9",
+            "content": [
+              {
+                "type": "internalEventMetadata",
+                "bodyOmitted": true,
+                "sha256": "da2f0a10071ccc62151b52842450f5131a77666b7f72268da1a828463d87ff89",
+                "characters": 1745,
+                "hasDelegatedTask": true
+              }
+            ]
+          },
+          {
+            "seq": 2,
+            "at": "2026-09-04T14:17:45.895Z",
+            "messageTimestamp": 1788531465892,
+            "recordedAt": 1788531465895,
+            "role": "assistant",
+            "model": "gpt-5.6-luna",
+            "provider": "openai",
+            "stopReason": "stop",
+            "runId": "78efd186-e93b-4b4f-bb2c-87b07cd835c9",
+            "content": [
+              {
+                "type": "text",
+                "text": "### Phân tích tài chính\n\n**Vốn ban đầu:** 540 triệu đồng\n\n| Khoản mục | Số tiền |\n|---|---:|\n| Sửa chữa | 240 triệu |\n| Đặt cọc | 60 triệu |\n| **Tiền còn lại để vận hành** | **240 triệu** |\n\n*Lưu ý: tiền đặt cọc thường là khoản có thể thu hồi cuối kỳ thuê, nhưng vẫn làm giảm tiền mặt ban đầu.*\n\n### Dòng tiền sau 3 tháng\n\nCông thức:\n\n- Giá vốn: **40% doanh thu**\n- Lãi gộp: **60% doanh thu**\n- Chi phí cố định: 18 + 42 + 12 = **72 triệu/tháng**\n- Dòng tiền ròng tháng = Doanh thu × 60% − 72 triệu\n\n| Kịch bản | Lãi gộp/tháng | Dòng tiền ròng/tháng | Dòng tiền ròng 3 tháng | Tiền còn lại cuối tháng 3 |\n|---|---:|---:|---:|---:|\n| Doanh thu 100 triệu/tháng | 60 triệu | **-12 triệu** | **-36 triệu** | **204 triệu** |\n| Doanh thu 150 triệu/tháng | 90 triệu | **+18 triệu** | **+54 triệu** | **294 triệu** |\n\nCác số trên chưa tính thuế, phí thanh toán, hao hụt, marketing, bảo trì, lãi vay hoặc chi phí phát sinh khác.\n\n### Doanh thu hòa vốn\n\n\\[\n72 \\div (1 - 40\\%) = 120\\text{ triệu đồng/tháng}\n\\]\n\nĐiểm bán cần đạt **120 triệu đồng doanh thu/tháng**, tương đương khoảng **4 triệu đồng/ngày** nếu tính 30 ngày.\n\n### Điều chỉnh nên cân nhắc\n\n1. **Không nên quyết định chỉ dựa trên kịch bản 150 triệu**; ở mức 100 triệu, điểm bán đang lỗ 12 triệu/tháng.\n2. Giữ riêng quỹ dự phòng tối thiểu **6 tháng chi phí cố định**:  \n   72 × 6 = **432 triệu**, trong khi vốn lưu động hiện chỉ còn 240 triệu.\n3. Đàm phán giảm chi phí cố định, đặc biệt là **lương 42 triệu/tháng** và tiền thuê; mỗi 10 triệu giảm chi phí cố định sẽ hạ doanh thu hòa vốn khoảng **16,7 triệu/tháng**.\n4. Kiểm soát giá vốn: nếu giảm từ 40% xuống 35%, doanh thu hòa vốn giảm còn khoảng **110,8 triệu/tháng**.\n5. Chia nhỏ ngân sách sửa chữa 240 triệu, chỉ thực hiện hạng mục thực sự cần thiết; nên có báo giá và khoản dự phòng phát sinh.\n6. Trước khi mở, nên kiểm chứng khả năng đạt tối thiểu **120 triệu/tháng**, tốt hơn là đặt mục tiêu an toàn **140–150 triệu/tháng**."
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "routing": [
+    {
+      "id": "df3eb3f6-963b-4565-9686-55fc36ac15a8",
+      "account_id": "68264167-a2d8-48b1-a00a-d31a06a7fd92",
+      "parent_run_id_hash": "10ce6a6a84ec1be0cba4eb8382af33bb76fcbea1abcb20858ecdbd54727a4a2c",
+      "outcome": "local",
+      "decision_source": "ai",
+      "reason_code": "router_no_candidate",
+      "confirmation_state": "not_required",
+      "policy_revision": 2,
+      "latency_ms": 2650,
+      "created_at": 1788531062976,
+      "targetAgentIds": [],
+      "childRunIds": []
+    },
+    {
+      "id": "e567052b-30d4-4a22-b4c4-1932706cb3c4",
+      "account_id": "68264167-a2d8-48b1-a00a-d31a06a7fd92",
+      "parent_run_id_hash": "2511a7d9596d046badb57f3fa62f16775d51b4995c6337dab4147bb386f4bbbb",
+      "outcome": "clarified",
+      "decision_source": "ai",
+      "reason_code": "handoff_confirmation_required",
+      "confirmation_state": "pending",
+      "policy_revision": 2,
+      "latency_ms": 7798,
+      "created_at": 1788531105384,
+      "targetAgentIds": [
+        "enterprise-finance-specialist"
+      ],
+      "childRunIds": []
+    },
+    {
+      "id": "056f293b-53b0-4b60-8270-cb1b3339d8df",
+      "account_id": "68264167-a2d8-48b1-a00a-d31a06a7fd92",
+      "parent_run_id_hash": "e3c4a1a1d96a224301be731dce14a0cca297f7fd5cc25abf571ea2a98a26c658",
+      "outcome": "failed",
+      "decision_source": "ai",
+      "reason_code": "delegate_spawn_failed",
+      "confirmation_state": "approved",
+      "policy_revision": 2,
+      "latency_ms": 1,
+      "created_at": 1788531395534,
+      "targetAgentIds": [
+        "enterprise-finance-specialist"
+      ],
+      "childRunIds": []
+    },
+    {
+      "id": "3e2b8048-9473-4d4b-93f6-67bb217543ea",
+      "account_id": "68264167-a2d8-48b1-a00a-d31a06a7fd92",
+      "parent_run_id_hash": "e2c3af2914080a32cf286b78c3e76ffb7d8623b61882804ee1e1394f8ecd11d9",
+      "outcome": "clarified",
+      "decision_source": "ai",
+      "reason_code": "handoff_confirmation_required",
+      "confirmation_state": "pending",
+      "policy_revision": 2,
+      "latency_ms": 7560,
+      "created_at": 1788531419748,
+      "targetAgentIds": [
+        "enterprise-finance-specialist"
+      ],
+      "childRunIds": []
+    },
+    {
+      "id": "81aea9d6-6378-4af9-8399-65924ceedc96",
+      "account_id": "68264167-a2d8-48b1-a00a-d31a06a7fd92",
+      "parent_run_id_hash": "b6a08b815ead681d2dc5881f427c7c8a2263a2655f6b7cbabc8363253e3ba96f",
+      "outcome": "delegated",
+      "decision_source": "ai",
+      "reason_code": "delegate_started",
+      "confirmation_state": "approved",
+      "policy_revision": 2,
+      "latency_ms": 43,
+      "created_at": 1788531446765,
+      "targetAgentIds": [
+        "enterprise-finance-specialist"
+      ],
+      "childRunIds": [
+        "78efd186-e93b-4b4f-bb2c-87b07cd835c9"
+      ]
+    },
+    {
+      "id": "73968f4c-56b1-4ff2-95fb-60f29b3a2296",
+      "account_id": "68264167-a2d8-48b1-a00a-d31a06a7fd92",
+      "parent_run_id_hash": "ce0ba2a7f13b1fd0141831a15a77685d1938af08a6908485f9b565a013288c48",
+      "outcome": "clarified",
+      "decision_source": "ai",
+      "reason_code": "router_target_invalid",
+      "confirmation_state": "pending",
+      "policy_revision": 2,
+      "latency_ms": 14120,
+      "created_at": 1788531617313,
+      "targetAgentIds": [
+        "enterprise-contract-specialist",
+        "enterprise-finance-specialist"
+      ],
+      "childRunIds": []
+    },
+    {
+      "id": "d4681cff-f8a3-43bc-89bd-2b11f9b99f7e",
+      "account_id": "68264167-a2d8-48b1-a00a-d31a06a7fd92",
+      "parent_run_id_hash": "b08370d27ba76c85de04be842e46bbb2dca3812471be1c6392d2b485303f4fa5",
+      "outcome": "local",
+      "decision_source": "ai",
+      "reason_code": "router_no_candidate",
+      "confirmation_state": "not_required",
+      "policy_revision": 2,
+      "latency_ms": 2682,
+      "created_at": 1788531638421,
+      "targetAgentIds": [],
+      "childRunIds": []
+    },
+    {
+      "id": "de86c256-41e8-4a1d-8eb0-c37cac26d478",
+      "account_id": "68264167-a2d8-48b1-a00a-d31a06a7fd92",
+      "parent_run_id_hash": "ca5920e084e2543d9c8c2ade7c4eae5f72842a931844ba3ea1bdda54372ce094",
+      "outcome": "local",
+      "decision_source": "ai",
+      "reason_code": "router_no_candidate",
+      "confirmation_state": "not_required",
+      "policy_revision": 2,
+      "latency_ms": 3048,
+      "created_at": 1788531772018,
+      "targetAgentIds": [],
+      "childRunIds": []
+    },
+    {
+      "id": "a95762ff-d28a-4540-a6db-29ae4fc5da9a",
+      "account_id": "68264167-a2d8-48b1-a00a-d31a06a7fd92",
+      "parent_run_id_hash": "8c3abb2cbee36e4c05220430240e74ecf9f8c4a8b231ec2efd4b5ef140e832c8",
+      "outcome": "local",
+      "decision_source": "ai",
+      "reason_code": "router_no_candidate",
+      "confirmation_state": "not_required",
+      "policy_revision": 2,
+      "latency_ms": 3237,
+      "created_at": 1788531829823,
+      "targetAgentIds": [],
+      "childRunIds": []
+    },
+    {
+      "id": "8c81881c-d856-4276-8fb3-28165c717067",
+      "account_id": "68264167-a2d8-48b1-a00a-d31a06a7fd92",
+      "parent_run_id_hash": "a358a94920409e8aae79d71394cdeea0041c87f0bb21f6062c32acd9d13deb2b",
+      "outcome": "local",
+      "decision_source": "ai",
+      "reason_code": "router_no_candidate",
+      "confirmation_state": "not_required",
+      "policy_revision": 2,
+      "latency_ms": 2572,
+      "created_at": 1788531858921,
+      "targetAgentIds": [],
+      "childRunIds": []
+    },
+    {
+      "id": "afe6b05f-334b-406a-9a08-9d24c537bbee",
+      "account_id": "68264167-a2d8-48b1-a00a-d31a06a7fd92",
+      "parent_run_id_hash": "52694845bf203dd636482857a47c733d5db5c111cd276d09fe6744dbe924f205",
+      "outcome": "clarified",
+      "decision_source": "ai",
+      "reason_code": "required_input_missing:input_a759abfedeed",
+      "confirmation_state": "not_required",
+      "policy_revision": 2,
+      "latency_ms": 4253,
+      "created_at": 1788531907390,
+      "targetAgentIds": [
+        "enterprise-contract-specialist"
+      ],
+      "childRunIds": []
+    },
+    {
+      "id": "f4f40392-169e-4c02-84ea-8534a29c4dd2",
+      "account_id": "68264167-a2d8-48b1-a00a-d31a06a7fd92",
+      "parent_run_id_hash": "1d65c30ba46a474612dd1f4c4828790dabed7ca5b913fe621935dfc1fc53080a",
+      "outcome": "local",
+      "decision_source": "ai",
+      "reason_code": "router_no_candidate",
+      "confirmation_state": "not_required",
+      "policy_revision": 2,
+      "latency_ms": 5229,
+      "created_at": 1788531934457,
+      "targetAgentIds": [],
+      "childRunIds": []
+    },
+    {
+      "id": "888e9e0b-2fc9-40a9-b11d-6141822b4f82",
+      "account_id": "68264167-a2d8-48b1-a00a-d31a06a7fd92",
+      "parent_run_id_hash": "b3b2c8bcf57c1dc8f7760291fdd783bd221e9d1c656a5b075f4b83a43f906c8b",
+      "outcome": "local",
+      "decision_source": "ai",
+      "reason_code": "router_no_candidate",
+      "confirmation_state": "not_required",
+      "policy_revision": 2,
+      "latency_ms": 3614,
+      "created_at": 1788532012569,
+      "targetAgentIds": [],
+      "childRunIds": []
+    },
+    {
+      "id": "f48ad7f5-c924-42ce-9cd5-5b14edfda255",
+      "account_id": "68264167-a2d8-48b1-a00a-d31a06a7fd92",
+      "parent_run_id_hash": "b606fa058cd6e83c9b503b4322fdd64023bde4870476351400557a4758d779a2",
+      "outcome": "local",
+      "decision_source": "ai",
+      "reason_code": "router_no_candidate",
+      "confirmation_state": "not_required",
+      "policy_revision": 2,
+      "latency_ms": 3798,
+      "created_at": 1788532088047,
+      "targetAgentIds": [],
+      "childRunIds": []
+    }
+  ],
+  "planAudits": [
+    {
+      "id": "3b641440-7da9-4888-a5f5-9aaa025ef287",
+      "action": "delegation.plan.selected",
+      "target_id": "866eb775-7ce4-4369-8006-5e5e8043bbd8",
+      "outcome": "success",
+      "created_at": 1788531105382,
+      "detail": {
+        "planId": "866eb775-7ce4-4369-8006-5e5e8043bbd8",
+        "planRevision": 1,
+        "handling": "hybrid",
+        "targetAgentIds": [
+          "enterprise-finance-specialist"
+        ],
+        "targetCount": 1,
+        "policyRevision": 2,
+        "accountPolicyRevision": 4,
+        "parentRunHash": "2511a7d9596d046badb57f3fa62f16775d51b4995c6337dab4147bb386f4bbbb",
+        "sessionHash": "c23a4d3c0ae01febe3c0c50a9091c2d1efde8d4a8881dddbc9469728aacb33c4"
+      }
+    },
+    {
+      "id": "9cb4c0be-d294-436e-aaf6-be2cbb7782d7",
+      "action": "delegation.plan.confirmed",
+      "target_id": "866eb775-7ce4-4369-8006-5e5e8043bbd8",
+      "outcome": "success",
+      "created_at": 1788531388201,
+      "detail": {
+        "planId": "866eb775-7ce4-4369-8006-5e5e8043bbd8",
+        "planRevision": 1,
+        "handling": "hybrid",
+        "targetAgentIds": [
+          "enterprise-finance-specialist"
+        ],
+        "targetCount": 1,
+        "policyRevision": 2,
+        "accountPolicyRevision": 4,
+        "parentRunHash": "e3c4a1a1d96a224301be731dce14a0cca297f7fd5cc25abf571ea2a98a26c658",
+        "sessionHash": "c23a4d3c0ae01febe3c0c50a9091c2d1efde8d4a8881dddbc9469728aacb33c4"
+      }
+    },
+    {
+      "id": "b10abd0f-5fce-45c2-b559-782c205fad45",
+      "action": "delegation.plan.selected",
+      "target_id": "036561c2-44ae-465e-82db-ec7bf5f1b975",
+      "outcome": "success",
+      "created_at": 1788531419747,
+      "detail": {
+        "planId": "036561c2-44ae-465e-82db-ec7bf5f1b975",
+        "planRevision": 1,
+        "handling": "specialist",
+        "targetAgentIds": [
+          "enterprise-finance-specialist"
+        ],
+        "targetCount": 1,
+        "policyRevision": 2,
+        "accountPolicyRevision": 4,
+        "parentRunHash": "e2c3af2914080a32cf286b78c3e76ffb7d8623b61882804ee1e1394f8ecd11d9",
+        "sessionHash": "c23a4d3c0ae01febe3c0c50a9091c2d1efde8d4a8881dddbc9469728aacb33c4"
+      }
+    },
+    {
+      "id": "fda0a1fd-bd42-4508-be46-7210c6abab50",
+      "action": "delegation.plan.confirmed",
+      "target_id": "036561c2-44ae-465e-82db-ec7bf5f1b975",
+      "outcome": "success",
+      "created_at": 1788531445279,
+      "detail": {
+        "planId": "036561c2-44ae-465e-82db-ec7bf5f1b975",
+        "planRevision": 1,
+        "handling": "specialist",
+        "targetAgentIds": [
+          "enterprise-finance-specialist"
+        ],
+        "targetCount": 1,
+        "policyRevision": 2,
+        "accountPolicyRevision": 4,
+        "parentRunHash": "b6a08b815ead681d2dc5881f427c7c8a2263a2655f6b7cbabc8363253e3ba96f",
+        "sessionHash": "c23a4d3c0ae01febe3c0c50a9091c2d1efde8d4a8881dddbc9469728aacb33c4"
+      }
+    },
+    {
+      "id": "d55480cf-f919-4996-90a0-4f349695c2fd",
+      "action": "delegation.plan.selected",
+      "target_id": "7c778c8c-5a76-4e86-8c9d-4dc93f59234f",
+      "outcome": "success",
+      "created_at": 1788531907389,
+      "detail": {
+        "planId": "7c778c8c-5a76-4e86-8c9d-4dc93f59234f",
+        "planRevision": 1,
+        "handling": "specialist",
+        "targetAgentIds": [
+          "enterprise-contract-specialist"
+        ],
+        "targetCount": 1,
+        "policyRevision": 2,
+        "accountPolicyRevision": 4,
+        "parentRunHash": "52694845bf203dd636482857a47c733d5db5c111cd276d09fe6744dbe924f205",
+        "sessionHash": "c23a4d3c0ae01febe3c0c50a9091c2d1efde8d4a8881dddbc9469728aacb33c4"
+      }
+    }
+  ],
+  "counts": {
+    "routingEvents": 14,
+    "selectedPlans": 3,
+    "confirmedPlans": 2,
+    "acceptedChildren": 1,
+    "endedChildren": 1,
+    "routedChildIds": 1
+  },
+  "environment": {
+    "account": [
+      {
+        "id": "68264167-a2d8-48b1-a00a-d31a06a7fd92",
+        "username": "hieu",
+        "display_name": "Hiếu DZ",
+        "role": "employee",
+        "enabled": 1,
+        "personal_agent_enabled": 1,
+        "policy_revision": 4
+      }
+    ],
+    "parentAgent": "enterprise-personal-2ae2cbc2deecdb86fe86",
+    "zones": [
+      {
+        "id": "0ee8b68b-8b2d-46db-87c2-d7c624abd7f9",
+        "slug": "qa-phap-che-20260904",
+        "name": "[KIỂM THỬ] Pháp chế & Mua sắm",
+        "status": "active",
+        "revision": 7,
+        "access_revision": 2,
+        "source_set_revision": 3,
+        "build_revision": 4,
+        "active_publication_id": "f746a0fb-083b-4114-99ec-ab202fdb4ff8",
+        "egress_policy": "external_allowed",
+        "updated_at": 1788505995879,
+        "publication_number": 2,
+        "generation_id": "9ac391d8-606e-468d-a543-d6111060e6d3",
+        "vector_status": "ready",
+        "published_at": 1788505995879
+      },
+      {
+        "id": "26f44d58-4a43-46f2-85a7-09f10c9c833d",
+        "slug": "qa-van-hanh-20260904",
+        "name": "[KIỂM THỬ] Dự án & Vận hành",
+        "status": "active",
+        "revision": 9,
+        "access_revision": 2,
+        "source_set_revision": 4,
+        "build_revision": 5,
+        "active_publication_id": "0f4ee7c5-d421-4383-9166-6abd5242cef9",
+        "egress_policy": "external_allowed",
+        "updated_at": 1788506267375,
+        "publication_number": 3,
+        "generation_id": "c0c2adec-66cf-4496-a324-fe8880b875dc",
+        "vector_status": "ready",
+        "published_at": 1788506267375
+      },
+      {
+        "id": "58f2e858-97bf-4953-965f-2637158b0169",
+        "slug": "qa-nhan-su-20260904",
+        "name": "[KIỂM THỬ] Nhân sự & Onboarding",
+        "status": "active",
+        "revision": 10,
+        "access_revision": 2,
+        "source_set_revision": 4,
+        "build_revision": 5,
+        "active_publication_id": "b3e8dbbc-012d-4df3-9049-7bf768861e34",
+        "egress_policy": "external_allowed",
+        "updated_at": 1788506190584,
+        "publication_number": 3,
+        "generation_id": "1fd693b9-451f-4dfe-b200-a557b79520b3",
+        "vector_status": "ready",
+        "published_at": 1788506190584
+      },
+      {
+        "id": "766b3227-d307-4c04-9c47-4e79d392ea2f",
+        "slug": "qa-tai-chinh-20260904",
+        "name": "[KIỂM THỬ] Tài chính & Chi phí",
+        "status": "active",
+        "revision": 7,
+        "access_revision": 2,
+        "source_set_revision": 3,
+        "build_revision": 4,
+        "active_publication_id": "b1c002af-74a6-4790-9abf-4e99b3809965",
+        "egress_policy": "external_allowed",
+        "updated_at": 1788506214938,
+        "publication_number": 2,
+        "generation_id": "7744be78-9af5-4a6b-b778-75431f4c2f28",
+        "vector_status": "ready",
+        "published_at": 1788506214938
+      },
+      {
+        "id": "dab5a778-619c-424d-9c60-c67d19634bda",
+        "slug": "qa-cntt-20260904",
+        "name": "[KIỂM THỬ] CNTT & An toàn thông tin",
+        "status": "active",
+        "revision": 9,
+        "access_revision": 4,
+        "source_set_revision": 3,
+        "build_revision": 4,
+        "active_publication_id": "094dafcd-2713-4c0d-826a-cd645390cb27",
+        "egress_policy": "external_allowed",
+        "updated_at": 1788506165191,
+        "publication_number": 2,
+        "generation_id": "5c17c548-b7b0-4668-b91b-7d78399f0228",
+        "vector_status": "ready",
+        "published_at": 1788506165191
+      },
+      {
+        "id": "ec9cfb6f-7eb6-49e1-bcf0-7d671ed199d5",
+        "slug": "qa-san-pham-20260904",
+        "name": "[KIỂM THỬ] Sản phẩm & Chăm sóc khách hàng",
+        "status": "active",
+        "revision": 7,
+        "access_revision": 2,
+        "source_set_revision": 3,
+        "build_revision": 4,
+        "active_publication_id": "feeba391-8313-43bd-bed3-1de6a910a4bf",
+        "egress_policy": "external_allowed",
+        "updated_at": 1788506242229,
+        "publication_number": 2,
+        "generation_id": "c9ce31ae-ed89-426c-b10d-8faf75ee740f",
+        "vector_status": "ready",
+        "published_at": 1788506242229
+      }
+    ],
+    "directBindings": [
+      {
+        "zone_id": "0ee8b68b-8b2d-46db-87c2-d7c624abd7f9",
+        "agent_resource_key": "agent:personal:68264167-a2d8-48b1-a00a-d31a06a7fd92",
+        "created_at": 1788464482803
+      },
+      {
+        "zone_id": "26f44d58-4a43-46f2-85a7-09f10c9c833d",
+        "agent_resource_key": "agent:personal:68264167-a2d8-48b1-a00a-d31a06a7fd92",
+        "created_at": 1788488889915
+      },
+      {
+        "zone_id": "58f2e858-97bf-4953-965f-2637158b0169",
+        "agent_resource_key": "agent:personal:68264167-a2d8-48b1-a00a-d31a06a7fd92",
+        "created_at": 1788464399970
+      },
+      {
+        "zone_id": "766b3227-d307-4c04-9c47-4e79d392ea2f",
+        "agent_resource_key": "agent:personal:68264167-a2d8-48b1-a00a-d31a06a7fd92",
+        "created_at": 1788464480699
+      },
+      {
+        "zone_id": "dab5a778-619c-424d-9c60-c67d19634bda",
+        "agent_resource_key": "agent:personal:68264167-a2d8-48b1-a00a-d31a06a7fd92",
+        "created_at": 1788466071120
+      },
+      {
+        "zone_id": "ec9cfb6f-7eb6-49e1-bcf0-7d671ed199d5",
+        "agent_resource_key": "agent:personal:68264167-a2d8-48b1-a00a-d31a06a7fd92",
+        "created_at": 1788464495855
+      }
+    ],
+    "evidenceTransferTableExists": true,
+    "evidenceTransferGrants": [],
+    "delegationPolicy": [
+      {
+        "rollout": "on",
+        "router_model": "openai/gpt-5.6-luna",
+        "auto_threshold": 0.9,
+        "clarify_threshold": 0.7,
+        "minimum_margin": 0.15,
+        "max_delegates_per_turn": 3,
+        "event_retention_days": 90,
+        "revision": 2,
+        "updated_at": 1788455885818
+      }
+    ],
+    "delegationOverrides": [],
+    "agentEntitlements": [
+      {
+        "resource_id": "agent:shared:enterprise-contract-specialist",
+        "resource_state": "active",
+        "effect": "allow",
+        "updated_at": 1788455749303
+      },
+      {
+        "resource_id": "agent:shared:enterprise-finance-specialist",
+        "resource_state": "active",
+        "effect": "allow",
+        "updated_at": 1788455749303
+      },
+      {
+        "resource_id": "agent:shared:enterprise-hr-specialist",
+        "resource_state": "active",
+        "effect": "allow",
+        "updated_at": 1788455749303
+      },
+      {
+        "resource_id": "agent:shared:main",
+        "resource_state": "active",
+        "effect": "allow",
+        "updated_at": 1788410872301
+      }
+    ],
+    "personalProfileRevision": [],
+    "sharedRelationshipRevisions": [],
+    "excluded": [
+      "profile_json",
+      "credentials",
+      "published source bodies",
+      "private paths"
+    ],
+    "fingerprintSha256": "a11a3d464e14edcd36dacfe562fa1635ab3bd774b858ab1f5abec0aada1b446d"
+  },
+  "evidenceAuditBoundary": "Private evidence audits do not persist a parent-session or child-run join. They are not exported by account/time inference."
+}

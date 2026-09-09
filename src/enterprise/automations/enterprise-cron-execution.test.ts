@@ -88,6 +88,7 @@ describe("Enterprise cron execution policy", () => {
           accountId: account.id,
           displayName: "Administrator Automation",
           personalAgentId,
+          personalAgentTemplateId: "main",
         },
       });
       const inventory = resolveEffectiveToolInventory({
@@ -108,7 +109,7 @@ describe("Enterprise cron execution policy", () => {
         workspaceAccess: "rw",
       });
       expect(resolveSandboxConfigForAgent(execution.cfg, personalAgentId).docker.network).toBe(
-        "none",
+        "bridge",
       );
       const sandboxRuntime = resolveSandboxRuntimeStatus({
         cfg: execution.cfg,

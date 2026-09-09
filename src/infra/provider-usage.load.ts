@@ -9,7 +9,11 @@ import {
 import { formatErrorMessage } from "./errors.js";
 import { resolveFetch } from "./fetch.js";
 import { resolveProxyFetchFromEnv } from "./net/proxy-fetch.js";
-import { type ProviderAuth, resolveProviderAuths } from "./provider-usage.auth.js";
+import {
+  prepareProviderUsageAuthFacts,
+  type ProviderAuth,
+  resolveProviderAuths,
+} from "./provider-usage.auth.js";
 import {
   PROVIDER_USAGE_TIMEOUT_MS,
   ignoredErrors,
@@ -134,6 +138,15 @@ export async function loadProviderUsageSummary(
   let authStore = opts.authStore;
   const getAuthStore = () =>
     (authStore ??= ensureAuthProfileStore(opts.agentDir, { allowKeychainPrompt: false }));
+  let preparedAuth: ReturnType<typeof prepareProviderUsageAuthFacts> | undefined;
+  if (!opts.auth) {
+    try {
+      // Request-local reuse avoids one metadata scan per provider without weakening invalidation.
+      preparedAuth = prepareProviderUsageAuthFacts({ config, env });
+    } catch {
+      // Preserve the existing per-provider error isolation when discovery is unavailable.
+    }
+  }
   const tasks = descriptors.map(({ provider }) => {
     return raceUsageTimeout(
       (async () => {
@@ -148,6 +161,7 @@ export async function loadProviderUsageSummary(
               env,
               getStore: getAuthStore,
               store: opts.authStore,
+              prepared: preparedAuth,
               onError: (_provider, error) => {
                 authError = error;
               },

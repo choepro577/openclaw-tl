@@ -1,6 +1,16 @@
 // Tracks task process state transitions used to reconcile running work.
 import type { TaskDeliveryState, TaskRecord } from "./task-registry.types.js";
 
+export type TaskLiveToolActivity = {
+  toolCallId: string;
+  name: string;
+  args?: unknown;
+  output?: string;
+  isError?: boolean;
+  resultReceived: boolean;
+  startedAt: number;
+};
+
 export type TaskActivityOverlayState = {
   runId: string;
   assistantText: string;
@@ -11,6 +21,7 @@ export type TaskActivityOverlayState = {
   added: number;
   removed: number;
   pendingDiffByToolCallId: Map<string, { files: string[]; added: number; removed: number }>;
+  liveToolsByCallId: Map<string, TaskLiveToolActivity>;
   dirty: boolean;
   lastFlushedAt?: number;
   flushTimer?: ReturnType<typeof setTimeout>;

@@ -58,6 +58,128 @@
 }
 
 /* ── Collapsed tool row ── */
+
+.chat-group.chat-group--delegation {
+  padding-bottom: 0;
+}
+
+.chat-delegation {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  margin-block: 8px;
+  padding: 4px 0;
+  overflow-wrap: anywhere;
+}
+
+.chat-delegation__row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) max-content auto;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+
+button.chat-delegation__row {
+  --cursor-action: pointer;
+  cursor: var(--cursor-action);
+}
+
+button.chat-delegation__row:hover {
+  color: var(--text);
+}
+
+.chat-delegation__row:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
+  border-radius: var(--radius-sm);
+}
+
+.chat-delegation__icons {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+  padding-left: 2px;
+}
+
+.chat-delegation__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  margin-left: -4px;
+  border: 1px solid var(--bg);
+  border-radius: 50%;
+  background: var(--bg);
+  color: var(--accent);
+}
+
+.chat-delegation__icon:first-child {
+  margin-left: 0;
+}
+
+.chat-delegation__icon svg,
+.chat-delegation__chevron svg {
+  width: 13px;
+  height: 13px;
+  flex-shrink: 0;
+}
+
+.chat-delegation__names {
+  min-width: 0;
+  color: var(--text);
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.chat-delegation__activity {
+  grid-column: 2 / -1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat-delegation__status {
+  justify-self: end;
+  color: var(--muted);
+  font-size: 12px;
+  overflow-wrap: normal;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.chat-delegation__row[data-state="failed"] .chat-delegation__status {
+  color: var(--danger);
+}
+
+.chat-delegation__chevron {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  color: var(--muted);
+}
+
+.chat-delegation__notice {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
 .chat-tool-msg-collapse {
   width: 100%;
   min-width: 0;
@@ -98,6 +220,11 @@
   list-style: none;
   appearance: none;
   -webkit-appearance: none;
+}
+
+.chat-progress-card-receipt__summary {
+  display: inline-flex;
+  align-items: center;
 }
 
 .chat-tool-disclosure__content {
@@ -1283,12 +1410,61 @@
 }
 
 .chat-reading-indicator svg {
-  width: 18px;
-  height: 18px;
+  overflow: visible;
+  width: 22px;
+  height: 22px;
   fill: currentColor;
   stroke: none;
   animation: chatWorkingClawFlex var(--claw-cycle) ease-out infinite;
   will-change: transform;
+}
+
+/* The pot rocks at its base while three staggered wisps rise independently. */
+@media (prefers-reduced-motion: no-preference) {
+  .chat-reading-indicator .rice-pot__body {
+    transform-box: view-box;
+    transform-origin: 12px 21px;
+    animation: ricePotRock 1.2s ease-in-out infinite;
+  }
+
+  .chat-reading-indicator .rice-pot__steam {
+    animation: ricePotSteam 1.8s ease-out infinite;
+  }
+
+  .chat-reading-indicator .rice-pot__steam:nth-child(2) {
+    animation-delay: -0.6s;
+  }
+
+  .chat-reading-indicator .rice-pot__steam:nth-child(3) {
+    animation-delay: -1.2s;
+  }
+}
+
+@keyframes ricePotRock {
+  0%,
+  100% {
+    transform: rotate(-5deg);
+  }
+
+  50% {
+    transform: rotate(5deg) translateY(-0.6px);
+  }
+}
+
+@keyframes ricePotSteam {
+  0% {
+    opacity: 0;
+    transform: translate(0, 2px);
+  }
+
+  25% {
+    opacity: 1;
+  }
+
+  100% {
+    opacity: 0;
+    transform: translate(1.5px, -5px);
+  }
 }
 
 /* The upper jaw hinges at the palm joint. Rest is slightly open — the open
@@ -2211,6 +2387,10 @@ openclaw-tooltip.chat-tasks-status__preview {
 
 .chat-subagent-activity__indicator--finished {
   color: var(--ok);
+}
+
+.chat-subagent-activity__indicator--pending {
+  color: var(--warn);
 }
 
 .chat-subagent-activity__indicator--failed {

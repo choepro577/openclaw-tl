@@ -122,7 +122,7 @@ export function resolveSubagentSpawnRequest(
     ? false
     : params.expectsCompletionMessage !== false;
   const hookRunner = getSubagentSpawnDeps().getGlobalHookRunner();
-  const cfg = loadSubagentConfig();
+  const cfg = ctx.config ?? loadSubagentConfig();
 
   // When agent omits runTimeoutSeconds, use the config default.
   // Falls back to 0 (no timeout) if config key is also unset,

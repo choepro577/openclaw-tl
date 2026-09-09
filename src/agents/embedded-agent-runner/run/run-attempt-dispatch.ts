@@ -1,3 +1,4 @@
+import { buildEnterpriseDelegationTurnPrompt } from "../../../enterprise/user/personal-agent-bootstrap.js";
 import { getGatewayContextResolver } from "../../../plugins/runtime/gateway-request-scope.js";
 import { createAgentHarnessTaskRuntimeScope } from "../../../tasks/agent-harness-task-runtime-scope.js";
 import type { ToolOutcomeObserver } from "../../agent-tools.before-tool-call.js";
@@ -18,6 +19,7 @@ import {
   withGatewayToolCallerIdentity,
 } from "../../tools/gateway-caller-context.js";
 import type { SystemAgentToolOptions } from "../../tools/system-agent-tool.js";
+import { resolveHarnessSkillSnapshot } from "../sandbox-skills.js";
 import { prepareExecApprovalContinuationForAttempt } from "./attempt-exec-approval-continuation.js";
 import { prepareEmbeddedAttemptPromptExecution } from "./attempt-prompt-submit.js";
 import { applyResolvedToolPromptFinalizer } from "./attempt-prompt-support.js";
@@ -241,6 +243,7 @@ export async function dispatchEmbeddedRunAttempt(input: {
         config: params.config,
         sessionKey: params.sandboxSessionKey ?? runtime.sessionKey ?? runtime.sessionId,
         workspaceDir: runtime.workspaceDir,
+        skillsSnapshot: params.skillsSnapshot,
       })))
     : undefined;
   if (!params.admittedRunContext) {
@@ -253,7 +256,22 @@ export async function dispatchEmbeddedRunAttempt(input: {
   }
   const incognitoSystemPrompt = appendIncognitoSystemPrompt({
     agentId: runtime.agentId,
-    extraSystemPrompt: params.extraSystemPrompt,
+    extraSystemPrompt:
+      [
+        params.extraSystemPrompt,
+        ...(params.config
+          ? [
+              buildEnterpriseDelegationTurnPrompt({
+                config: params.config,
+                agentId: runtime.agentId,
+                sessionKey: runtime.sessionKey,
+                runId: params.runId,
+              }),
+            ]
+          : []),
+      ]
+        .filter(Boolean)
+        .join("\n\n") || undefined,
     sessionKey: params.sessionKey,
     storePath: params.sessionTarget?.storePath,
   });
@@ -337,7 +355,15 @@ export async function dispatchEmbeddedRunAttempt(input: {
     ...(runtime.authoredContextTokenCap === undefined
       ? {}
       : { authoredContextTokenCap: runtime.authoredContextTokenCap }),
-    skillsSnapshot: params.skillsSnapshot,
+    skillsSnapshot: control.pluginHarnessOwnsTransport
+      ? resolveHarnessSkillSnapshot({
+          sandbox: pluginSandbox,
+          skillsAnchorWorkspace: runtime.bootstrapWorkspaceDir ?? runtime.workspaceDir,
+          skillsSnapshot: params.skillsSnapshot,
+          config: params.config,
+          agentId: runtime.agentId,
+        })
+      : params.skillsSnapshot,
     prompt: pluginHarnessPrompt ?? preparedExecApprovalContinuation.prompt,
     transcriptPrompt:
       pluginHarnessPrompt !== undefined && params.transcriptPrompt === undefined

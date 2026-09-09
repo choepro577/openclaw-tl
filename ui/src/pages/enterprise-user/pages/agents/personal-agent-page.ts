@@ -11,6 +11,8 @@ import {
 } from "../../../../components/settings-ui.ts";
 import { renderSettingsWorkspace } from "../../../../components/settings-workspace.ts";
 import { eu } from "../../../../i18n/enterprise-user.ts";
+import { i18n } from "../../../../i18n/index.ts";
+import { showToast } from "../../../../lib/toast.ts";
 import { OpenClawLightDomElement } from "../../../../lit/openclaw-element.ts";
 import type {
   PersonalAgentKnowledgeItem,
@@ -73,6 +75,14 @@ export class UserPersonalAgentPage extends OpenClawLightDomElement {
     this.editingKnowledgeId = null;
     this.knowledgeTitle = "";
     this.knowledgeContent = "";
+  }
+
+  private async saveProfile(): Promise<void> {
+    await personalAgentEditorStore.save();
+    const editorState = personalAgentEditorStore.state;
+    if (editorState.phase === "ready") {
+      showToast({ message: editorState.error ?? eu("personalAgentSaveSucceeded") });
+    }
   }
 
   private async saveKnowledge(): Promise<void> {
@@ -424,7 +434,7 @@ export class UserPersonalAgentPage extends OpenClawLightDomElement {
             title: item.title,
             description: `${item.kind === "upload" ? item.sourceName : eu("note")} · ${eu(
               "updatedAt",
-              { time: new Date(item.updatedAt).toLocaleString() },
+              { time: new Date(item.updatedAt).toLocaleString(i18n.getLocale()) },
             )}`,
             control: html`<div class="eu-actions">
               <button class="btn btn--sm" type="button" @click=${() => this.editKnowledge(item)}>
@@ -552,7 +562,7 @@ export class UserPersonalAgentPage extends OpenClawLightDomElement {
             class="btn primary"
             type="button"
             ?disabled=${editorState.busy || !dirty || draft.name.trim().length === 0}
-            @click=${() => void personalAgentEditorStore.save()}
+            @click=${() => void this.saveProfile()}
           >
             ${editorState.busy ? eu("saveBusy") : eu("saveChanges")}
           </button>

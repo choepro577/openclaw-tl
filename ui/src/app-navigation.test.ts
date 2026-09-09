@@ -164,39 +164,43 @@ describe("settingsSearchTextMatches", () => {
 
 describe("formatDocumentTitle", () => {
   it("suffixes the brand after a plain context", () => {
-    expect(formatDocumentTitle({ context: "Usage" })).toBe("Usage — OpenClaw");
+    expect(formatDocumentTitle({ context: "Usage" })).toBe("Usage — MAAP");
   });
 
   it("does not duplicate a context ending in the brand", () => {
-    expect(formatDocumentTitle({ context: "Ask OpenClaw" })).toBe("Ask OpenClaw");
-    expect(formatDocumentTitle({ context: "OpenClaw" })).toBe("OpenClaw");
+    expect(formatDocumentTitle({ context: "Ask MAAP" })).toBe("Ask MAAP");
+    expect(formatDocumentTitle({ context: "MAAP" })).toBe("MAAP");
+  });
+
+  it("masks the engine name in dynamic context before adding the brand", () => {
+    expect(formatDocumentTitle({ context: "/home/app/.openclaw/workspace" })).toBe(
+      "/home/app/.*******/workspace — MAAP",
+    );
   });
 
   it("prefixes a positive attention count", () => {
-    expect(formatDocumentTitle({ context: "Usage", attentionCount: 2 })).toBe(
-      "(2) Usage — OpenClaw",
-    );
+    expect(formatDocumentTitle({ context: "Usage", attentionCount: 2 })).toBe("(2) Usage — MAAP");
   });
 
   it("does not add a queued count for an empty offline outbox", () => {
     expect(formatDocumentTitle({ context: "Usage", offline: true, queuedCount: 0 })).toBe(
-      "(Offline) Usage — OpenClaw",
+      "(Offline) Usage — MAAP",
     );
   });
 
   it("includes the queued outbox count in the offline marker", () => {
     expect(formatDocumentTitle({ context: "Usage", offline: true, queuedCount: 3 })).toBe(
-      "(Offline · 3 queued) Usage — OpenClaw",
+      "(Offline · 3 queued) Usage — MAAP",
     );
   });
 
   it("ignores a queued count while online", () => {
-    expect(formatDocumentTitle({ context: "Usage", queuedCount: 3 })).toBe("Usage — OpenClaw");
+    expect(formatDocumentTitle({ context: "Usage", queuedCount: 3 })).toBe("Usage — MAAP");
   });
 
   it("suppresses the attention count while offline", () => {
     expect(formatDocumentTitle({ context: "Usage", attentionCount: 2, offline: true })).toBe(
-      "(Offline) Usage — OpenClaw",
+      "(Offline) Usage — MAAP",
     );
   });
 });
@@ -217,7 +221,7 @@ describe("titleForRoute", () => {
       Object.fromEntries(ALL_ROUTES.map((routeId) => [routeId, titleForRoute(routeId)])),
     ).toEqual({
       chat: "Chat",
-      custodian: "OpenClaw",
+      custodian: "MAAP",
       activity: "Activity",
       apps: "Apps",
       portals: "Portals",

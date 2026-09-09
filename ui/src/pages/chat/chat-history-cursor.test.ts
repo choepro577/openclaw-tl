@@ -119,6 +119,57 @@ describe("chat history cursor revalidation", () => {
     ).toBe("cursor-2");
   });
 
+  it("queues a newer cursor behind the current history request", async () => {
+    const firstResponse = createDeferred<Record<string, unknown>>();
+    const secondResponse = createDeferred<Record<string, unknown>>();
+    const handler = vi
+      .fn()
+      .mockReturnValueOnce(firstResponse.promise)
+      .mockReturnValueOnce(secondResponse.promise);
+    const state = createState(handler);
+    const cache = seedCachedHistory(
+      state,
+      [message("user", "cached", "cached-user", 1)],
+      "cursor-1",
+    );
+
+    const firstLoad = loadChatHistory(state);
+    expect(handler).toHaveBeenCalledOnce();
+
+    cacheChatSessionSnapshot(
+      cache,
+      state,
+      { sessionKey: state.sessionKey },
+      {
+        messages: state.chatMessages,
+        pagination: state.chatHistoryPagination,
+        sessionId: "session-cursor",
+        deltaCursor: "cursor-2",
+      },
+    );
+    const queuedLoad = loadChatHistory(state);
+    expect(handler).toHaveBeenCalledOnce();
+
+    firstResponse.resolve({
+      kind: "delta",
+      messages: [],
+      deltaCursor: "cursor-2",
+      sessionInfo: { key: "main", kind: "direct", sessionId: "session-cursor", updatedAt: 2 },
+    });
+    await vi.waitFor(() => expect(handler).toHaveBeenCalledTimes(2));
+
+    secondResponse.resolve({
+      messages: [],
+      sessionId: "session-cursor",
+      completeSnapshot: true,
+    });
+    await Promise.all([firstLoad, queuedLoad]);
+    expect(handler.mock.calls[1]?.[0]).toMatchObject({
+      cursor: "cursor-2",
+      sessionKey: "main",
+    });
+  });
+
   it("clears a rejected cursor before falling back to a full tail fetch", async () => {
     const cached = message("user", "cached", "cached-user", 1);
     const fresh = message("assistant", "fresh", "fresh-assistant", 2);

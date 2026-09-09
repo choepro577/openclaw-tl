@@ -992,10 +992,10 @@ body {
   letter-spacing: -0.01em;
   background: var(--bg);
   color: var(--text);
-  /* App chrome behaves like native controls: dragging across labels, tiles,
-     and navigation must not create accidental text selections. Text-entry
-     surfaces and document-like content opt back in below or in route CSS. */
-  user-select: none;
+  /* Text is selectable by default across the app. Interaction-specific
+     surfaces such as drag handles opt out in their feature CSS. */
+  user-select: text;
+  -webkit-user-select: text;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }

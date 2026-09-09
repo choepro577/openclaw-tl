@@ -1384,6 +1384,37 @@ describe("handleToolExecutionEnd sessions_spawn terminal success tracking", () =
 
     expect(ctx.state.acceptedSessionSpawns).toEqual([]);
   });
+
+  it("records every trusted enterprise_delegate child without accepting look-alike tools", async () => {
+    const { ctx } = createTestContext();
+    const managedResult = {
+      details: {
+        outcome: "delegated",
+        acceptedSessionSpawns: [
+          { runId: "run-contract", childSessionKey: "agent:contract:subagent:one" },
+          { runId: "run-finance", childSessionKey: "agent:finance:subagent:two" },
+        ],
+      },
+    };
+
+    await endTool(ctx, {
+      toolName: "enterprise_delegate",
+      toolCallId: "tool-managed-delegate",
+      isError: false,
+      result: managedResult,
+    });
+    await endTool(ctx, {
+      toolName: "untrusted_lookalike",
+      toolCallId: "tool-lookalike",
+      isError: false,
+      result: managedResult,
+    });
+
+    expect(ctx.state.acceptedSessionSpawns).toEqual([
+      { runId: "run-contract", childSessionKey: "agent:contract:subagent:one" },
+      { runId: "run-finance", childSessionKey: "agent:finance:subagent:two" },
+    ]);
+  });
 });
 
 describe("handleToolExecutionEnd mutating failure recovery", () => {

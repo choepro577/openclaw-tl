@@ -1,7 +1,7 @@
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { closeOpenClawStateDatabaseForTest } from "../../state/openclaw-state-db.js";
 import {
   countEnterpriseAdministrators,
@@ -15,9 +15,19 @@ import {
   replaceEnterpriseEntitlements,
   resolveEnterpriseResourceAccess,
 } from "../entitlements/entitlement-store.js";
-import { authenticateEnterpriseToken, loginEnterpriseAccount } from "./auth-service.js";
+import {
+  authenticateEnterpriseToken,
+  loginEnterpriseAccount,
+  resetEnterpriseAccountPassword,
+} from "./auth-service.js";
 import { hashEnterprisePassword, verifyEnterprisePassword } from "./password.js";
-import { revokeEnterpriseSession } from "./session-store.js";
+import {
+  ENTERPRISE_SESSION_TOUCH_INTERVAL_MS,
+  createEnterpriseSession,
+  getActiveEnterpriseSession,
+  revokeEnterpriseSession,
+  touchEnterpriseSession,
+} from "./session-store.js";
 
 const tempDirectories: string[] = [];
 
@@ -62,6 +72,88 @@ describe("enterprise account auth", () => {
 
     revokeEnterpriseSession(login.principal.sessionId, "test", options);
     expect(authenticateEnterpriseToken(login.token, options)).toBeUndefined();
+  });
+
+  it("coalesces last-seen writes without bypassing session expiry or revocation", async () => {
+    const options = stateOptions();
+    const account = createEnterpriseAccount(
+      {
+        username: "touch.admin",
+        displayName: "Touch Admin",
+        passwordHash: await hashEnterprisePassword("touch-password"),
+        role: "administrator",
+      },
+      options,
+    );
+    const baseNow = Date.now();
+    const clock = vi.spyOn(Date, "now").mockReturnValue(baseNow);
+    try {
+      const session = createEnterpriseSession(account.id, options, "admin");
+
+      clock.mockReturnValue(baseNow + 1_000);
+      touchEnterpriseSession(session.sessionId, options);
+      expect(getActiveEnterpriseSession(session.sessionId, options, "admin")?.lastSeenAt).toBe(
+        baseNow + 1_000,
+      );
+
+      clock.mockReturnValue(baseNow + 2_000);
+      touchEnterpriseSession(session.sessionId, options);
+      expect(getActiveEnterpriseSession(session.sessionId, options, "admin")?.lastSeenAt).toBe(
+        baseNow + 1_000,
+      );
+
+      const nextTouchAt = baseNow + 1_000 + ENTERPRISE_SESSION_TOUCH_INTERVAL_MS + 1;
+      clock.mockReturnValue(nextTouchAt);
+      touchEnterpriseSession(session.sessionId, options);
+      expect(getActiveEnterpriseSession(session.sessionId, options, "admin")?.lastSeenAt).toBe(
+        nextTouchAt,
+      );
+
+      clock.mockReturnValue(session.expiresAt);
+      expect(getActiveEnterpriseSession(session.sessionId, options, "admin")).toBeUndefined();
+
+      revokeEnterpriseSession(session.sessionId, "test", options);
+      clock.mockReturnValue(session.expiresAt + 1);
+      touchEnterpriseSession(session.sessionId, options);
+      expect(getActiveEnterpriseSession(session.sessionId, options, "admin")).toBeUndefined();
+    } finally {
+      clock.mockRestore();
+    }
+  });
+
+  it("resets a locked-out account password and revokes its existing sessions", async () => {
+    const options = stateOptions();
+    const account = createEnterpriseAccount(
+      {
+        username: "recovery.admin",
+        displayName: "Recovery Admin",
+        passwordHash: await hashEnterprisePassword("old-admin-password"),
+        role: "administrator",
+        mustChangePassword: false,
+      },
+      options,
+    );
+    const previousLogin = await loginEnterpriseAccount(
+      account.username,
+      "old-admin-password",
+      options,
+      "admin",
+    );
+
+    const updated = await resetEnterpriseAccountPassword(
+      account.id,
+      "recovered-admin-password",
+      options,
+    );
+
+    expect(updated.mustChangePassword).toBe(true);
+    expect(authenticateEnterpriseToken(previousLogin.token, options, "admin")).toBeUndefined();
+    await expect(
+      loginEnterpriseAccount(account.username, "old-admin-password", options, "admin"),
+    ).rejects.toThrow("INVALID_CREDENTIALS");
+    await expect(
+      loginEnterpriseAccount(account.username, "recovered-admin-password", options, "admin"),
+    ).resolves.toMatchObject({ principal: { account: { id: account.id } } });
   });
 
   it("enforces deny-wins and the employee shell hard deny", async () => {

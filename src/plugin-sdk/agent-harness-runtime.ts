@@ -133,6 +133,7 @@ type EmbeddedRunAttemptParamsBase = Omit<
   | "onContextEngineTurnCandidate"
   | "pluginHarnessToolPolicySafeDeniedTools"
   | "trajectoryRecorder"
+  | "resolvePrivateModelContext"
 > & {
   /** Per-model context cap authored by the operator and forwarded to harness runtimes. */
   authoredContextTokenCap?: number;

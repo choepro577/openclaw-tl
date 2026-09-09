@@ -1,4 +1,5 @@
 import { html, nothing } from "lit";
+import "./automation-editor.css";
 import { state } from "lit/decorators.js";
 import {
   renderSettingsPage,
@@ -16,6 +17,7 @@ import {
   updateUserAutomation,
 } from "../../services/user-enterprise-api.ts";
 import { userAgentCatalogStore } from "../../state/user-agent-catalog-store.ts";
+import { automationScheduleValid, renderCalendarSchedule } from "./automation-schedule.ts";
 
 export function routeAutomationId(): string | null {
   const queryId = new URLSearchParams(globalThis.location?.search ?? "").get("id");
@@ -32,6 +34,8 @@ function defaultAt(): string {
   return local.toISOString().slice(0, 16);
 }
 
+const DEFAULT_CRON_EXPRESSION = "0 8 * * *";
+
 export class UserAutomationEditorPage extends OpenClawLightDomElement {
   @state() private source: UserAutomation | null = null;
   @state() private draft: UserAutomationInput = {
@@ -42,6 +46,7 @@ export class UserAutomationEditorPage extends OpenClawLightDomElement {
     prompt: "",
   };
   @state() private loading = false;
+  @state() private cronAdvanced = false;
   @state() private busy = false;
   @state() private error = "";
   private unsubscribe?: () => void;
@@ -94,8 +99,19 @@ export class UserAutomationEditorPage extends OpenClawLightDomElement {
   }
 
   private async save(): Promise<void> {
-    if (this.busy || !this.draft.name.trim() || !this.draft.prompt.trim()) {
+    if (
+      this.source?.readOnly ||
+      this.busy ||
+      !this.draft.name.trim() ||
+      !this.draft.prompt.trim() ||
+      !automationScheduleValid(this.draft.schedule)
+    ) {
       return;
+    }
+    for (const input of this.querySelectorAll<
+      HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement
+    >("input, select, textarea")) {
+      if (!input.reportValidity()) return;
     }
     this.busy = true;
     this.error = "";
@@ -130,46 +146,62 @@ export class UserAutomationEditorPage extends OpenClawLightDomElement {
     }
     const agents = userAgentCatalogStore.agents.filter((agent) => agent.actions.canSchedule);
     const schedule = this.draft.schedule;
+    const readOnly = this.source?.readOnly === true;
+    const scheduleReady = automationScheduleValid(schedule);
     return renderSettingsWorkspace(
       renderSettingsPage(html`
         <header class="eu-page-header">
           <div>
             <h1>${this.source ? eu("automationEdit") : eu("automationCreate")}</h1>
-            <p>${eu("automationAgentTurn")}</p>
           </div>
           <button
             class="btn primary"
             type="button"
-            ?disabled=${this.busy || !this.draft.name.trim() || !this.draft.prompt.trim()}
+            ?disabled=${readOnly ||
+            this.busy ||
+            !this.draft.name.trim() ||
+            !this.draft.prompt.trim() ||
+            !scheduleReady}
             @click=${() => void this.save()}
           >
             ${this.busy ? eu("saveBusy") : eu("automationSave")}
           </button>
         </header>
+        ${!scheduleReady
+          ? html`<div class="callout danger" role="alert">${eu("automationInvalidSchedule")}</div>`
+          : nothing}
+        ${readOnly
+          ? html`<div class="callout" role="status">${eu("automationReadOnly")}</div>`
+          : nothing}
         ${this.error ? html`<div class="callout danger" role="alert">${this.error}</div>` : nothing}
         ${renderSettingsSection(
           { title: eu("configuration") },
           html`
             ${renderSettingsRow({
               title: eu("automationName"),
+              stacked: true,
               control: html`<input
-                class="input"
+                class="settings-input"
+                aria-label=${eu("automationName")}
                 maxlength="128"
+                ?disabled=${readOnly}
                 .value=${this.draft.name}
                 @input=${(event: Event) =>
                   this.updateDraft({ name: (event.currentTarget as HTMLInputElement).value })}
               />`,
-              stacked: true,
             })}
             ${renderSettingsRow({
               title: eu("newConversationAgentTitle"),
+              stacked: true,
               description:
                 this.source?.agentAccess === "removed"
                   ? eu("automationAgentRemoved")
                   : eu("automationAgentAccess"),
               control: html`<select
-                class="input"
+                class="settings-select"
+                aria-label=${eu("newConversationAgentTitle")}
                 .value=${this.draft.agentKey}
+                ?disabled=${readOnly}
                 @change=${(event: Event) =>
                   this.updateDraft({
                     agentKey: (event.currentTarget as HTMLSelectElement).value as AgentKey,
@@ -180,18 +212,20 @@ export class UserAutomationEditorPage extends OpenClawLightDomElement {
             })}
             ${renderSettingsRow({
               title: eu("automationPrompt"),
+              stacked: true,
               description: eu("automationPromptCount", {
                 count: String(this.draft.prompt.length),
               }),
               control: html`<textarea
-                class="input"
+                class="settings-input"
+                aria-label=${eu("automationPrompt")}
                 rows="7"
                 maxlength="4000"
+                ?disabled=${readOnly}
                 .value=${this.draft.prompt}
                 @input=${(event: Event) =>
                   this.updateDraft({ prompt: (event.currentTarget as HTMLTextAreaElement).value })}
               ></textarea>`,
-              stacked: true,
             })}
           `,
         )}
@@ -200,29 +234,42 @@ export class UserAutomationEditorPage extends OpenClawLightDomElement {
           html`
             ${renderSettingsRow({
               title: eu("automationScheduleType"),
+              stacked: true,
               control: html`<select
-                class="input"
+                class="settings-select"
+                aria-label=${eu("automationScheduleType")}
                 .value=${schedule.kind}
+                ?disabled=${readOnly}
                 @change=${(event: Event) => {
                   const kind = (event.currentTarget as HTMLSelectElement).value;
                   this.updateDraft({
                     schedule:
                       kind === "once"
                         ? { kind: "once", at: defaultAt() }
-                        : { kind: "interval", everyMinutes: 60 },
+                        : kind === "cron"
+                          ? {
+                              kind: "cron",
+                              expr: DEFAULT_CRON_EXPRESSION,
+                              tz: Intl.DateTimeFormat().resolvedOptions().timeZone,
+                            }
+                          : { kind: "interval", everyMinutes: 60 },
                   });
                 }}
               >
                 <option value="once">${eu("automationOnce")}</option>
                 <option value="interval">${eu("automationInterval")}</option>
+                <option value="cron">${eu("automationCalendar")}</option>
               </select>`,
             })}
             ${schedule.kind === "once"
               ? renderSettingsRow({
                   title: eu("automationTime"),
+                  stacked: true,
                   control: html`<input
-                    class="input"
+                    class="settings-input"
+                    aria-label=${eu("automationTime")}
                     type="datetime-local"
+                    ?disabled=${readOnly}
                     .value=${schedule.at.slice(0, 16)}
                     @input=${(event: Event) =>
                       this.updateDraft({
@@ -233,29 +280,43 @@ export class UserAutomationEditorPage extends OpenClawLightDomElement {
                       })}
                   />`,
                 })
-              : renderSettingsRow({
-                  title: eu("automationEveryMinutes"),
-                  control: html`<input
-                    class="input"
-                    type="number"
-                    min="1"
-                    max="525600"
-                    .value=${String(schedule.everyMinutes)}
-                    @input=${(event: Event) =>
-                      this.updateDraft({
-                        schedule: {
-                          kind: "interval",
-                          everyMinutes: Number((event.currentTarget as HTMLInputElement).value),
-                        },
-                      })}
-                  />`,
-                })}
+              : schedule.kind === "cron"
+                ? renderCalendarSchedule(
+                    schedule,
+                    readOnly,
+                    this.cronAdvanced,
+                    (advanced) => {
+                      this.cronAdvanced = advanced;
+                    },
+                    (schedule) => this.updateDraft({ schedule }),
+                  )
+                : renderSettingsRow({
+                    title: eu("automationEveryMinutes"),
+                    stacked: true,
+                    control: html`<input
+                      class="settings-input"
+                      aria-label=${eu("automationEveryMinutes")}
+                      type="number"
+                      min="1"
+                      max="525600"
+                      ?disabled=${readOnly}
+                      .value=${String(schedule.everyMinutes)}
+                      @input=${(event: Event) =>
+                        this.updateDraft({
+                          schedule: {
+                            kind: "interval",
+                            everyMinutes: Number((event.currentTarget as HTMLInputElement).value),
+                          },
+                        })}
+                    />`,
+                  })}
             ${renderSettingsRow({
               title: eu("status"),
               control: html`<label class="field checkbox"
                 ><input
                   type="checkbox"
                   .checked=${this.draft.enabled}
+                  ?disabled=${readOnly}
                   @change=${(event: Event) =>
                     this.updateDraft({
                       enabled: (event.currentTarget as HTMLInputElement).checked,

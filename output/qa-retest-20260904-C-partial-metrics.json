@@ -1,0 +1,350 @@
+{
+  "generatedAt": "2026-09-04T14:50:46.820Z",
+  "pass": "C",
+  "capturedAt": "2026-09-04T14:50:46.658Z",
+  "sessionKey": "agent:enterprise-personal-2ae2cbc2deecdb86fe86:dashboard:0feb5fb4-214e-4540-8463-4a0c748cd79c",
+  "transcriptId": "cd811276-f582-4c6a-ae87-9a585a01205f",
+  "expectedCases": 11,
+  "observedCases": 2,
+  "allInitialPromptsMatchExactly": false,
+  "totalUserMessages": 3,
+  "internalUserRoleEventCount": 3,
+  "unclassifiedUserRoleEvents": [],
+  "totalFollowups": 1,
+  "counts": {
+    "routingEvents": 4,
+    "selectedPlans": 1,
+    "confirmedPlans": 1,
+    "acceptedChildren": 1,
+    "endedChildren": 1,
+    "routedChildIds": 1
+  },
+  "cases": [
+    {
+      "caseId": "C01",
+      "observed": true,
+      "promptMatchesPlanExactly": true,
+      "seqStart": 1,
+      "seqEnd": 4,
+      "firstUserMessageAt": "2026-09-04T14:31:46.101Z",
+      "transcriptUserWrittenAt": "2026-09-04T14:31:49.577Z",
+      "lastVisibleAssistantAt": "2026-09-04T14:31:56.458Z",
+      "observedUserToLastAssistantMs": 10357,
+      "userMessages": [
+        {
+          "seq": 1,
+          "kind": "initial",
+          "at": "2026-09-04T14:31:49.577Z",
+          "text": "27 phần nước với giá mỗi phần 14 nghìn thì mình phải trả tổng bao nhiêu?"
+        }
+      ],
+      "followupCount": 0,
+      "tools": {
+        "searchInvocations": 0,
+        "getInvocations": 0,
+        "memoryInvocations": 0,
+        "otherInvocations": 0,
+        "countsByName": {},
+        "calls": [],
+        "results": []
+      },
+      "sources": [],
+      "routing": [
+        {
+          "id": "f3b62475-4cdf-4cf3-bbb9-a43cd92baa26",
+          "account_id": "68264167-a2d8-48b1-a00a-d31a06a7fd92",
+          "parent_run_id_hash": "af067ac6be4206522466e04b4de2675095f9615f745869a7065cefed2897c385",
+          "outcome": "local",
+          "decision_source": "ai",
+          "reason_code": "router_no_candidate",
+          "confirmation_state": "not_required",
+          "policy_revision": 2,
+          "latency_ms": 3000,
+          "created_at": 1788532309110,
+          "targetAgentIds": [],
+          "childRunIds": [],
+          "attribution": "exact_parent_session_and_run_hash"
+        }
+      ],
+      "acceptedChildCount": 0,
+      "children": [],
+      "planAudits": [],
+      "assistantVisibleMessages": [
+        {
+          "seq": 4,
+          "at": "2026-09-04T14:31:56.458Z",
+          "stopReason": "stop",
+          "text": "27 × 14.000 = **378.000 đồng**."
+        }
+      ],
+      "lastAssistantVisible": {
+        "seq": 4,
+        "at": "2026-09-04T14:31:56.458Z",
+        "stopReason": "stop",
+        "text": "27 × 14.000 = **378.000 đồng**."
+      },
+      "grade": "manual_review_required",
+      "gradeBoundary": "Counts and last assistant text do not establish business completion, consent, correctness, or successful evidence transfer."
+    },
+    {
+      "caseId": "C02",
+      "observed": true,
+      "promptMatchesPlanExactly": true,
+      "seqStart": 5,
+      "seqEnd": 12,
+      "firstUserMessageAt": "2026-09-04T14:32:25.607Z",
+      "transcriptUserWrittenAt": "2026-09-04T14:32:30.942Z",
+      "lastVisibleAssistantAt": "2026-09-04T14:33:38.608Z",
+      "observedUserToLastAssistantMs": 73001,
+      "userMessages": [
+        {
+          "seq": 5,
+          "kind": "initial",
+          "at": "2026-09-04T14:32:30.942Z",
+          "text": "Mình đang chốt dự toán chuyến công tác tuần tới cho 3 người, kéo dài 3 ngày 2 đêm. Mỗi người dự kiến tốn 900 nghìn tiền khách sạn một đêm và 240 nghìn tiền ăn một ngày. So với mức công ty, tổng ăn ở được tính tối đa là bao nhiêu, phần vượt là bao nhiêu? Đi về rồi hạn nộp chứng từ thế nào?"
+        },
+        {
+          "seq": 7,
+          "kind": "followup",
+          "at": "2026-09-04T14:33:37.155Z",
+          "text": "Ừ, bạn xem giúp mình nhé."
+        }
+      ],
+      "followupCount": 1,
+      "tools": {
+        "searchInvocations": 0,
+        "getInvocations": 0,
+        "memoryInvocations": 0,
+        "otherInvocations": 0,
+        "countsByName": {},
+        "calls": [],
+        "results": []
+      },
+      "sources": [],
+      "routing": [
+        {
+          "id": "5b658d9d-0d8b-47ed-83d4-c70d4548d038",
+          "account_id": "68264167-a2d8-48b1-a00a-d31a06a7fd92",
+          "parent_run_id_hash": "a5d344cd9c75465e6926d92ba1e77aa5d251e990f3ca73e9a1122a06b588ec73",
+          "outcome": "clarified",
+          "decision_source": "ai",
+          "reason_code": "handoff_confirmation_required",
+          "confirmation_state": "pending",
+          "policy_revision": 2,
+          "latency_ms": 5311,
+          "created_at": 1788532350925,
+          "targetAgentIds": [
+            "enterprise-finance-specialist"
+          ],
+          "childRunIds": [],
+          "attribution": "exact_parent_session_and_run_hash"
+        },
+        {
+          "id": "8c728439-e3f4-4fbf-ae14-65120864c11e",
+          "account_id": "68264167-a2d8-48b1-a00a-d31a06a7fd92",
+          "parent_run_id_hash": "97d0275bba32e2e3eb59b39e6dfd4530e23abddaf019a2ca95e2620e3c80d7b3",
+          "outcome": "delegated",
+          "decision_source": "ai",
+          "reason_code": "delegate_started",
+          "confirmation_state": "approved",
+          "policy_revision": 2,
+          "latency_ms": 53,
+          "created_at": 1788532418493,
+          "targetAgentIds": [
+            "enterprise-finance-specialist"
+          ],
+          "childRunIds": [
+            "90015388-ac38-497d-a679-21fef1ed8591"
+          ],
+          "attribution": "exact_parent_session_and_run_hash"
+        },
+        {
+          "id": "5db59649-7a72-4692-8df0-33a40be66c8c",
+          "account_id": "68264167-a2d8-48b1-a00a-d31a06a7fd92",
+          "parent_run_id_hash": "97d0275bba32e2e3eb59b39e6dfd4530e23abddaf019a2ca95e2620e3c80d7b3",
+          "outcome": "blocked",
+          "decision_source": "system",
+          "reason_code": "mutation_confirmation_expired",
+          "confirmation_state": "expired",
+          "policy_revision": 2,
+          "latency_ms": null,
+          "created_at": 1788532431987,
+          "targetAgentIds": [
+            "enterprise-finance-specialist"
+          ],
+          "childRunIds": [
+            "90015388-ac38-497d-a679-21fef1ed8591"
+          ],
+          "attribution": "exact_parent_session_and_run_hash"
+        }
+      ],
+      "acceptedChildCount": 1,
+      "children": [
+        {
+          "runId": "90015388-ac38-497d-a679-21fef1ed8591",
+          "childSessionKey": "agent:enterprise-finance-specialist:subagent:8c0ed4aa-69cf-4377-8ca2-514a7475d6b4",
+          "createdAt": 1788532418466,
+          "startedAt": 1788532418713,
+          "endedAt": 1788532452504,
+          "outcome": {
+            "status": "ok"
+          },
+          "attribution": "exact_parent_registry_and_routing_child_id"
+        }
+      ],
+      "planAudits": [
+        {
+          "id": "e1a1a5d8-2229-437b-96fb-12992c9e2a34",
+          "action": "delegation.plan.selected",
+          "target_id": "793070f5-5e6e-4adb-96b3-7dfdadd49ed2",
+          "outcome": "success",
+          "created_at": 1788532350924,
+          "detail": {
+            "planId": "793070f5-5e6e-4adb-96b3-7dfdadd49ed2",
+            "planRevision": 1,
+            "handling": "specialist",
+            "targetAgentIds": [
+              "enterprise-finance-specialist"
+            ],
+            "targetCount": 1,
+            "policyRevision": 2,
+            "accountPolicyRevision": 4,
+            "parentRunHash": "a5d344cd9c75465e6926d92ba1e77aa5d251e990f3ca73e9a1122a06b588ec73",
+            "sessionHash": "3f0b13336ee96cdc9bbf2a5c79231ab7e8e0c1a7931b8f924569e66b9ba9894d"
+          }
+        },
+        {
+          "id": "029c90c0-578e-4d28-a19b-7d0b9c8a5f33",
+          "action": "delegation.plan.confirmed",
+          "target_id": "793070f5-5e6e-4adb-96b3-7dfdadd49ed2",
+          "outcome": "success",
+          "created_at": 1788532416825,
+          "detail": {
+            "planId": "793070f5-5e6e-4adb-96b3-7dfdadd49ed2",
+            "planRevision": 1,
+            "handling": "specialist",
+            "targetAgentIds": [
+              "enterprise-finance-specialist"
+            ],
+            "targetCount": 1,
+            "policyRevision": 2,
+            "accountPolicyRevision": 4,
+            "parentRunHash": "97d0275bba32e2e3eb59b39e6dfd4530e23abddaf019a2ca95e2620e3c80d7b3",
+            "sessionHash": "3f0b13336ee96cdc9bbf2a5c79231ab7e8e0c1a7931b8f924569e66b9ba9894d"
+          }
+        }
+      ],
+      "assistantVisibleMessages": [
+        {
+          "seq": 6,
+          "at": "2026-09-04T14:32:30.953Z",
+          "stopReason": "stop",
+          "text": "Bạn có đồng ý giao các phần việc đã nêu cho Chuyên gia Tài chính & Ngân sách không?"
+        },
+        {
+          "seq": 8,
+          "at": "2026-09-04T14:33:38.495Z",
+          "stopReason": "stop",
+          "text": "Đã chuyển phần việc đã xác nhận đến chuyên gia. Tôi đang chờ kết quả để tổng hợp."
+        },
+        {
+          "seq": 9,
+          "at": "2026-09-04T14:33:38.608Z",
+          "stopReason": "stop",
+          "text": "Đã chuyển phần việc đã xác nhận đến chuyên gia. Tôi đang chờ kết quả để tổng hợp."
+        }
+      ],
+      "lastAssistantVisible": {
+        "seq": 9,
+        "at": "2026-09-04T14:33:38.608Z",
+        "stopReason": "stop",
+        "text": "Đã chuyển phần việc đã xác nhận đến chuyên gia. Tôi đang chờ kết quả để tổng hợp."
+      },
+      "grade": "manual_review_required",
+      "gradeBoundary": "Counts and last assistant text do not establish business completion, consent, correctness, or successful evidence transfer."
+    },
+    {
+      "caseId": "C03",
+      "observed": false,
+      "expectedPrompt": "Bạn giúp mình cân nhắc chuyện mở một điểm bán nhỏ nhé. Tổng vốn có 540 triệu, bỏ ra 240 triệu sửa sang và 60 triệu đặt cọc. Chi phí mỗi tháng gồm thuê mặt bằng 18 triệu, lương 42 triệu và các khoản khác 12 triệu; giá vốn chiếm 40% doanh thu. Với hai mức doanh thu 100 triệu và 150 triệu mỗi tháng, sau 3 tháng mình còn bao nhiêu tiền? Doanh thu hòa vốn là mức nào và nên điều chỉnh gì trước khi quyết định?",
+      "grade": "manual_review_required"
+    },
+    {
+      "caseId": "C04",
+      "observed": false,
+      "expectedPrompt": "Mình cần quyết xem có chốt đợt triển khai tại Bến Tre cho 30 người được chưa. Ngân sách tổng là 60 triệu; nhà cung cấp lấy 48 triệu trước thuế và có xem dữ liệu khách hàng. Nhóm đi công tác vẫn 3 người, 3 ngày 2 đêm, ăn ở theo dự toán mình vừa hỏi. Hợp đồng dự thảo BT-0904 bắt trả trước 80%, không ấn định thời hạn xử lý việc chậm tiến độ, còn trách nhiệm của nhà cung cấp bị giới hạn ở 2 triệu. Bạn cân đối giúp phần tiền còn dư, xem khoản trả trước đáng lo ở đâu và nên sửa những điều khoản gì. Đồng thời giúp mình xác định các việc phải xong trước triển khai, cách xếp lịch đào tạo và bàn giao, để mình biết đã nên chốt hay chưa.",
+      "grade": "manual_review_required"
+    },
+    {
+      "caseId": "C05",
+      "observed": false,
+      "expectedPrompt": "Mình sắp vào họp, bạn tóm lại thành đúng 5 việc ưu tiên nhé; phân biệt giúp phần đã chắc chắn với phần còn phải hỏi lại hoặc xác nhận.",
+      "grade": "manual_review_required"
+    },
+    {
+      "caseId": "C06",
+      "observed": false,
+      "expectedPrompt": "Mình muốn viết gọn bằng tiếng Anh tiêu đề ‘Phân tích ngân sách và rủi ro hợp đồng’ trên slide, viết thế nào?",
+      "grade": "manual_review_required"
+    },
+    {
+      "caseId": "C07",
+      "observed": false,
+      "expectedPrompt": "Cho mình hỏi trợ cấp nội bộ khi nhân viên sinh con thứ hai là bao nhiêu tiền, và có bao nhiêu ngày để nộp hồ sơ?",
+      "grade": "manual_review_required"
+    },
+    {
+      "caseId": "C08",
+      "observed": false,
+      "expectedPrompt": "Có một hợp đồng thuê kho mới, khác cái vừa bàn. Điều khoản phạt của hợp đồng đó có ổn không bạn?",
+      "grade": "manual_review_required"
+    },
+    {
+      "caseId": "C09",
+      "observed": false,
+      "expectedPrompt": "Khoan bàn hợp đồng kho nhé, để việc đó lại sau. Dữ liệu bị xóa nhầm từ 31 ngày trước thì còn trong khoảng thời gian công ty lưu bản sao không?",
+      "grade": "manual_review_required"
+    },
+    {
+      "caseId": "C10",
+      "observed": false,
+      "expectedPrompt": "Hai bạn mới sẽ vào nhóm tháng tới. Mình nên chuẩn bị máy, tài khoản và người hướng dẫn trước bao lâu, rồi theo dõi tuần đầu như thế nào? Một bạn xin làm tại nhà toàn bộ tuần, như vậy có phù hợp với cách làm của công ty không?",
+      "grade": "manual_review_required"
+    },
+    {
+      "caseId": "C11",
+      "observed": false,
+      "expectedPrompt": "Bạn nói rõ giúp mình toàn bộ tiêu chí để hoàn tất chương trình hội nhập nhé. Hai bạn mới cần đạt bài kiểm tra ra sao; nếu chưa đạt thì phải làm gì, bao lâu mới thi lại, và ai là người xác nhận đã hoàn thành?",
+      "grade": "manual_review_required"
+    }
+  ],
+  "unattributedRouting": [],
+  "unattributedChildren": [],
+  "environmentFingerprint": "a11a3d464e14edcd36dacfe562fa1635ab3bd774b858ab1f5abec0aada1b446d",
+  "warnings": [
+    "SQLite snapshots are observations, not authorization.",
+    "Run ID hashes are correlation only, never execution authority.",
+    "Timing starts at user message timestamp, not merely transcript insertion; routing can precede the latter.",
+    "All case grades require manual comparison to the fixed oracle and visible UI.",
+    "A response ending in another permission question is not task completion."
+  ],
+  "qaDisposition": {
+    "pass": "C",
+    "status": "partial_user_directed_stop",
+    "plannedCases": 11,
+    "observedCases": 2,
+    "lastObservedCase": "C02",
+    "unrunCases": [
+      "C03",
+      "C04",
+      "C05",
+      "C06",
+      "C07",
+      "C08",
+      "C09",
+      "C10",
+      "C11"
+    ],
+    "nextStrategy": "Fix the failing case, retest it naturally in an isolated session, then resume combined and multi-turn testing only after that case passes."
+  }
+}

@@ -14,6 +14,8 @@ import {
   normalizeMainKey,
   parseAgentSessionKey,
 } from "../routing/session-key.js";
+import { isSubagentSessionKey } from "../sessions/session-key-utils.js";
+import { readAgentRuntimeExecutionLineage } from "./agent-runtime-execution-lineage.js";
 import {
   authorizeGatewaySessionCreation,
   operatorSessionCap,
@@ -214,6 +216,23 @@ type SessionSharingRoleParams = {
   isMember?: boolean;
 };
 
+function trustedNativeSubagentParentOwnsTarget(params: SessionSharingRoleParams): boolean {
+  const identity = params.client?.internal?.agentRuntimeIdentity;
+  const lineage = readAgentRuntimeExecutionLineage(identity?.sessionSpawnContext);
+  const entry = params.target.entry;
+  return (
+    params.client?.internal?.agentRunTracking === "native_subagent" &&
+    identity !== undefined &&
+    lineage?.relation === "sessions_spawn" &&
+    entry.createdVia === "spawn" &&
+    entry.createdActor?.type === "agent" &&
+    entry.createdActor.id === identity.agentId &&
+    entry.spawnedBy === identity.sessionKey &&
+    entry.parentSessionKey === identity.sessionKey &&
+    isSubagentSessionKey(params.target.canonicalKey)
+  );
+}
+
 export function resolveSessionSharingRole(params: SessionSharingRoleParams): SessionSharingRole {
   return resolveSharingRole(params);
 }
@@ -222,6 +241,13 @@ function resolveSharingRole(
   params: SessionSharingRoleParams,
   preparedCap?: { value: ReturnType<typeof operatorSessionCap> },
 ): SessionSharingRole {
+  // A native child launch is host-owned work, but it can retain the human
+  // operator's closed session ceiling. Recognize only the exact freshly spawned
+  // child linked to the attested parent runtime; all other sessions continue to
+  // use the ordinary role and membership policy below.
+  if (trustedNativeSubagentParentOwnsTarget(params)) {
+    return "owner";
+  }
   const enterpriseAccess = enterprisePortalCanAccessSession({
     cfg: params.cfg,
     client: params.client,
@@ -412,6 +438,7 @@ export function authorizeSessionSharingTarget(params: {
   target: SessionSharingTarget;
 }): ErrorShape | null {
   if (
+    !trustedNativeSubagentParentOwnsTarget(params) &&
     enterprisePortalCanAccessSession({
       cfg: params.cfg,
       client: params.client,
@@ -539,6 +566,11 @@ export function resolveSessionMutationAuthorization(params: {
     if (
       hidesForeignSessions &&
       target &&
+      !trustedNativeSubagentParentOwnsTarget({
+        cfg: getCfg(),
+        client: params.client,
+        target,
+      }) &&
       enterprisePortalCanAccessSession({
         cfg: getCfg(),
         client: params.client,
@@ -551,6 +583,11 @@ export function resolveSessionMutationAuthorization(params: {
     if (
       hidesForeignSessions &&
       target &&
+      !trustedNativeSubagentParentOwnsTarget({
+        cfg: getCfg(),
+        client: params.client,
+        target,
+      }) &&
       enterpriseUserPortalIdentity(params.client) === undefined &&
       target.entry.createdActor?.id !== params.client?.authenticatedUserProfile?.profileId
     ) {

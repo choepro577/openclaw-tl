@@ -374,7 +374,7 @@ export async function fetchClawHubPackageArtifact(params: {
   timeoutMs?: number;
   fetchImpl?: ClawHubFetch;
 }): Promise<ClawHubPackageArtifactResolverResponse> {
-  return await fetchClawHubJson<ClawHubPackageArtifactResolverResponse>({
+  const response = await fetchClawHubJson<ClawHubPackageArtifactResolverResponse>({
     baseUrl: params.baseUrl,
     path: `/api/v1/packages/${encodeURIComponent(params.name)}/versions/${encodeURIComponent(
       params.version,
@@ -383,6 +383,30 @@ export async function fetchClawHubPackageArtifact(params: {
     timeoutMs: params.timeoutMs,
     fetchImpl: params.fetchImpl,
   });
+  const artifact = response.artifact;
+  if (!isJsonObject(artifact)) {
+    return response;
+  }
+  // The hosted resolver also emits the package-summary dialect (kind/sha256).
+  // Normalize once at the API boundary so review and installation bind the same artifact.
+  const kind = readClawHubStringField(artifact, "kind", "artifact");
+  const sha256 = readClawHubStringField(artifact, "sha256", "artifact");
+  if (
+    (kind && artifact.artifactKind && kind !== artifact.artifactKind) ||
+    (sha256 && artifact.artifactSha256 && sha256 !== artifact.artifactSha256)
+  ) {
+    throw new Error("Malformed ClawHub artifact response: conflicting artifact identity fields.");
+  }
+  return {
+    ...response,
+    artifact: {
+      ...artifact,
+      ...(!artifact.artifactKind && (kind === "npm-pack" || kind === "legacy-zip")
+        ? { artifactKind: kind }
+        : {}),
+      ...(!artifact.artifactSha256 && sha256 ? { artifactSha256: sha256 } : {}),
+    } as ClawHubResolvedArtifact,
+  };
 }
 
 export async function fetchClawHubPackageSecurity(params: {
@@ -403,6 +427,17 @@ export async function fetchClawHubPackageSecurity(params: {
     fetchImpl: params.fetchImpl,
   });
   return parseClawHubPackageSecurityResponse(response);
+}
+
+export async function listClawHubPackages(params: {
+  family: ClawHubPackageFamily;
+  limit: number;
+}): Promise<ClawHubPackageListItem[]> {
+  const result = await fetchClawHubJson<{ items: ClawHubPackageListItem[] }>({
+    path: "/api/v1/packages",
+    search: { family: params.family, limit: String(params.limit) },
+  });
+  return result.items ?? [];
 }
 
 export async function searchClawHubPackages(params: {

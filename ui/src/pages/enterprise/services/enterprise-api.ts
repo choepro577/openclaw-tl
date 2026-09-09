@@ -4,13 +4,22 @@ import type { ClawHubSkillDetail } from "../../../lib/skills/index.ts";
 import type {
   EnterpriseAccount,
   EnterpriseAccountRole,
+  EnterpriseAccessPreset,
   EnterpriseAdminModelContext,
   EnterpriseAdminModelMethod,
   EnterpriseAuditEvent,
   EnterpriseConfigSnapshot,
   EnterpriseConfigValidation,
+  EnterpriseCodexPluginGrant,
+  EnterpriseCodexPluginRequest,
+  EnterpriseCodexPluginRequestDetail,
   EnterpriseEffectivePolicy,
   EnterpriseEntitlement,
+  EnterpriseEntitlementEffect,
+  EnterpriseDelegationEvent,
+  EnterpriseDelegationPolicy,
+  EnterpriseDelegationProfile,
+  EnterpriseDelegationSpecialist,
   EnterprisePageInfo,
   EnterprisePluginGrant,
   EnterprisePluginRequest,
@@ -208,11 +217,11 @@ export async function loadEnterpriseUserCapabilities(): Promise<EnterpriseUserCa
 }
 
 export async function listAdminAccounts(filters: Record<string, string> = {}) {
-  return requestJson<{ accounts: EnterpriseAccount[]; pageInfo: EnterprisePageInfo }>(
-    `/api/enterprise/admin/accounts${queryString(filters)}`,
-    undefined,
-    "admin",
-  );
+  return requestJson<{
+    accounts: EnterpriseAccount[];
+    pageInfo: EnterprisePageInfo;
+    accessPresets: EnterpriseAccessPreset[];
+  }>(`/api/enterprise/admin/accounts${queryString(filters)}`, undefined, "admin");
 }
 
 export async function createAdminAccount(input: {
@@ -223,12 +232,19 @@ export async function createAdminAccount(input: {
   enabled: boolean;
   personalAgentEnabled: boolean;
   defaultAgentId: string | null;
-  accessPresetKey: string;
+  accessPresetKey?: string;
   skillGrants?: string[];
+  agentGrants?: string[];
 }) {
   return requestJson<{ account: EnterpriseAccount }>(
     "/api/enterprise/admin/accounts",
-    { method: "POST", body: JSON.stringify(input) },
+    {
+      method: "POST",
+      body: JSON.stringify({
+        ...input,
+        accessPresetKey: input.accessPresetKey ?? (input.role === "employee" ? "basic@1" : "none"),
+      }),
+    },
     "admin",
   );
 }
@@ -242,7 +258,11 @@ export async function loadAdminAccount(accountId: string) {
   }>(`/api/enterprise/admin/accounts/${encodeURIComponent(accountId)}`, undefined, "admin");
 }
 
-export async function updateAdminAccount(accountId: string, patch: Partial<EnterpriseAccount>) {
+export type EnterpriseAdminAccountPatch = Partial<EnterpriseAccount> & {
+  applyAccessPreset?: boolean;
+};
+
+export async function updateAdminAccount(accountId: string, patch: EnterpriseAdminAccountPatch) {
   return requestJson<{ account: EnterpriseAccount }>(
     `/api/enterprise/admin/accounts/${encodeURIComponent(accountId)}`,
     { method: "PATCH", body: JSON.stringify(patch) },
@@ -503,6 +523,212 @@ export async function deleteAdminSharedAgent(agentId: string, baseHash: string) 
   );
 }
 
+export async function loadAdminDelegationSettings() {
+  return requestJson<{
+    policy: EnterpriseDelegationPolicy;
+    availableModels: string[];
+    routerModelAvailable: boolean;
+  }>("/api/enterprise/admin/delegation/settings", undefined, "admin");
+}
+
+export async function saveAdminDelegationSettings(policy: EnterpriseDelegationPolicy) {
+  const { revision: baseRevision, updatedAt: _updatedAt, ...input } = policy;
+  return requestJson<{ policy: EnterpriseDelegationPolicy }>(
+    "/api/enterprise/admin/delegation/settings",
+    { method: "PATCH", body: JSON.stringify({ ...input, baseRevision }) },
+    "admin",
+  );
+}
+
+export async function loadAdminDelegationOverview(filters: Record<string, string> = {}) {
+  return requestJson<{
+    policy: EnterpriseDelegationPolicy;
+    accountsWithPersonalAgent: number;
+    assignments: number;
+    effectiveAssignments: number;
+    routableAssignments: number;
+    events: {
+      totalEvents: number;
+      delegated: number;
+      clarified: number;
+      blocked: number;
+      failed: number;
+      averageLatencyMs: number | null;
+    };
+  }>(`/api/enterprise/admin/delegation/overview${queryString(filters)}`, undefined, "admin");
+}
+
+export async function listAdminDelegationEvents(filters: Record<string, string> = {}) {
+  return requestJson<{
+    events: EnterpriseDelegationEvent[];
+    total: number;
+    nextCursor: string | null;
+  }>(`/api/enterprise/admin/delegation/events${queryString(filters)}`, undefined, "admin");
+}
+
+export async function loadAdminAgentDelegationProfile(agentId: string, signal?: AbortSignal) {
+  return requestJson<{
+    agentId: string;
+    name: string;
+    description: string;
+    profile: EnterpriseDelegationProfile;
+    checklist: Record<string, boolean>;
+    canActivate: boolean;
+    policyRevision: number;
+    configHash: string;
+  }>(
+    `/api/enterprise/admin/agents/${encodeURIComponent(agentId)}/delegation-profile`,
+    { signal },
+    "admin",
+  );
+}
+
+export async function saveAdminAgentDelegationProfile(input: {
+  agentId: string;
+  description: string;
+  profile: EnterpriseDelegationProfile;
+  baseHash: string;
+}) {
+  return requestJson<{ agentId: string; hash: string }>(
+    `/api/enterprise/admin/agents/${encodeURIComponent(input.agentId)}/delegation-profile`,
+    {
+      method: "PATCH",
+      body: JSON.stringify({
+        description: input.description,
+        profile: {
+          ...input.profile,
+          requiredInputs: input.profile.requiredInputs.map(({ id, ...item }) =>
+            id.trim() ? { id, ...item } : item,
+          ),
+        },
+        baseHash: input.baseHash,
+      }),
+    },
+    "admin",
+  );
+}
+
+export async function draftAdminAgentDelegationProfile(agentId: string) {
+  return requestJson<{
+    description: string;
+    draft: EnterpriseDelegationProfile;
+    source: "ai";
+    model: string;
+    saved: false;
+  }>(
+    `/api/enterprise/admin/agents/${encodeURIComponent(agentId)}/delegation-profile/draft`,
+    { method: "POST", body: "{}" },
+    "admin",
+  );
+}
+
+export async function simulateAdminAgentDelegation(
+  agentId: string,
+  accountId: string,
+  prompt: string,
+) {
+  return requestJson<{
+    outcome: "delegate" | "clarify" | "local" | "blocked" | "shadow";
+    agentNames: string[];
+    decisionSource: "explicit" | "rule" | "ai" | "system";
+    reasonCode: string;
+    confidenceBand: "clear" | "ambiguous" | null;
+    policyRevision: number;
+    profileRevisions: Record<string, string>;
+    missingRequiredInput: {
+      agentId: string;
+      id: string;
+      label: string;
+      question: string;
+    } | null;
+  }>(
+    `/api/enterprise/admin/agents/${encodeURIComponent(agentId)}/delegation-profile/simulate`,
+    { method: "POST", body: JSON.stringify({ accountId, prompt }) },
+    "admin",
+  );
+}
+
+export async function loadAdminAccountDelegation(accountId: string) {
+  return requestJson<{
+    account: EnterpriseAccount;
+    policy: EnterpriseDelegationPolicy;
+    overrides: Array<{
+      accountId: string;
+      agentResourceKey: string;
+      mode: "inherit" | "confirm_before_handoff" | "explicit_only" | "disabled";
+      revision: number;
+      updatedAt: number;
+    }>;
+    specialists: EnterpriseDelegationSpecialist[];
+  }>(
+    `/api/enterprise/admin/accounts/${encodeURIComponent(accountId)}/delegation`,
+    undefined,
+    "admin",
+  );
+}
+
+export async function saveAdminAccountDelegationOverride(input: {
+  accountId: string;
+  agentResourceKey: string;
+  mode: "inherit" | "confirm_before_handoff" | "explicit_only" | "disabled";
+  baseRevision: number;
+  baseAccountPolicyRevision: number;
+}) {
+  return requestJson<{
+    override: Record<string, unknown>;
+    accountPolicyRevision: number;
+  }>(
+    `/api/enterprise/admin/accounts/${encodeURIComponent(input.accountId)}/delegation`,
+    { method: "PATCH", body: JSON.stringify(input) },
+    "admin",
+  );
+}
+
+export async function previewAdminDelegationActivation() {
+  return requestJson<{
+    previewToken: string;
+    expiresAt: number;
+    policy: EnterpriseDelegationPolicy;
+    summary: {
+      assignments: number;
+      eligible: number;
+      missingProfile: number;
+      blocked: number;
+      orphaned: number;
+      affectedUsers: number;
+    };
+    rows: Array<{
+      accountId: string;
+      username: string;
+      displayName: string;
+      accountEnabled: boolean;
+      personalAgentEnabled: boolean;
+      agentId: string;
+      agentName: string;
+      resourceKey: string;
+      assigned: boolean;
+      effective: boolean;
+      eligible: boolean;
+      reasonCodes: string[];
+    }>;
+  }>(
+    "/api/enterprise/admin/delegation/activation-preview",
+    { method: "POST", body: "{}" },
+    "admin",
+  );
+}
+
+export async function activateAdminDelegation(
+  previewToken: string,
+  exclusions: Array<{ accountId: string; agentResourceKey: string }> = [],
+) {
+  return requestJson<{ policy: EnterpriseDelegationPolicy }>(
+    "/api/enterprise/admin/delegation/activate",
+    { method: "POST", body: JSON.stringify({ previewToken, exclusions }) },
+    "admin",
+  );
+}
+
 export async function listAdminSkillCatalog(filters: Record<string, string> = {}) {
   return requestJson<{ items: EnterpriseSkillCatalogItem[]; catalogRevision: string }>(
     `/api/enterprise/admin/skills${queryString(filters)}`,
@@ -528,14 +754,40 @@ export async function loadAdminExternalSkillDetail(ref: string, signal?: AbortSi
 }
 
 export async function installAdminExternalSkill(input: {
-  agentId: string;
+  agentId?: string;
   ref: string;
   version?: string;
   acknowledgeClawHubRisk?: boolean;
 }) {
+  const { agentId, ...rest } = input;
   return requestJson<{ message?: string; warning?: string; slug?: string; version?: string }>(
     "/api/enterprise/admin/skills/install",
-    { method: "POST", body: JSON.stringify(input) },
+    {
+      method: "POST",
+      body: JSON.stringify({
+        ...(agentId ? { agentId } : {}),
+        ...rest,
+      }),
+    },
+    "admin",
+  );
+}
+
+export async function importAdminSkillFolder(input: {
+  agentId?: string;
+  folderName: string;
+  files: Array<{ path: string; contentBase64: string }>;
+}) {
+  return requestJson<{ slug: string; message: string; warning?: string }>(
+    "/api/enterprise/admin/skills/import",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        ...(input.agentId ? { agentId: input.agentId } : {}),
+        folderName: input.folderName,
+        files: input.files,
+      }),
+    },
     "admin",
   );
 }
@@ -551,6 +803,59 @@ export async function listAdminPluginRequests(): Promise<EnterprisePluginRequest
     "admin",
   );
   return result.items;
+}
+
+export async function listAdminCodexPluginRequests(): Promise<EnterpriseCodexPluginRequest[]> {
+  const result = await requestEnterprisePortalJson<{ items: EnterpriseCodexPluginRequest[] }>(
+    "/api/enterprise/admin/codex-plugin-requests",
+    undefined,
+    "admin",
+  );
+  return result.items;
+}
+
+export function loadAdminCodexPluginRequest(
+  id: string,
+): Promise<EnterpriseCodexPluginRequestDetail> {
+  return requestEnterprisePortalJson(
+    `/api/enterprise/admin/codex-plugin-requests/${encodeURIComponent(id)}`,
+    undefined,
+    "admin",
+  );
+}
+
+export function approveAdminCodexPluginRequest(request: EnterpriseCodexPluginRequest): Promise<{
+  request: EnterpriseCodexPluginRequest;
+  grant: EnterpriseCodexPluginGrant | null;
+  authRequired?: boolean;
+  appsNeedingAuth?: Array<{ id: string; name: string; installUrl?: string | null }>;
+  connectUrls?: string[];
+  restartRequired?: boolean;
+}> {
+  return requestEnterprisePortalJson(
+    `/api/enterprise/admin/codex-plugin-requests/${encodeURIComponent(request.id)}/approve`,
+    {
+      method: "POST",
+      headers: adminIdempotencyHeaders(),
+      body: JSON.stringify({ baseRevision: request.revision }),
+    },
+    "admin",
+  );
+}
+
+export function rejectAdminCodexPluginRequest(
+  request: EnterpriseCodexPluginRequest,
+  reason: string,
+): Promise<{ request: EnterpriseCodexPluginRequest }> {
+  return requestEnterprisePortalJson(
+    `/api/enterprise/admin/codex-plugin-requests/${encodeURIComponent(request.id)}/reject`,
+    {
+      method: "POST",
+      headers: adminIdempotencyHeaders(),
+      body: JSON.stringify({ baseRevision: request.revision, reason }),
+    },
+    "admin",
+  );
 }
 
 export function loadAdminPluginRequest(id: string): Promise<EnterprisePluginRequestDetail> {
@@ -717,7 +1022,7 @@ export async function createEnterpriseAccount(input: {
       enabled: true,
       personalAgentEnabled: input.role === "employee",
       defaultAgentId: null,
-      accessPresetKey: input.role === "employee" ? "standard-coding@1" : "none",
+      accessPresetKey: input.role === "employee" ? "basic@1" : "none",
     })
   ).account;
 }

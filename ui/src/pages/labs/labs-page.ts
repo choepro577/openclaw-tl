@@ -4,7 +4,6 @@ import { state } from "lit/decorators.js";
 import { titleForRoute } from "../../app-navigation.ts";
 import { applicationContext, type ApplicationContext } from "../../app/context.ts";
 import {
-  renderDocsLink,
   renderSettingsPage,
   renderSettingsRow,
   renderSettingsSection,
@@ -13,7 +12,6 @@ import {
 import { renderSettingsWorkspace } from "../../components/settings-workspace.ts";
 import { t } from "../../i18n/index.ts";
 import { resolveEditableSnapshotConfig } from "../../lib/config/config-state-model.ts";
-import { buildExternalLinkRel, EXTERNAL_LINK_TARGET } from "../../lib/external-link.ts";
 import { formatUiError } from "../../lib/format-error.ts";
 import { GatewayPageController } from "../../lit/gateway-page-controller.ts";
 import { OpenClawLightDomElement } from "../../lit/openclaw-element.ts";
@@ -139,9 +137,7 @@ class LabsPage extends OpenClawLightDomElement {
     );
     const description = html`
       ${feature.description()}
-      <a href=${feature.docsUrl} target=${EXTERNAL_LINK_TARGET} rel=${buildExternalLinkRel()}
-        >${t("labsPage.documentation")}</a
-      >${feature.restartHint ? html` <span>${feature.restartHint()}</span>` : nothing}
+      ${feature.restartHint ? html` <span>${feature.restartHint()}</span>` : nothing}
       <span>${defaultDescription}</span>
     `;
     return renderSettingsToggleRow({
@@ -172,11 +168,7 @@ class LabsPage extends OpenClawLightDomElement {
         rows,
       ),
       {
-        intro: html`${t("labsPage.intro")}
-        ${renderDocsLink(
-          "https://docs.openclaw.ai/concepts/experimental-features",
-          t("common.learnMore"),
-        )}`,
+        intro: html`${t("labsPage.intro")}`,
       },
     );
     return html`

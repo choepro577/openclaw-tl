@@ -16,6 +16,8 @@ export type CodexAvailablePlugin = {
   id: string;
   pluginName: string;
   marketplaceName: string;
+  /** Marketplace display name, separate from the canonical installation slug. */
+  name?: string;
   description?: string;
   installed: boolean;
   enabled: boolean;
@@ -56,6 +58,8 @@ export function parseCodexPluginMarketplaceId(
 export async function discoverCodexMarketplacePlugins(params: {
   request: CodexPluginMarketplaceListRequest;
   workspaceDir: string;
+  /** Public-catalog consumers can omit private/shared supplemental marketplaces. */
+  includeSupplemental?: boolean;
 }): Promise<CodexPluginDiscoveryResult> {
   const requestParams: v2.PluginListParams = { cwds: [params.workspaceDir] };
   const primary = await params.request(requestParams);
@@ -64,53 +68,54 @@ export async function discoverCodexMarketplacePlugins(params: {
   );
   const marketplaces = [...primary.marketplaces];
 
-  try {
-    const supplemental = await params.request({
-      ...requestParams,
-      marketplaceKinds: [...SUPPLEMENTAL_MARKETPLACE_KINDS],
-    });
-    marketplaces.push(...supplemental.marketplaces);
-    warnings.push(
-      ...(supplemental.marketplaceLoadErrors ?? []).map((error) =>
-        boundedCatalogText(error.message),
-      ),
-    );
-  } catch (error) {
-    let recoveredSupplementalMarketplace = false;
-    for (const kind of SUPPLEMENTAL_MARKETPLACE_KINDS) {
-      try {
-        const supplemental = await params.request({
-          ...requestParams,
-          marketplaceKinds: [kind],
-        });
-        marketplaces.push(...supplemental.marketplaces);
-        recoveredSupplementalMarketplace ||= supplemental.marketplaces.length > 0;
-        warnings.push(
-          ...(supplemental.marketplaceLoadErrors ?? []).map((loadError) =>
-            boundedCatalogText(loadError.message),
-          ),
-        );
-      } catch (kindError) {
+  if (params.includeSupplemental !== false) {
+    try {
+      const supplemental = await params.request({
+        ...requestParams,
+        marketplaceKinds: [...SUPPLEMENTAL_MARKETPLACE_KINDS],
+      });
+      marketplaces.push(...supplemental.marketplaces);
+      warnings.push(
+        ...(supplemental.marketplaceLoadErrors ?? []).map((error) =>
+          boundedCatalogText(error.message),
+        ),
+      );
+    } catch (error) {
+      let recoveredSupplementalMarketplace = false;
+      for (const kind of SUPPLEMENTAL_MARKETPLACE_KINDS) {
+        try {
+          const supplemental = await params.request({
+            ...requestParams,
+            marketplaceKinds: [kind],
+          });
+          marketplaces.push(...supplemental.marketplaces);
+          recoveredSupplementalMarketplace ||= supplemental.marketplaces.length > 0;
+          warnings.push(
+            ...(supplemental.marketplaceLoadErrors ?? []).map((loadError) =>
+              boundedCatalogText(loadError.message),
+            ),
+          );
+        } catch (kindError) {
+          warnings.push(
+            boundedCatalogText(
+              `${kind} marketplace unavailable: ${
+                kindError instanceof Error ? kindError.message : String(kindError)
+              }`,
+            ),
+          );
+        }
+      }
+      if (!recoveredSupplementalMarketplace && warnings.length === 0) {
         warnings.push(
           boundedCatalogText(
-            `${kind} marketplace unavailable: ${
-              kindError instanceof Error ? kindError.message : String(kindError)
+            `Additional marketplaces could not be listed: ${
+              error instanceof Error ? error.message : String(error)
             }`,
           ),
         );
       }
     }
-    if (!recoveredSupplementalMarketplace && warnings.length === 0) {
-      warnings.push(
-        boundedCatalogText(
-          `Additional marketplaces could not be listed: ${
-            error instanceof Error ? error.message : String(error)
-          }`,
-        ),
-      );
-    }
   }
-
   const discovered = new Map<string, CodexAvailablePlugin>();
   const ambiguous = new Set<string>();
   for (const marketplace of marketplaces) {
@@ -127,10 +132,14 @@ export async function discoverCodexMarketplacePlugins(params: {
         continue;
       }
       const previous = discovered.get(id);
+      const displayName = readRecord(summary.interface)?.displayName;
       const next: CodexAvailablePlugin = {
         id,
         pluginName,
         marketplaceName: marketplace.name,
+        name: boundedCatalogText(
+          (typeof displayName === "string" && displayName.trim()) || summary.name || pluginName,
+        ),
         installed: summary.installed,
         enabled: summary.enabled,
         available:

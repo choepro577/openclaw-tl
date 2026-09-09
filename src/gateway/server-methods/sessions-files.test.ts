@@ -404,6 +404,32 @@ describe("sessions.files RPC handlers", () => {
     expect(parentRelativeBrowserPreview.file.content).toBe("export const shared = true;\n");
   });
 
+  it("opens Codex sandbox workspace links from the session workspace", async () => {
+    writeWorkspaceFile(workspaceRoot, "generated/quote.md", "# Generated quote\n");
+    mockVisibleMessages([
+      assistantToolCall("apply_patch", {
+        input: "*** Begin Patch\n*** Add File: /workspace/generated/quote.md\n*** End Patch\n",
+      }),
+    ]);
+
+    const preview = expectOkPayload(
+      await invokeSessionFilesHandler("sessions.files.get", {
+        sessionKey: "agent:main:main",
+        path: "/workspace/generated/quote.md",
+      }),
+    );
+
+    expect(preview.file.content).toBe("# Generated quote\n");
+    expect(preview.file.workspacePath).toBe("generated/quote.md");
+
+    expectError(
+      await invokeSessionFilesHandler("sessions.files.get", {
+        sessionKey: "agent:main:main",
+        path: "/workspace/../outside.md",
+      }),
+    );
+  });
+
   it("falls back to the configured agent workspace for sessions without spawned metadata", async () => {
     hoisted.loadSessionEntry.mockReturnValue({
       canonicalKey: "agent:main:main",

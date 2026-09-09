@@ -1,6 +1,7 @@
 import { html, nothing } from "lit";
 import type { SessionPermissionMode } from "../../../../../packages/gateway-protocol/src/index.js";
 import { icons } from "../../../components/icons.ts";
+import { enterpriseUserChatCardCopy } from "../../../i18n/enterprise-user-chat.ts";
 import { t } from "../../../i18n/index.ts";
 
 const PERMISSION_MODES = ["read-only", "guarded", "workspace", "full"] as const;
@@ -103,7 +104,7 @@ export function renderChatPermissionPicker(params: ChatPermissionPickerProps) {
         data-chat-select-value=${params.mode ?? ""}
         aria-label=${`${t("chat.permissionControls.label")}: ${modeLabel(params.mode)}`}
         aria-disabled=${params.disabled ? "true" : "false"}
-        title=${params.disabledReason ?? t("chat.permissionControls.help")}
+        title=${params.disabledReason ?? enterpriseUserChatCardCopy("chat.permissionControls.help")}
         ?disabled=${params.disabled}
       >
         <span class="chat-controls__permission-icon" aria-hidden="true">${icons.shieldCheck}</span>

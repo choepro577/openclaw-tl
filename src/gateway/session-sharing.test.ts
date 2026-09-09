@@ -5,6 +5,7 @@ import type { OpenClawConfig } from "../config/types.openclaw.js";
 import { closeOpenClawAgentDatabasesForTest } from "../state/openclaw-agent-db.js";
 import { ensureProfileForEmail, setUserProfileRole } from "../state/user-profiles.js";
 import { withOpenClawTestState } from "../test-utils/openclaw-test-state.js";
+import { withAgentRuntimeExecutionLineage } from "./agent-runtime-execution-lineage.js";
 import { sessionGroupHandlers } from "./server-methods/sessions-groups.js";
 import type { GatewayClient, GatewayRequestContext, RespondFn } from "./server-methods/types.js";
 import {
@@ -165,6 +166,85 @@ function roleClient(
 }
 
 describe("session sharing policy", () => {
+  it("lets an attested native parent start only its exact spawned child under a closed session role", () => {
+    const cfg = rolePolicyConfig();
+    const parentAgentId = "enterprise-personal-user-a";
+    const parentSessionKey = `agent:${parentAgentId}:dashboard:parent`;
+    const childSessionKey = "agent:enterprise-hr-specialist:subagent:child";
+    const restricted = roleClient("none", "native-parent");
+    const operationalRunInstance = { instanceId: "parent-instance", runId: "parent-run" };
+    restricted.internal = {
+      operatorRoleActor: {
+        kind: "operator",
+        profileId: restricted.authenticatedUserProfile!.profileId,
+      },
+      agentRunTracking: "native_subagent",
+      agentRuntimeIdentity: {
+        kind: "agentRuntime",
+        agentId: parentAgentId,
+        sessionKey: parentSessionKey,
+        operationalRunInstance,
+        delegatedAuthority: {
+          kind: "local",
+          operationalRunInstance,
+          lifecycleGeneration: "generation",
+          claimId: "claim",
+        },
+        sessionSpawnContext: withAgentRuntimeExecutionLineage(
+          { inheritedToolPolicy: { version: 1, allow: [], deny: [] } },
+          {
+            relation: "sessions_spawn",
+            requesterRef: parentSessionKey,
+            controllerRef: parentSessionKey,
+            depth: 1,
+            applicableGrantRefs: ["tool:sessions_spawn"],
+            localPolicyRefs: ["policy"],
+            runtimeAssuranceRefs: ["runtime"],
+            targetPolicyRefs: ["target"],
+            externalNativeActions: "observable",
+          },
+        ),
+      },
+    };
+    const childTarget: SharingTarget = {
+      agentId: "enterprise-hr-specialist",
+      canonicalKey: childSessionKey,
+      storeKey: childSessionKey,
+      storeKeys: [childSessionKey],
+      storePath: "/tmp/enterprise-hr.sqlite",
+      entry: {
+        sessionId: "child-session",
+        updatedAt: 1,
+        visibility: "shared",
+        createdVia: "spawn",
+        createdActor: { type: "agent", id: parentAgentId },
+        spawnedBy: parentSessionKey,
+        parentSessionKey,
+      },
+    };
+
+    expect(resolveSessionSharingRole({ cfg, client: restricted, target: childTarget })).toBe(
+      "owner",
+    );
+    expect(
+      authorizeSessionSharingTarget({ cfg, client: restricted, target: childTarget }),
+    ).toBeNull();
+
+    const siblingTarget: SharingTarget = {
+      ...childTarget,
+      canonicalKey: "agent:enterprise-hr-specialist:subagent:sibling",
+      storeKey: "agent:enterprise-hr-specialist:subagent:sibling",
+      storeKeys: ["agent:enterprise-hr-specialist:subagent:sibling"],
+      entry: { ...childTarget.entry, spawnedBy: `${parentSessionKey}:other` },
+    };
+    expect(resolveSessionSharingRole({ cfg, client: restricted, target: siblingTarget })).toBe(
+      "viewer",
+    );
+    expect(
+      authorizeSessionSharingTarget({ cfg, client: restricted, target: siblingTarget }),
+    ).toMatchObject({ code: "INVALID_REQUEST", message: expect.stringContaining("was not found") });
+  });
+
   it("denies starting a run on an existing foreign-agent session despite foreign-session write access", async () => {
     await withOpenClawTestState({ scenario: "minimal" }, async () => {
       const cfg = rolePolicyConfig(["guest-agent"]);

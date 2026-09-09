@@ -1618,6 +1618,22 @@ export async function startGatewayPostAttachRuntime(
           if (params.isClosing?.()) {
             return await stopStartupSidecars(mainSessionRecoverySidecar);
           }
+          if (!params.minimalTestGateway && params.cfgAtStart.enterprise?.enabled) {
+            try {
+              const [{ prewarmEnterpriseCatalogs }, { readGatewayConfigResponse }] =
+                await Promise.all([
+                  import("../enterprise/catalog/enterprise-catalog.js"),
+                  import("./server-methods/config.js"),
+                ]);
+              prewarmEnterpriseCatalogs(params.cfgAtStart);
+              const gatewayContext = params.resolveGatewayContext();
+              if (gatewayContext) {
+                await readGatewayConfigResponse(gatewayContext, { primeCache: true });
+              }
+            } catch (err) {
+              params.log.warn(`enterprise API prewarm failed: ${String(err)}`);
+            }
+          }
           params.startupTrace?.detail("sidecars.ready", [
             [
               "loadedPluginCount",

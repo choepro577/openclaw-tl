@@ -60,29 +60,29 @@ describe("OpenClaw shell document title", () => {
 
   it("keeps the boot title before a route commits", () => {
     const shell = createShell();
-    document.title = "OpenClaw Control";
+    document.title = "MAAP Control";
 
     shell.routeState = {};
     shell.syncDocumentTitle();
-    expect(document.title).toBe("OpenClaw Control");
+    expect(document.title).toBe("MAAP Control");
   });
 
   it("uses the route title for a connected route", () => {
     const shell = createShell(createContext({ sessions: null }));
     shell.routeState = { routeId: "usage" };
     shell.syncDocumentTitle();
-    expect(document.title).toBe("Usage — OpenClaw");
+    expect(document.title).toBe("Usage — MAAP");
   });
 
   it("appends the configured environment to route and custodian titles", () => {
     const shell = createShell(createContext({ environment: { label: "edge", color: "amber" } }));
     shell.routeState = { routeId: "usage" };
     shell.syncDocumentTitle();
-    expect(document.title).toBe("Usage — OpenClaw · edge");
+    expect(document.title).toBe("Usage — MAAP · edge");
 
     shell.routeState = { routeId: "custodian" };
     shell.syncDocumentTitle();
-    expect(document.title).toBe("Ask OpenClaw · edge");
+    expect(document.title).toBe("Ask MAAP · edge");
   });
 
   it("uses the active session's derived title for a non-main chat", () => {
@@ -98,7 +98,23 @@ describe("OpenClaw shell document title", () => {
 
     shell.syncDocumentTitle();
 
-    expect(document.title).toBe("Quarterly launch plan — OpenClaw");
+    expect(document.title).toBe("Quarterly launch plan — MAAP");
+  });
+
+  it("masks the engine name in a dynamic session title", () => {
+    const session: GatewaySessionRow = {
+      key: "agent:main:dashboard:workspace",
+      kind: "direct",
+      updatedAt: 1,
+      derivedTitle: "/home/app/.openclaw/workspace",
+    };
+    const shell = createShell(createContext({ sessions: [session] }));
+    shell.routeState = { routeId: "chat" };
+    shell.activeSessionKey = session.key;
+
+    shell.syncDocumentTitle();
+
+    expect(document.title).toBe("/home/app/.*******/workspace — MAAP");
   });
 
   it("uses the agent name for an agent main chat", () => {
@@ -110,7 +126,7 @@ describe("OpenClaw shell document title", () => {
 
     shell.syncDocumentTitle();
 
-    expect(document.title).toBe("Molty — OpenClaw");
+    expect(document.title).toBe("Molty — MAAP");
   });
 
   it("uses the selected agent name for a global-scope main chat", () => {
@@ -125,7 +141,7 @@ describe("OpenClaw shell document title", () => {
 
     shell.syncDocumentTitle();
 
-    expect(document.title).toBe("Molty — OpenClaw");
+    expect(document.title).toBe("Molty — MAAP");
   });
 
   it("falls back to the session display name when the main agent is missing", () => {
@@ -143,7 +159,7 @@ describe("OpenClaw shell document title", () => {
 
     shell.syncDocumentTitle();
 
-    expect(document.title).toBe("Fallback thread — OpenClaw");
+    expect(document.title).toBe("Fallback thread — MAAP");
   });
 
   it("prefixes the pending approval count", () => {
@@ -152,7 +168,7 @@ describe("OpenClaw shell document title", () => {
 
     shell.syncDocumentTitle();
 
-    expect(document.title).toBe("(2) Usage — OpenClaw");
+    expect(document.title).toBe("(2) Usage — MAAP");
   });
 
   it("shows offline instead of a stale approval count", () => {
@@ -161,7 +177,7 @@ describe("OpenClaw shell document title", () => {
 
     shell.syncDocumentTitle();
 
-    expect(document.title).toBe("(Offline) Usage — OpenClaw");
+    expect(document.title).toBe("(Offline) Usage — MAAP");
   });
 
   it("includes stored chat outbox messages in the offline marker", () => {
@@ -173,7 +189,7 @@ describe("OpenClaw shell document title", () => {
 
     shell.syncDocumentTitle();
 
-    expect(document.title).toBe("(Offline · 3 queued) Usage — OpenClaw");
+    expect(document.title).toBe("(Offline · 3 queued) Usage — MAAP");
   });
 
   it("uses the meaningful custodian label without a brand suffix", () => {
@@ -182,6 +198,6 @@ describe("OpenClaw shell document title", () => {
 
     shell.syncDocumentTitle();
 
-    expect(document.title).toBe("Ask OpenClaw");
+    expect(document.title).toBe("Ask MAAP");
   });
 });

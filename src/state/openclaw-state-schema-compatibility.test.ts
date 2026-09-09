@@ -19,6 +19,11 @@ describe("OpenClaw state runtime schema projection", () => {
     expect(schema).not.toContain("idx_github_publication_requests_pending");
     expect(schema).not.toContain("CREATE TABLE IF NOT EXISTS config_revision_keys");
     expect(schema).not.toContain("CREATE TABLE IF NOT EXISTS enterprise_knowledge_zones");
+    expect(schema).not.toContain("CREATE TABLE IF NOT EXISTS enterprise_agent_access_requests");
+    expect(schema).not.toContain("idx_enterprise_agent_access_requests_");
+    expect(schema).not.toContain(
+      "CREATE TABLE IF NOT EXISTS enterprise_knowledge_evidence_transfer_grants",
+    );
     expect(schema).not.toContain("idx_enterprise_knowledge_zones_status");
     expect(schema).not.toContain("idx_enterprise_knowledge_idempotency_expiry");
 

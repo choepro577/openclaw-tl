@@ -123,6 +123,35 @@ describe("maybeGenerateDashboardSessionTitle", () => {
     );
   });
 
+  it("re-resolves automatic auth profiles instead of pinning a stale alias", async () => {
+    const entry = {
+      ...baseEntry,
+      providerOverride: "openai",
+      modelOverride: "gpt-5.6-luna",
+      authProfileOverride: "openai:employee@example.test",
+      authProfileOverrideSource: "auto" as const,
+      authProfileOverrideCompactionCount: 0,
+    };
+    mockSessionUpdate(entry);
+
+    await expect(maybeGenerateDashboardSessionTitle(titleParams(entry))).resolves.toBe(true);
+
+    expect(resolveUtilityModelRefForAgent).toHaveBeenCalledWith({
+      cfg,
+      agentId: "main",
+      primaryProvider: "openai",
+      primaryModelRef: "openai/gpt-5.6-luna",
+    });
+    expect(generateConversationLabelWithFallback).toHaveBeenCalledWith(
+      expect.objectContaining({
+        regularModelRef: "openai/gpt-5.6-luna",
+      }),
+    );
+    expect(generateConversationLabelWithFallback).toHaveBeenCalledWith(
+      expect.not.objectContaining({ preferredProfile: expect.anything() }),
+    );
+  });
+
   it("preserves a locked session harness as the title runtime owner", async () => {
     const entry = {
       ...baseEntry,

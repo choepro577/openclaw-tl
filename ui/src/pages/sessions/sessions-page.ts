@@ -14,6 +14,7 @@ import { subtitleForRoute, titleForRoute } from "../../app-navigation.ts";
 import { selectApplicationSession } from "../../app/agent-selection.ts";
 import { applicationContext, type ApplicationContext } from "../../app/context.ts";
 import { hasOperatorWriteAccess } from "../../app/operator-access.ts";
+import { showNativeAlert } from "../../branding/display-dialog.ts";
 import { renderAgentScopeControl } from "../../components/agent-scope-control.ts";
 import {
   requestCloudWorkerStop,
@@ -25,7 +26,6 @@ import { fetchSessionMenuWork } from "../../components/session-menu-work.ts";
 import type { SessionMenuAction, SessionMenuWork } from "../../components/session-menu.ts";
 import "../../components/session-menu.ts";
 import { renderSessionsHubHeader } from "../../components/sessions-hub-header.ts";
-import { renderDocsLink } from "../../components/settings-ui.ts";
 import { renderSettingsWorkspace } from "../../components/settings-workspace.ts";
 import { t } from "../../i18n/index.ts";
 import { watchAgentScope } from "../../lib/agents/index.ts";
@@ -79,8 +79,6 @@ import { rememberSessionCustomGroup, sessionCategoryNames } from "./custom-group
 import { loadStoredGroupBy, saveStoredGroupBy } from "./page-state.ts";
 import { sessionsPageListQuery, type SessionsRouteData } from "./route.ts";
 import { renderSessions, type SessionsProps, type TranscriptSearchState } from "./view.ts";
-
-const SESSIONS_DOCS_URL = "https://docs.openclaw.ai/concepts/session";
 
 type SessionsPageRequestScope = {
   epoch: number;
@@ -726,7 +724,7 @@ class SessionsPage extends OpenClawLightDomElement {
         return;
       }
       if (result.preservedWorktrees.length > 0) {
-        window.alert(formatPreservedWorktreesNotice(result.preservedWorktrees));
+        showNativeAlert(formatPreservedWorktreesNotice(result.preservedWorktrees));
       }
       if (result.deleted.length > 0) {
         const deleted = new Set(result.deleted);
@@ -1519,8 +1517,7 @@ class SessionsPage extends OpenClawLightDomElement {
       ${renderSessionsHubHeader({
         active: "sessions",
         title: titleForRoute("sessions"),
-        subtitle: html`${subtitleForRoute("sessions")}
-        ${renderDocsLink(SESSIONS_DOCS_URL, t("common.learnMore"))}`,
+        subtitle: html`${subtitleForRoute("sessions")}`,
         actions: renderAgentScopeControl({
           agents: context.agents.state.agentsList?.agents ?? [],
           selection: context.agentSelection,

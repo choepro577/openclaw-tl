@@ -6,6 +6,7 @@
   "command-auth",
   "config-runtime",
   "discord",
+  "gateway-config-runtime",
   "inbound-reply-dispatch",
   "infra-runtime",
   "telegram-account"

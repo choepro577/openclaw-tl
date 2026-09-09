@@ -3,6 +3,7 @@ import forceAtlas2 from "graphology-layout-forceatlas2";
 import FA2LayoutSupervisor from "graphology-layout-forceatlas2/worker";
 import Sigma from "sigma";
 import type { NodeHoverDrawingFunction } from "sigma/rendering";
+import { graphEdgeLabel } from "../../i18n/enterprise-knowledge-graph.ts";
 import {
   graphSelectionNeighborhood,
   type GraphRendererAdapter,
@@ -27,19 +28,6 @@ type EdgeAttributes = {
   size: number;
   label: string;
   type: string;
-};
-
-const EDGE_LABELS: Record<GraphVisualLink["kind"], string> = {
-  contains: "chứa",
-  references: "tham chiếu",
-  mentions: "đề cập",
-  similar: "tương tự",
-  supports: "hỗ trợ",
-  contradicts: "mâu thuẫn",
-  supersedes: "thay thế",
-  depends_on: "phụ thuộc",
-  applies_to: "áp dụng cho",
-  custom: "tùy chỉnh",
 };
 
 function edgeSymbol(link: GraphVisualLink): string {
@@ -117,7 +105,7 @@ export async function createKnowledgeGraph2dRenderer(
     graph.addEdgeWithKey(link.edgeRef, link.sourceNodeRef, link.targetNodeRef, {
       color: linkColor(link, palette),
       size: Math.max(0.5, link.confidence * 2.2),
-      label: `${edgeSymbol(link)} ${EDGE_LABELS[link.kind]}`,
+      label: `${edgeSymbol(link)} ${graphEdgeLabel(link.kind)}`,
       type: "line",
     });
   }

@@ -134,6 +134,7 @@ export function createCodexAppServerAgentHarness(
     delegatedExecutionPluginIds: ["voice-call"],
     contextEngineHostCapabilities: CODEX_APP_SERVER_CONTEXT_ENGINE_HOST_CAPABILITIES,
     conversationToolPolicySupport: "exact",
+    privatePreparationSupport: "host-observation-scope-v1",
     conversationToolPolicySafeDenyTools: CODEX_TOOL_POLICY_SAFE_DENY_NAMES,
     deliveryDefaults: {
       visibleReplies: "message_tool",

@@ -8,9 +8,14 @@ import type { AssistantMessage } from "../../../llm/types.js";
 import { getAgentScopedMediaLocalRoots } from "../../../media/local-roots.js";
 import type { ProviderRuntimePluginHandle } from "../../../plugins/provider-hook-runtime.js";
 import { resolveProviderTextTransforms } from "../../../plugins/provider-runtime.js";
+import { resolveAdmittedRunActiveAssertion } from "../../admitted-run-context.js";
 import type { AgentRunAttemptFailureSource } from "../../agent-run-terminal-outcome.js";
 import type { subscribeEmbeddedAgentSession } from "../../embedded-agent-subscribe.js";
 import { wrapStreamFnTextTransforms } from "../../plugin-text-transforms.js";
+import {
+  privateModelContextUnavailable,
+  wrapStreamFnWithPrivateModelContext,
+} from "../../private-model-context.js";
 import { registerProviderStreamForModel } from "../../provider-stream.js";
 import type { AgentMessage } from "../../runtime/index.js";
 import type { SandboxContext } from "../../sandbox/types.js";
@@ -555,6 +560,21 @@ export async function prepareEmbeddedAttemptTransport(input: {
     authProfileId: resolveAttemptStreamAuthProfileId(attempt),
     authStorage: attempt.authStorage,
   });
+  if (attempt.resolvePrivateModelContext) {
+    const assertActive = resolveAdmittedRunActiveAssertion(
+      attempt.admittedRunContext,
+      input.abortSignal,
+    );
+    if (!assertActive) {
+      throw privateModelContextUnavailable();
+    }
+    session.agent.streamFn = wrapStreamFnWithPrivateModelContext({
+      streamFn: session.agent.streamFn,
+      streamStrategy,
+      resolve: attempt.resolvePrivateModelContext,
+      assertActive,
+    });
+  }
   // Install inside provider/config wrappers so their full onPayload chain runs
   // before admission hashes the request body that the built-in transport sends.
   session.agent.streamFn = wrapStreamFnWithProviderPromptState({

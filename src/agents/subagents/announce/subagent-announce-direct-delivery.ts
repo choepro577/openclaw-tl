@@ -54,9 +54,9 @@ import {
 } from "./subagent-announce-delivery-retry.js";
 import {
   dispatchSubagentAnnounceAgent,
-  getSubagentAnnounceRuntimeConfig,
   isSubagentRequesterSessionAbandoned,
   loadRequesterSessionEntry,
+  resolveSubagentAnnounceRuntimeConfig,
   resolveExternalBestEffortDeliveryTarget,
   resolveQueueSettings,
 } from "./subagent-announce-delivery.runtime.js";
@@ -116,7 +116,7 @@ export async function sendSubagentAnnounceDirectly(params: {
       path: "none",
     };
   }
-  const cfg = getSubagentAnnounceRuntimeConfig();
+  const cfg = resolveSubagentAnnounceRuntimeConfig(params.resolveGatewayContext);
   const announceTimeoutMs = resolveSubagentAnnounceTimeoutMs(cfg);
   const canonicalRequesterSessionKey = resolveRequesterStoreKey(
     cfg,
@@ -136,6 +136,7 @@ export async function sendSubagentAnnounceDirectly(params: {
     const requesterEntry = loadRequesterSessionEntry(
       params.targetRequesterSessionKey,
       params.requesterAgentId,
+      cfg,
     ).entry;
     const deliveryTarget = !params.requesterIsSubagent
       ? resolveExternalBestEffortDeliveryTarget({
@@ -194,6 +195,7 @@ export async function sendSubagentAnnounceDirectly(params: {
     const requesterActivity = resolveRequesterSessionActivity(
       params.targetRequesterSessionKey,
       params.requesterAgentId,
+      cfg,
     );
     if (
       params.expectsCompletionMessage &&
@@ -289,8 +291,11 @@ export async function sendSubagentAnnounceDirectly(params: {
     if (
       params.expectsCompletionMessage &&
       isCronRunSessionKey(canonicalRequesterSessionKey) &&
-      !resolveRequesterSessionActivity(params.targetRequesterSessionKey, params.requesterAgentId)
-        .isActive &&
+      !resolveRequesterSessionActivity(
+        params.targetRequesterSessionKey,
+        params.requesterAgentId,
+        cfg,
+      ).isActive &&
       !agentMediatedCompletion
     ) {
       return {
@@ -528,7 +533,14 @@ export async function sendSubagentAnnounceDirectly(params: {
       }) ||
         (shouldDeliverAgentFinal &&
           hasVisibleNonSilentGatewayPayload &&
-          directAnnounceResult.deliveryStatus?.status !== "suppressed")),
+          directAnnounceResult.deliveryStatus?.status !== "suppressed") ||
+        // Web Chat has no external outbound target: its visible final is the
+        // committed assistant payload in the requester transcript. `deliver`
+        // is intentionally false there, so a suppressed outbound status must
+        // not turn a successful UI reply into a durable retry loop.
+        (!deliveryTarget.deliver &&
+          !requiresMessageToolDelivery &&
+          hasVisibleNonSilentGatewayPayload)),
     );
     const hasVisibleCompletionReply =
       requesterVisibleFinalDelivered ||

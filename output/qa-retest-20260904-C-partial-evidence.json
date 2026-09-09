@@ -1,0 +1,795 @@
+{
+  "capturedAt": "2026-09-04T14:50:46.658Z",
+  "parentAgent": "enterprise-personal-2ae2cbc2deecdb86fe86",
+  "accountId": "68264167-a2d8-48b1-a00a-d31a06a7fd92",
+  "sessionKey": "agent:enterprise-personal-2ae2cbc2deecdb86fe86:dashboard:0feb5fb4-214e-4540-8463-4a0c748cd79c",
+  "transcriptId": "cd811276-f582-4c6a-ae87-9a585a01205f",
+  "sessionHash": "3f0b13336ee96cdc9bbf2a5c79231ab7e8e0c1a7931b8f924569e66b9ba9894d",
+  "collectionMode": "sqlite3 -readonly; no runtime mutations",
+  "privateBodiesOmitted": true,
+  "parent": {
+    "session_key": "agent:enterprise-personal-2ae2cbc2deecdb86fe86:dashboard:0feb5fb4-214e-4540-8463-4a0c748cd79c",
+    "current_session_id": "cd811276-f582-4c6a-ae87-9a585a01205f",
+    "status": "failed",
+    "agent": "enterprise-personal-2ae2cbc2deecdb86fe86",
+    "events": [
+      {
+        "seq": 1,
+        "at": "2026-09-04T14:31:49.577Z",
+        "messageTimestamp": 1788532306101,
+        "recordedAt": 1788532309577,
+        "role": "user",
+        "userRunCorrelationId": "982a0f40-3d29-447d-8928-62c11496f7a4",
+        "content": [
+          {
+            "type": "text",
+            "text": "27 phần nước với giá mỗi phần 14 nghìn thì mình phải trả tổng bao nhiêu?"
+          }
+        ]
+      },
+      {
+        "seq": 4,
+        "at": "2026-09-04T14:31:56.458Z",
+        "messageTimestamp": 1788532312771,
+        "recordedAt": 1788532316458,
+        "role": "assistant",
+        "model": "gpt-5.6-sol",
+        "provider": "openai",
+        "stopReason": "stop",
+        "runId": "982a0f40-3d29-447d-8928-62c11496f7a4",
+        "content": [
+          {
+            "type": "text",
+            "text": "27 × 14.000 = **378.000 đồng**.",
+            "phase": "final_answer"
+          }
+        ]
+      },
+      {
+        "seq": 5,
+        "at": "2026-09-04T14:32:30.942Z",
+        "messageTimestamp": 1788532345607,
+        "recordedAt": 1788532350942,
+        "role": "user",
+        "userRunCorrelationId": "f34676a7-bead-40b2-961d-d1e91d39348b",
+        "content": [
+          {
+            "type": "text",
+            "text": "Mình đang chốt dự toán chuyến công tác tuần tới cho 3 người, kéo dài 3 ngày 2 đêm. Mỗi người dự kiến tốn 900 nghìn tiền khách sạn một đêm và 240 nghìn tiền ăn một ngày. So với mức công ty, tổng ăn ở được tính tối đa là bao nhiêu, phần vượt là bao nhiêu? Đi về rồi hạn nộp chứng từ thế nào?"
+          }
+        ]
+      },
+      {
+        "seq": 6,
+        "at": "2026-09-04T14:32:30.953Z",
+        "messageTimestamp": 1788532350953,
+        "recordedAt": 1788532350953,
+        "role": "assistant",
+        "model": "gateway-injected",
+        "provider": "openclaw",
+        "stopReason": "stop",
+        "content": [
+          {
+            "type": "text",
+            "text": "Bạn có đồng ý giao các phần việc đã nêu cho Chuyên gia Tài chính & Ngân sách không?"
+          }
+        ]
+      },
+      {
+        "seq": 7,
+        "at": "2026-09-04T14:33:37.155Z",
+        "messageTimestamp": 1788532404295,
+        "recordedAt": 1788532417155,
+        "role": "user",
+        "userRunCorrelationId": "99307aa5-feaa-480f-8d83-bea48d110ac8",
+        "content": [
+          {
+            "type": "text",
+            "text": "Ừ, bạn xem giúp mình nhé."
+          }
+        ]
+      },
+      {
+        "seq": 8,
+        "at": "2026-09-04T14:33:38.495Z",
+        "messageTimestamp": 1788532418494,
+        "recordedAt": 1788532418495,
+        "role": "assistant",
+        "model": "host-response",
+        "provider": "openclaw",
+        "stopReason": "stop",
+        "runId": "99307aa5-feaa-480f-8d83-bea48d110ac8",
+        "content": [
+          {
+            "type": "text",
+            "text": "Đã chuyển phần việc đã xác nhận đến chuyên gia. Tôi đang chờ kết quả để tổng hợp."
+          }
+        ]
+      },
+      {
+        "seq": 9,
+        "at": "2026-09-04T14:33:38.608Z",
+        "messageTimestamp": 1788532418608,
+        "recordedAt": 1788532418608,
+        "role": "assistant",
+        "model": "gateway-injected",
+        "provider": "openclaw",
+        "stopReason": "stop",
+        "content": [
+          {
+            "type": "text",
+            "text": "Đã chuyển phần việc đã xác nhận đến chuyên gia. Tôi đang chờ kết quả để tổng hợp."
+          }
+        ]
+      },
+      {
+        "seq": 10,
+        "at": "2026-09-04T14:34:12.584Z",
+        "messageTimestamp": 1788532452583,
+        "recordedAt": 1788532452584,
+        "role": "user",
+        "content": [
+          {
+            "type": "internalEventMetadata",
+            "bodyOmitted": true,
+            "sha256": "12120445ad28eb00df09b1240e61e20a4b7cb923f93376c6cf2edb83c0f9dc69",
+            "characters": 1181,
+            "hasDelegatedTask": false
+          }
+        ]
+      },
+      {
+        "seq": 11,
+        "at": "2026-09-04T14:34:42.661Z",
+        "messageTimestamp": 1788532482660,
+        "recordedAt": 1788532482661,
+        "role": "user",
+        "content": [
+          {
+            "type": "internalEventMetadata",
+            "bodyOmitted": true,
+            "sha256": "12120445ad28eb00df09b1240e61e20a4b7cb923f93376c6cf2edb83c0f9dc69",
+            "characters": 1181,
+            "hasDelegatedTask": false
+          }
+        ]
+      },
+      {
+        "seq": 12,
+        "at": "2026-09-04T14:36:42.791Z",
+        "messageTimestamp": 1788532602790,
+        "recordedAt": 1788532602791,
+        "role": "user",
+        "content": [
+          {
+            "type": "internalEventMetadata",
+            "bodyOmitted": true,
+            "sha256": "12120445ad28eb00df09b1240e61e20a4b7cb923f93376c6cf2edb83c0f9dc69",
+            "characters": 1181,
+            "hasDelegatedTask": false
+          }
+        ]
+      }
+    ]
+  },
+  "children": [
+    {
+      "runId": "90015388-ac38-497d-a679-21fef1ed8591",
+      "childSessionKey": "agent:enterprise-finance-specialist:subagent:8c0ed4aa-69cf-4377-8ca2-514a7475d6b4",
+      "createdAt": 1788532418466,
+      "startedAt": 1788532418713,
+      "sessionStartedAt": 1788532418466,
+      "endedAt": 1788532452504,
+      "registryAccepted": true,
+      "outcome": {
+        "status": "ok"
+      },
+      "endedReason": "subagent-complete",
+      "requesterSettleWakeStatus": null,
+      "completionAnnouncedAt": null,
+      "frozenVisibleResult": "Đã tính:\n\n- **Khách sạn:** 3 người × 2 đêm × 900.000 = **5.400.000 đồng**\n- **Ăn uống:** 3 người × 3 ngày × 240.000 = **2.160.000 đồng**\n- **Tổng dự kiến:** **7.560.000 đồng**\n\nChưa có mức trần công ty trong dữ liệu được cung cấp nên chưa thể xác định chính xác mức tối đa được thanh toán và phần vượt. Công thức:\n\n- Mức tối đa = 3 × (2 × định mức khách sạn/đêm + 3 × định mức ăn/ngày)\n- Phần vượt = max(0, 7.560.000 − mức tối đa)\n\nViệc tra cứu thời hạn nộp chứng từ hiện không thực hiện được do kho chính sách không khả dụng; cần kiểm tra quy chế công tác phí/HR-Finance của công ty trước khi kết luận.",
+      "transcript": {
+        "session_key": "agent:enterprise-finance-specialist:subagent:8c0ed4aa-69cf-4377-8ca2-514a7475d6b4",
+        "current_session_id": "a18db25d-5edd-475f-bd35-bf7225da5d5f",
+        "status": "done",
+        "agent": "enterprise-finance-specialist",
+        "events": [
+          {
+            "seq": 1,
+            "at": "2026-09-04T14:33:38.460Z",
+            "messageTimestamp": 1788532418459,
+            "recordedAt": 1788532418460,
+            "role": "user",
+            "userRunCorrelationId": "90015388-ac38-497d-a679-21fef1ed8591",
+            "content": [
+              {
+                "type": "internalEventMetadata",
+                "bodyOmitted": true,
+                "sha256": "cb3aa389fe456caabb610d35446d2da14ebb197745c9f58026de919dac40b4aa",
+                "characters": 1473,
+                "hasDelegatedTask": true
+              }
+            ]
+          },
+          {
+            "seq": 2,
+            "at": "2026-09-04T14:34:12.389Z",
+            "messageTimestamp": 1788532428093,
+            "recordedAt": 1788532452389,
+            "role": "assistant",
+            "model": "gpt-5.6-luna",
+            "provider": "openai",
+            "stopReason": "toolUse",
+            "runId": "90015388-ac38-497d-a679-21fef1ed8591",
+            "content": [
+              {
+                "type": "toolCall",
+                "id": "exec-c964f6bb-f5b8-4715-8a76-770bd4610eac",
+                "name": "memory_search",
+                "argumentKeys": [
+                  "corpus",
+                  "maxResults",
+                  "query"
+                ],
+                "argumentsOmitted": true
+              }
+            ]
+          },
+          {
+            "seq": 3,
+            "at": "2026-09-04T14:34:12.391Z",
+            "messageTimestamp": 1788532428188,
+            "recordedAt": 1788532452391,
+            "role": "toolResult",
+            "toolName": "memory_search",
+            "toolCallId": "exec-c964f6bb-f5b8-4715-8a76-770bd4610eac",
+            "isError": true,
+            "runId": "90015388-ac38-497d-a679-21fef1ed8591",
+            "content": [
+              {
+                "type": "toolResultMetadata",
+                "isError": true,
+                "rawTextSha256": "3d87c19f8e7d93db7ad0846922f871f9456e6cc9adad396beaaa457d41e79e39",
+                "rawTextCharacters": 544,
+                "bodyOmitted": true
+              }
+            ]
+          },
+          {
+            "seq": 4,
+            "at": "2026-09-04T14:34:12.394Z",
+            "messageTimestamp": 1788532431926,
+            "recordedAt": 1788532452394,
+            "role": "assistant",
+            "model": "gpt-5.6-luna",
+            "provider": "openai",
+            "stopReason": "toolUse",
+            "runId": "90015388-ac38-497d-a679-21fef1ed8591",
+            "content": [
+              {
+                "type": "toolCall",
+                "id": "exec-124c5f63-72fc-4104-8e57-41a16e9c5d39",
+                "name": "sandbox_exec",
+                "argumentKeys": [
+                  "command",
+                  "workdir",
+                  "yieldMs",
+                  "timeoutSeconds"
+                ],
+                "argumentsOmitted": true
+              }
+            ]
+          },
+          {
+            "seq": 5,
+            "at": "2026-09-04T14:34:12.396Z",
+            "messageTimestamp": 1788532431990,
+            "recordedAt": 1788532452396,
+            "role": "toolResult",
+            "toolName": "sandbox_exec",
+            "toolCallId": "exec-124c5f63-72fc-4104-8e57-41a16e9c5d39",
+            "isError": true,
+            "runId": "90015388-ac38-497d-a679-21fef1ed8591",
+            "content": [
+              {
+                "type": "toolResultMetadata",
+                "isError": true,
+                "rawTextSha256": "6f1a68786924ce0d51a8da6d7f80e5e37208b08d0a59c12da9b886df28a985ae",
+                "rawTextCharacters": 48,
+                "bodyOmitted": true
+              }
+            ]
+          },
+          {
+            "seq": 6,
+            "at": "2026-09-04T14:34:12.398Z",
+            "messageTimestamp": 1788532440777,
+            "recordedAt": 1788532452398,
+            "role": "assistant",
+            "model": "gpt-5.6-luna",
+            "provider": "openai",
+            "stopReason": "toolUse",
+            "runId": "90015388-ac38-497d-a679-21fef1ed8591",
+            "content": [
+              {
+                "type": "toolCall",
+                "id": "exec-05cbd103-97be-4f96-ae25-859ee9b7a54d",
+                "name": "read",
+                "argumentKeys": [
+                  "path",
+                  "optional"
+                ],
+                "argumentsOmitted": true
+              }
+            ]
+          },
+          {
+            "seq": 7,
+            "at": "2026-09-04T14:34:12.399Z",
+            "messageTimestamp": 1788532441053,
+            "recordedAt": 1788532452399,
+            "role": "toolResult",
+            "toolName": "read",
+            "toolCallId": "exec-05cbd103-97be-4f96-ae25-859ee9b7a54d",
+            "isError": false,
+            "status": "not_found",
+            "runId": "90015388-ac38-497d-a679-21fef1ed8591",
+            "content": [
+              {
+                "type": "toolResultMetadata",
+                "status": "not_found",
+                "isError": false,
+                "rawTextSha256": "ed9912bf80a8eb8d78df619629ffd320a9c000eddba8fa06e8e714303afa84f7",
+                "rawTextCharacters": 172,
+                "bodyOmitted": true
+              }
+            ]
+          },
+          {
+            "seq": 8,
+            "at": "2026-09-04T14:34:12.400Z",
+            "messageTimestamp": 1788532441080,
+            "recordedAt": 1788532452400,
+            "role": "assistant",
+            "model": "gpt-5.6-luna",
+            "provider": "openai",
+            "stopReason": "toolUse",
+            "runId": "90015388-ac38-497d-a679-21fef1ed8591",
+            "content": [
+              {
+                "type": "toolCall",
+                "id": "exec-bb1d47fa-94c4-46f1-9be7-2ed5c90948c3",
+                "name": "read",
+                "argumentKeys": [
+                  "path",
+                  "optional"
+                ],
+                "argumentsOmitted": true
+              }
+            ]
+          },
+          {
+            "seq": 9,
+            "at": "2026-09-04T14:34:12.402Z",
+            "messageTimestamp": 1788532441243,
+            "recordedAt": 1788532452402,
+            "role": "toolResult",
+            "toolName": "read",
+            "toolCallId": "exec-bb1d47fa-94c4-46f1-9be7-2ed5c90948c3",
+            "isError": false,
+            "runId": "90015388-ac38-497d-a679-21fef1ed8591",
+            "content": [
+              {
+                "type": "toolResultMetadata",
+                "isError": false,
+                "rawTextSha256": "052c08abd914c94f02beccc07fed6a609a0aeb3a28b1e6cee5616e28d6934b59",
+                "rawTextCharacters": 897,
+                "bodyOmitted": true
+              }
+            ]
+          },
+          {
+            "seq": 10,
+            "at": "2026-09-04T14:34:12.403Z",
+            "messageTimestamp": 1788532444559,
+            "recordedAt": 1788532452403,
+            "role": "assistant",
+            "model": "gpt-5.6-luna",
+            "provider": "openai",
+            "stopReason": "toolUse",
+            "runId": "90015388-ac38-497d-a679-21fef1ed8591",
+            "content": [
+              {
+                "type": "toolCall",
+                "id": "exec-87be0a4d-3648-4234-aa5a-8b92498e2673",
+                "name": "memory_search",
+                "argumentKeys": [
+                  "corpus",
+                  "maxResults",
+                  "query"
+                ],
+                "argumentsOmitted": true
+              }
+            ]
+          },
+          {
+            "seq": 11,
+            "at": "2026-09-04T14:34:12.403Z",
+            "messageTimestamp": 1788532444575,
+            "recordedAt": 1788532452403,
+            "role": "toolResult",
+            "toolName": "memory_search",
+            "toolCallId": "exec-87be0a4d-3648-4234-aa5a-8b92498e2673",
+            "isError": true,
+            "runId": "90015388-ac38-497d-a679-21fef1ed8591",
+            "content": [
+              {
+                "type": "toolResultMetadata",
+                "isError": true,
+                "rawTextSha256": "6ea8e253ad8339a15a7485e461f40c13b6ef04a4acb22a27bf9d90431932e3e7",
+                "rawTextCharacters": 417,
+                "bodyOmitted": true
+              }
+            ]
+          },
+          {
+            "seq": 12,
+            "at": "2026-09-04T14:34:12.404Z",
+            "messageTimestamp": 1788532452385,
+            "recordedAt": 1788532452404,
+            "role": "assistant",
+            "model": "gpt-5.6-luna",
+            "provider": "openai",
+            "stopReason": "stop",
+            "runId": "90015388-ac38-497d-a679-21fef1ed8591",
+            "content": [
+              {
+                "type": "text",
+                "text": "Đã tính:\n\n- **Khách sạn:** 3 người × 2 đêm × 900.000 = **5.400.000 đồng**\n- **Ăn uống:** 3 người × 3 ngày × 240.000 = **2.160.000 đồng**\n- **Tổng dự kiến:** **7.560.000 đồng**\n\nChưa có mức trần công ty trong dữ liệu được cung cấp nên chưa thể xác định chính xác mức tối đa được thanh toán và phần vượt. Công thức:\n\n- Mức tối đa = 3 × (2 × định mức khách sạn/đêm + 3 × định mức ăn/ngày)\n- Phần vượt = max(0, 7.560.000 − mức tối đa)\n\nViệc tra cứu thời hạn nộp chứng từ hiện không thực hiện được do kho chính sách không khả dụng; cần kiểm tra quy chế công tác phí/HR-Finance của công ty trước khi kết luận."
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "routing": [
+    {
+      "id": "f3b62475-4cdf-4cf3-bbb9-a43cd92baa26",
+      "account_id": "68264167-a2d8-48b1-a00a-d31a06a7fd92",
+      "parent_run_id_hash": "af067ac6be4206522466e04b4de2675095f9615f745869a7065cefed2897c385",
+      "outcome": "local",
+      "decision_source": "ai",
+      "reason_code": "router_no_candidate",
+      "confirmation_state": "not_required",
+      "policy_revision": 2,
+      "latency_ms": 3000,
+      "created_at": 1788532309110,
+      "targetAgentIds": [],
+      "childRunIds": []
+    },
+    {
+      "id": "5b658d9d-0d8b-47ed-83d4-c70d4548d038",
+      "account_id": "68264167-a2d8-48b1-a00a-d31a06a7fd92",
+      "parent_run_id_hash": "a5d344cd9c75465e6926d92ba1e77aa5d251e990f3ca73e9a1122a06b588ec73",
+      "outcome": "clarified",
+      "decision_source": "ai",
+      "reason_code": "handoff_confirmation_required",
+      "confirmation_state": "pending",
+      "policy_revision": 2,
+      "latency_ms": 5311,
+      "created_at": 1788532350925,
+      "targetAgentIds": [
+        "enterprise-finance-specialist"
+      ],
+      "childRunIds": []
+    },
+    {
+      "id": "8c728439-e3f4-4fbf-ae14-65120864c11e",
+      "account_id": "68264167-a2d8-48b1-a00a-d31a06a7fd92",
+      "parent_run_id_hash": "97d0275bba32e2e3eb59b39e6dfd4530e23abddaf019a2ca95e2620e3c80d7b3",
+      "outcome": "delegated",
+      "decision_source": "ai",
+      "reason_code": "delegate_started",
+      "confirmation_state": "approved",
+      "policy_revision": 2,
+      "latency_ms": 53,
+      "created_at": 1788532418493,
+      "targetAgentIds": [
+        "enterprise-finance-specialist"
+      ],
+      "childRunIds": [
+        "90015388-ac38-497d-a679-21fef1ed8591"
+      ]
+    },
+    {
+      "id": "5db59649-7a72-4692-8df0-33a40be66c8c",
+      "account_id": "68264167-a2d8-48b1-a00a-d31a06a7fd92",
+      "parent_run_id_hash": "97d0275bba32e2e3eb59b39e6dfd4530e23abddaf019a2ca95e2620e3c80d7b3",
+      "outcome": "blocked",
+      "decision_source": "system",
+      "reason_code": "mutation_confirmation_expired",
+      "confirmation_state": "expired",
+      "policy_revision": 2,
+      "latency_ms": null,
+      "created_at": 1788532431987,
+      "targetAgentIds": [
+        "enterprise-finance-specialist"
+      ],
+      "childRunIds": [
+        "90015388-ac38-497d-a679-21fef1ed8591"
+      ]
+    }
+  ],
+  "planAudits": [
+    {
+      "id": "e1a1a5d8-2229-437b-96fb-12992c9e2a34",
+      "action": "delegation.plan.selected",
+      "target_id": "793070f5-5e6e-4adb-96b3-7dfdadd49ed2",
+      "outcome": "success",
+      "created_at": 1788532350924,
+      "detail": {
+        "planId": "793070f5-5e6e-4adb-96b3-7dfdadd49ed2",
+        "planRevision": 1,
+        "handling": "specialist",
+        "targetAgentIds": [
+          "enterprise-finance-specialist"
+        ],
+        "targetCount": 1,
+        "policyRevision": 2,
+        "accountPolicyRevision": 4,
+        "parentRunHash": "a5d344cd9c75465e6926d92ba1e77aa5d251e990f3ca73e9a1122a06b588ec73",
+        "sessionHash": "3f0b13336ee96cdc9bbf2a5c79231ab7e8e0c1a7931b8f924569e66b9ba9894d"
+      }
+    },
+    {
+      "id": "029c90c0-578e-4d28-a19b-7d0b9c8a5f33",
+      "action": "delegation.plan.confirmed",
+      "target_id": "793070f5-5e6e-4adb-96b3-7dfdadd49ed2",
+      "outcome": "success",
+      "created_at": 1788532416825,
+      "detail": {
+        "planId": "793070f5-5e6e-4adb-96b3-7dfdadd49ed2",
+        "planRevision": 1,
+        "handling": "specialist",
+        "targetAgentIds": [
+          "enterprise-finance-specialist"
+        ],
+        "targetCount": 1,
+        "policyRevision": 2,
+        "accountPolicyRevision": 4,
+        "parentRunHash": "97d0275bba32e2e3eb59b39e6dfd4530e23abddaf019a2ca95e2620e3c80d7b3",
+        "sessionHash": "3f0b13336ee96cdc9bbf2a5c79231ab7e8e0c1a7931b8f924569e66b9ba9894d"
+      }
+    }
+  ],
+  "counts": {
+    "routingEvents": 4,
+    "selectedPlans": 1,
+    "confirmedPlans": 1,
+    "acceptedChildren": 1,
+    "endedChildren": 1,
+    "routedChildIds": 1
+  },
+  "environment": {
+    "account": [
+      {
+        "id": "68264167-a2d8-48b1-a00a-d31a06a7fd92",
+        "username": "hieu",
+        "display_name": "Hiếu DZ",
+        "role": "employee",
+        "enabled": 1,
+        "personal_agent_enabled": 1,
+        "policy_revision": 4
+      }
+    ],
+    "parentAgent": "enterprise-personal-2ae2cbc2deecdb86fe86",
+    "zones": [
+      {
+        "id": "0ee8b68b-8b2d-46db-87c2-d7c624abd7f9",
+        "slug": "qa-phap-che-20260904",
+        "name": "[KIỂM THỬ] Pháp chế & Mua sắm",
+        "status": "active",
+        "revision": 7,
+        "access_revision": 2,
+        "source_set_revision": 3,
+        "build_revision": 4,
+        "active_publication_id": "f746a0fb-083b-4114-99ec-ab202fdb4ff8",
+        "egress_policy": "external_allowed",
+        "updated_at": 1788505995879,
+        "publication_number": 2,
+        "generation_id": "9ac391d8-606e-468d-a543-d6111060e6d3",
+        "vector_status": "ready",
+        "published_at": 1788505995879
+      },
+      {
+        "id": "26f44d58-4a43-46f2-85a7-09f10c9c833d",
+        "slug": "qa-van-hanh-20260904",
+        "name": "[KIỂM THỬ] Dự án & Vận hành",
+        "status": "active",
+        "revision": 9,
+        "access_revision": 2,
+        "source_set_revision": 4,
+        "build_revision": 5,
+        "active_publication_id": "0f4ee7c5-d421-4383-9166-6abd5242cef9",
+        "egress_policy": "external_allowed",
+        "updated_at": 1788506267375,
+        "publication_number": 3,
+        "generation_id": "c0c2adec-66cf-4496-a324-fe8880b875dc",
+        "vector_status": "ready",
+        "published_at": 1788506267375
+      },
+      {
+        "id": "58f2e858-97bf-4953-965f-2637158b0169",
+        "slug": "qa-nhan-su-20260904",
+        "name": "[KIỂM THỬ] Nhân sự & Onboarding",
+        "status": "active",
+        "revision": 10,
+        "access_revision": 2,
+        "source_set_revision": 4,
+        "build_revision": 5,
+        "active_publication_id": "b3e8dbbc-012d-4df3-9049-7bf768861e34",
+        "egress_policy": "external_allowed",
+        "updated_at": 1788506190584,
+        "publication_number": 3,
+        "generation_id": "1fd693b9-451f-4dfe-b200-a557b79520b3",
+        "vector_status": "ready",
+        "published_at": 1788506190584
+      },
+      {
+        "id": "766b3227-d307-4c04-9c47-4e79d392ea2f",
+        "slug": "qa-tai-chinh-20260904",
+        "name": "[KIỂM THỬ] Tài chính & Chi phí",
+        "status": "active",
+        "revision": 7,
+        "access_revision": 2,
+        "source_set_revision": 3,
+        "build_revision": 4,
+        "active_publication_id": "b1c002af-74a6-4790-9abf-4e99b3809965",
+        "egress_policy": "external_allowed",
+        "updated_at": 1788506214938,
+        "publication_number": 2,
+        "generation_id": "7744be78-9af5-4a6b-b778-75431f4c2f28",
+        "vector_status": "ready",
+        "published_at": 1788506214938
+      },
+      {
+        "id": "dab5a778-619c-424d-9c60-c67d19634bda",
+        "slug": "qa-cntt-20260904",
+        "name": "[KIỂM THỬ] CNTT & An toàn thông tin",
+        "status": "active",
+        "revision": 9,
+        "access_revision": 4,
+        "source_set_revision": 3,
+        "build_revision": 4,
+        "active_publication_id": "094dafcd-2713-4c0d-826a-cd645390cb27",
+        "egress_policy": "external_allowed",
+        "updated_at": 1788506165191,
+        "publication_number": 2,
+        "generation_id": "5c17c548-b7b0-4668-b91b-7d78399f0228",
+        "vector_status": "ready",
+        "published_at": 1788506165191
+      },
+      {
+        "id": "ec9cfb6f-7eb6-49e1-bcf0-7d671ed199d5",
+        "slug": "qa-san-pham-20260904",
+        "name": "[KIỂM THỬ] Sản phẩm & Chăm sóc khách hàng",
+        "status": "active",
+        "revision": 7,
+        "access_revision": 2,
+        "source_set_revision": 3,
+        "build_revision": 4,
+        "active_publication_id": "feeba391-8313-43bd-bed3-1de6a910a4bf",
+        "egress_policy": "external_allowed",
+        "updated_at": 1788506242229,
+        "publication_number": 2,
+        "generation_id": "c9ce31ae-ed89-426c-b10d-8faf75ee740f",
+        "vector_status": "ready",
+        "published_at": 1788506242229
+      }
+    ],
+    "directBindings": [
+      {
+        "zone_id": "0ee8b68b-8b2d-46db-87c2-d7c624abd7f9",
+        "agent_resource_key": "agent:personal:68264167-a2d8-48b1-a00a-d31a06a7fd92",
+        "created_at": 1788464482803
+      },
+      {
+        "zone_id": "26f44d58-4a43-46f2-85a7-09f10c9c833d",
+        "agent_resource_key": "agent:personal:68264167-a2d8-48b1-a00a-d31a06a7fd92",
+        "created_at": 1788488889915
+      },
+      {
+        "zone_id": "58f2e858-97bf-4953-965f-2637158b0169",
+        "agent_resource_key": "agent:personal:68264167-a2d8-48b1-a00a-d31a06a7fd92",
+        "created_at": 1788464399970
+      },
+      {
+        "zone_id": "766b3227-d307-4c04-9c47-4e79d392ea2f",
+        "agent_resource_key": "agent:personal:68264167-a2d8-48b1-a00a-d31a06a7fd92",
+        "created_at": 1788464480699
+      },
+      {
+        "zone_id": "dab5a778-619c-424d-9c60-c67d19634bda",
+        "agent_resource_key": "agent:personal:68264167-a2d8-48b1-a00a-d31a06a7fd92",
+        "created_at": 1788466071120
+      },
+      {
+        "zone_id": "ec9cfb6f-7eb6-49e1-bcf0-7d671ed199d5",
+        "agent_resource_key": "agent:personal:68264167-a2d8-48b1-a00a-d31a06a7fd92",
+        "created_at": 1788464495855
+      }
+    ],
+    "evidenceTransferTableExists": true,
+    "evidenceTransferGrants": [],
+    "delegationPolicy": [
+      {
+        "rollout": "on",
+        "router_model": "openai/gpt-5.6-luna",
+        "auto_threshold": 0.9,
+        "clarify_threshold": 0.7,
+        "minimum_margin": 0.15,
+        "max_delegates_per_turn": 3,
+        "event_retention_days": 90,
+        "revision": 2,
+        "updated_at": 1788455885818
+      }
+    ],
+    "delegationOverrides": [],
+    "agentEntitlements": [
+      {
+        "resource_id": "agent:shared:enterprise-contract-specialist",
+        "resource_state": "active",
+        "effect": "allow",
+        "updated_at": 1788455749303
+      },
+      {
+        "resource_id": "agent:shared:enterprise-finance-specialist",
+        "resource_state": "active",
+        "effect": "allow",
+        "updated_at": 1788455749303
+      },
+      {
+        "resource_id": "agent:shared:enterprise-hr-specialist",
+        "resource_state": "active",
+        "effect": "allow",
+        "updated_at": 1788455749303
+      },
+      {
+        "resource_id": "agent:shared:main",
+        "resource_state": "active",
+        "effect": "allow",
+        "updated_at": 1788410872301
+      }
+    ],
+    "personalProfileRevision": [],
+    "sharedRelationshipRevisions": [],
+    "excluded": [
+      "profile_json",
+      "credentials",
+      "published source bodies",
+      "private paths"
+    ],
+    "fingerprintSha256": "a11a3d464e14edcd36dacfe562fa1635ab3bd774b858ab1f5abec0aada1b446d"
+  },
+  "evidenceAuditBoundary": "Private evidence audits do not persist a parent-session or child-run join. They are not exported by account/time inference.",
+  "qaDisposition": {
+    "pass": "C",
+    "status": "partial_user_directed_stop",
+    "plannedCases": 11,
+    "observedCases": 2,
+    "lastObservedCase": "C02",
+    "unrunCases": [
+      "C03",
+      "C04",
+      "C05",
+      "C06",
+      "C07",
+      "C08",
+      "C09",
+      "C10",
+      "C11"
+    ],
+    "nextStrategy": "Fix the failing case, retest it naturally in an isolated session, then resume combined and multi-turn testing only after that case passes."
+  }
+}

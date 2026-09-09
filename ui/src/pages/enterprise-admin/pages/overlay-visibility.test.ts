@@ -2,6 +2,7 @@
 
 import { nothing, render } from "lit";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { i18n } from "../../../i18n/index.ts";
 import { installDialogPolyfill } from "../../../test-helpers/modal-dialog.ts";
 import type { EnterpriseAdminDialog } from "../components/admin-dialog.ts";
 import { EnterpriseAdminAccountsPage } from "./accounts-page.ts";
@@ -24,13 +25,15 @@ function button(label: string): HTMLButtonElement {
 }
 
 describe("Enterprise admin overlay visibility", () => {
-  beforeEach(() => {
+  beforeEach(async () => {
+    await i18n.setLocale("vi");
     restoreDialogPolyfill = installDialogPolyfill();
     container = document.createElement("div");
     document.body.append(container);
   });
 
-  afterEach(() => {
+  afterEach(async () => {
+    await i18n.setLocale("en");
     render(nothing, container);
     container.remove();
     restoreDialogPolyfill();
@@ -62,7 +65,7 @@ describe("Enterprise admin overlay visibility", () => {
 
     expect(container.querySelector("openclaw-enterprise-admin-dialog")).toBeNull();
 
-    button("Tạo shared agent").click();
+    button("Tạo agent dùng chung").click();
     render(page.render(), container);
     const dialog = container.querySelector<EnterpriseAdminDialog>(
       "openclaw-enterprise-admin-dialog",

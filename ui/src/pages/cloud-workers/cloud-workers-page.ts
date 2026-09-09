@@ -6,7 +6,6 @@ import { titleForRoute } from "../../app-navigation.ts";
 import { applicationContext, type ApplicationContext } from "../../app/context.ts";
 import { showConfirmDialog } from "../../components/confirm-dialog.ts";
 import {
-  renderDocsLink,
   renderSettingsEmpty,
   renderSettingsPage,
   renderSettingsRow,
@@ -36,7 +35,6 @@ import {
   type ConfiguredCloudWorkerProfile,
 } from "./cloud-worker-config.ts";
 
-const CLOUD_WORKERS_DOCS_URL = "https://docs.openclaw.ai/gateway/cloud-workers";
 type EditorState = { kind: "add" } | { kind: "edit"; profileId: string } | null;
 
 function formControlValue(event: Event): string {
@@ -381,8 +379,7 @@ class CloudWorkersPage extends OpenClawLightDomElement {
         }),
         renderSettingsRow({
           title: t("cloudWorkersPage.fields.backend"),
-          description: html`${t("cloudWorkersPage.fields.backendHelp")}
-          ${renderDocsLink(CLOUD_WORKERS_DOCS_URL, t("cloudWorkersPage.providerList"))}`,
+          description: html`${t("cloudWorkersPage.fields.backendHelp")}`,
           control: html`<input
             class="settings-input mono"
             aria-label=${t("cloudWorkersPage.fields.backend")}
@@ -564,8 +561,7 @@ class CloudWorkersPage extends OpenClawLightDomElement {
         ${this.renderEditor()}
       `,
       {
-        intro: html`${t("cloudWorkersPage.intro")}
-        ${renderDocsLink(CLOUD_WORKERS_DOCS_URL, t("cloudWorkersPage.documentation"))}`,
+        intro: html`${t("cloudWorkersPage.intro")}`,
       },
     );
     return html`

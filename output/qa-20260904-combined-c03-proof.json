@@ -1,0 +1,28 @@
+{
+  "capturedAt": "2026-09-04T17:14:15.078Z",
+  "sessionKey": "agent:enterprise-personal-2ae2cbc2deecdb86fe86:dashboard:e4bfd79e-6068-4ced-8ae2-5d126ce033ce",
+  "parentTranscriptId": "7c9fd715-70a5-43c5-8169-5a2833eb9f31",
+  "parentStatus": "done",
+  "childCount": 1,
+  "proof": [
+    {
+      "runId": "da566ce6-b197-4058-8d15-b36fa31e9aa9",
+      "agentId": "enterprise-finance-specialist",
+      "childTranscriptId": "22cbc9a9-0939-41d3-872c-c5151e31f22c",
+      "startedAt": 1788541990494,
+      "endedAt": 1788542013140,
+      "outcome": "ok",
+      "independentAssistantRun": true,
+      "models": [
+        "openai/gpt-5.6-luna"
+      ],
+      "capturedCharacters": 2179,
+      "capturedSha256": "df7fd8a6c599325225e4963e083e63996bb474f3f6620c60ffe959b1d744a011",
+      "fullChildProjectionReceivedByParent": true,
+      "parentReceiptSequence": 16,
+      "parentReceiptHasTruncation": false,
+      "completionAnnouncedAt": 1788542030283
+    }
+  ],
+  "boundary": "Actual persisted QA run and parent receipt; no hidden reasoning, credentials or prompt bodies emitted"
+}

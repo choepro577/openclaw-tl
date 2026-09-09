@@ -1,0 +1,30 @@
+- main [ref=f2e5]:
+  - generic [ref=f2e6]:
+    - generic [ref=f2e10]:
+      - strong [ref=f2e11]: MAAP
+      - generic [ref=f2e12]: MAAP Enterprise
+    - generic [ref=f2e13]:
+      - generic [ref=f2e14]:
+        - text: MAAP USER
+        - heading "Đăng nhập" [level=1] [ref=f2e15]
+        - paragraph [ref=f2e16]: Đăng nhập bằng tài khoản doanh nghiệp để truy cập Agent của bạn.
+      - generic [ref=f2e17]:
+        - generic [ref=f2e18]:
+          - generic [ref=f2e19]: Tên đăng nhập
+          - textbox "Tên đăng nhập" [ref=f2e20]: hieu
+        - generic [ref=f2e21]:
+          - generic [ref=f2e22]: Mật khẩu
+          - generic [ref=f2e23]:
+            - textbox "Mật khẩu" [ref=f2e24]:
+              - /placeholder: ""
+              - text: "1234567890"
+            - button "Hiện mật khẩu" [active] [ref=f2e45]
+        - button "Đăng nhập" [ref=f2e30]
+      - generic [ref=f2e32]:
+        - generic [ref=f2e34]: hoặc
+        - button "Đăng nhập bằng tài khoản Thiên Lý" [ref=f2e35] [cursor=pointer]
+      - generic [ref=f2e37]:
+        - generic [ref=f2e38]: Ngôn ngữ
+        - combobox "Ngôn ngữ" [ref=f2e39]:
+          - option "Tiếng Việt" [selected]
+          - option "English"

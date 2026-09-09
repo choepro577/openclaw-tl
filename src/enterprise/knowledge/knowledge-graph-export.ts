@@ -1,7 +1,6 @@
 import { createHash } from "node:crypto";
 import { readFile, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { DatabaseSync } from "node:sqlite";
 import { renderKnowledgeWikiLink } from "@openclaw/knowledge-graph-core";
 import JSZip from "jszip";
 import { generateSecureUuid } from "../../infra/secure-random.js";
@@ -11,10 +10,8 @@ import {
   type OpenClawStateDatabaseOptions,
 } from "../../state/openclaw-state-db.js";
 import { ensureEnterpriseSchema } from "../database/enterprise-schema.js";
-import {
-  ensureEnterpriseKnowledgeArtifactDirectories,
-  resolveKnowledgeGenerationDatabasePath,
-} from "./artifact-store.js";
+import { ensureEnterpriseKnowledgeArtifactDirectories } from "./artifact-store.js";
+import { openKnowledgeGraphDatabase } from "./graph-query.js";
 import { EnterpriseKnowledgeError } from "./knowledge-types.js";
 
 const MAX_EXPORT_ENTRIES = 5_000;
@@ -89,11 +86,18 @@ export async function buildObsidianArchive(params: {
   zoneName: string;
   publishedAt: number;
   env?: NodeJS.ProcessEnv;
+  databaseOptions?: OpenClawStateDatabaseOptions;
 }): Promise<{ buffer: Buffer; checksum: string; entryCount: number; uncompressedBytes: number }> {
-  const db = new DatabaseSync(
-    resolveKnowledgeGenerationDatabasePath(params.zoneId, params.generationId, params.env),
-    { readOnly: true },
-  );
+  const db = openKnowledgeGraphDatabase({
+    zoneId: params.zoneId,
+    zoneLabel: params.zoneName,
+    generationId: params.generationId,
+    publicationId: null,
+    snapshot: "active",
+    publishedAt: params.publishedAt,
+    env: params.env,
+    databaseOptions: params.databaseOptions,
+  });
   try {
     const graphTable = db
       .prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'graph_nodes'")
@@ -315,11 +319,11 @@ export async function createKnowledgeGraphExport(params: {
       "Active publication not found.",
     );
   }
-  if (!["ready", "degraded"].includes(String(active.graph_status))) {
+  if (String(active.graph_status) === "error") {
     throw new EnterpriseKnowledgeError(
-      "GRAPH_NOT_BUILT",
+      "GRAPH_INTEGRITY_FAILED",
       422,
-      "The active publication has no graph.",
+      "The graph failed integrity checks.",
     );
   }
   const exportId = generateSecureUuid();
@@ -355,6 +359,7 @@ export async function createKnowledgeGraphExport(params: {
       zoneName: String(active.name),
       publishedAt: Number(active.published_at),
       env: params.env,
+      databaseOptions: options,
     });
     const paths = await ensureEnterpriseKnowledgeArtifactDirectories(params.env);
     const filePath = path.join(paths.exports, `${exportId}.zip`);

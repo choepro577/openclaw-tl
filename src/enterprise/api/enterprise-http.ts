@@ -1,4 +1,3 @@
-// Same-origin HTTP API for Enterprise login, accounts, and entitlements.
 import type { IncomingMessage, ServerResponse } from "node:http";
 import {
   ClawHubTrustErrorCodes,
@@ -36,32 +35,51 @@ import {
   updateEnterpriseAgentCronJob,
   updateEnterpriseAgentSkills,
   updateEnterpriseAgentTools,
+  updateEnterpriseAgentDelegationProfile,
   updateEnterpriseSharedAgent,
   writeEnterpriseAgentFile,
   type EnterpriseAgentPanel,
   type EnterpriseAgentScope,
 } from "../agents/admin-agent-service.js";
+import {
+  approveEnterpriseAdminAgentAccessRequest,
+  cancelUserEnterpriseAgentAccessRequest,
+  getEnterpriseAdminAgentAccessRequest,
+  listEnterpriseAdminAgentAccessRequests,
+  listEnterpriseUserAgentAccessRequests,
+  presentEnterpriseAgentAccessRequest,
+  presentEnterpriseAgentAccessRequestSummary,
+  rejectEnterpriseAdminAgentAccessRequest,
+  requestEnterpriseAgentAccess,
+} from "../agents/agent-access-request-service.js";
+import { withEnterpriseAgentLifecycleLocks } from "../agents/enterprise-agent-lifecycle-lock.js";
 import { appendEnterpriseAuditEvent, listEnterpriseAuditEvents } from "../audit/audit-store.js";
 import {
   authenticateEnterpriseRequest,
   changeEnterprisePassword,
   loginEnterpriseAccount,
   logoutEnterprisePrincipal,
+  resetEnterpriseAccountPassword,
 } from "../auth/auth-service.js";
 import { clearEnterpriseAuthCookie, createEnterpriseAuthCookie } from "../auth/cookie.js";
 import { issueEnterpriseCsrfToken, verifyEnterpriseCsrfToken } from "../auth/jwt.js";
 import { hashEnterprisePassword } from "../auth/password.js";
 import {
   listEnterpriseAccountSessions,
-  revokeEnterpriseAccountSessions,
   revokeEnterpriseStoredSession,
   type EnterprisePortalAudience,
 } from "../auth/session-store.js";
+import { handleThienLyHttpRequest } from "../auth/thienly-http.js";
 import {
   listEnterpriseAgentCatalog,
   listEnterpriseSkillCatalog,
   listEnterpriseToolCatalog,
 } from "../catalog/enterprise-catalog.js";
+import {
+  importEnterpriseSkillFolder,
+  MAX_SKILL_FOLDER_BODY_BYTES,
+  resolveEnterpriseSkillInstallWorkspace,
+} from "../catalog/skill-folder-import.js";
 import {
   applyEnterpriseAdminConfig,
   listEnterpriseConfigBackups,
@@ -69,6 +87,27 @@ import {
   rollbackEnterpriseAdminConfig,
   validateEnterpriseAdminConfig,
 } from "../config/admin-config-service.js";
+import {
+  activateEnterpriseDelegationFromPreview,
+  createEnterpriseAgentDelegationProfileDraft,
+  createEnterpriseDelegationActivationPreview,
+  readEnterpriseAccountDelegation,
+  readEnterpriseAgentDelegationProfile,
+  simulateEnterpriseDelegation,
+} from "../delegation/delegation-admin-service.js";
+import {
+  enterpriseDelegationModeCanOverride,
+  listEnterpriseDelegationCandidates,
+} from "../delegation/delegation-candidates.js";
+import { invalidateEnterpriseDelegationMutationApprovals } from "../delegation/delegation-mutation-guard.js";
+import { invalidateEnterpriseDelegationRouterRuntimeState } from "../delegation/delegation-router.js";
+import {
+  listEnterpriseDelegationEvents,
+  readEnterpriseDelegationOverview,
+  readEnterpriseDelegationPolicy,
+  writeEnterpriseDelegationOverride,
+  writeEnterpriseDelegationPolicy,
+} from "../delegation/delegation-store.js";
 import { isEnterpriseEnabled } from "../enterprise-config.js";
 import {
   listEnterpriseEntitlements,
@@ -80,6 +119,11 @@ import {
   type EnterpriseEntitlement,
   type EnterpriseResourceType,
 } from "../entitlements/entitlement-store.js";
+// Same-origin HTTP API for Enterprise login, accounts, and entitlements.
+import {
+  ENTERPRISE_ACCESS_PRESETS,
+  personalAgentResourceKey,
+} from "../entitlements/resource-keys.js";
 import { handleEnterpriseExtensionHttpRequest } from "../extensions/enterprise-extension-http.js";
 import {
   EnterpriseGatewayMethodError,
@@ -117,6 +161,7 @@ import {
   readSharedAgentRelationship,
   writeSharedAgentRelationship,
 } from "../user/shared-agent-relationship-store.js";
+import { listEnterpriseUserSharedAgentRoster } from "../user/user-agent-roster.js";
 import type { AgentKey } from "../user/user-api-contracts.js";
 import {
   createUserAutomation,
@@ -143,6 +188,15 @@ import {
   requireEnterpriseUserConversation,
 } from "../user/user-conversation-service.js";
 import { resolveEnterpriseUserRuntimeAgentId } from "../user/user-gateway-client.js";
+import {
+  EnterpriseDelegationActivationSchema,
+  EnterpriseDelegationEmptyBodySchema,
+  EnterpriseDelegationOverridePatchSchema,
+  EnterpriseDelegationProfilePatchSchema,
+  EnterpriseDelegationSettingsPatchSchema,
+  EnterpriseDelegationSimulationSchema,
+  parseEnterpriseDelegationApiBody,
+} from "./delegation-api-validation.js";
 
 const API_PREFIXES = ["/api/auth/", "/api/enterprise/"] as const;
 const MAX_JSON_BODY_BYTES = 64 * 1024;
@@ -150,10 +204,77 @@ const MAX_AGENT_FILE_CONTENT_BYTES = 262_144;
 const MAX_AGENT_FILE_BODY_BYTES = MAX_AGENT_FILE_CONTENT_BYTES + 16 * 1024;
 const LOGIN_WINDOW_MS = 15 * 60 * 1000;
 const LOGIN_MAX_FAILURES = 5;
+const DELEGATION_MODEL_WINDOW_MS = 60_000;
+const DELEGATION_MODEL_MAX_REQUESTS = 10;
 
 const loginFailures = new Map<string, { count: number; windowStartedAt: number }>();
+const delegationModelRequests = new Map<string, { count: number; windowStartedAt: number }>();
 
 type JsonRecord = Record<string, unknown>;
+
+function parseDelegationEventFilters(searchParams: URLSearchParams) {
+  const outcome = searchParams.get("outcome") ?? undefined;
+  const source = searchParams.get("source") ?? undefined;
+  const allowedOutcomes = new Set([
+    "delegated",
+    "clarified",
+    "local",
+    "blocked",
+    "failed",
+    "cancelled",
+    "shadow",
+  ]);
+  const allowedSources = new Set(["explicit", "rule", "ai", "system"]);
+  if (outcome && !allowedOutcomes.has(outcome)) {
+    throw new Error("FIELD_INVALID:outcome");
+  }
+  if (source && !allowedSources.has(source)) {
+    throw new Error("FIELD_INVALID:source");
+  }
+  const parseTimestamp = (key: "createdFrom" | "createdTo") => {
+    const raw = searchParams.get(key);
+    if (!raw) {
+      return undefined;
+    }
+    if (!/^\d{1,16}$/.test(raw)) {
+      throw new Error(`FIELD_INVALID:${key}`);
+    }
+    const value = Number(raw);
+    if (!Number.isSafeInteger(value) || value < 0) {
+      throw new Error(`FIELD_INVALID:${key}`);
+    }
+    return value;
+  };
+  const reasonCode = searchParams.get("reasonCode")?.trim() || undefined;
+  if (reasonCode && reasonCode.length > 128) {
+    throw new Error("FIELD_INVALID:reasonCode");
+  }
+  const filters = {
+    accountId: searchParams.get("accountId")?.trim() || undefined,
+    agentId: searchParams.get("agentId")?.trim() || undefined,
+    outcome: outcome as
+      | "delegated"
+      | "clarified"
+      | "local"
+      | "blocked"
+      | "failed"
+      | "cancelled"
+      | "shadow"
+      | undefined,
+    source: source as "explicit" | "rule" | "ai" | "system" | undefined,
+    reasonCode,
+    createdFrom: parseTimestamp("createdFrom"),
+    createdTo: parseTimestamp("createdTo"),
+  };
+  if (
+    filters.createdFrom !== undefined &&
+    filters.createdTo !== undefined &&
+    filters.createdFrom > filters.createdTo
+  ) {
+    throw new Error("FIELD_INVALID:createdFrom");
+  }
+  return filters;
+}
 
 function sendJson(res: ServerResponse, status: number, body: unknown): true {
   res.statusCode = status;
@@ -363,6 +484,26 @@ function recordLoginFailure(key: string): void {
   }
 }
 
+function admitDelegationModelRequest(key: string): boolean {
+  const now = Date.now();
+  const current = delegationModelRequests.get(key);
+  if (!current || now - current.windowStartedAt >= DELEGATION_MODEL_WINDOW_MS) {
+    delegationModelRequests.set(key, { count: 1, windowStartedAt: now });
+    return true;
+  }
+  if (current.count >= DELEGATION_MODEL_MAX_REQUESTS) {
+    return false;
+  }
+  current.count += 1;
+  if (delegationModelRequests.size > 5_000) {
+    const oldest = delegationModelRequests.keys().next().value;
+    if (oldest !== undefined) {
+      delegationModelRequests.delete(oldest);
+    }
+  }
+  return true;
+}
+
 function requireAdmin(req: IncomingMessage, res: ServerResponse) {
   const principal = authenticateEnterpriseRequest(req, "admin");
   if (!principal) {
@@ -458,6 +599,22 @@ function adminAgentPath(
     scope: match[1] as EnterpriseAgentScope,
     id: decodeURIComponent(match[2]),
     panel: match[3] as EnterpriseAgentPanel | undefined,
+  };
+}
+
+function adminDelegationProfilePath(
+  pathname: string,
+): { agentId: string; action: "profile" | "draft" | "simulate" } | undefined {
+  const match =
+    /^\/api\/enterprise\/admin\/agents\/([^/]+)\/delegation-profile(?:\/(draft|simulate))?$/.exec(
+      pathname,
+    );
+  if (!match?.[1]) {
+    return undefined;
+  }
+  return {
+    agentId: decodeURIComponent(match[1]),
+    action: match[2] === "draft" ? "draft" : match[2] === "simulate" ? "simulate" : "profile",
   };
 }
 
@@ -639,6 +796,9 @@ export async function handleEnterpriseHttpRequest(
   const searchParams = new URL(req.url ?? "/", "http://localhost").searchParams;
 
   try {
+    if (await handleThienLyHttpRequest(req, res, config, pathname)) {
+      return true;
+    }
     if (
       await handleEnterpriseExtensionHttpRequest({
         req,
@@ -660,6 +820,139 @@ export async function handleEnterpriseHttpRequest(
     ) {
       return true;
     }
+    const accessRequestRoute =
+      /^\/api\/enterprise\/(user\/v2|admin)\/agent-access-requests(?:\/([a-zA-Z0-9-]{1,128})(?:\/(approve|reject|cancel))?)?$/.exec(
+        pathname,
+      );
+    if (accessRequestRoute) {
+      const audience = accessRequestRoute[1] === "admin" ? "admin" : "user";
+      const principal = audience === "admin" ? requireAdmin(req, res) : requireUser(req, res);
+      if (!principal) {
+        return true;
+      }
+      const id = accessRequestRoute[2];
+      const action = accessRequestRoute[3];
+      if (req.method === "GET" && !action) {
+        if (!id) {
+          const items =
+            audience === "admin"
+              ? listEnterpriseAdminAgentAccessRequests(config)
+              : listEnterpriseUserAgentAccessRequests(principal.account.id);
+          const agentKey = searchParams.get("agentKey");
+          return sendJson(res, 200, {
+            items: agentKey ? items.filter((item) => item.agentKey === agentKey) : items,
+          });
+        }
+        if (audience === "admin") {
+          const request = getEnterpriseAdminAgentAccessRequest(config, id);
+          if (!request) {
+            throw new Error("AGENT_ACCESS_REQUEST_NOT_FOUND");
+          }
+          const entitlement =
+            listEnterpriseEntitlementsForResource("agent", request.resourceKey).find(
+              (item) => item.accountId === request.requesterAccountId,
+            ) ?? null;
+          return sendJson(res, 200, {
+            request,
+            account: request.requester,
+            agent: request.agent,
+            entitlement,
+          });
+        }
+      }
+      const create = audience === "user" && !id && !action;
+      const cancel = audience === "user" && id && action === "cancel";
+      const review = audience === "admin" && id && (action === "approve" || action === "reject");
+      if (req.method !== "POST" || !(create || cancel || review)) {
+        return sendError(res, 405, "METHOD_NOT_ALLOWED", "Thao tác không được hỗ trợ.");
+      }
+      if (!requirePortalCsrf(req, res, principal, audience)) {
+        return true;
+      }
+      const body = await readJson(req);
+      if (create) {
+        const agentKey = requireString(body, "agentKey", 128);
+        if (!agentKey.startsWith("shared:")) {
+          throw new Error("AGENT_NOT_FOUND");
+        }
+        const previous = listEnterpriseUserAgentAccessRequests(principal.account.id).find(
+          (item) => item.agentKey === agentKey && item.state === "pending",
+        );
+        const request = await requestEnterpriseAgentAccess(
+          config,
+          principal.account,
+          agentKey as AgentKey,
+        );
+        if (!previous) {
+          appendEnterpriseAuditEvent({
+            actorAccountId: principal.account.id,
+            actorSessionId: principal.sessionId,
+            action: "agent.access.request",
+            targetType: "agent-access-request",
+            targetId: request.id,
+            requestId: requestId(req),
+            before: null,
+            after: { agentKey, state: request.state },
+            outcome: "success",
+          });
+        }
+        return sendJson(res, previous ? 200 : 201, {
+          request: presentEnterpriseAgentAccessRequestSummary(request),
+        });
+      }
+      const baseRevision = requireInteger(body, "baseRevision");
+      if (cancel) {
+        const request = cancelUserEnterpriseAgentAccessRequest({
+          requestId: id!,
+          accountId: principal.account.id,
+          baseRevision,
+        });
+        appendEnterpriseAuditEvent({
+          actorAccountId: principal.account.id,
+          actorSessionId: principal.sessionId,
+          action: "agent.access.cancel",
+          targetType: "agent-access-request",
+          targetId: request.id,
+          requestId: requestId(req),
+          before: { state: "pending" },
+          after: request,
+          outcome: "success",
+        });
+        return sendJson(res, 200, { request });
+      }
+      const input = { requestId: id!, reviewerAccountId: principal.account.id, baseRevision };
+      const result =
+        action === "approve"
+          ? await approveEnterpriseAdminAgentAccessRequest(config, input)
+          : {
+              request: rejectEnterpriseAdminAgentAccessRequest({
+                ...input,
+                reason: requireString(body, "reason", 2_000),
+              }),
+            };
+      appendEnterpriseAuditEvent({
+        actorAccountId: principal.account.id,
+        actorSessionId: principal.sessionId,
+        action: `agent.access.${action}`,
+        targetType: "agent-access-request",
+        targetId: result.request.id,
+        requestId: requestId(req),
+        before: { state: "pending" },
+        after: result,
+        outcome: "success",
+      });
+      if (action === "approve") {
+        const account = getEnterpriseAccountById(result.request.requesterAccountId);
+        if (account) {
+          hooks.disconnectClientsForProfile?.(account.profileId);
+        }
+      }
+      return sendJson(res, 200, {
+        ...result,
+        request: presentEnterpriseAgentAccessRequest(result.request, config),
+      });
+    }
+
     if (pathname === "/api/enterprise/status" && req.method === "GET") {
       return sendJson(res, 200, {
         enabled: true,
@@ -1550,6 +1843,7 @@ export async function handleEnterpriseHttpRequest(
       });
       return sendJson(res, 200, {
         accounts: accounts.slice(offset, offset + limit),
+        accessPresets: ENTERPRISE_ACCESS_PRESETS,
         pageInfo: {
           total: accounts.length,
           nextCursor: offset + limit < accounts.length ? String(offset + limit) : null,
@@ -1577,40 +1871,83 @@ export async function handleEnterpriseHttpRequest(
       ) {
         throw new Error("FIELD_INVALID:skillGrants");
       }
-      let account = createEnterpriseAccount({
-        username: requireString(body, "username", 64),
-        displayName: requireString(body, "displayName", 128),
-        passwordHash: await hashEnterprisePassword(requireString(body, "initialPassword", 512)),
-        role,
-        mustChangePassword: true,
-        enabled: optionalBoolean(body, "enabled"),
-        personalAgentEnabled: optionalBoolean(body, "personalAgentEnabled"),
-        defaultAgentId: optionalString(body, "defaultAgentId", 128),
-        accessPresetKey: optionalString(body, "accessPresetKey", 64) ?? undefined,
-      });
-      if (skillGrants.length > 0) {
-        applyEnterpriseAccessChanges(
-          skillGrants.map((resourceId) => ({
-            accountId: account.id,
-            resourceType: "skill" as const,
-            resourceId,
-            effect: "allow" as const,
-          })),
-          { [account.id]: account.policyRevision },
-        );
-        account = getEnterpriseAccountById(account.id) ?? account;
+      const agentGrants = body.agentGrants ?? [];
+      const sharedAgents = listEnterpriseUserSharedAgentRoster(config).shared;
+      const sharedAgentKeys = new Set(sharedAgents.map((agent) => agent.resourceKey));
+      if (
+        !Array.isArray(agentGrants) ||
+        agentGrants.length > 200 ||
+        agentGrants.some(
+          (value) =>
+            typeof value !== "string" ||
+            !value.startsWith("agent:shared:") ||
+            value.length > 256 ||
+            !sharedAgentKeys.has(value),
+        )
+      ) {
+        throw new Error("FIELD_INVALID:agentGrants");
       }
-      appendEnterpriseAuditEvent({
-        actorAccountId: admin.account.id,
-        actorSessionId: admin.sessionId,
-        action: "account.create",
-        targetType: "account",
-        targetId: account.id,
-        requestId: requestId(req),
-        before: null,
-        after: account,
-        outcome: "success",
-      });
+      const personalAgentEnabled = optionalBoolean(body, "personalAgentEnabled");
+      const effectivePersonalAgentEnabled = personalAgentEnabled ?? role === "employee";
+      const defaultAgentId = optionalString(body, "defaultAgentId", 128);
+      const defaultAgent = defaultAgentId
+        ? sharedAgents.find((agent) => agent.agentId === defaultAgentId)
+        : undefined;
+      if (defaultAgentId && !defaultAgent) {
+        throw new Error("DEFAULT_AGENT_INVALID");
+      }
+      const initialEntitlements: Array<{
+        resourceType: "agent" | "skill" | "tool";
+        resourceId: string;
+        effect: "allow" | "deny";
+      }> = [...new Set(skillGrants as string[])].map((resourceId) => ({
+        resourceType: "skill",
+        resourceId,
+        effect: "allow",
+      }));
+      for (const resourceId of [...new Set(agentGrants as string[])]) {
+        initialEntitlements.push({
+          resourceType: "agent" as const,
+          resourceId,
+          effect: "allow" as const,
+        });
+      }
+      if (role === "employee" && !effectivePersonalAgentEnabled && defaultAgent) {
+        if (!initialEntitlements.some((item) => item.resourceId === defaultAgent.resourceKey)) {
+          initialEntitlements.push({
+            resourceType: "agent" as const,
+            resourceId: defaultAgent.resourceKey,
+            effect: "allow" as const,
+          });
+        }
+      }
+      const passwordHash = await hashEnterprisePassword(
+        requireString(body, "initialPassword", 512),
+      );
+      const account = await withEnterpriseAgentLifecycleLocks(
+        initialEntitlements
+          .filter((entitlement) => entitlement.resourceType === "agent")
+          .map((entitlement) => entitlement.resourceId),
+        () =>
+          createEnterpriseAccount({
+            config,
+            username: requireString(body, "username", 64),
+            displayName: requireString(body, "displayName", 128),
+            passwordHash,
+            role,
+            mustChangePassword: true,
+            enabled: optionalBoolean(body, "enabled"),
+            personalAgentEnabled: effectivePersonalAgentEnabled,
+            defaultAgentId,
+            accessPresetKey: optionalString(body, "accessPresetKey", 64) ?? undefined,
+            initialEntitlements,
+            audit: {
+              actorAccountId: admin.account.id,
+              actorSessionId: admin.sessionId,
+              requestId: requestId(req),
+            },
+          }),
+      );
       return sendJson(res, 201, { account });
     }
 
@@ -1645,6 +1982,13 @@ export async function handleEnterpriseHttpRequest(
         return sendError(res, 400, "ROLE_INVALID", "Role không hợp lệ.");
       }
       const account = updateEnterpriseAccount(before.id, {
+        config,
+        applyAccessPreset: optionalBoolean(body, "applyAccessPreset"),
+        audit: {
+          actorAccountId: admin.account.id,
+          actorSessionId: admin.sessionId,
+          requestId: requestId(req),
+        },
         ...(body.displayName === undefined
           ? {}
           : { displayName: requireString(body, "displayName", 128) }),
@@ -1665,17 +2009,6 @@ export async function handleEnterpriseHttpRequest(
       if (account.enabled !== before.enabled || account.role !== before.role) {
         hooks.disconnectClientsForProfile?.(account.profileId);
       }
-      appendEnterpriseAuditEvent({
-        actorAccountId: admin.account.id,
-        actorSessionId: admin.sessionId,
-        action: "account.update",
-        targetType: "account",
-        targetId: account.id,
-        requestId: requestId(req),
-        before,
-        after: account,
-        outcome: "success",
-      });
       return sendJson(res, 200, { account });
     }
 
@@ -1693,11 +2026,10 @@ export async function handleEnterpriseHttpRequest(
         return sendError(res, 404, "ACCOUNT_NOT_FOUND", "Không tìm thấy tài khoản.");
       }
       const body = await readJson(req);
-      const updated = updateEnterpriseAccount(account.id, {
-        passwordHash: await hashEnterprisePassword(requireString(body, "newPassword", 512)),
-        mustChangePassword: true,
-      });
-      revokeEnterpriseAccountSessions(account.id, "password_reset");
+      const updated = await resetEnterpriseAccountPassword(
+        account.id,
+        requireString(body, "newPassword", 512),
+      );
       hooks.disconnectClientsForProfile?.(account.profileId);
       appendEnterpriseAuditEvent({
         actorAccountId: admin.account.id,
@@ -1745,6 +2077,309 @@ export async function handleEnterpriseHttpRequest(
         outcome: "success",
       });
       return sendJson(res, 200, { ok: true });
+    }
+
+    if (adminAccountRoute?.tail === "/delegation" && req.method === "GET") {
+      if (!requireAdmin(req, res)) {
+        return true;
+      }
+      return sendJson(
+        res,
+        200,
+        readEnterpriseAccountDelegation(config, adminAccountRoute.accountId),
+      );
+    }
+
+    if (adminAccountRoute?.tail === "/delegation" && req.method === "PATCH") {
+      const admin = requireAdmin(req, res);
+      if (!admin || !requirePortalCsrf(req, res, admin, "admin")) {
+        return true;
+      }
+      const body = parseEnterpriseDelegationApiBody(
+        EnterpriseDelegationOverridePatchSchema,
+        await readJson(req),
+      );
+      const mode = body.mode;
+      const accountDelegation = readEnterpriseAccountDelegation(
+        config,
+        adminAccountRoute.accountId,
+      );
+      const agentResourceKey = body.agentResourceKey;
+      const specialist = accountDelegation.specialists.find(
+        (candidate) => candidate.resourceKey === agentResourceKey,
+      );
+      if (!specialist) {
+        throw new Error("DELEGATION_OVERRIDE_ASSIGNMENT_REQUIRED");
+      }
+      if (
+        !enterpriseDelegationModeCanOverride(
+          specialist.profile?.handlingMode ?? "explicit_only",
+          mode,
+        )
+      ) {
+        throw new Error("DELEGATION_OVERRIDE_CANNOT_LOOSEN");
+      }
+      const result = writeEnterpriseDelegationOverride(
+        {
+          accountId: adminAccountRoute.accountId,
+          agentResourceKey,
+          mode,
+          baseRevision: body.baseRevision,
+          baseAccountPolicyRevision: body.baseAccountPolicyRevision,
+        },
+        {},
+        {
+          actorAccountId: admin.account.id,
+          actorSessionId: admin.sessionId,
+          requestId: requestId(req),
+        },
+      );
+      return sendJson(res, 200, result);
+    }
+
+    if (pathname === "/api/enterprise/admin/delegation/settings" && req.method === "GET") {
+      if (!requireAdmin(req, res)) {
+        return true;
+      }
+      const policy = readEnterpriseDelegationPolicy();
+      const gatewayContext = hooks.getGatewayContext?.();
+      const catalog = gatewayContext
+        ? await gatewayContext.loadGatewayModelCatalog({ readOnly: true })
+        : [];
+      const availableModels = [
+        ...new Set(catalog.map((entry) => `${entry.provider}/${entry.id}`)),
+      ].toSorted();
+      return sendJson(res, 200, {
+        policy,
+        availableModels,
+        routerModelAvailable: Boolean(
+          policy.routerModel && availableModels.includes(policy.routerModel),
+        ),
+      });
+    }
+
+    if (pathname === "/api/enterprise/admin/delegation/settings" && req.method === "PATCH") {
+      const admin = requireAdmin(req, res);
+      if (!admin || !requirePortalCsrf(req, res, admin, "admin")) {
+        return true;
+      }
+      const body = parseEnterpriseDelegationApiBody(
+        EnterpriseDelegationSettingsPatchSchema,
+        await readJson(req),
+      );
+      const rollout = body.rollout;
+      const routerModel = body.routerModel;
+      if (rollout !== "off") {
+        const gatewayContext = hooks.getGatewayContext?.();
+        const availableModels = gatewayContext
+          ? (await gatewayContext.loadGatewayModelCatalog({ readOnly: true })).map(
+              (entry) => `${entry.provider}/${entry.id}`,
+            )
+          : [];
+        if (!availableModels.includes(routerModel)) {
+          throw new Error("DELEGATION_ROUTER_MODEL_UNAVAILABLE");
+        }
+      }
+      const previousPolicy = readEnterpriseDelegationPolicy();
+      const policy = writeEnterpriseDelegationPolicy(
+        body.baseRevision,
+        {
+          rollout,
+          routerModel,
+          autoThreshold: body.autoThreshold,
+          clarifyThreshold: body.clarifyThreshold,
+          minimumMargin: body.minimumMargin,
+          maxDelegatesPerTurn: body.maxDelegatesPerTurn,
+          eventRetentionDays: body.eventRetentionDays,
+        },
+        {},
+        {
+          actorAccountId: admin.account.id,
+          actorSessionId: admin.sessionId,
+          requestId: requestId(req),
+        },
+      );
+      if (previousPolicy.rollout !== "off" && policy.rollout === "off") {
+        invalidateEnterpriseDelegationRouterRuntimeState();
+        invalidateEnterpriseDelegationMutationApprovals();
+      }
+      return sendJson(res, 200, { policy });
+    }
+
+    if (pathname === "/api/enterprise/admin/delegation/overview" && req.method === "GET") {
+      if (!requireAdmin(req, res)) {
+        return true;
+      }
+      const accounts = listEnterpriseAccounts();
+      const candidates = accounts.flatMap((account) =>
+        listEnterpriseDelegationCandidates(config, account),
+      );
+      return sendJson(res, 200, {
+        policy: readEnterpriseDelegationPolicy(),
+        accountsWithPersonalAgent: accounts.filter(
+          (account) => account.enabled && account.personalAgentEnabled,
+        ).length,
+        assignments: candidates.length,
+        effectiveAssignments: candidates.filter((candidate) => candidate.effective).length,
+        routableAssignments: candidates.filter((candidate) => candidate.routable).length,
+        events: readEnterpriseDelegationOverview({}, parseDelegationEventFilters(searchParams)),
+      });
+    }
+
+    if (pathname === "/api/enterprise/admin/delegation/events" && req.method === "GET") {
+      if (!requireAdmin(req, res)) {
+        return true;
+      }
+      const filters = parseDelegationEventFilters(searchParams);
+      return sendJson(
+        res,
+        200,
+        listEnterpriseDelegationEvents({
+          ...filters,
+          limit: Math.max(1, Math.min(Number(searchParams.get("limit")) || 50, 200)),
+          offset: Math.max(0, Number(searchParams.get("cursor")) || 0),
+        }),
+      );
+    }
+
+    if (
+      pathname === "/api/enterprise/admin/delegation/activation-preview" &&
+      req.method === "POST"
+    ) {
+      const admin = requireAdmin(req, res);
+      if (!admin || !requirePortalCsrf(req, res, admin, "admin")) {
+        return true;
+      }
+      parseEnterpriseDelegationApiBody(EnterpriseDelegationEmptyBodySchema, await readJson(req));
+      return sendJson(res, 200, createEnterpriseDelegationActivationPreview(config));
+    }
+
+    if (pathname === "/api/enterprise/admin/delegation/activate" && req.method === "POST") {
+      const admin = requireAdmin(req, res);
+      if (!admin || !requirePortalCsrf(req, res, admin, "admin")) {
+        return true;
+      }
+      const body = parseEnterpriseDelegationApiBody(
+        EnterpriseDelegationActivationSchema,
+        await readJson(req),
+      );
+      const exclusions = body.exclusions;
+      const currentPolicy = readEnterpriseDelegationPolicy();
+      const gatewayContext = hooks.getGatewayContext?.();
+      const availableModels = gatewayContext
+        ? (await gatewayContext.loadGatewayModelCatalog({ readOnly: true })).map(
+            (entry) => `${entry.provider}/${entry.id}`,
+          )
+        : [];
+      if (!currentPolicy.routerModel || !availableModels.includes(currentPolicy.routerModel)) {
+        throw new Error("DELEGATION_ROUTER_MODEL_UNAVAILABLE");
+      }
+      const policy = activateEnterpriseDelegationFromPreview({
+        config,
+        previewToken: body.previewToken,
+        exclusions,
+        actorAccountId: admin.account.id,
+        actorSessionId: admin.sessionId,
+        requestId: requestId(req),
+      });
+      return sendJson(res, 200, { policy });
+    }
+
+    const delegationProfileRoute = adminDelegationProfilePath(pathname);
+    if (delegationProfileRoute?.action === "profile" && req.method === "GET") {
+      if (!requireAdmin(req, res)) {
+        return true;
+      }
+      return sendJson(
+        res,
+        200,
+        await readEnterpriseAgentDelegationProfile(config, delegationProfileRoute.agentId),
+      );
+    }
+
+    if (delegationProfileRoute?.action === "profile" && req.method === "PATCH") {
+      const admin = requireAdmin(req, res);
+      if (!admin || !requirePortalCsrf(req, res, admin, "admin")) {
+        return true;
+      }
+      const body = parseEnterpriseDelegationApiBody(
+        EnterpriseDelegationProfilePatchSchema,
+        await readJson(req),
+      );
+      const before = await readEnterpriseAgentDelegationProfile(
+        config,
+        delegationProfileRoute.agentId,
+      );
+      const result = await updateEnterpriseAgentDelegationProfile(delegationProfileRoute.agentId, {
+        description: body.description,
+        profile: body.profile,
+        baseHash: body.baseHash,
+      });
+      appendEnterpriseAuditEvent({
+        actorAccountId: admin.account.id,
+        actorSessionId: admin.sessionId,
+        action: "delegation.profile.update",
+        targetType: "agent",
+        targetId: result.agentId,
+        requestId: requestId(req),
+        before: { description: before.description, profile: before.profile },
+        after: { hash: result.hash, status: body.profile.status },
+        outcome: "success",
+      });
+      return sendJson(res, 200, result);
+    }
+
+    if (delegationProfileRoute?.action === "draft" && req.method === "POST") {
+      const admin = requireAdmin(req, res);
+      if (!admin || !requirePortalCsrf(req, res, admin, "admin")) {
+        return true;
+      }
+      parseEnterpriseDelegationApiBody(EnterpriseDelegationEmptyBodySchema, await readJson(req));
+      const modelRequestKey = `${admin.account.id}\0draft`;
+      if (!admitDelegationModelRequest(modelRequestKey)) {
+        res.setHeader("Retry-After", Math.ceil(DELEGATION_MODEL_WINDOW_MS / 1000));
+        return sendError(
+          res,
+          429,
+          "DELEGATION_MODEL_RATE_LIMITED",
+          "Bạn đã tạo quá nhiều bản nháp trong thời gian ngắn. Vui lòng thử lại sau.",
+        );
+      }
+      return sendJson(
+        res,
+        200,
+        await createEnterpriseAgentDelegationProfileDraft(config, delegationProfileRoute.agentId),
+      );
+    }
+
+    if (delegationProfileRoute?.action === "simulate" && req.method === "POST") {
+      const admin = requireAdmin(req, res);
+      if (!admin || !requirePortalCsrf(req, res, admin, "admin")) {
+        return true;
+      }
+      const body = parseEnterpriseDelegationApiBody(
+        EnterpriseDelegationSimulationSchema,
+        await readJson(req),
+      );
+      const modelRequestKey = `${admin.account.id}\0simulate`;
+      if (!admitDelegationModelRequest(modelRequestKey)) {
+        res.setHeader("Retry-After", Math.ceil(DELEGATION_MODEL_WINDOW_MS / 1000));
+        return sendError(
+          res,
+          429,
+          "DELEGATION_MODEL_RATE_LIMITED",
+          "Bạn đã chạy quá nhiều mô phỏng trong thời gian ngắn. Vui lòng thử lại sau.",
+        );
+      }
+      return sendJson(
+        res,
+        200,
+        await simulateEnterpriseDelegation({
+          config,
+          accountId: body.accountId,
+          prompt: body.prompt,
+        }),
+      );
     }
 
     if (pathname === "/api/enterprise/admin/agents" && req.method === "GET") {
@@ -2234,7 +2869,8 @@ export async function handleEnterpriseHttpRequest(
       }
       const body = await readJson(req);
       const ref = requireString(body, "ref", 512);
-      const agentId = requireString(body, "agentId", 64);
+      const agentId = optionalString(body, "agentId", 64);
+      resolveEnterpriseSkillInstallWorkspace(config, agentId);
       const version = optionalString(body, "version", 128);
       const acknowledgeClawHubRisk = optionalBoolean(body, "acknowledgeClawHubRisk") === true;
       const { skillsHandlers } = await import("../../gateway/server-methods/skills.js");
@@ -2245,7 +2881,7 @@ export async function handleEnterpriseHttpRequest(
           {
             source: "clawhub",
             slug: ref,
-            agentId,
+            ...(agentId ? { agentId } : { scope: "global" }),
             ...(version ? { version } : {}),
             ...(acknowledgeClawHubRisk ? { acknowledgeClawHubRisk: true } : {}),
           },
@@ -2283,6 +2919,36 @@ export async function handleEnterpriseHttpRequest(
         });
         throw error;
       }
+    }
+
+    if (pathname === "/api/enterprise/admin/skills/import" && req.method === "POST") {
+      const admin = requireAdmin(req, res);
+      if (!admin || !requirePortalCsrf(req, res, admin, "admin")) {
+        return true;
+      }
+      const body = await readJson(req, MAX_SKILL_FOLDER_BODY_BYTES);
+      const agentId = optionalString(body, "agentId", 64);
+      const folderName = requireString(body, "folderName", 128);
+      const result = await importEnterpriseSkillFolder({
+        config,
+        agentId,
+        folderName,
+        files: body.files,
+      });
+      appendEnterpriseAuditEvent({
+        actorAccountId: admin.account.id,
+        actorSessionId: admin.sessionId,
+        action: "skill.folder.import",
+        targetType: "skill",
+        targetId: result.ok ? result.slug : folderName,
+        requestId: requestId(req),
+        before: null,
+        after: { agentId: agentId ?? null, folderName, result },
+        outcome: result.ok ? "success" : "failure",
+      });
+      return result.ok
+        ? sendJson(res, 200, result)
+        : sendError(res, 400, "SKILL_IMPORT_FAILED", result.error);
     }
 
     if (pathname === "/api/enterprise/admin/tools" && req.method === "GET") {
@@ -2424,18 +3090,57 @@ export async function handleEnterpriseHttpRequest(
       }
       const body = await readJson(req);
       const parsed = parseAccessChanges(body);
-      const result = applyEnterpriseAccessChanges(parsed.changes, parsed.baseRevisions);
-      appendEnterpriseAuditEvent({
-        actorAccountId: admin.account.id,
-        actorSessionId: admin.sessionId,
-        action: "access.change",
-        targetType: "entitlement",
-        targetId: parsed.changes.map((change) => change.accountId).join(","),
-        requestId: requestId(req),
-        before: null,
-        after: parsed.changes,
-        outcome: "success",
-      });
+      const changedResourceTypes = new Set(
+        parsed.changes
+          .filter((change) => change.effect !== null)
+          .map((change) => change.resourceType),
+      );
+      const knownAgentKeys = changedResourceTypes.has("agent")
+        ? new Set([
+            ...listEnterpriseUserSharedAgentRoster(config).shared.map((item) => item.resourceKey),
+            ...listEnterpriseAccounts().map((account) => personalAgentResourceKey(account.id)),
+          ])
+        : new Set<string>();
+      const knownSkillKeys = changedResourceTypes.has("skill")
+        ? new Set(listEnterpriseSkillCatalog(config).items.map((item) => item.resourceKey))
+        : new Set<string>();
+      const knownToolKeys = changedResourceTypes.has("tool")
+        ? new Set(
+            listEnterpriseToolCatalog(config)
+              .items.filter((item) => item.assignable === true)
+              .map((item) => String(item.resourceKey)),
+          )
+        : new Set<string>();
+      for (const change of parsed.changes) {
+        if (change.effect === null) {
+          continue;
+        }
+        const exists =
+          change.resourceType === "agent"
+            ? knownAgentKeys.has(change.resourceId)
+            : change.resourceType === "skill"
+              ? knownSkillKeys.has(change.resourceId)
+              : knownToolKeys.has(change.resourceId);
+        if (!exists) {
+          throw new Error(`ENTERPRISE_RESOURCE_NOT_ASSIGNABLE:${change.resourceType}`);
+        }
+      }
+      const result = await withEnterpriseAgentLifecycleLocks(
+        parsed.changes
+          .filter((change) => change.resourceType === "agent")
+          .map((change) => change.resourceId),
+        () =>
+          applyEnterpriseAccessChanges(
+            parsed.changes,
+            parsed.baseRevisions,
+            {},
+            {
+              actorAccountId: admin.account.id,
+              actorSessionId: admin.sessionId,
+              requestId: requestId(req),
+            },
+          ),
+      );
       return sendJson(res, 200, result);
     }
 
@@ -2539,11 +3244,15 @@ export async function handleEnterpriseHttpRequest(
       if (!requireAdmin(req, res)) {
         return true;
       }
-      return sendJson(res, 200, { accounts: listEnterpriseAccounts() });
+      return sendJson(res, 200, {
+        accounts: listEnterpriseAccounts(),
+        accessPresets: ENTERPRISE_ACCESS_PRESETS,
+      });
     }
 
     if (pathname === "/api/enterprise/accounts" && req.method === "POST") {
-      if (!requireAdmin(req, res)) {
+      const admin = requireAdmin(req, res);
+      if (!admin) {
         return true;
       }
       const body = await readJson(req);
@@ -2552,6 +3261,13 @@ export async function handleEnterpriseHttpRequest(
         return sendError(res, 400, "ROLE_INVALID", "Role không hợp lệ.");
       }
       const account = createEnterpriseAccount({
+        config,
+        accessPresetKey: optionalString(body, "accessPresetKey", 64) ?? undefined,
+        audit: {
+          actorAccountId: admin.account.id,
+          actorSessionId: admin.sessionId,
+          requestId: requestId(req),
+        },
         username: requireString(body, "username", 64),
         displayName: requireString(body, "displayName", 128),
         passwordHash: await hashEnterprisePassword(requireString(body, "initialPassword", 512)),
@@ -2604,6 +3320,16 @@ export async function handleEnterpriseHttpRequest(
         );
       }
       const account = updateEnterpriseAccount(current.id, {
+        config,
+        applyAccessPreset: optionalBoolean(body, "applyAccessPreset"),
+        ...(body.accessPresetKey === undefined
+          ? {}
+          : { accessPresetKey: requireString(body, "accessPresetKey", 64) }),
+        audit: {
+          actorAccountId: admin.account.id,
+          actorSessionId: admin.sessionId,
+          requestId: requestId(req),
+        },
         ...(body.displayName === undefined
           ? {}
           : { displayName: requireString(body, "displayName", 128) }),
@@ -2631,11 +3357,10 @@ export async function handleEnterpriseHttpRequest(
         return sendError(res, 404, "ACCOUNT_NOT_FOUND", "Không tìm thấy tài khoản.");
       }
       const body = await readJson(req);
-      const updated = updateEnterpriseAccount(account.id, {
-        passwordHash: await hashEnterprisePassword(requireString(body, "newPassword", 512)),
-        mustChangePassword: true,
-      });
-      revokeEnterpriseAccountSessions(account.id, "password_reset");
+      const updated = await resetEnterpriseAccountPassword(
+        account.id,
+        requireString(body, "newPassword", 512),
+      );
       hooks.disconnectClientsForProfile?.(account.profileId);
       return sendJson(res, 200, { account: updated });
     }
@@ -2665,6 +3390,32 @@ export async function handleEnterpriseHttpRequest(
     return sendError(res, 404, "NOT_FOUND", "Không tìm thấy Enterprise API.");
   } catch (error) {
     const message = error instanceof Error ? error.message : "UNKNOWN_ERROR";
+    if (
+      message.startsWith("AGENT_ACCESS_REQUEST_REVISION_CONFLICT:") ||
+      message.startsWith("AGENT_ACCESS_REQUEST_STATE_CONFLICT:")
+    ) {
+      return sendError(
+        res,
+        409,
+        "AGENT_ACCESS_REQUEST_CONFLICT",
+        "Yêu cầu đã được xử lý hoặc thay đổi. Hãy tải lại trước khi thử lại.",
+      );
+    }
+    if (message === "AGENT_ACCESS_REQUEST_NOT_FOUND") {
+      return sendError(res, 404, message, "Không tìm thấy yêu cầu truy cập.");
+    }
+    if (message === "AGENT_ACCESS_ALREADY_GRANTED") {
+      return sendError(
+        res,
+        409,
+        message,
+        "Bạn đã có quyền sử dụng Agent này. Hãy tải lại danh sách Agent.",
+      );
+    }
+    if (message === "ACCOUNT_DISABLED") {
+      return sendError(res, 403, message, "Tài khoản đã bị vô hiệu hóa.");
+    }
+
     if (error instanceof EnterpriseGatewayMethodError) {
       const details = error.gatewayError.details;
       const trust = readClawHubTrustErrorDetails(details);
@@ -2705,6 +3456,76 @@ export async function handleEnterpriseHttpRequest(
         accountId,
         currentRevision: Number(currentRevision),
       });
+    }
+    if (message.startsWith("DELEGATION_POLICY_REVISION_CONFLICT:")) {
+      return sendJson(res, 409, {
+        code: "DELEGATION_POLICY_REVISION_CONFLICT",
+        message: "Thiết lập điều phối đã được quản trị viên khác thay đổi.",
+        currentRevision: Number(message.slice("DELEGATION_POLICY_REVISION_CONFLICT:".length)),
+      });
+    }
+    if (message.startsWith("DELEGATION_OVERRIDE_REVISION_CONFLICT:")) {
+      return sendJson(res, 409, {
+        code: "DELEGATION_OVERRIDE_REVISION_CONFLICT",
+        message: "Cấu hình riêng của người dùng đã thay đổi; dữ liệu bạn nhập vẫn được giữ lại.",
+        currentRevision: Number(message.slice("DELEGATION_OVERRIDE_REVISION_CONFLICT:".length)),
+      });
+    }
+    if (message === "DELEGATION_PREVIEW_CONFLICT" || message === "DELEGATION_PREVIEW_EXPIRED") {
+      return sendError(
+        res,
+        409,
+        message,
+        message === "DELEGATION_PREVIEW_EXPIRED"
+          ? "Bản xem trước đã hết hạn; hãy chạy xem trước lại."
+          : "Dữ liệu đã đổi sau khi xem trước; hãy xem khác biệt và chạy lại bản xem trước.",
+      );
+    }
+    if (message === "DELEGATION_ROUTER_MODEL_REQUIRED") {
+      return sendError(
+        res,
+        400,
+        message,
+        "Cần chọn model định tuyến trước khi chạy thử hoặc kích hoạt.",
+      );
+    }
+    if (message === "DELEGATION_ROUTER_MODEL_UNAVAILABLE") {
+      return sendError(
+        res,
+        400,
+        message,
+        "Model định tuyến không nằm trong danh sách model hiện đang khả dụng.",
+      );
+    }
+    if (
+      message === "DELEGATION_OVERRIDE_ASSIGNMENT_REQUIRED" ||
+      message === "DELEGATION_OVERRIDE_CANNOT_LOOSEN" ||
+      message.startsWith("ENTERPRISE_RESOURCE_NOT_ASSIGNABLE:")
+    ) {
+      return sendError(
+        res,
+        400,
+        message.split(":", 1)[0]!,
+        message === "DELEGATION_OVERRIDE_CANNOT_LOOSEN"
+          ? "Cấu hình riêng chỉ được phép chặt hơn cấu hình mặc định của Agent."
+          : "Agent, Skill hoặc Tool này không thể được gán trong cấu hình hiện tại.",
+      );
+    }
+    if (message === "DELEGATION_DRAFT_MODEL_UNAVAILABLE") {
+      return sendError(
+        res,
+        503,
+        message,
+        "Model định tuyến hiện không khả dụng; hệ thống không tự đổi sang model khác.",
+      );
+    }
+    if (message === "DELEGATION_DRAFT_INVALID") {
+      return sendError(
+        res,
+        502,
+        message,
+        "Model trả về bản nháp không hợp lệ. Không có thay đổi nào được lưu.",
+      );
     }
     if (message.startsWith("CONFIG_HASH_CONFLICT:")) {
       return sendJson(res, 409, {
@@ -2761,7 +3582,9 @@ export async function handleEnterpriseHttpRequest(
         "VALIDATION_ERROR",
         message === "PASSWORD_INVALID"
           ? "Mật khẩu phải có từ 10 đến 512 ký tự."
-          : "Dữ liệu gửi lên không hợp lệ.",
+          : message === "USERNAME_INVALID"
+            ? "Username chỉ gồm chữ thường không dấu, số, dấu chấm, gạch dưới hoặc gạch ngang."
+            : "Dữ liệu gửi lên không hợp lệ.",
       );
     }
     if (message === "PASSWORD_REUSE") {
@@ -2784,6 +3607,14 @@ export async function handleEnterpriseHttpRequest(
     }
     if (message === "AUTOMATION_NOT_FOUND") {
       return sendError(res, 404, message, "Không tìm thấy Automation.");
+    }
+    if (message === "AUTOMATION_READ_ONLY") {
+      return sendError(
+        res,
+        409,
+        message,
+        "Automation này do hệ thống quản lý và không thể thay đổi từ User Portal.",
+      );
     }
     if (message === "KNOWLEDGE_ITEM_LIMIT" || message === "KNOWLEDGE_TOTAL_LIMIT") {
       return sendError(

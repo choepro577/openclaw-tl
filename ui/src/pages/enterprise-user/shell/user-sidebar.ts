@@ -1,11 +1,13 @@
 import { html, nothing } from "lit";
-import { property } from "lit/decorators.js";
+import { property, state } from "lit/decorators.js";
 import type { RouteId } from "../../../app-route-paths.ts";
 import type { ApplicationContext } from "../../../app/context.ts";
 import { icons } from "../../../components/icons.ts";
 import { eu } from "../../../i18n/enterprise-user.ts";
 import { OpenClawLightDomContentsElement } from "../../../lit/openclaw-element.ts";
 import { logoutEnterprisePortal } from "../../enterprise/services/enterprise-api.ts";
+import { openUserAgentConversation } from "../adapters/chat-route-adapter.ts";
+import { userAgentCatalogStore } from "../state/user-agent-catalog-store.ts";
 import { userBootstrapStore } from "../state/user-bootstrap-store.ts";
 import "../components/user-agent-switcher.ts";
 import "../components/user-conversation-organizer.ts";
@@ -14,6 +16,9 @@ export class EnterpriseUserSidebar extends OpenClawLightDomContentsElement {
   @property({ attribute: false }) context?: ApplicationContext<RouteId>;
   @property({ attribute: false }) activeRoute: RouteId = "enterprise";
   @property({ attribute: false }) onNavigate?: () => void;
+  @state() private creatingConversation = false;
+  @state() private switchingAgent = false;
+  @state() private conversationError = "";
   private unsubscribers: Array<() => void> = [];
 
   override connectedCallback(): void {
@@ -35,6 +40,29 @@ export class EnterpriseUserSidebar extends OpenClawLightDomContentsElement {
     this.onNavigate?.();
   }
 
+  private async createConversation(): Promise<void> {
+    const context = this.context;
+    const activeAgent = userAgentCatalogStore.activeAgent;
+    if (!context || this.creatingConversation || this.switchingAgent) {
+      return;
+    }
+    if (!activeAgent?.actions.canChat) {
+      this.navigate("new-session");
+      return;
+    }
+    this.creatingConversation = true;
+    this.conversationError = "";
+    try {
+      await openUserAgentConversation(context, activeAgent.key, "new");
+      this.onNavigate?.();
+    } catch (error) {
+      this.conversationError =
+        error instanceof Error ? error.message : eu("conversationCreateFailed");
+    } finally {
+      this.creatingConversation = false;
+    }
+  }
+
   private navItem(routeId: RouteId, label: string, icon?: unknown) {
     const active = this.activeRoute === routeId;
     return html`<button
@@ -53,42 +81,54 @@ export class EnterpriseUserSidebar extends OpenClawLightDomContentsElement {
   override render() {
     const bootstrap = userBootstrapStore.state;
     const user = bootstrap.phase === "ready" ? bootstrap.data.user : null;
+    const canCreateConversation =
+      bootstrap.phase === "ready" && bootstrap.data.agents.some((agent) => agent.actions.canChat);
     return html`
       <aside class="sidebar" aria-label=${eu("enterpriseUserNavigation")}>
         <div class="sidebar-shell">
           <div class="sidebar-shell__content">
             <div class="sidebar-shell__body">
-              <div class="eu-sidebar-brand">${eu("productName")}</div>
               <openclaw-enterprise-user-agent-switcher
                 .context=${this.context}
                 .onNavigate=${this.onNavigate}
+                .operationBusy=${this.creatingConversation}
+                .onSwitchingChange=${(switching: boolean) => {
+                  this.switchingAgent = switching;
+                }}
               ></openclaw-enterprise-user-agent-switcher>
               <button
                 type="button"
                 class="btn primary eu-new-chat"
-                ?disabled=${bootstrap.phase !== "ready" ||
-                !bootstrap.data.agents.some((agent) => agent.actions.canChat)}
-                @click=${() => this.navigate("new-session")}
+                ?disabled=${this.creatingConversation ||
+                this.switchingAgent ||
+                !canCreateConversation}
+                @click=${() => void this.createConversation()}
               >
-                ${icons.plus} <span>${eu("newConversation")}</span>
+                ${icons.plus}
+                <span
+                  >${this.creatingConversation
+                    ? eu("conversationCreateBusy")
+                    : eu("newConversation")}</span
+                >
               </button>
+              ${this.conversationError
+                ? html`<div class="callout danger" role="alert">${this.conversationError}</div>`
+                : nothing}
               <nav class="sidebar-nav" aria-label=${eu("userPages")}>
-                <openclaw-enterprise-user-conversation-organizer
-                  .context=${this.context}
-                  .refreshToken=${this.activeRoute}
-                  .onNavigate=${this.onNavigate}
-                ></openclaw-enterprise-user-conversation-organizer>
-                ${this.navItem("sessions", eu("allConversations"))}
                 ${this.navItem("enterprise", eu("agents"), icons.bot)}
+                ${bootstrap.phase === "ready" && bootstrap.data.features.automations
+                  ? this.navItem("cron", eu("automations"), icons.clock)
+                  : nothing}
                 ${bootstrap.phase === "ready" && bootstrap.data.features.plugins.enabled
                   ? this.navItem("plugins", eu("plugins"), icons.box)
                   : nothing}
                 ${bootstrap.phase === "ready" && bootstrap.data.features.knowledge.enabled
-                  ? this.navItem("knowledge", "Tri thức doanh nghiệp", icons.book)
+                  ? this.navItem("knowledge", eu("knowledgeEnterprise"), icons.book)
                   : nothing}
-                ${bootstrap.phase === "ready" && bootstrap.data.features.automations
-                  ? this.navItem("cron", eu("automations"), icons.clock)
-                  : nothing}
+                <openclaw-enterprise-user-conversation-organizer
+                  .context=${this.context}
+                  .onNavigate=${this.onNavigate}
+                ></openclaw-enterprise-user-conversation-organizer>
               </nav>
             </div>
           </div>

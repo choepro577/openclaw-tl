@@ -1,7 +1,9 @@
 import { html } from "lit";
 import { property } from "lit/decorators.js";
 import { inferBasePathFromPathname } from "../../../app-route-paths.ts";
+import { eu } from "../../../i18n/enterprise-user.ts";
 import { OpenClawLightDomElement } from "../../../lit/openclaw-element.ts";
+import { enterpriseCopy } from "../enterprise-copy.ts";
 import type { EnterpriseAccount, EnterpriseEffectivePolicy } from "../services/enterprise-api.ts";
 
 export class EnterprisePersonalAgentPage extends OpenClawLightDomElement {
@@ -15,22 +17,28 @@ export class EnterprisePersonalAgentPage extends OpenClawLightDomElement {
     return html`
       <section class="enterprise-panel enterprise-stack">
         <div>
-          <h2>Personal Agent</h2>
+          <h2>${eu("personalAgent")}</h2>
           <p class="enterprise-muted">
-            Workspace, memory và session được lưu riêng cho tài khoản ${this.account?.username}.
+            ${enterpriseCopy("personalAgentDescription", {
+              username: this.account?.username ?? "",
+            })}
           </p>
         </div>
         ${enabled
           ? html`
-              <p>Agent mặc định: <strong class="enterprise-code">${agentId ?? "main"}</strong></p>
+              <p>
+                ${enterpriseCopy("defaultAgentValue")}<strong class="enterprise-code"
+                  >${agentId ?? "main"}</strong
+                >
+              </p>
               <a
                 class="enterprise-button"
                 href=${`${basePath}/new?agent=${encodeURIComponent(agentId ?? "main")}`}
               >
-                Bắt đầu phiên Personal Agent
+                ${enterpriseCopy("startPersonalAgent")}
               </a>
             `
-          : html`<p class="enterprise-error">Personal Agent đang bị quản trị viên tắt.</p>`}
+          : html`<p class="enterprise-error">${enterpriseCopy("personalAgentDisabled")}</p>`}
       </section>
     `;
   }

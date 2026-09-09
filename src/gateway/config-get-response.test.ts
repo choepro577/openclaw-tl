@@ -109,6 +109,27 @@ describe("config.get response cache", () => {
     expect(responses.every((response) => response === responses[0])).toBe(true);
   });
 
+  it("can prime before the watcher becomes active", async () => {
+    let status: "disabled" | "active" = "disabled";
+    const watcher = () => status;
+    const loadUiHints = vi.fn(() => undefined);
+
+    const primed = await readConfigGetResponse({
+      getHotReloadStatus: watcher,
+      loadUiHints,
+      primeCache: true,
+    });
+    status = "active";
+    mocks.readConfigFileSnapshot.mockClear();
+    loadUiHints.mockClear();
+
+    const hit = await readConfigGetResponse({ getHotReloadStatus: watcher, loadUiHints });
+
+    expect(hit).toBe(primed);
+    expect(mocks.readConfigFileSnapshot).not.toHaveBeenCalled();
+    expect(loadUiHints).not.toHaveBeenCalled();
+  });
+
   it("evicts a failed projection instead of retaining its rejected promise", async () => {
     const loadUiHints = vi.fn(() => undefined);
     mocks.readConfigFileSnapshot.mockRejectedValueOnce(new Error("transient read failure"));

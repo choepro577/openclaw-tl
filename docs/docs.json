@@ -1815,6 +1815,7 @@
                   {
                     "group": "Gateway and service",
                     "pages": [
+                      "cli/auth",
                       "cli/backup",
                       "cli/openclaw",
                       "cli/daemon",

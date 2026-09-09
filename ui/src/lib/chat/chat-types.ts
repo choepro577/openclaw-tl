@@ -289,4 +289,4 @@ export type ToolCard = {
   };
 };
 
-export type ToolCardOutcome = "running" | "succeeded" | "failed" | "unknown";
+export type ToolCardOutcome = "running" | "succeeded" | "failed" | "skipped" | "unknown";

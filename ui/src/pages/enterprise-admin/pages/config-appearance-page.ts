@@ -2,6 +2,8 @@ import { html } from "lit";
 import { state } from "lit/decorators.js";
 import { TEXT_SCALE_STOPS, type TextScaleStop } from "../../../app/settings.ts";
 import type { ThemeMode } from "../../../app/theme.ts";
+import { ea } from "../../../i18n/enterprise-admin.ts";
+import { renderEnterpriseLanguagePicker } from "../../../i18n/enterprise-language-picker.ts";
 import { OpenClawLightDomElement } from "../../../lit/openclaw-element.ts";
 import {
   ADMIN_APPEARANCE_EVENT,
@@ -12,14 +14,14 @@ import {
 } from "../admin-appearance.ts";
 
 const THEMES = [
-  { id: "claw" as const, label: "Claw", description: "Giao diện OpenClaw nguyên bản" },
+  { id: "claw" as const, label: "MAAP", description: "Giao diện MAAP nguyên bản" },
   { id: "knot" as const, label: "Knot", description: "Tông màu OpenKnot dịu hơn" },
   { id: "dash" as const, label: "Dash", description: "Tương phản cao cho dashboard" },
-];
+] as const;
 
 const ACCENTS = [
   { label: "Mặc định", value: undefined },
-  { label: "Claw", value: "#ff5c5c" },
+  { label: "MAAP", value: "#ff5c5c" },
   { label: "Amber", value: "#f5b942" },
   { label: "Mint", value: "#52c99a" },
   { label: "Blue", value: "#5b9cf6" },
@@ -55,25 +57,27 @@ export class EnterpriseAdminConfigAppearancePage extends OpenClawLightDomElement
     return html`<section class="ea-page">
       <header class="ea-page-header">
         <div>
-          <h1>UI & Appearance</h1>
-          <p>Tuỳ chỉnh riêng cho portal Admin trên trình duyệt này.</p>
+          <h1>${ea("UI & Appearance")}</h1>
+          <p>${ea("Tuỳ chỉnh riêng cho portal Admin trên trình duyệt này.")}</p>
         </div>
         <button
           class="ea-button"
           type="button"
           @click=${() => (this.settings = resetAdminAppearance())}
         >
-          Khôi phục mặc định
+          ${ea("Khôi phục mặc định")}
         </button>
+        ${renderEnterpriseLanguagePicker("ea-input")}
       </header>
       <div class="ea-banner">
-        Các lựa chọn dưới đây áp dụng tức thời trong Admin và không thay đổi giao diện
-        <code>/app</code>.
+        ${ea(
+          "Các lựa chọn dưới đây áp dụng tức thời trong Admin; màu sắc và cỡ chữ chỉ áp dụng riêng cho portal Admin, còn ngôn ngữ dùng chung trong trình duyệt.",
+        )}
       </div>
       <div class="ea-appearance-sections">
         <section class="ea-card ea-appearance-section">
-          <h2>Theme</h2>
-          <p class="ea-muted">Chọn bảng màu nền cho portal quản trị.</p>
+          <h2>${ea("Theme")}</h2>
+          <p class="ea-muted">${ea("Chọn bảng màu nền cho portal quản trị.")}</p>
           <div class="ea-theme-grid">
             ${THEMES.map(
               (theme) => html`<button
@@ -86,15 +90,15 @@ export class EnterpriseAdminConfigAppearancePage extends OpenClawLightDomElement
                   <i></i><i></i><i></i>
                 </span>
                 <strong>${theme.label}</strong>
-                <small>${theme.description}</small>
+                <small>${ea(theme.description)}</small>
               </button>`,
             )}
           </div>
         </section>
         <section class="ea-card ea-appearance-section">
-          <h2>Color mode</h2>
-          <p class="ea-muted">Theo hệ thống hoặc cố định sáng/tối.</p>
-          <div class="ea-segmented" role="group" aria-label="Color mode">
+          <h2>${ea("Color mode")}</h2>
+          <p class="ea-muted">${ea("Theo hệ thống hoặc cố định sáng/tối.")}</p>
+          <div class="ea-segmented" role="group" aria-label=${ea("Color mode")}>
             ${(["system", "light", "dark"] as ThemeMode[]).map(
               (mode) => html`<button
                 class=${this.settings.mode === mode ? "is-active" : ""}
@@ -102,14 +106,14 @@ export class EnterpriseAdminConfigAppearancePage extends OpenClawLightDomElement
                 aria-pressed=${this.settings.mode === mode ? "true" : "false"}
                 @click=${() => this.saveSettings({ mode })}
               >
-                ${mode === "system" ? "System" : mode === "light" ? "Light" : "Dark"}
+                ${mode === "system" ? ea("System") : mode === "light" ? ea("Light") : ea("Dark")}
               </button>`,
             )}
           </div>
         </section>
         <section class="ea-card ea-appearance-section">
-          <h2>Accent</h2>
-          <p class="ea-muted">Màu nhấn cho nút, focus và trạng thái active.</p>
+          <h2>${ea("Accent")}</h2>
+          <p class="ea-muted">${ea("Màu nhấn cho nút, focus và trạng thái active.")}</p>
           <div class="ea-accent-grid">
             ${ACCENTS.map(
               (accent) => html`<button
@@ -118,8 +122,8 @@ export class EnterpriseAdminConfigAppearancePage extends OpenClawLightDomElement
                   ? "is-active"
                   : ""}"
                 type="button"
-                title=${accent.label}
-                aria-label=${accent.label}
+                title=${ea(accent.label)}
+                aria-label=${ea(accent.label)}
                 aria-pressed=${this.settings.accent === accent.value ||
                 (!this.settings.accent && accent.value === undefined)
                   ? "true"
@@ -129,7 +133,7 @@ export class EnterpriseAdminConfigAppearancePage extends OpenClawLightDomElement
               ></button>`,
             )}
             <label class="ea-custom-accent">
-              <span>Tùy chọn</span>
+              <span>${ea("Tùy chọn")}</span>
               <input
                 type="color"
                 .value=${this.settings.accent ?? "#ff5c5c"}
@@ -140,8 +144,8 @@ export class EnterpriseAdminConfigAppearancePage extends OpenClawLightDomElement
           </div>
         </section>
         <section class="ea-card ea-appearance-section">
-          <h2>Text scale</h2>
-          <p class="ea-muted">Điều chỉnh kích thước chữ trong portal Admin.</p>
+          <h2>${ea("Text scale")}</h2>
+          <p class="ea-muted">${ea("Điều chỉnh kích thước chữ trong portal Admin.")}</p>
           <div class="ea-text-scale-options">
             ${TEXT_SCALE_STOPS.map(
               (stop) => html`<button

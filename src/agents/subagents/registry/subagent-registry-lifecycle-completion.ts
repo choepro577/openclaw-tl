@@ -9,6 +9,7 @@ import {
   type SubagentRunOutcome,
   withSubagentOutcomeTiming,
 } from "../announce/subagent-announce-output.js";
+import { notifySubagentTerminalCallback } from "../subagent-terminal-callbacks.js";
 import { updateSwarmCollectorCompletion } from "../swarm/swarm-collector.js";
 import { clearDeliveryState, ensureCompletionState } from "./subagent-delivery-state.js";
 import {
@@ -625,6 +626,10 @@ export async function completeSubagentRunAttempt(
   if (!entry) {
     return;
   }
+  notifySubagentTerminalCallback({
+    runId: completeParams.runId,
+    childSessionKey: entry.childSessionKey,
+  });
   await completeTerminalEffects(context, {
     completeParams,
     completionReason,

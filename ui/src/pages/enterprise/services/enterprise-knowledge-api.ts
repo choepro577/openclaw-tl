@@ -1119,7 +1119,7 @@ export function searchEnterpriseKnowledgeCandidate(
   zoneId: string,
   query: string,
 ) {
-  return requestJson<{ hits: Array<Record<string, unknown>> }>(
+  return requestJson<{ hits: Array<Record<string, unknown>>; candidate: { id: string } }>(
     `${knowledgePrefix(audience)}/${encodeURIComponent(zoneId)}/preview-search`,
     { method: "POST", body: JSON.stringify({ query }) },
     audience,
@@ -1165,6 +1165,26 @@ export function replaceEnterpriseKnowledgeAgentBindings(
   return requestJson<{ zone: EnterpriseKnowledgeZone; items: string[] }>(
     `${knowledgePrefix("admin")}/${encodeURIComponent(zoneId)}/agents`,
     { method: "PUT", body: JSON.stringify({ baseRevision, agentResourceKeys }) },
+    "admin",
+  );
+}
+
+export function listEnterpriseKnowledgeEvidenceTransfers(zoneId: string) {
+  return requestJson<{ items: string[]; revision: number }>(
+    `${knowledgePrefix("admin")}/${encodeURIComponent(zoneId)}/evidence-transfers`,
+    undefined,
+    "admin",
+  );
+}
+
+export function replaceEnterpriseKnowledgeEvidenceTransfers(
+  zoneId: string,
+  baseRevision: number,
+  targetAgentResourceKeys: string[],
+) {
+  return requestJson<{ zone: EnterpriseKnowledgeZone; items: string[] }>(
+    `${knowledgePrefix("admin")}/${encodeURIComponent(zoneId)}/evidence-transfers`,
+    { method: "PUT", body: JSON.stringify({ baseRevision, targetAgentResourceKeys }) },
     "admin",
   );
 }

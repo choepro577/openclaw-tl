@@ -1,4 +1,5 @@
 // Control UI i18n module implements translate behavior.
+import { brandProductCopy } from "../../branding/display-brand.ts";
 import { getSafeLocalStorage } from "../../local-storage.ts";
 import { en } from "../locales/en.ts";
 import {
@@ -263,13 +264,14 @@ class I18nManager {
       return key;
     }
 
+    const brandedValue = brandProductCopy(value);
     if (params) {
       // ?? not ||: an empty-string param is a provided value (render empty),
       // while a missing param keeps the visible {placeholder} for debugging.
-      return value.replace(/\{(\w+)\}/g, (_, k) => params[k] ?? `{${k}}`);
+      return brandedValue.replace(/\{(\w+)\}/g, (_, k) => params[k] ?? `{${k}}`);
     }
 
-    return value;
+    return brandedValue;
   }
 }
 

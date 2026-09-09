@@ -81,13 +81,15 @@ const SEARCH_CORPUS_OUTCOME_GUIDANCE =
   "Corpus outcomes cover each requested corpus; a corpus warning means results are partial and must be surfaced to the user.";
 const GET_READ_OUTCOME_GUIDANCE =
   "status=ok means the requested excerpt was read; status=not_found means every requested available corpus missed.";
+const MEMORY_RECALL_SCOPE =
+  "Recall prior work, decisions, dates, people, preferences, or todos only when needed facts are not already available in the current conversation. Do not search memory just to summarize, translate, calculate from, or reorganize information already present. Company policies require current authoritative sources available to this agent; personal memory is not a substitute.";
 
 export const MEMORY_SEARCH_TOOL_CONTRACT = {
   label: "Memory Search",
   name: "memory_search",
   parameters: MemorySearchSchema,
   describe: ({ search }: MemorySourceContract) =>
-    `Mandatory recall step: semantically search ${search} before answering questions about prior work, decisions, dates, people, preferences, or todos. Optional \`corpus=wiki\` or \`corpus=all\` also searches registered compiled-wiki supplements. \`corpus=memory\` restricts hits to indexed memory files (excludes session transcript chunks from ranking). \`corpus=sessions\` restricts hits to the session corpus under the same visibility rules as session history tools. ${SEARCH_CORPUS_OUTCOME_GUIDANCE} If response has disabled=true or stale=true, tell the user and include the warning/action guidance.`,
+    `${MEMORY_RECALL_SCOPE} For missing prior facts, semantically search ${search}. Optional \`corpus=wiki\` or \`corpus=all\` also searches registered compiled-wiki supplements. \`corpus=memory\` restricts hits to indexed memory files (excludes session transcript chunks from ranking). \`corpus=sessions\` restricts hits to the session corpus under the same visibility rules as session history tools. ${SEARCH_CORPUS_OUTCOME_GUIDANCE} If disabled=true or stale=true, explain the limitation in the user's language and continue from confirmed context; do not give administration commands.`,
 } as const;
 
 export const MEMORY_GET_TOOL_CONTRACT = {
@@ -114,12 +116,12 @@ export function buildMemoryPromptSection({
   }
 
   const guidance = hasMemorySearch
-    ? `Before answering anything about prior work, decisions, dates, people, preferences, or todos: run memory_search on ${sources.search}${
+    ? `${MEMORY_RECALL_SCOPE} For missing prior facts, run memory_search on ${sources.search}${
         hasMemoryGet ? "; then use memory_get to pull only the needed lines" : ""
       }. ${SEARCH_CORPUS_OUTCOME_GUIDANCE}${
         hasMemoryGet ? ` For memory_get, ${GET_READ_OUTCOME_GUIDANCE}` : ""
       } If low confidence after search, say you checked.`
-    : `Before answering anything about prior work, decisions, dates, people, preferences, or todos that point to a specific source in ${sources.files}: run memory_get to pull only the needed lines. ${GET_READ_OUTCOME_GUIDANCE} ${SEARCH_CORPUS_OUTCOME_GUIDANCE} If low confidence after reading, say you checked.`;
+    : `${MEMORY_RECALL_SCOPE} For missing prior facts pointing to a specific source in ${sources.files}, run memory_get to pull only the needed lines. ${GET_READ_OUTCOME_GUIDANCE} ${SEARCH_CORPUS_OUTCOME_GUIDANCE} If low confidence after reading, say you checked.`;
   const citationGuidance =
     citationsMode === "off"
       ? "Citations are disabled: do not mention file paths or line numbers in replies unless the user explicitly asks."

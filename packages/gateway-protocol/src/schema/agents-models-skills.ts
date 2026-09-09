@@ -431,6 +431,7 @@ export const SkillsInstallParamsSchema = Type.Union([
   closedObject({
     agentId: Type.Optional(NonEmptyString),
     source: Type.Literal("clawhub"),
+    scope: Type.Optional(Type.Literal("global")),
     slug: Type.String({ minLength: 1, description: CLAWHUB_SKILL_REF_DESCRIPTION }),
     version: Type.Optional(NonEmptyString),
     force: Type.Optional(Type.Boolean()),

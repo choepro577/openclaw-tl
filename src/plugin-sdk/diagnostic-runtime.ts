@@ -32,6 +32,10 @@ export function normalizeDiagnosticLane(value: string | undefined, fallback = "u
 }
 
 export { isDiagnosticFlagEnabled } from "../infra/diagnostic-flags.js";
+export {
+  bindPrivateRunObservationScope,
+  isPrivateRunObservationScope,
+} from "../infra/private-run-observations.js";
 export type {
   DiagnosticEventMetadata,
   DiagnosticEventPayload,

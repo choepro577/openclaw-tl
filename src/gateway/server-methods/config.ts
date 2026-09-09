@@ -844,20 +844,28 @@ function diffConfigLeafPaths(prev: unknown, next: unknown, prefix = ""): string[
   return diffConfigPaths(prev, next, prefix);
 }
 
+/** Reuses the watcher-keyed config response for both startup prewarm and requests. */
+export async function readGatewayConfigResponse(
+  context: Pick<
+    GatewayRequestContext,
+    "getConfigReloaderHotReloadStatus" | "configRevisionProjector"
+  >,
+  options: { primeCache?: boolean } = {},
+) {
+  return await readConfigGetResponse({
+    getHotReloadStatus: context.getConfigReloaderHotReloadStatus,
+    loadUiHints: () => loadSchemaWithPlugins().uiHints,
+    ...options,
+    revisionProjector: context.configRevisionProjector,
+  });
+}
+
 export const configHandlers: GatewayRequestHandlers = {
   "config.get": async ({ params, respond, context }) => {
     if (!assertValidParams(params, validateConfigGetParams, "config.get", respond)) {
       return;
     }
-    respond(
-      true,
-      await readConfigGetResponse({
-        getHotReloadStatus: context.getConfigReloaderHotReloadStatus,
-        loadUiHints: () => loadSchemaWithPlugins().uiHints,
-        revisionProjector: context.configRevisionProjector,
-      }),
-      undefined,
-    );
+    respond(true, await readGatewayConfigResponse(context), undefined);
   },
   "config.schema": ({ params, respond }) => {
     if (!assertValidParams(params, validateConfigSchemaParams, "config.schema", respond)) {

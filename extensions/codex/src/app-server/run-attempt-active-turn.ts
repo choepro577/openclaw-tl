@@ -131,17 +131,22 @@ export async function activateCodexAttemptTurn(
               nativePlanUpdateOrdinal += 1;
               try {
                 const input = canonicalizeNativeProgressCardInput(update);
+                const fullyRepresented =
+                  input.markdown === update.markdown &&
+                  JSON.stringify(input.plan) === JSON.stringify(update.steps);
                 await progressCardTool.execute(
                   `codex-native-plan:${activeTurnId}:${nativePlanUpdateOrdinal}`,
                   input,
                   runAbortController.signal,
                 );
+                return fullyRepresented;
               } catch (error) {
                 embeddedAgentLog.warn("failed to persist native Codex plan to progress card", {
                   runId: params.runId,
                   threadId: resourceState.thread.threadId,
                   error: formatErrorMessage(error),
                 });
+                return false;
               }
             },
           }

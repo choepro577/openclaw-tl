@@ -2,11 +2,19 @@ import { html, render } from "lit";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { GatewayBrowserClient } from "../../../api/gateway.ts";
 import type { TaskSummary } from "../../../lib/tasks/task-summary.ts";
-import { renderBackgroundTasksRail } from "./chat-background-tasks-render.ts";
+import {
+  renderBackgroundTasksRail,
+  renderBackgroundTasksToggle,
+} from "./chat-background-tasks-render.ts";
+import {
+  backgroundTaskStatusLabel,
+  backgroundTaskStatusTone,
+} from "./chat-background-tasks-shared.ts";
 import { renderBackgroundTasksStatusRow } from "./chat-background-tasks-status.ts";
 import {
   createBackgroundTasksProps,
   handleBackgroundTasksEvent,
+  requestBackgroundTasksRefresh,
   type BackgroundTasksHost,
 } from "./chat-background-tasks.ts";
 import type { BackgroundTasksProps } from "./chat-background-tasks.types.ts";
@@ -175,6 +183,102 @@ describe("background tasks rail state", () => {
     expect(props.activeCount).toBe(1);
   });
 
+  it("projects only requester-owned subagents as a read-only Subagents panel", async () => {
+    const tasks = [
+      makeTask({ id: "specialist-running" }),
+      makeTask({
+        id: "specialist-reported",
+        status: "completed",
+        deliveryStatus: "delivered",
+        updatedAt: 3_000,
+      }),
+      makeTask({ id: "operator-task", runtime: "cli", title: "Operator task" }),
+      makeTask({
+        id: "other-requester",
+        title: "Other requester",
+        sessionKey: "agent:main:other-thread",
+        childSessionKey: "agent:main:current",
+      }),
+    ];
+    const { host } = createHost({ request: () => Promise.resolve({ tasks }) });
+
+    createBackgroundTasksProps(host, { subagentsOnly: true });
+    await flushAsync();
+
+    const props = createBackgroundTasksProps(host, { subagentsOnly: true });
+    expect(props.tasks?.map((task) => task.id)).toEqual([
+      "specialist-reported",
+      "specialist-running",
+    ]);
+    expect(props.activeCount).toBe(1);
+    expect(props.subagentsOnly).toBe(true);
+    expect(props.canCancel).toBe(false);
+    expect(props.finishedCollapsed).toBe(false);
+    const expanded = createBackgroundTasksProps(host, { subagentsOnly: true });
+    const container = document.createElement("div");
+    document.body.append(container);
+    render(
+      html`${renderBackgroundTasksRail(expanded, { embedded: true, subagents: true })}`,
+      container,
+    );
+    expect(container.querySelector("aside")?.getAttribute("aria-label")).toBe("Subagents");
+    expect(container.textContent).toContain("Result returned to Personal Agent");
+    expect(container.textContent).not.toContain("Subagent");
+    expect(container.textContent).not.toContain("operator-task");
+    expect(container.textContent).not.toContain("other-requester");
+    expect(container.querySelector(".chat-tasks-rail__refresh")).toBeNull();
+    expect(container.querySelector(".chat-tasks-rail__task-stop")).toBeNull();
+  });
+
+  it("renders an Enterprise Subagents toggle with the active badge and no operator label", () => {
+    const onToggleCollapsed = vi.fn();
+    const container = document.createElement("div");
+    document.body.append(container);
+    const props = makeProps({
+      collapsed: true,
+      activeCount: 3,
+      subagentsOnly: true,
+      onToggleCollapsed,
+    });
+
+    render(html`${renderBackgroundTasksToggle(props, { subagents: true })}`, container);
+
+    const toggle = container.querySelector<HTMLButtonElement>(".chat-tasks-toggle");
+    expect(toggle?.getAttribute("aria-label")).toBe("Show subagents");
+    expect(toggle?.getAttribute("aria-expanded")).toBe("false");
+    expect(toggle?.querySelector(".chat-tasks-toggle__badge")?.textContent?.trim()).toBe("3");
+    expect(container.textContent).not.toContain("background tasks");
+    toggle?.click();
+    expect(onToggleCollapsed).toHaveBeenCalledOnce();
+  });
+
+  it("distinguishes execution completion from specialist report delivery", () => {
+    const queued = makeTask({
+      id: "specialist-queued",
+      status: "queued",
+    });
+    const completedPending = makeTask({
+      id: "specialist-pending-report",
+      status: "completed",
+      deliveryStatus: "pending",
+    });
+    const completedFailed = makeTask({
+      id: "specialist-failed-report",
+      status: "completed",
+      deliveryStatus: "failed",
+    });
+    expect(backgroundTaskStatusLabel(queued, { subagentsOnly: true })).toBe("Waiting to start");
+    expect(backgroundTaskStatusTone(queued, { subagentsOnly: true })).toBe("warn");
+    expect(backgroundTaskStatusLabel(completedPending, { subagentsOnly: true })).toBe(
+      "Waiting for the result to reach Personal Agent",
+    );
+    expect(backgroundTaskStatusTone(completedPending, { subagentsOnly: true })).toBe("warn");
+    expect(backgroundTaskStatusLabel(completedFailed, { subagentsOnly: true })).toBe(
+      "Task completed, but the result could not reach Personal Agent",
+    );
+    expect(backgroundTaskStatusTone(completedFailed, { subagentsOnly: true })).toBe("danger");
+  });
+
   it("keeps the later recent page's equally current running progress", async () => {
     const recent = makeTask({
       id: "task-1",
@@ -294,10 +398,17 @@ describe("background tasks rail state", () => {
       taskId: "runtime-task-1",
       progressSummary: "Reading files",
     });
+    const fullResult = "Complete specialist result\n\nIncluding the remaining analysis.";
     const { host, request } = createHost({
       request: (method) =>
         method === "tasks.get"
-          ? Promise.resolve({ task: { ...running, prompt: "Audit the background task UI" } })
+          ? Promise.resolve({
+              task: {
+                ...running,
+                prompt: "Audit the background task UI",
+                result: fullResult,
+              },
+            })
           : Promise.resolve({ tasks: [running] }),
     });
     createBackgroundTasksProps(host);
@@ -319,6 +430,7 @@ describe("background tasks rail state", () => {
     expect(request).toHaveBeenCalledWith("tasks.get", { taskId: "task-1" });
     const props = createBackgroundTasksProps(host);
     expect(props.taskDetails.get("task-1")?.prompt).toBe("Audit the background task UI");
+    expect(props.taskDetails.get("task-1")?.result).toBe(fullResult);
   });
 
   it("lets reopening a task retry a failed detail lookup", async () => {
@@ -468,6 +580,56 @@ describe("background tasks rail events", () => {
     return { host, request };
   }
 
+  it("coalesces terminal readbacks and rejects stale session or connection scopes", async () => {
+    const { host, request } = await loadedHost([makeTask({ id: "task-1" })]);
+    const callsBefore = request.mock.calls.length;
+    let release: (() => void) | undefined;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const delivered = makeTask({
+      id: "task-1",
+      status: "completed",
+      deliveryStatus: "delivered",
+      updatedAt: 3_000,
+    });
+    let refreshCalls = 0;
+    request.mockImplementation((method) => {
+      if (method !== "tasks.list") {
+        return Promise.resolve({});
+      }
+      refreshCalls += 1;
+      return refreshCalls <= 2
+        ? gate.then(() => ({ tasks: [delivered] }))
+        : Promise.resolve({ tasks: [delivered] });
+    });
+
+    requestBackgroundTasksRefresh(host);
+    requestBackgroundTasksRefresh(host);
+    expect(request).toHaveBeenCalledTimes(callsBefore + 2);
+
+    host.sessionKey = "agent:main:another-thread";
+    requestBackgroundTasksRefresh(host);
+    host.sessionKey = "agent:main:current";
+    host.connectionEpoch = 1;
+    requestBackgroundTasksRefresh(host);
+    expect(request).toHaveBeenCalledTimes(callsBefore + 2);
+
+    // The wrong-epoch request above must be ignored, while the original
+    // in-flight request remains eligible for its one trailing reload.
+    host.connectionEpoch = undefined;
+    release?.();
+    await flushAsync();
+    await flushAsync();
+    expect(request).toHaveBeenCalledTimes(callsBefore + 4);
+    expect(createBackgroundTasksProps(host).tasks).toMatchObject([
+      expect.objectContaining({
+        status: "completed",
+        deliveryStatus: "delivered",
+      }),
+    ]);
+  });
+
   it("applies matching upserts and drops deletions", async () => {
     const { host } = await loadedHost([makeTask({ id: "task-1" })]);
 
@@ -531,6 +693,7 @@ describe("background tasks rail events", () => {
       terminalSummary: "Previous terminal details",
     });
     const prompt = "Inspect the concurrent task owner";
+    const result = "Complete specialist result with all analysis sections.";
     const correction = makeTask({
       id: "task-1",
       status: "completed",
@@ -540,7 +703,7 @@ describe("background tasks rail events", () => {
     const { host } = createHost({
       request: (method) =>
         method === "tasks.get"
-          ? Promise.resolve({ task: { ...completed, prompt } })
+          ? Promise.resolve({ task: { ...completed, prompt, result } })
           : Promise.resolve({ tasks: [completed] }),
     });
     createBackgroundTasksProps(host);
@@ -554,6 +717,7 @@ describe("background tasks rail events", () => {
     expect(props.tasks?.[0]?.terminalSummary).toBe("Authoritative terminal details");
     expect(props.taskDetails.get("task-1")).toMatchObject({
       prompt,
+      result,
       terminalSummary: "Authoritative terminal details",
     });
   });

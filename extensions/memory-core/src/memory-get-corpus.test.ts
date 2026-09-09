@@ -89,10 +89,11 @@ describe("memory_get corpus outcomes", () => {
         ...emptyRange,
         corpora: [
           { corpus: "memory", outcome: "ok" },
-          { corpus: "wiki", outcome: "unavailable", error: "wiki unavailable" },
+          { corpus: "wiki", outcome: "unavailable", error: "wiki_recall_unavailable" },
         ],
-        warning: "Wiki corpus unavailable: wiki unavailable",
-        error: "wiki unavailable",
+        warning:
+          "Wiki corpus unavailable. Memory recall is temporarily unavailable; results do not cover that requested corpus.",
+        error: "wiki_recall_unavailable",
       },
     },
     {
@@ -114,11 +115,12 @@ describe("memory_get corpus outcomes", () => {
       expected: {
         ...wikiPayload,
         corpora: [
-          { corpus: "memory", outcome: "unavailable", error: "memory unavailable" },
+          { corpus: "memory", outcome: "unavailable", error: "memory_recall_unavailable" },
           { corpus: "wiki", outcome: "ok" },
         ],
-        warning: "Memory corpus unavailable: memory unavailable",
-        error: "memory unavailable",
+        warning:
+          "Memory corpus unavailable. Memory recall is temporarily unavailable; results do not cover that requested corpus.",
+        error: "memory_recall_unavailable",
       },
     },
     {
@@ -140,11 +142,12 @@ describe("memory_get corpus outcomes", () => {
       expected: {
         ...memoryMiss,
         corpora: [
-          { corpus: "memory", outcome: "unavailable", error: "memory unavailable" },
+          { corpus: "memory", outcome: "unavailable", error: "memory_recall_unavailable" },
           { corpus: "wiki", outcome: "ok" },
         ],
-        warning: "Memory corpus unavailable: memory unavailable",
-        error: "memory unavailable",
+        warning:
+          "Memory corpus unavailable. Memory recall is temporarily unavailable; results do not cover that requested corpus.",
+        error: "memory_recall_unavailable",
       },
     },
     {
@@ -155,10 +158,11 @@ describe("memory_get corpus outcomes", () => {
         ...memoryMiss,
         corpora: [
           { corpus: "memory", outcome: "ok" },
-          { corpus: "wiki", outcome: "unavailable", error: "wiki unavailable" },
+          { corpus: "wiki", outcome: "unavailable", error: "wiki_recall_unavailable" },
         ],
-        warning: "Wiki corpus unavailable: wiki unavailable",
-        error: "wiki unavailable",
+        warning:
+          "Wiki corpus unavailable. Memory recall is temporarily unavailable; results do not cover that requested corpus.",
+        error: "wiki_recall_unavailable",
       },
     },
     {
@@ -170,12 +174,12 @@ describe("memory_get corpus outcomes", () => {
         text: "",
         disabled: true,
         corpora: [
-          { corpus: "memory", outcome: "unavailable", error: "memory unavailable" },
-          { corpus: "wiki", outcome: "unavailable", error: "wiki unavailable" },
+          { corpus: "memory", outcome: "unavailable", error: "memory_recall_unavailable" },
+          { corpus: "wiki", outcome: "unavailable", error: "wiki_recall_unavailable" },
         ],
         warning:
-          "Memory corpus unavailable: memory unavailable Wiki corpus unavailable: wiki unavailable",
-        error: "memory unavailable; wiki unavailable",
+          "Memory corpus unavailable. Memory recall is temporarily unavailable; results do not cover that requested corpus. Wiki corpus unavailable. Memory recall is temporarily unavailable; results do not cover that requested corpus.",
+        error: "memory_recall_unavailable; wiki_recall_unavailable",
       },
     },
     {
@@ -187,12 +191,12 @@ describe("memory_get corpus outcomes", () => {
         text: "",
         disabled: true,
         corpora: [
-          { corpus: "memory", outcome: "unavailable", error: "memory unavailable" },
+          { corpus: "memory", outcome: "unavailable", error: "memory_recall_unavailable" },
           { corpus: "wiki", outcome: "not-registered" },
         ],
         warning:
-          "Memory corpus unavailable: memory unavailable Wiki corpus is not registered; results do not cover that requested corpus.",
-        error: "memory unavailable",
+          "Memory corpus unavailable. Memory recall is temporarily unavailable; results do not cover that requested corpus. Wiki corpus is not registered; results do not cover that requested corpus.",
+        error: "memory_recall_unavailable",
       },
     },
   ])("$name", async ({ memory, wiki, expected }) => {
@@ -234,9 +238,10 @@ describe("memory_get corpus outcomes", () => {
       expected: {
         path: lookup,
         text: "",
-        corpora: [{ corpus: "wiki", outcome: "unavailable", error: "wiki unavailable" }],
-        warning: "Wiki corpus unavailable: wiki unavailable",
-        error: "wiki unavailable",
+        corpora: [{ corpus: "wiki", outcome: "unavailable", error: "wiki_recall_unavailable" }],
+        warning:
+          "Wiki corpus unavailable. Memory recall is temporarily unavailable; results do not cover that requested corpus.",
+        error: "wiki_recall_unavailable",
       },
     },
   ])("reports a wiki-only $name", async ({ wiki, expected }) => {
@@ -268,9 +273,10 @@ describe("memory_get corpus outcomes", () => {
 
     expect(result.details).toEqual({
       ...wikiPayload,
-      corpora: [{ corpus: "wiki", outcome: "unavailable", error: "broken wiki" }],
-      warning: "Wiki corpus unavailable: broken wiki",
-      error: "broken wiki",
+      corpora: [{ corpus: "wiki", outcome: "unavailable", error: "wiki_recall_unavailable" }],
+      warning:
+        "Wiki corpus unavailable. Memory recall is temporarily unavailable; results do not cover that requested corpus.",
+      error: "wiki_recall_unavailable",
     });
   });
 
@@ -327,7 +333,7 @@ describe("memory_get corpus outcomes", () => {
           {
             corpus: "wiki",
             outcome: "unavailable",
-            error: "memory_get timed out after 15s",
+            error: "wiki_recall_unavailable",
           },
         ],
       },

@@ -266,7 +266,11 @@ export class ChatPane extends ChatPaneLayoutRender {
         gatewaySnapshot,
         setObserverVisibility: this.setSessionObserverVisibility,
         workspaceEnabled: true,
-        backgroundTasksEnabled: !enterpriseUserPresentation,
+        // Enterprise hides operator task controls, but still observes its own
+        // child runs for the specialist lifecycle shown inside the transcript.
+        backgroundTasksEnabled: true,
+        subagentsOnly: enterpriseUserPresentation,
+        taskDetailsInTasksSlot: enterpriseUserPresentation,
       });
     const selfUser = resolveCurrentSelfUser({
       snapshotUser: gatewaySnapshot.selfUser,
@@ -489,7 +493,8 @@ export class ChatPane extends ChatPaneLayoutRender {
       permissionPicker: composerControlPolicy.renderPermissionPicker
         ? composerControls?.permissionPicker
         : undefined,
-      backgroundTasks: catalogKey || enterpriseUserPresentation ? undefined : backgroundTasks,
+      backgroundTasks: catalogKey ? undefined : backgroundTasks,
+      delegationTasks: catalogKey ? [] : (backgroundTasks.tasks ?? []),
       ...this.suggestionChatProps(state.connected, selectedSessionArchived, multiIdentity),
       pullRequests: enterpriseUserPresentation
         ? []
@@ -699,7 +704,14 @@ export class ChatPane extends ChatPaneLayoutRender {
       },
       canvasPluginSurfaceUrl: state.canvasPluginSurfaceUrl,
       boardProvider: enterpriseUserPresentation ? undefined : board.provider,
-      onOpenSidebar: state.handleOpenSidebar,
+      onOpenSidebar: (content) => {
+        if (enterpriseUserPresentation && content?.kind === "task") {
+          state.sidebarContent = content;
+          openPanelSlot("tasks");
+          return;
+        }
+        state.handleOpenSidebar(content);
+      },
       onRequestOpenImage: state.beginImageOpen,
       onOpenImage: state.handleOpenImage,
       assistantName: state.assistantName,

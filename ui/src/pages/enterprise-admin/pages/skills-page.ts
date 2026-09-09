@@ -5,13 +5,14 @@ import {
   readClawHubTrustErrorDetails,
 } from "../../../../../packages/gateway-protocol/src/clawhub-trust-error-details.js";
 import { icons } from "../../../components/icons.ts";
+import { ea } from "../../../i18n/enterprise-admin.ts";
 import { formatUiExternalText } from "../../../lib/format-error.ts";
-import { resolveSafeExternalUrl } from "../../../lib/open-external-url.ts";
-import { clawHubSkillRef, type ClawHubSearchResult } from "../../../lib/skills/clawhub-search.ts";
+import type { ClawHubSearchResult } from "../../../lib/skills/clawhub-search.ts";
 import type { ClawHubSkillDetail } from "../../../lib/skills/index.ts";
 import { OpenClawLightDomElement } from "../../../lit/openclaw-element.ts";
 import {
   EnterpriseApiError,
+  importAdminSkillFolder,
   installAdminExternalSkill,
   listAdminAccounts,
   listAdminAgentCatalog,
@@ -23,6 +24,15 @@ import {
   type EnterpriseSkillCatalogItem,
 } from "../../enterprise/services/enterprise-api.ts";
 import { errorMessage } from "../utils.ts";
+import {
+  encodeExternalSkillFolder,
+  selectExternalSkillFolder,
+  type ExternalSkillFolderSelection,
+} from "./external-skill-folder.ts";
+import {
+  renderExternalSkillInstallerView,
+  type ExternalInstallMessage,
+} from "./external-skill-installer-view.ts";
 import "../components/access-dialog.ts";
 import "../components/admin-dialog.ts";
 
@@ -35,19 +45,39 @@ const sources = [
   ["other", "Other"],
 ] as const;
 
-type ExternalInstallMessage = {
-  kind: "success" | "error";
-  text: string;
-  acknowledgeRef?: string;
-  acknowledgeVersion?: string;
-};
-
 function withWarning(message: string, warning?: string): string {
   return warning ? `${message}\n\n${warning}` : message;
 }
 
-function clampSummary(value: string, maxLength = 140): string {
-  return value.length <= maxLength ? value : `${value.slice(0, maxLength - 1).trimEnd()}…`;
+function skillTechnicalStatusLabel(status: string): string {
+  switch (status) {
+    case "ready":
+      return ea("Sẵn sàng");
+    case "needs_setup":
+      return ea("Cần thiết lập");
+    case "disabled":
+      return ea("Đã tắt");
+    default:
+      return status.replace("_", " ");
+  }
+}
+
+function externalSkillFolderErrorMessage(error: unknown): string {
+  const code = error instanceof Error ? error.message : "";
+  switch (code) {
+    case "empty folder":
+      return ea("Folder skill trống.");
+    case "too many files":
+      return ea("Folder skill vượt quá 200 file.");
+    case "folder too large":
+      return ea("Folder skill vượt quá 10 MiB.");
+    case "folder path unavailable":
+      return ea("Không xác định được đường dẫn folder skill.");
+    case "folder paths differ":
+      return ea("Các file phải thuộc cùng một folder skill.");
+    default:
+      return errorMessage(error);
+  }
 }
 
 export class EnterpriseAdminSkillsPage extends OpenClawLightDomElement {
@@ -74,8 +104,10 @@ export class EnterpriseAdminSkillsPage extends OpenClawLightDomElement {
   @state() private externalDetailLoading = false;
   @state() private externalDetailError = "";
   @state() private externalInstallingRef = "";
+  @state() private externalImporting = false;
   @state() private externalMessage: ExternalInstallMessage | null = null;
   @state() private externalInstalledRefs: ReadonlySet<string> = new Set();
+  @state() private externalFolderSelection: ExternalSkillFolderSelection | null = null;
   private reloadTimer?: ReturnType<typeof globalThis.setTimeout>;
   private externalSearchTimer?: ReturnType<typeof globalThis.setTimeout>;
   private externalSearchAbort?: AbortController;
@@ -109,14 +141,11 @@ export class EnterpriseAdminSkillsPage extends OpenClawLightDomElement {
   private async loadAgents(): Promise<void> {
     try {
       this.agents = (await listAdminAgentCatalog()).shared;
-      if (!this.agents.some((agent) => agent.agentId === this.externalAgentId)) {
-        this.externalAgentId =
-          this.agents.find((agent) => agent.agentId === "main")?.agentId ??
-          this.agents[0]?.agentId ??
-          "";
-      }
-      if (this.externalOpen) {
-        void this.loadExternalInstalledRefs(this.externalAgentId);
+      if (
+        this.externalAgentId &&
+        !this.agents.some((agent) => agent.agentId === this.externalAgentId)
+      ) {
+        this.externalAgentId = "";
       }
     } catch {
       this.agents = [];
@@ -151,31 +180,27 @@ export class EnterpriseAdminSkillsPage extends OpenClawLightDomElement {
   }
 
   private openExternalInstaller(): void {
-    if (this.agents.some((agent) => agent.agentId === this.agentId)) {
-      this.externalAgentId = this.agentId;
-    }
+    this.externalAgentId = "";
     this.externalOpen = true;
     this.externalMessage = null;
+    this.externalFolderSelection = null;
     if (this.agents.length === 0) {
       void this.loadAgents();
-    } else {
-      void this.loadExternalInstalledRefs(this.externalAgentId);
     }
+    void this.loadExternalInstalledRefs(this.externalAgentId);
   }
 
   private async loadExternalInstalledRefs(agentId: string): Promise<void> {
-    if (!agentId) {
-      this.externalInstalledRefs = new Set();
-      return;
-    }
     try {
-      const { items } = await listAdminSkillCatalog({ agentId });
+      const { items } = await listAdminSkillCatalog(agentId ? { agentId } : {});
       if (this.externalAgentId !== agentId) {
         return;
       }
       this.externalInstalledRefs = new Set(
         items.flatMap((item) =>
-          item.clawhub?.valid === true && item.clawhub.requestedReference
+          item.ownerAgentId === (agentId || null) &&
+          item.clawhub?.valid === true &&
+          item.clawhub.requestedReference
             ? [item.clawhub.requestedReference]
             : [],
         ),
@@ -188,13 +213,14 @@ export class EnterpriseAdminSkillsPage extends OpenClawLightDomElement {
   }
 
   private closeExternalInstaller(): void {
-    if (this.externalInstallingRef) {
+    if (this.externalInstallingRef || this.externalImporting) {
       return;
     }
     this.externalOpen = false;
     this.externalDetailRef = "";
     this.externalDetail = null;
     this.externalDetailError = "";
+    this.externalFolderSelection = null;
     this.externalDetailAbort?.abort();
   }
 
@@ -278,20 +304,14 @@ export class EnterpriseAdminSkillsPage extends OpenClawLightDomElement {
     acknowledgeClawHubRisk = false,
     version?: string,
   ): Promise<void> {
-    if (!this.externalAgentId || this.externalInstallingRef) {
-      if (!this.externalAgentId) {
-        this.externalMessage = {
-          kind: "error",
-          text: "Chưa có shared agent để nhận skill. Hãy tạo agent trước khi cài.",
-        };
-      }
+    if (this.externalInstallingRef || this.externalImporting) {
       return;
     }
     this.externalInstallingRef = ref;
     this.externalMessage = null;
     try {
       const result = await installAdminExternalSkill({
-        agentId: this.externalAgentId,
+        ...(this.externalAgentId ? { agentId: this.externalAgentId } : {}),
         ref,
         ...(version ? { version } : {}),
         ...(acknowledgeClawHubRisk ? { acknowledgeClawHubRisk: true } : {}),
@@ -299,7 +319,7 @@ export class EnterpriseAdminSkillsPage extends OpenClawLightDomElement {
       this.externalMessage = {
         kind: "success",
         text: withWarning(
-          formatUiExternalText(result.message, `Đã cài ${ref}`),
+          formatUiExternalText(result.message, `${ea("Đã cài")} ${ref}`),
           result.warning ? formatUiExternalText(result.warning) : undefined,
         ),
       };
@@ -316,7 +336,7 @@ export class EnterpriseAdminSkillsPage extends OpenClawLightDomElement {
         kind: "error",
         text: needsAcknowledgement
           ? withWarning(
-              "Hãy xem cảnh báo bảo mật từ ClawHub trước khi cài skill này.",
+              ea("Hãy xem cảnh báo bảo mật từ ClawHub trước khi cài skill này."),
               trustDetails.warning ? formatUiExternalText(trustDetails.warning) : undefined,
             )
           : withWarning(
@@ -333,12 +353,57 @@ export class EnterpriseAdminSkillsPage extends OpenClawLightDomElement {
     }
   }
 
-  private isExternalInstalled(result: ClawHubSearchResult): boolean {
-    if (result.installOnly !== true) {
-      return false;
+  private selectExternalFolder(files: FileList | null): void {
+    if (!files?.length) {
+      return;
     }
-    const ref = clawHubSkillRef(result);
-    return this.externalInstalledRefs.has(ref);
+    try {
+      this.externalFolderSelection = selectExternalSkillFolder(files);
+      this.externalMessage = null;
+    } catch (error) {
+      this.externalFolderSelection = null;
+      this.externalMessage = {
+        kind: "error",
+        text: externalSkillFolderErrorMessage(error),
+      };
+    }
+  }
+
+  private async importExternalFolder(): Promise<void> {
+    const selection = this.externalFolderSelection;
+    if (!selection || this.externalImporting || this.externalInstallingRef) {
+      return;
+    }
+    this.externalImporting = true;
+    this.externalMessage = null;
+    try {
+      const result = await importAdminSkillFolder({
+        ...(this.externalAgentId ? { agentId: this.externalAgentId } : {}),
+        ...(await encodeExternalSkillFolder(selection)),
+      });
+      this.externalMessage = {
+        kind: "success",
+        text: withWarning(
+          `${ea("Đã lưu")} ${result.slug}`,
+          result.warning ? formatUiExternalText(result.warning) : undefined,
+        ),
+      };
+      this.externalFolderSelection = null;
+      const folderInput = this.querySelector<HTMLInputElement>(
+        'input[type="file"][webkitdirectory]',
+      );
+      if (folderInput) {
+        folderInput.value = "";
+      }
+      await Promise.all([this.load(), this.loadExternalInstalledRefs(this.externalAgentId)]);
+    } catch (error) {
+      this.externalMessage = {
+        kind: "error",
+        text: errorMessage(error),
+      };
+    } finally {
+      this.externalImporting = false;
+    }
   }
 
   private statusBadge(item: EnterpriseSkillCatalogItem): string {
@@ -349,237 +414,41 @@ export class EnterpriseAdminSkillsPage extends OpenClawLightDomElement {
         : "ea-badge--warn";
   }
 
-  private renderExternalMessage() {
-    if (!this.externalMessage) {
-      return nothing;
-    }
-    return html`
-      <div
-        class="ea-banner ${this.externalMessage.kind === "error"
-          ? "ea-banner--error"
-          : "ea-banner--success"}"
-        role=${this.externalMessage.kind === "error" ? "alert" : "status"}
-      >
-        <div class="ea-pre-wrap">${this.externalMessage.text}</div>
-        ${this.externalMessage.acknowledgeRef
-          ? html`<button
-              class="ea-button ea-button--danger"
-              type="button"
-              ?disabled=${Boolean(this.externalInstallingRef)}
-              @click=${() =>
-                void this.installExternalSkill(
-                  this.externalMessage?.acknowledgeRef ?? "",
-                  true,
-                  this.externalMessage?.acknowledgeVersion,
-                )}
-            >
-              Tôi hiểu rủi ro và vẫn cài
-            </button>`
-          : nothing}
-      </div>
-    `;
-  }
-
-  private renderExternalResults() {
-    if (this.externalResults === null) {
-      return html`<div class="ea-marketplace-empty">
-        Nhập tên hoặc chức năng cần tìm trong ClawHub.
-      </div>`;
-    }
-    if (this.externalResults.length === 0) {
-      return html`<div class="ea-marketplace-empty">Không tìm thấy skill phù hợp.</div>`;
-    }
-    return html`
-      <div class="ea-marketplace-list">
-        ${this.externalResults.map((result) => {
-          const ref = clawHubSkillRef(result);
-          const icon = result.icon
-            ? resolveSafeExternalUrl(result.icon, globalThis.location.href)
-            : null;
-          const installed = this.isExternalInstalled(result);
-          return html`
-            <article class="ea-marketplace-item">
-              ${result.installOnly
-                ? html`<div class="ea-marketplace-item__identity">
-                    ${this.renderExternalIcon(result, icon)}
-                    <span>
-                      <strong>${result.displayName}</strong>
-                      <span class="ea-muted"
-                        >${result.summary
-                          ? `${clampSummary(result.summary)} · `
-                          : ""}${ref}${result.trustState ? " · Chưa được ClawHub quét" : ""}</span
-                      >
-                    </span>
-                  </div>`
-                : html`<button
-                    class="ea-marketplace-item__identity ea-marketplace-item__detail"
-                    type="button"
-                    aria-label=${`Xem chi tiết ${result.displayName}`}
-                    @click=${() => void this.openExternalDetail(ref)}
-                  >
-                    ${this.renderExternalIcon(result, icon)}
-                    <span>
-                      <strong>${result.displayName}</strong>
-                      <span class="ea-muted"
-                        >${result.summary ? `${clampSummary(result.summary)} · ` : ""}${ref}</span
-                      >
-                    </span>
-                  </button>`}
-              <div class="ea-marketplace-item__actions">
-                ${result.version ? html`<span class="ea-badge">v${result.version}</span>` : nothing}
-                <button
-                  class="ea-button"
-                  type="button"
-                  ?disabled=${installed || Boolean(this.externalInstallingRef)}
-                  @click=${() => void this.installExternalSkill(ref)}
-                >
-                  ${installed
-                    ? "Đã cài"
-                    : this.externalInstallingRef === ref
-                      ? "Đang cài…"
-                      : "Cài đặt"}
-                </button>
-              </div>
-            </article>
-          `;
-        })}
-      </div>
-    `;
-  }
-
-  private renderExternalIcon(result: ClawHubSearchResult, icon: string | null) {
-    return icon
-      ? html`<img class="ea-marketplace-icon" src=${icon} alt="" loading="lazy" />`
-      : html`<span class="ea-marketplace-icon ea-marketplace-icon--fallback"
-          >${result.displayName.slice(0, 1).toUpperCase()}</span
-        >`;
-  }
-
-  private renderExternalDetail() {
-    const detail = this.externalDetail;
-    const image = detail?.skill?.icon ?? detail?.owner?.image;
-    const safeImage = image ? resolveSafeExternalUrl(image, globalThis.location.href) : null;
-    return html`
-      <div class="ea-stack">
-        <div>
-          <button class="ea-button" type="button" @click=${() => this.closeExternalDetail()}>
-            ← Quay lại kết quả
-          </button>
-        </div>
-        ${this.renderExternalMessage()}
-        ${this.externalDetailLoading
-          ? html`<div class="ea-loading">Đang tải thông tin skill…</div>`
-          : this.externalDetailError
-            ? html`<div class="ea-banner ea-banner--error" role="alert">
-                ${this.externalDetailError}
-              </div>`
-            : detail?.skill
-              ? html`
-                  <div class="ea-marketplace-detail">
-                    <div class="ea-marketplace-detail__heading">
-                      ${safeImage
-                        ? html`<img class="ea-marketplace-icon" src=${safeImage} alt="" />`
-                        : nothing}
-                      <div>
-                        <h3>${detail.skill.displayName}</h3>
-                        <p class="ea-muted">
-                          ${detail.owner?.displayName ?? detail.owner?.handle ?? "ClawHub"}${detail
-                            .owner?.handle
-                            ? ` (@${detail.owner.handle})`
-                            : ""}
-                        </p>
-                      </div>
-                    </div>
-                    <p>${detail.skill.summary ?? "Không có mô tả."}</p>
-                    ${detail.latestVersion
-                      ? html`<p class="ea-muted">
-                          Phiên bản mới nhất: ${detail.latestVersion.version}
-                        </p>`
-                      : nothing}
-                    ${detail.latestVersion?.changelog
-                      ? html`<div class="ea-code">${detail.latestVersion.changelog}</div>`
-                      : nothing}
-                    ${detail.metadata?.os?.length
-                      ? html`<p class="ea-muted">Nền tảng: ${detail.metadata.os.join(", ")}</p>`
-                      : nothing}
-                    <button
-                      class="ea-button ea-button--primary"
-                      type="button"
-                      ?disabled=${Boolean(this.externalInstallingRef)}
-                      @click=${() => void this.installExternalSkill(this.externalDetailRef)}
-                    >
-                      ${this.externalInstallingRef === this.externalDetailRef
-                        ? "Đang cài…"
-                        : `Cài ${detail.skill.displayName}`}
-                    </button>
-                  </div>
-                `
-              : html`<div class="ea-marketplace-empty">Không tìm thấy thông tin skill.</div>`}
-      </div>
-    `;
-  }
-
   private renderExternalInstaller() {
-    return html`
-      <openclaw-enterprise-admin-dialog
-        .open=${true}
-        .wide=${true}
-        heading=${this.externalDetail?.skill?.displayName ?? "Cài skill bên ngoài"}
-        description="Tìm trên ClawHub, xem nguồn và cài vào workspace của shared agent."
-        .canClose=${() => !this.externalInstallingRef}
-        .onClose=${() => this.closeExternalInstaller()}
-      >
-        ${this.externalDetailRef
-          ? this.renderExternalDetail()
-          : html`<div class="ea-stack">
-              <label class="ea-field">
-                Cài vào agent
-                <select
-                  class="ea-select"
-                  .value=${this.externalAgentId}
-                  ?disabled=${Boolean(this.externalInstallingRef)}
-                  @change=${(event: Event) => {
-                    this.externalAgentId = (event.currentTarget as HTMLSelectElement).value;
-                    this.externalMessage = null;
-                    void this.loadExternalInstalledRefs(this.externalAgentId);
-                  }}
-                >
-                  ${this.agents.length === 0
-                    ? html`<option value="">Chưa có shared agent</option>`
-                    : this.agents.map(
-                        (agent) => html`<option value=${agent.agentId}>
-                          ${agent.name} (${agent.agentId})
-                        </option>`,
-                      )}
-                </select>
-              </label>
-              <label class="ea-field">
-                Tìm trên ClawHub
-                <div class="ea-marketplace-search">
-                  <input
-                    class="ea-input"
-                    type="search"
-                    name="external-skill-search"
-                    autocomplete="off"
-                    placeholder="Ví dụ: email, github, calendar…"
-                    .value=${this.externalQuery}
-                    @input=${(event: Event) =>
-                      this.changeExternalQuery((event.currentTarget as HTMLInputElement).value)}
-                  />
-                  ${this.externalSearching
-                    ? html`<span class="ea-muted">Đang tìm…</span>`
-                    : nothing}
-                </div>
-              </label>
-              ${this.externalSearchError
-                ? html`<div class="ea-banner ea-banner--error" role="alert">
-                    ${this.externalSearchError}
-                  </div>`
-                : nothing}
-              ${this.renderExternalMessage()} ${this.renderExternalResults()}
-            </div>`}
-      </openclaw-enterprise-admin-dialog>
-    `;
+    return renderExternalSkillInstallerView({
+      state: {
+        agents: this.agents,
+        agentId: this.externalAgentId,
+        query: this.externalQuery,
+        results: this.externalResults,
+        searching: this.externalSearching,
+        searchError: this.externalSearchError,
+        detailRef: this.externalDetailRef,
+        detail: this.externalDetail,
+        detailLoading: this.externalDetailLoading,
+        detailError: this.externalDetailError,
+        installingRef: this.externalInstallingRef,
+        importing: this.externalImporting,
+        message: this.externalMessage,
+        installedRefs: this.externalInstalledRefs,
+        folderSelection: this.externalFolderSelection,
+      },
+      actions: {
+        onCloseInstaller: () => this.closeExternalInstaller(),
+        onCloseDetail: () => this.closeExternalDetail(),
+        onChangeAgent: (agentId) => {
+          this.externalAgentId = agentId;
+          this.externalMessage = null;
+          void this.loadExternalInstalledRefs(agentId);
+        },
+        onChangeQuery: (value) => this.changeExternalQuery(value),
+        onSelectFolder: (files) => this.selectExternalFolder(files),
+        onImportFolder: () => this.importExternalFolder(),
+        onOpenDetail: (ref) => this.openExternalDetail(ref),
+        onInstall: (ref, acknowledgeClawHubRisk, version) =>
+          this.installExternalSkill(ref, acknowledgeClawHubRisk, version),
+      },
+    });
   }
 
   override render() {
@@ -587,21 +456,21 @@ export class EnterpriseAdminSkillsPage extends OpenClawLightDomElement {
       <section class="ea-page">
         <header class="ea-page-header">
           <div>
-            <h1>Quản lý skill</h1>
-            <p>Catalog occurrence-aware, tách trạng thái kỹ thuật khỏi quyền user</p>
+            <h1>${ea("Quản lý skill")}</h1>
+            <p>${ea("Catalog occurrence-aware, tách trạng thái kỹ thuật khỏi quyền user")}</p>
           </div>
           <div class="ea-row-actions">
-            <span class="ea-badge">${this.items.length} occurrences</span>
+            <span class="ea-badge">${this.items.length} ${ea("occurrences")}</span>
             <button
               class="ea-button ea-button--primary"
               type="button"
               @click=${() => this.openExternalInstaller()}
             >
-              ${icons.plus} Cài skill bên ngoài
+              ${icons.plus} ${ea("Cài skill bên ngoài")}
             </button>
           </div>
         </header>
-        <nav class="ea-tabs" aria-label="Nguồn skill">
+        <nav class="ea-tabs" aria-label=${ea("Nguồn skill")}>
           ${sources.map(
             ([id, label]) => html`
               <button
@@ -612,7 +481,7 @@ export class EnterpriseAdminSkillsPage extends OpenClawLightDomElement {
                   void this.load();
                 }}
               >
-                ${label}
+                ${ea(label)}
               </button>
             `,
           )}
@@ -621,8 +490,8 @@ export class EnterpriseAdminSkillsPage extends OpenClawLightDomElement {
           <input
             class="ea-input"
             type="search"
-            placeholder="Tìm skill…"
-            aria-label="Tìm skill"
+            placeholder=${ea("Tìm skill…")}
+            aria-label=${ea("Tìm skill")}
             @input=${(event: Event) => {
               this.query = (event.currentTarget as HTMLInputElement).value;
               this.scheduleLoad();
@@ -630,21 +499,21 @@ export class EnterpriseAdminSkillsPage extends OpenClawLightDomElement {
           />
           <select
             class="ea-select"
-            aria-label="Lọc trạng thái"
+            aria-label=${ea("Lọc trạng thái")}
             @change=${(event: Event) => {
               this.status = (event.currentTarget as HTMLSelectElement).value;
               void this.load();
             }}
           >
-            <option value="all">All</option>
-            <option value="ready">Ready</option>
-            <option value="needs_setup">Needs setup</option>
-            <option value="disabled">Disabled</option>
+            <option value="all">${ea("Tất cả")}</option>
+            <option value="ready">${ea("Sẵn sàng")}</option>
+            <option value="needs_setup">${ea("Cần thiết lập")}</option>
+            <option value="disabled">${ea("Đã tắt")}</option>
           </select>
           <input
             class="ea-input"
-            placeholder="Lọc theo agent ID"
-            aria-label="Lọc theo agent"
+            placeholder=${ea("Lọc theo agent ID")}
+            aria-label=${ea("Lọc theo agent")}
             @change=${(event: Event) => {
               this.agentId = (event.currentTarget as HTMLInputElement).value;
               void this.load();
@@ -652,13 +521,13 @@ export class EnterpriseAdminSkillsPage extends OpenClawLightDomElement {
           />
           <select
             class="ea-select"
-            aria-label="Lọc theo user"
+            aria-label=${ea("Lọc theo user")}
             @change=${(event: Event) => {
               this.accountId = (event.currentTarget as HTMLSelectElement).value;
               void this.load();
             }}
           >
-            <option value="">Tất cả user</option>
+            <option value="">${ea("Tất cả user")}</option>
             ${this.accounts.map(
               (account) =>
                 html`<option value=${account.id}>
@@ -669,21 +538,21 @@ export class EnterpriseAdminSkillsPage extends OpenClawLightDomElement {
         </div>
         <div class="ea-card ea-table-wrap">
           ${this.loading
-            ? html`<div class="ea-loading">Đang tổng hợp skill catalog…</div>`
+            ? html`<div class="ea-loading">${ea("Đang tổng hợp skill catalog…")}</div>`
             : this.error
               ? html`<div class="ea-empty"><p class="ea-error">${this.error}</p></div>`
               : html`
                   <table class="ea-table">
                     <thead>
                       <tr>
-                        <th>Skill</th>
-                        <th>Source / scope</th>
-                        <th>Owner agent</th>
-                        <th>Technical status</th>
-                        <th>Setup reason</th>
-                        <th>User được cấp</th>
-                        <th>Effective</th>
-                        <th class="ea-table__action">Thao tác</th>
+                        <th>${ea("Skill")}</th>
+                        <th>${ea("Source / scope")}</th>
+                        <th>${ea("Owner agent")}</th>
+                        <th>${ea("Technical status")}</th>
+                        <th>${ea("Setup reason")}</th>
+                        <th>${ea("User được cấp")}</th>
+                        <th>${ea("Effective")}</th>
+                        <th class="ea-table__action">${ea("Thao tác")}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -698,10 +567,10 @@ export class EnterpriseAdminSkillsPage extends OpenClawLightDomElement {
                               <span class="ea-badge">${item.category}</span>
                               <div class="ea-muted">${item.source}</div>
                             </td>
-                            <td>${item.ownerAgentId ?? "Global"}</td>
+                            <td>${item.ownerAgentId ?? ea("Global")}</td>
                             <td>
                               <span class="ea-badge ${this.statusBadge(item)}"
-                                >${item.intrinsicStatus.replace("_", " ")}</span
+                                >${skillTechnicalStatusLabel(item.intrinsicStatus)}</span
                               >
                             </td>
                             <td>${item.setupReason ?? "—"}</td>
@@ -713,8 +582,8 @@ export class EnterpriseAdminSkillsPage extends OpenClawLightDomElement {
                                       ? "ea-badge--good"
                                       : "ea-badge--bad"}"
                                     >${item.effectiveAccess?.effectiveAllowed
-                                      ? "Được dùng"
-                                      : "Không được dùng"}</span
+                                      ? ea("Được dùng")
+                                      : ea("Không được dùng")}</span
                                   >`
                                 : "—"}
                             </td>
@@ -727,7 +596,7 @@ export class EnterpriseAdminSkillsPage extends OpenClawLightDomElement {
                                   this.accessItem = item;
                                 }}
                               >
-                                Quản lý user
+                                ${ea("Quản lý user")}
                               </button>
                             </td>
                           </tr>
@@ -736,7 +605,7 @@ export class EnterpriseAdminSkillsPage extends OpenClawLightDomElement {
                     </tbody>
                   </table>
                   ${this.items.length === 0
-                    ? html`<div class="ea-empty">Không có skill phù hợp bộ lọc.</div>`
+                    ? html`<div class="ea-empty">${ea("Không có skill phù hợp bộ lọc.")}</div>`
                     : nothing}
                 `}
         </div>
@@ -760,11 +629,12 @@ export class EnterpriseAdminSkillsPage extends OpenClawLightDomElement {
             .onClose=${() => (this.detailItem = undefined)}
           >
             <div class="ea-stack">
-              <p>${this.detailItem.description || "Không có mô tả."}</p>
+              <p>${this.detailItem.description || ea("Không có mô tả.")}</p>
               <div class="ea-code">${JSON.stringify(this.detailItem, null, 2)}</div>
               <div class="ea-banner">
-                Bật/tắt và setup chỉ khả dụng khi source hỗ trợ lifecycle ổn định. Quyền user không
-                thay đổi trạng thái kỹ thuật.
+                ${ea(
+                  "Bật/tắt và setup chỉ khả dụng khi source hỗ trợ lifecycle ổn định. Quyền user không thay đổi trạng thái kỹ thuật.",
+                )}
               </div>
             </div>
           </openclaw-enterprise-admin-dialog>`

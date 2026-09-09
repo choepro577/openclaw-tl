@@ -32,6 +32,7 @@ function buildDirectChildSessionPatch(patch: Record<string, unknown>): Partial<S
   if (patch.inheritedToolPolicyVersion === 1) {
     entry.inheritedToolPolicyVersion = 1;
   }
+  if (patch.requiresPrivateModelContext === true) entry.requiresPrivateModelContext = true;
   if (patch.incognito === true) {
     entry.incognito = true;
   }
@@ -117,6 +118,7 @@ export async function createInitialSubagentSession(params: {
   admissionPatch?: Record<string, unknown>;
   inheritedToolAllowlist?: string[];
   inheritedToolDenylist?: string[];
+  requiresPrivateModelContext?: true;
   modelPatch: Record<string, unknown>;
   swarmGroupId?: string;
   collect: boolean;
@@ -132,6 +134,7 @@ export async function createInitialSubagentSession(params: {
     ...(params.spawnedCwd ? { spawnedCwd: params.spawnedCwd } : {}),
     ...params.admissionPatch,
     inheritedToolPolicyVersion: 1,
+    ...(params.requiresPrivateModelContext ? { requiresPrivateModelContext: true } : {}),
     ...inheritedToolAllowPatch(params.inheritedToolAllowlist),
     ...inheritedToolDenyPatch(params.inheritedToolDenylist),
     ...params.modelPatch,

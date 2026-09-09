@@ -414,6 +414,8 @@ type SessionEntryCore = SessionRestartRecoveryState &
     subagentControlScope?: "children" | "none";
     /** Version of the requester tool-policy snapshot captured when this child was spawned. */
     inheritedToolPolicyVersion?: 1;
+    /** Host-only fail-closed marker; evidence itself is never persisted with the session. */
+    requiresPrivateModelContext?: true;
     /** Session-scoped tool deny entries inherited from the caller that created this session. */
     inheritedToolDeny?: string[];
     /** Session-scoped tool allow entries inherited from the caller that created this session. */

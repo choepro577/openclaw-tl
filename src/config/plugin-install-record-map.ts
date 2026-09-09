@@ -19,6 +19,7 @@ const NORMALIZED_STRING_FIELDS = [
   "installedAt",
   "clawhubUrl",
   "clawhubPackage",
+  "clawhubVersion",
   "clawhubFamily",
   "clawhubChannel",
   "clawhubTrustDisposition",

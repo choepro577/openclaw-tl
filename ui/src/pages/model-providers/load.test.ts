@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { GatewayBrowserClient } from "../../api/gateway.ts";
-import { loadModelProvidersData } from "./load.ts";
+import { loadModelProviderUsage, loadModelProvidersData } from "./load.ts";
 
 describe("loadModelProvidersData", () => {
   it("keeps full catalog discovery out of the initial page load", async () => {
@@ -35,6 +35,32 @@ describe("loadModelProvidersData", () => {
           method === "models.list" && (params as { view?: string } | undefined)?.view === "all",
       ),
     ).toHaveLength(0);
+  });
+
+  it("reuses the shared runtime config load instead of requesting config twice", async () => {
+    const request = vi.fn(async (method: string): Promise<unknown> => {
+      switch (method) {
+        case "models.authStatus":
+          return { ts: 1, providers: [], providerCapabilities: [] };
+        case "models.list":
+          return { models: [] };
+        case "usage.status":
+          return { updatedAt: 1, providers: [] };
+        case "sessions.usage":
+          return { aggregates: { byProvider: [] } };
+        default:
+          return {};
+      }
+    });
+    const client = { request } as unknown as GatewayBrowserClient;
+
+    const result = await loadModelProvidersData(client, {
+      agentId: "writer",
+      configLoad: Promise.resolve({ models: { mode: "merge" } }),
+    });
+
+    expect(result.config).toEqual({ models: { mode: "merge" } });
+    expect(request).not.toHaveBeenCalledWith("config.get", expect.anything());
   });
 
   it("scopes only credential status to the selected agent", async () => {
@@ -214,5 +240,34 @@ describe("loadModelProvidersData", () => {
           (params as { view?: string } | undefined)?.view === "configured",
       ),
     ).toHaveLength(0);
+  });
+
+  it("retries one cold Enterprise Admin usage refresh", async () => {
+    vi.useFakeTimers();
+    try {
+      let usageCalls = 0;
+      const request = vi.fn(async (method: string): Promise<unknown> => {
+        if (method === "usage.status") {
+          usageCalls += 1;
+          return usageCalls === 1
+            ? { updatedAt: 1, providers: [], refreshing: true }
+            : { updatedAt: 2, providers: [{ provider: "openai", windows: [] }] };
+        }
+        return { aggregates: { byProvider: [] } };
+      });
+      const client = { request } as unknown as GatewayBrowserClient;
+
+      const resultPromise = loadModelProviderUsage(client, { retryRefreshing: true });
+      await vi.advanceTimersByTimeAsync(2_000);
+      const result = await resultPromise;
+
+      expect(usageCalls).toBe(2);
+      expect(result.providerUsage).toMatchObject({
+        ok: true,
+        value: { updatedAt: 2, providers: [{ provider: "openai" }] },
+      });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

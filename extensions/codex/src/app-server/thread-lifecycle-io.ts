@@ -17,6 +17,7 @@ import {
 } from "./client.js";
 import { isMessageOnlyCodexSourceReply } from "./dynamic-tool-profile.js";
 import { markStartedCodexManagedThread } from "./managed-thread-store.js";
+import { collectCodexNativePluginMcpServerOwnersFromPolicyContext } from "./native-plugin-grants.js";
 import {
   applyCodexNativeSkillIsolation,
   type CodexNativeSkillIsolation,
@@ -28,6 +29,7 @@ import {
 } from "./plugin-thread-attestation.js";
 import {
   buildCodexPluginAppsConfigPatchFromPolicyContext,
+  collectCodexPluginAppIdsFromPolicyContext,
   mergeCodexThreadConfigs,
   type CodexPluginThreadConfig,
 } from "./plugin-thread-config.js";
@@ -173,10 +175,36 @@ export async function resumeExistingCodexThread(
       resumeBinding.connectionScope === "supervision"
         ? undefined
         : (params.params.authProfileId ?? resumeBinding.authProfileId);
+    const pluginAppPolicyContext =
+      context.prebuiltPluginThreadConfig?.policyContext ?? resumeBinding.pluginAppPolicyContext;
+    const nativePluginMcpServerOwners =
+      context.prebuiltPluginThreadConfig?.nativePluginMcpServerOwners ??
+      (pluginAppPolicyContext
+        ? collectCodexNativePluginMcpServerOwnersFromPolicyContext(pluginAppPolicyContext)
+        : undefined);
+    const pluginMcpServerNames = nativePluginMcpServerOwners?.map((owner) => owner.serverName);
+    const selectivePluginCapabilityAdmission =
+      !ringZeroActive &&
+      !isMessageOnlyCodexSourceReply(params.params) &&
+      Boolean(pluginAppPolicyContext) &&
+      (collectCodexPluginAppIdsFromPolicyContext(pluginAppPolicyContext).length > 0 ||
+        (pluginMcpServerNames?.length ?? 0) > 0);
+    const admittedCodexPluginAppIds = selectivePluginCapabilityAdmission
+      ? collectCodexPluginAppIdsFromPolicyContext(pluginAppPolicyContext)
+      : [];
+    const admittedCodexPluginMcpServerNames = selectivePluginCapabilityAdmission
+      ? pluginMcpServerNames
+      : undefined;
     const finalConfigPatch = context.prebuiltFinalConfigPatch ??
       params.buildFinalConfigPatch?.({
         action: "resume",
         binding: resumeBinding,
+        ...(nativePluginMcpServerOwners
+          ? {
+              nativePluginMcpServerOwners,
+            }
+          : {}),
+        ...(pluginAppPolicyContext ? { pluginAppPolicyContext } : {}),
       }) ?? {
         configPatch: params.finalConfigPatch,
         nativeHookRelayGeneration: params.nativeHookRelayGeneration,
@@ -215,6 +243,13 @@ export async function resumeExistingCodexThread(
         webSearchAllowed: params.webSearchAllowed,
         hostSystemAgentActive,
         restrictedToolSurfaceInheritedMcpServerNames,
+        ...(selectivePluginCapabilityAdmission
+          ? {
+              admittedCodexPluginAppIds,
+              admittedCodexPluginMcpServerNames,
+              nativeHookRelayConfig: finalConfigPatch.configPatch,
+            }
+          : {}),
         shellEnvironment: params.shellEnvironment,
         disableLoginShell: params.disableLoginShell,
       }),
@@ -263,6 +298,12 @@ export async function resumeExistingCodexThread(
             response.thread.id,
             resumeParams.config,
             params.signal,
+            selectivePluginCapabilityAdmission
+              ? {
+                  admittedCodexPluginAppIds,
+                  admittedCodexPluginMcpServerNames,
+                }
+              : undefined,
           ),
         );
       } catch (error) {
@@ -467,7 +508,26 @@ export async function startFreshCodexThread(
         params.pluginThreadConfig?.build(),
       )))
     : undefined;
-  const finalConfigPatch = params.buildFinalConfigPatch?.({ action: "start" }) ?? {
+  const pluginAppPolicyContext = pluginThreadConfig?.policyContext;
+  const nativePluginMcpServerOwners = pluginThreadConfig?.nativePluginMcpServerOwners;
+  const pluginMcpServerNames = nativePluginMcpServerOwners?.map((owner) => owner.serverName);
+  const selectivePluginCapabilityAdmission =
+    !ringZeroActive &&
+    !isMessageOnlyCodexSourceReply(params.params) &&
+    Boolean(pluginAppPolicyContext) &&
+    (collectCodexPluginAppIdsFromPolicyContext(pluginAppPolicyContext).length > 0 ||
+      (pluginMcpServerNames?.length ?? 0) > 0);
+  const admittedCodexPluginAppIds = selectivePluginCapabilityAdmission
+    ? collectCodexPluginAppIdsFromPolicyContext(pluginAppPolicyContext)
+    : [];
+  const admittedCodexPluginMcpServerNames = selectivePluginCapabilityAdmission
+    ? pluginMcpServerNames
+    : undefined;
+  const finalConfigPatch = params.buildFinalConfigPatch?.({
+    action: "start",
+    ...(nativePluginMcpServerOwners ? { nativePluginMcpServerOwners } : {}),
+    ...(pluginAppPolicyContext ? { pluginAppPolicyContext } : {}),
+  }) ?? {
     configPatch: params.finalConfigPatch,
     nativeHookRelayGeneration: params.nativeHookRelayGeneration,
   };
@@ -498,6 +558,13 @@ export async function startFreshCodexThread(
       modelProvider: startModelProvider,
       hostSystemAgentActive,
       restrictedToolSurfaceInheritedMcpServerNames,
+      ...(selectivePluginCapabilityAdmission
+        ? {
+            admittedCodexPluginAppIds,
+            admittedCodexPluginMcpServerNames,
+            nativeHookRelayConfig: finalConfigPatch.configPatch,
+          }
+        : {}),
       shellEnvironment: params.shellEnvironment,
       disableLoginShell: params.disableLoginShell,
     }),
@@ -559,6 +626,12 @@ export async function startFreshCodexThread(
           response.thread.id,
           startParams.config,
           params.signal,
+          selectivePluginCapabilityAdmission
+            ? {
+                admittedCodexPluginAppIds,
+                admittedCodexPluginMcpServerNames,
+              }
+            : undefined,
         ),
       );
     } catch (error) {

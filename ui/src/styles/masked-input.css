@@ -1,0 +1,17 @@
+/* Presentation layer for technical text controls. The control's native value
+ * remains the source of truth; this layer only paints a masked mirror. */
+[data-maap-input-overlay] {
+  overflow: hidden;
+  pointer-events: none;
+  user-select: none;
+}
+
+.maap-masked-input-target {
+  -webkit-text-fill-color: transparent !important;
+  text-shadow: none !important;
+  caret-color: var(--text-strong, currentColor) !important;
+}
+
+.maap-masked-input-target::placeholder {
+  -webkit-text-fill-color: transparent !important;
+}

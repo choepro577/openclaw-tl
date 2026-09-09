@@ -1,15 +1,30 @@
 import type { OpenClawConfig } from "../config/types.openclaw.js";
+import type { EnterpriseKnowledgeAuthority } from "../enterprise/knowledge/authority.js";
+import { generateSecureUuid } from "../infra/secure-random.js";
 
-type GatewayEnterpriseKnowledgeAuthority = {
-  readonly accountId: string;
-  readonly sessionId: string;
-  readonly agentResourceKey: string;
-  hasPublishedKnowledge(): boolean;
-  search(input: { query: string; maxResults?: number; zoneSlug?: string }): Promise<unknown>;
-  get(citationId: string): Promise<unknown>;
-  evaluateGrounding(
-    finalText: string,
-  ): { action: "accept" } | { action: "revise"; instruction: string };
+export type GatewayEnterpriseDelegationSpecialist = {
+  agentId: string;
+  name: string;
+  description: string;
+  assigned: boolean;
+  effective: boolean;
+  routable: boolean;
+  effectiveMode: "auto_when_certain" | "confirm_before_handoff" | "explicit_only" | "disabled";
+  reasonCodes: string[];
+};
+
+export type GatewayEnterpriseDelegationTurn = {
+  decisionId?: string;
+  planId?: string;
+  planRevision?: number;
+  handling?: "direct" | "knowledge" | "specialist" | "hybrid";
+  outcome: "delegate" | "clarify" | "local" | "blocked" | "shadow";
+  source: "explicit" | "rule" | "ai" | "system";
+  agentNames: string[];
+  instruction: string;
+  /** User-facing text for a server-owned clarification; never inferred from instruction prose. */
+  clarificationQuestion?: string;
+  reasonCode: string;
 };
 import { resolveGlobalSingleton } from "../shared/global-singleton.js";
 
@@ -22,14 +37,44 @@ const gatewayRequestScopedConfigs = resolveGlobalSingleton<WeakSet<OpenClawConfi
   () => new WeakSet(),
 );
 
+const gatewayRequestConfigIdentities = resolveGlobalSingleton<WeakMap<OpenClawConfig, string>>(
+  Symbol.for("openclaw.gateway.requestScopedRuntimeConfigIdentities"),
+  () => new WeakMap(),
+);
+
+/** Runtime metadata is request-private even when two configs serialize identically. */
+export function getGatewayRequestRuntimeConfigIdentity(config: OpenClawConfig): string | undefined {
+  if (!isGatewayRequestScopedRuntimeConfig(config)) return undefined;
+  let identity = gatewayRequestConfigIdentities.get(config);
+  if (!identity) {
+    identity = generateSecureUuid();
+    gatewayRequestConfigIdentities.set(config, identity);
+  }
+  return identity;
+}
+
 export type GatewayRequestRuntimeMetadata = {
+  /** Authoritative account grants, resolved for the current Agent and harness owner. */
+  nativePluginGrants?: (
+    agentId: string,
+    harnessPluginId: string,
+  ) => readonly { pluginName: string; marketplaceName: string; capabilityDigest?: string | null }[];
   enterpriseUser?: {
     accountId: string;
     displayName: string;
     personalAgentId: string;
+    personalAgentTemplateId: string;
   };
   enterpriseKnowledge?: {
-    createAuthority(agentId: string): GatewayEnterpriseKnowledgeAuthority;
+    createAuthority(agentId: string): EnterpriseKnowledgeAuthority;
+  };
+  enterpriseDelegation?: {
+    accountId: string;
+    personalAgentId: string;
+    specialists: GatewayEnterpriseDelegationSpecialist[];
+    resolveExplicitAgentIds?: (prompt: string) => string[];
+    request?: { sessionKey: string; parentRunId: string };
+    turn?: GatewayEnterpriseDelegationTurn;
   };
 };
 

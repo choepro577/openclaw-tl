@@ -1,3 +1,4 @@
+import { setImmediate as yieldToEventLoop } from "node:timers/promises";
 import { vi } from "vitest";
 import type { SessionObserverDigest } from "../../packages/gateway-protocol/src/schema/sessions.js";
 import type { OpenClawConfig } from "../config/types.openclaw.js";
@@ -73,9 +74,9 @@ export function persistedLiveDigest(
 }
 
 export async function flushObserver(): Promise<void> {
-  for (let index = 0; index < 12; index += 1) {
-    await Promise.resolve();
-  }
+  // A real event-loop boundary drains nested async model/persistence chains
+  // without advancing the fake observer timers under test.
+  await yieldToEventLoop();
 }
 
 export function createHarness(options?: {
@@ -151,16 +152,20 @@ export function declareObserverVisibility(
 
 export function startAndAddToolNotes(
   observer: ReturnType<typeof createSessionObserver>,
-  params: { runId?: string; sessionKey?: string; count?: number } = {},
+  params: { runId?: string; sessionKey?: string; agentId?: string; count?: number } = {},
 ): void {
   const runId = params.runId ?? "run-1";
   const sessionKey = params.sessionKey ?? "agent:main:session-1";
-  observer.handleEvent(event({ runId, sessionKey, stream: "lifecycle", data: { phase: "start" } }));
+  const agentId = params.agentId;
+  observer.handleEvent(
+    event({ runId, sessionKey, agentId, stream: "lifecycle", data: { phase: "start" } }),
+  );
   for (let index = 0; index < (params.count ?? 3); index += 1) {
     observer.handleEvent(
       event({
         runId,
         sessionKey,
+        agentId,
         stream: "tool",
         data: { phase: "start", name: "read", args: { path: `src/file-${index}.ts` } },
       }),

@@ -1,0 +1,343 @@
+[
+  {
+    "chat": "8eeebb76",
+    "sessionId": "18663a50-a87c-4fb8-9e49-b4f6d3a213f3",
+    "sessionKey": "agent:enterprise-personal-2ae2cbc2deecdb86fe86:dashboard:8eeebb76-698e-493a-b4e6-89653e358a2d",
+    "tools": [
+      {
+        "id": "call_y8H0u2MhcaUCKZiuKhksypiR|fc_05ebb6edb873522b016a9a34026cc887d0919b592432398e0e",
+        "name": "memory_search",
+        "arguments": {
+          "query": "Bến Tre chốt phương án chia lớp thời điểm học hạn đăng ký bảo hành",
+          "maxResults": 10
+        }
+      },
+      {
+        "id": "call_g952sPCTOj7U69AQvUuNVUM8|fc_05ebb6edb873522b016a9a34026ce087d0b5bc22731dcd8d29",
+        "name": "enterprise_knowledge_search",
+        "arguments": {
+          "query": "quy định hiện tại hạn đăng ký bảo hành khóa học lớp đào tạo",
+          "zoneSlug": null,
+          "maxResults": 10
+        }
+      },
+      {
+        "id": "call_qPi16Qndfv5wH36Y7RAp4SUc|fc_01b1e10edb7fb096016a9a3415fa5c87d0a8db0b51c41e951a",
+        "name": "memory_get",
+        "arguments": {
+          "path": "MEMORY.md"
+        }
+      },
+      {
+        "id": "call_zDJ9WTZIF3aB8j31RRiTeaog|fc_01b1e10edb7fb096016a9a3415fa7887d0a23b7a1621c07fe4",
+        "name": "enterprise_knowledge_get",
+        "arguments": {}
+      },
+      {
+        "id": "call_MuFdMFEgxq6remPAiOq8HqIY|fc_01b1e10edb7fb096016a9a3415fa8887d0b3618f2731e1a8e7",
+        "name": "enterprise_knowledge_get",
+        "arguments": {}
+      }
+    ],
+    "finalAnswers": [
+      "Lần trước mình chốt:\n\n- **2 lớp, mỗi lớp 15 người** — tổng 30 người.\n- **Ưu tiên học chiều thứ Tư**; chưa chốt ngày cụ thể.\n  Nguồn ghi nhớ: `MEMORY.md#L3-L6`\n\nĐối chiếu quy định hiện tại:\n\n- Mỗi lớp tối đa **18 người**; 30 người phải chia **ít nhất 2 lớp** → phương án **2 × 15 hoàn toàn phù hợp**.\n- Phải đăng ký trước **ít nhất 9 ngày làm việc** → khi chọn thứ Tư cụ thể, cần lùi đủ 9 ngày làm việc để xác định hạn đăng ký.\n- Bảo hành cấu hình **60 ngày theo lịch**, tính từ **biên bản nghiệm thu**; chỉ áp dụng cho cấu hình đã thống nhất. Tính năng mới phải đánh giá và báo giá riêng.\n\nLưu ý: các nội dung nguồn đều được đánh dấu là **dữ liệu kiểm thử hư cấu**, không phải chính sách production.\nNguồn quy định: **[QA] OPS-02 — Đào tạo và bàn giao chi nhánh, phiên bản 2**, cập nhật 04/09/2026."
+    ]
+  },
+  {
+    "chat": "03c903f8",
+    "sessionId": "86ea1339-8960-4e60-aab0-bc2c2b8b9f27",
+    "sessionKey": "agent:enterprise-personal-2ae2cbc2deecdb86fe86:dashboard:03c903f8-faa0-44bf-b9e0-27f1e06f24e0",
+    "tools": [
+      {
+        "id": "call_O9QwGUsMCaCo3AOpeRaBJ6qm|fc_0a3941812d6da884016a9a344ef02487d0a984f069953843d9",
+        "name": "enterprise_knowledge_search",
+        "arguments": {
+          "query": "chính sách hiện hành thời gian lưu giữ bản sao lưu dữ liệu bị xóa khôi phục backup retention 31 ngày",
+          "zoneSlug": null,
+          "maxResults": 8
+        }
+      },
+      {
+        "id": "call_hq6P6pBaYnHJP6niy8lBI9PP|fc_0a3941812d6da884016a9a344ef03c87d0a0a1caf87d4bd657",
+        "name": "enterprise_knowledge_search",
+        "arguments": {
+          "query": "backup retention deleted data recovery period days",
+          "zoneSlug": null,
+          "maxResults": 8
+        }
+      },
+      {
+        "id": "call_YpDZFO2DuwRcFhNiHvHIsh06|fc_09aca7fdcb2e8419016a9a3456153887d0a0274db2c9e739e0",
+        "name": "enterprise_knowledge_search",
+        "arguments": {
+          "query": "\"bản sao lưu\" \"ngày\" khôi phục dữ liệu",
+          "zoneSlug": null,
+          "maxResults": 10
+        }
+      },
+      {
+        "id": "call_JqPQepRozephBZ2KcLv4aUG1|fc_09aca7fdcb2e8419016a9a3456155087d0b85d27248ffab150",
+        "name": "enterprise_knowledge_search",
+        "arguments": {
+          "query": "\"lưu giữ\" \"backup\" \"ngày\"",
+          "zoneSlug": null,
+          "maxResults": 10
+        }
+      },
+      {
+        "id": "call_8Zmtr8iWlPtxcbtfx6RINVxJ|fc_09aca7fdcb2e8419016a9a3456155c87d0b81b32daf853e1cf",
+        "name": "enterprise_knowledge_search",
+        "arguments": {
+          "query": "xóa nhầm dữ liệu 30 ngày 31 ngày hỗ trợ kỹ thuật",
+          "zoneSlug": null,
+          "maxResults": 10
+        }
+      },
+      {
+        "id": "call_KenRYcRJoWUaaIXpRFYrWDSQ|fc_06fb1ed521e0ea11016a9a346bc4a487d0be4ea84819302536",
+        "name": "enterprise_knowledge_get",
+        "arguments": {}
+      },
+      {
+        "id": "call_MNL0mCCzjmmT5W1RfwOTUz4U|fc_06fb1ed521e0ea11016a9a346bc4b487d096449d311ba67555",
+        "name": "enterprise_knowledge_get",
+        "arguments": {}
+      },
+      {
+        "id": "call_qqXLGr6EX1ViQhe2DJDceiIb|fc_06fb1ed521e0ea11016a9a346bc4bc87d08f51ac3f9072e57e",
+        "name": "enterprise_knowledge_get",
+        "arguments": {}
+      },
+      {
+        "id": "call_sKtte2X7QYOlAEeHL7Eh2X1b|fc_043915c7ddf2eada016a9a3470529487d0958feab4a4b68301",
+        "name": "enterprise_knowledge_search",
+        "arguments": {
+          "query": "31 ngày sao lưu",
+          "zoneSlug": null,
+          "maxResults": 20
+        }
+      },
+      {
+        "id": "call_r2u6pOXnaWeMGYbSSJyLGSBG|fc_043915c7ddf2eada016a9a347052ac87d080c53e95b87b4c95",
+        "name": "enterprise_knowledge_search",
+        "arguments": {
+          "query": "30 35 60 90 ngày dữ liệu sao lưu",
+          "zoneSlug": null,
+          "maxResults": 20
+        }
+      },
+      {
+        "id": "call_DGBotvzzJz54ca6ffL3SgFuN|fc_043915c7ddf2eada016a9a347052b487d0a3176822492256a0",
+        "name": "enterprise_knowledge_search",
+        "arguments": {
+          "query": "khôi phục dữ liệu đã xóa bản backup chính sách CNTT",
+          "zoneSlug": null,
+          "maxResults": 20
+        }
+      }
+    ],
+    "finalAnswers": [
+      "Chưa thể kết luận dữ liệu xóa **31 ngày trước** còn trong bản sao lưu.\n\nKho quy định hiện có **không nêu thời hạn lưu backup hoặc cửa sổ khôi phục dữ liệu**. Tài liệu CNTT tìm được chỉ hướng dẫn tạo ticket qua cổng hỗ trợ nội bộ và còn được ghi rõ là dữ liệu kiểm thử, không phải chính sách chính thức. [[QA] IT-01 — Thiết bị và hỗ trợ kỹ thuật](eyJfdiI6MSwieiI6ImRhYjVhNzc4LTYxOWMtNDI0ZC05YzYwLWM2N2QxOTYzNGJkYSIsInAiOiJiZDcxOTNjMC0xMjJkLTQ4ZmYtOWVkMC0zNThjNjFlMDc3MjciLCJnIjoiNGMyMWEzYmItOWQyOC00ZmM3LWI2ZGItOTVmYzNlZWY5ZjYxIiwicyI6ImZiY2NkYzg2LWE2NzMtNDYwNS04ZTA1LTYzNzk4YjU1N2Y4NSIsInYiOiJlZjJlZTc4OS0zODI1LTQ0ZGEtOTk0Yy01YTkxMDFmNTM1OGQiLCJuIjoxLCJ4IjoiMzdiMmYxM2RmMWE3NDQzY2VhNjU3M2YwZTgzNjczODIifQ.ksE9-1VSPU3KpQNd7x88bVz6gneMUGpLpacK-ou9U70)\n\nTrong cuộc họp, nên nói:\n\n> “Dữ liệu đã bị xóa 31 ngày nên hiện chưa thể cam kết còn bản sao lưu hoặc khôi phục được. Mình sẽ chuyển CNTT kiểm tra bản backup thực tế và phản hồi sau.”\n\nNên tạo ticket ngay, ghi rõ **hệ thống, dữ liệu bị xóa và thời điểm xóa chính xác**."
+    ]
+  },
+  {
+    "chat": "7b94aedd",
+    "sessionId": "9c2fc9e9-f47e-4984-914b-c593737d605e",
+    "sessionKey": "agent:enterprise-personal-2ae2cbc2deecdb86fe86:dashboard:7b94aedd-9812-4008-8e4c-d427ab3cdce2",
+    "tools": [
+      {
+        "id": "call_ywNKuuzzqv9acCohx08EGN8K|fc_0b0312310bd51c5e016a9a34cb61f887d089a4603b9a356a9b",
+        "name": "enterprise_knowledge_search",
+        "arguments": {
+          "query": "gói phần mềm chi nhánh chạy thử 18 người sau nghiệm thu 30 người định mức lựa chọn gói license",
+          "zoneSlug": null,
+          "maxResults": 10
+        }
+      },
+      {
+        "id": "call_7fCZZoqmRz2wUIsR5ZNoKZGR|fc_0b0312310bd51c5e016a9a34cb620887d0882f95fbc4076eca",
+        "name": "enterprise_knowledge_search",
+        "arguments": {
+          "query": "dịch vụ bên ngoài 48 triệu trước thuế thủ tục hợp đồng phê duyệt mua sắm nghiệm thu thanh toán",
+          "zoneSlug": null,
+          "maxResults": 10
+        }
+      },
+      {
+        "id": "call_lvfx69OyehzD55KNTV9sJQet|fc_0b0312310bd51c5e016a9a34cb621087d09ee5372b7c028304",
+        "name": "enterprise_knowledge_search",
+        "arguments": {
+          "query": "nhà cung cấp bên ngoài truy cập xem dữ liệu khách hàng bảo mật dữ liệu cá nhân cấp quyền xử lý dữ liệu",
+          "zoneSlug": null,
+          "maxResults": 10
+        }
+      },
+      {
+        "id": "call_Lx3ofaInYBqDfgLTylwObhmQ|fc_0b0312310bd51c5e016a9a34cb621887d0b8c49c922090f4d8",
+        "name": "enterprise_knowledge_search",
+        "arguments": {
+          "query": "công tác phí 3 ngày 2 đêm Bến Tre mức tiền ăn ở lưu trú tối đa chứng từ thời hạn quyết toán",
+          "zoneSlug": null,
+          "maxResults": 10
+        }
+      },
+      {
+        "id": "call_2GRO4G7zvhxYoqHIjsKntOgg|fc_051051fa9f77efb7016a9a34f73d8087d08a224d95cf3c3690",
+        "name": "enterprise_knowledge_get",
+        "arguments": {}
+      },
+      {
+        "id": "call_TsFL7cNvh5civPTOCmfmFhv9|fc_051051fa9f77efb7016a9a34f73d9087d0a66beca4d9c0f200",
+        "name": "enterprise_knowledge_get",
+        "arguments": {}
+      },
+      {
+        "id": "call_ApsdPCZu41DfZARyV10mWxhm|fc_051051fa9f77efb7016a9a34f73da087d099064301b3c46c3e",
+        "name": "enterprise_knowledge_get",
+        "arguments": {}
+      },
+      {
+        "id": "call_PuONsG42j9ya5YgpVdiaXbOm|fc_051051fa9f77efb7016a9a34f73dac87d09c2ea38903983829",
+        "name": "enterprise_knowledge_get",
+        "arguments": {}
+      },
+      {
+        "id": "call_QCHJotnWsrA4NQcRBVSN3POu|fc_051051fa9f77efb7016a9a34f73db487d0858c2e0ea1f82011",
+        "name": "enterprise_knowledge_get",
+        "arguments": {}
+      },
+      {
+        "id": "call_TpeXRbn7M9xUgfQeglqESwHs|fc_051051fa9f77efb7016a9a34f73dbc87d09333ac7fabf78903",
+        "name": "enterprise_knowledge_get",
+        "arguments": {}
+      },
+      {
+        "id": "call_pVOptjXeVDs4MXuvfJ4sOzCW|fc_051051fa9f77efb7016a9a34f73dc087d080cf0a857dc62065",
+        "name": "enterprise_knowledge_get",
+        "arguments": {}
+      },
+      {
+        "id": "call_5CEsNGEyzorxxF1yzm7wGRTK|fc_051051fa9f77efb7016a9a34f73dc887d09e6a851b39433ce2",
+        "name": "enterprise_knowledge_get",
+        "arguments": {}
+      }
+    ],
+    "finalAnswers": [
+      "**Lưu ý quan trọng:** toàn bộ tài liệu tìm thấy đều được gắn nhãn **dữ liệu kiểm thử hư cấu, không áp dụng cho hoạt động thực tế**. Vì vậy, dưới đây là phương án theo bộ quy định thử nghiệm hiện có; cần đối chiếu chính sách production trước khi phê duyệt hoặc ký hợp đồng.\n\n## Đề xuất\n\n### 1. Gói phần mềm\n\nChọn **Aurora Desk Enterprise**:\n\n- Growth chỉ tối đa 20 người, không đáp ứng quy mô 30 người sau nghiệm thu.\n- Enterprise hỗ trợ phân quyền nâng cao, SSO và nhật ký kiểm toán—phù hợp hơn khi nhà cung cấp được tiếp cận dữ liệu khách hàng.\n- Cần yêu cầu báo giá Enterprise nằm trong ngân sách **48 triệu đồng trước thuế**; hiện chưa có giá niêm yết nên chưa thể xác nhận ngân sách đủ.\nNguồn: *PROD-01 — Aurora Desk: gói dịch vụ*; *OPS-01 — Kế hoạch triển khai chi nhánh Bến Tre*.\n\nĐào tạo 30 người phải chia **ít nhất 2 lớp**, mỗi lớp tối đa 18 người; đăng ký trước buổi học ít nhất 9 ngày làm việc. Nguồn: *OPS-02 — Đào tạo và bàn giao chi nhánh*, bản 2.\n\n### 2. Mua sắm và pháp lý\n\nGiá trị 48 triệu thuộc ngưỡng từ 30 triệu trở lên:\n\n1. Thu tối thiểu **3 báo giá**.\n2. Có phê duyệt của **Tài chính và Giám đốc điều hành**.\n3. Không được chia nhỏ đơn hàng để né ngưỡng.\nNguồn: *FIN-02 — Ngân sách đào tạo và ngưỡng mua sắm*.\n\nMặc dù hợp đồng dưới ngưỡng 50 triệu, việc xử lý dữ liệu khách hàng khiến hợp đồng **bắt buộc qua Pháp chế**. Hồ sơ gửi duyệt gồm:\n\n- Dự thảo hợp đồng có thể chỉnh sửa;\n- Báo giá đã duyệt;\n- Thông tin pháp nhân nhà cung cấp;\n- Mô tả dịch vụ, thời hạn và đầu mối phụ trách;\n- Trưởng bộ phận xác nhận nghiệp vụ, Tài chính xác nhận ngân sách;\n- Người có thẩm quyền/được ủy quyền ký.\n\nSLA Pháp chế là **3 ngày làm việc khi đủ hồ sơ**; tối đa **7 ngày làm việc** nếu có chuyển dữ liệu xuyên biên giới. Bản ký và lịch sử duyệt phải lưu 6 năm sau khi hợp đồng kết thúc. Nguồn: *LEG-01 — Quy trình thẩm định hợp đồng*.\n\nTrước khi chia sẻ dữ liệu/thông tin dự án:\n\n- Ký NDA mẫu **SM-NDA-2026**;\n- Ký riêng **thỏa thuận xử lý dữ liệu cá nhân (DPA)**—NDA không thay thế DPA;\n- Hoàn tất hồ sơ nhà cung cấp: đăng ký doanh nghiệp, tài khoản ngân hàng đã xác minh, đầu mối hỗ trợ, báo giá và khai báo xung đột lợi ích.\nNguồn: *LEG-02 — NDA và tiếp nhận nhà cung cấp*.\n\n### 3. Cấp quyền nhà cung cấp\n\nChỉ cấp sau khi NDA, DPA, Pháp chế và kiểm tra CNTT hoàn tất:\n\n- Tài khoản định danh riêng, không dùng chung;\n- Quyền tối thiểu, ưu tiên chỉ đọc nếu đủ để chuyển đổi;\n- Bắt buộc MFA;\n- Có người bảo trợ nội bộ và bật log truy cập;\n- Thời hạn tối đa **14 ngày**; gia hạn phải duyệt lại;\n- Thu hồi ngay khi hoàn thành chuyển đổi/nghiệm thu;\n- Không gửi mật khẩu, OTP, recovery code hoặc khóa API qua chat/hồ sơ.\nNguồn: *IT-02 — MFA và truy cập nhà cung cấp*.\n\n## Công tác phí 3 ngày 2 đêm\n\nCho **1 người**, mức tối đa theo tài liệu thử nghiệm:\n\n- Khách sạn: 850.000 × 2 đêm = **1.700.000 đồng**.\n- Tiền ăn: 220.000 × 3 ngày = **660.000 đồng**.\n- Tổng ăn ở: **2.360.000 đồng**, chưa gồm đi lại.\n- Taxi sân bay: tối đa 350.000 đồng/lượt, phải có chứng từ nếu thực tế có phát sinh.\n- Phần vượt hạn mức phải được Giám đốc Tài chính duyệt bằng văn bản **trước khi phát sinh**.\nNguồn: *FIN-01 — Công tác phí và hoàn ứng*.\n\n## Các mốc cần nhớ\n\n- UAT và chữ ký quản lý chi nhánh: ít nhất **2 ngày làm việc trước ngày vận hành 18/09/2026**—dự kiến chậm nhất 16/09, nhưng nên xác nhận cách tính hạn nội bộ.\n- Đăng ký đào tạo: trước từng buổi ít nhất **9 ngày làm việc**.\n- Danh sách học viên, kết quả và biên bản bàn giao: trong **2 ngày làm việc sau buổi học cuối**.\n- Hồ sơ hoàn ứng công tác: trong **5 ngày làm việc sau khi kết thúc chuyến đi**, gồm quyết định công tác, hóa đơn hợp lệ, bảng kê và xác nhận hoàn thành.\n- Trực tăng cường: 10 ngày làm việc sau vận hành, báo cáo hằng ngày lúc 16:30.\nNguồn: *OPS-01*, *OPS-02*, *FIN-01*.\n\n## Thông tin còn thiếu\n\n- Báo giá Enterprise, thời hạn thuê và thuế suất để kiểm tra trần 48 triệu.\n- Phạm vi dữ liệu nhà cung cấp được xem, có tải/xuất dữ liệu hay không.\n- Nơi lưu trữ dữ liệu và có chuyển dữ liệu ra nước ngoài không.\n- Ngày đào tạo, ngày đi–về cụ thể để chốt các hạn chứng từ.\n- Chức danh/ngạch công tác của anh và phương tiện di chuyển, nếu chính sách production phân hạn mức theo cấp bậc.\n- Mẫu DPA, quy trình kiểm tra CNTT và chính sách công tác phí **production** đang có hiệu lực."
+    ]
+  },
+  {
+    "chat": "e8ef94f4",
+    "sessionId": "facfab18-bef2-4355-b3ef-efb65b13a983",
+    "sessionKey": "agent:enterprise-personal-2ae2cbc2deecdb86fe86:dashboard:e8ef94f4-7167-42cf-b5f9-c5190ea6f392",
+    "tools": [
+      {
+        "id": "call_zEisuQ3LuICMAEN6tC18it65|fc_0bcfc0235b451494016a9a36afe38c87d0b748988e294b8ae4",
+        "name": "enterprise_knowledge_search",
+        "arguments": {
+          "query": "chính sách sao lưu dữ liệu thời gian lưu giữ bản sao lưu dữ liệu bị xóa khôi phục 31 ngày",
+          "zoneSlug": null,
+          "maxResults": 10
+        }
+      },
+      {
+        "id": "call_8ENiowaeKkK2L37jqo5egWFL|fc_0fef2cfb26e01b79016a9a36bceb1887d096ee65644301ac0e",
+        "name": "enterprise_knowledge_get",
+        "arguments": {}
+      },
+      {
+        "id": "call_DGEuJq1aIK2klu1b28JwoRXP|fc_0fef2cfb26e01b79016a9a36bceb2887d0a3da82beef67546e",
+        "name": "enterprise_knowledge_get",
+        "arguments": {}
+      }
+    ],
+    "finalAnswers": [
+      "Theo tài liệu CNTT hiện có:\n\n- **Bản sao lưu vận hành được giữ 35 ngày.**\n- Dữ liệu bị xóa **31 ngày trước vẫn còn trong thời hạn lưu**, nhưng chỉ còn khoảng **4 ngày**.\n- Không nên hứa chắc sẽ khôi phục được; hãy nói **“vẫn trong thời hạn sao lưu, cần CNTT kiểm tra khả năng phục hồi”** và tạo ticket ngay.\n\nLưu ý: nguồn hiện được gắn nhãn **dữ liệu kiểm thử**, nên nếu dùng trong cuộc họp chính thức, cần CNTT xác nhận đây cũng là chính sách đang áp dụng thực tế.\n\nNguồn: *[QA] IT-02 — MFA và truy cập nhà cung cấp*, phiên bản 1, xuất bản 03/09/2026."
+    ]
+  },
+  {
+    "chat": "0780b5aa",
+    "sessionId": "a66b2c92-18ec-4211-ab8a-74a9f2680ea9",
+    "sessionKey": "agent:enterprise-personal-2ae2cbc2deecdb86fe86:dashboard:0780b5aa-fe6c-49ae-9b9f-73e6504c24b1",
+    "tools": [
+      {
+        "id": "call_CqpJvi2iQ9MVUSDVJxDRjeeE|fc_0640ef21e7ce64a8016a9a371ed5f487d09d078e3ce09d3e5c",
+        "name": "enterprise_knowledge_search",
+        "arguments": {
+          "query": "chính sách hỗ trợ tiền mặt nhân viên sinh con thứ hai mức hỗ trợ thời hạn nộp hồ sơ",
+          "zoneSlug": null,
+          "maxResults": 10
+        }
+      },
+      {
+        "id": "call_97MVQTWNmwZFrAQrioZExSyQ|fc_08a8e9cf4d3728cf016a9a37233a6487d0be9b8256c73491b2",
+        "name": "enterprise_knowledge_get",
+        "arguments": {}
+      },
+      {
+        "id": "call_1MbJ0kslnXujfE8YfWSHVW7u|fc_09ea469f4e53e21d016a9a372a39e087d0b2949131fd39149b",
+        "name": "enterprise_knowledge_search",
+        "arguments": {
+          "query": "\"sinh con\" \"thứ hai\" trợ cấp phúc lợi hồ sơ ngày",
+          "zoneSlug": null,
+          "maxResults": 20
+        }
+      },
+      {
+        "id": "call_XeohxoB4CXXIY4HcMbHGRJQj|fc_01551e15f93d073b016a9a37321e5887d0a7d00bcefe4f5b2d",
+        "name": "enterprise_knowledge_get",
+        "arguments": {}
+      }
+    ],
+    "finalAnswers": [
+      "Hiếu ơi, mình **chưa xác định được** mức hỗ trợ và hạn nộp hồ sơ từ kho chính sách hiện có. Tài liệu HR hiện chỉ là **dữ liệu kiểm thử** và ghi rõ **chưa có thông tin về trợ cấp sinh con**.\n\nNguồn: *HR-02 — Nghỉ phép, đào tạo và làm việc từ xa*, phiên bản 1.0."
+    ]
+  },
+  {
+    "chat": "0a0029b9",
+    "sessionId": "2742670e-e8b0-4fa5-9927-faab397a90ed",
+    "sessionKey": "agent:enterprise-personal-2ae2cbc2deecdb86fe86:dashboard:0a0029b9-9f23-4071-ae91-f85b9bb3509d",
+    "tools": [
+      {
+        "id": "call_Z6r8yPVpBU5Ptmb7m1VGsYQo|fc_09cd63419bcc2917016a9a3d04398487d0b898c509c763128b",
+        "name": "enterprise_knowledge_search",
+        "arguments": {
+          "query": "chính sách sao lưu dữ liệu thời gian lưu giữ bản sao lưu dữ liệu bị xóa 31 ngày khôi phục",
+          "maxResults": 10,
+          "zoneSlug": null
+        }
+      },
+      {
+        "id": "call_xEi9urthuYKHK94otMqZzZ4U|fc_09cd63419bcc2917016a9a3d0439a087d0a032df40019dab3f",
+        "name": "enterprise_knowledge_search",
+        "arguments": {
+          "query": "backup retention policy deleted data 31 days restore retention period",
+          "maxResults": 10,
+          "zoneSlug": null
+        }
+      },
+      {
+        "id": "call_ZQp89JsuBLpfVGCRvLvSSpPH|fc_0ad83d748000f887016a9a3d30da5487d09bd14541ec3834f4",
+        "name": "enterprise_knowledge_get",
+        "arguments": {}
+      },
+      {
+        "id": "call_VTYkrvMUSOU6mVnVkLWwGdGv|fc_0ad83d748000f887016a9a3d30da6c87d084fc9c9dd3e2de05",
+        "name": "enterprise_knowledge_get",
+        "arguments": {}
+      },
+      {
+        "id": "call_8Hjz6qc0C70mXuDkAx3JERNW|fc_0f8146f83b10bf4e016a9a3d37d8bc87d0b3d4cad069c3c8ab",
+        "name": "enterprise_knowledge_search",
+        "arguments": {
+          "query": "\"35 ngày\" \"Bản sao lưu vận hành\"",
+          "maxResults": 5,
+          "zoneSlug": null
+        }
+      }
+    ],
+    "finalAnswers": [
+      "Theo tài liệu CNTT hiện có:\n\n- **Bản sao lưu vận hành được giữ 35 ngày.**\n- Dữ liệu bị xóa **31 ngày trước vẫn đang trong thời hạn lưu giữ**, còn khoảng **4 ngày**.\n- Tuy nhiên, thời hạn lưu giữ **không đồng nghĩa chắc chắn khôi phục được**. Nên tạo ticket CNTT ngay và chỉ trao đổi với đồng nghiệp rằng dữ liệu **“có khả năng còn trong bản sao lưu, đang chờ CNTT xác nhận/khôi phục”**.\n\nNguồn: *[QA] IT-02 — MFA và truy cập nhà cung cấp*, phiên bản 1, công bố 04/09/2026. Lưu ý nguồn nằm trong vùng **[KIỂM THỬ] CNTT & An toàn thông tin**."
+    ]
+  }
+]

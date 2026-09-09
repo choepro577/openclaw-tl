@@ -1,0 +1,24 @@
+openclaw-user-automation-editor-page .settings-page {
+  --settings-control-height: 40px;
+
+  gap: 24px;
+}
+
+openclaw-user-automation-editor-page .eu-page-header {
+  align-items: center;
+  margin-bottom: 0;
+}
+
+openclaw-user-automation-editor-page .settings-row {
+  padding: 16px;
+}
+
+openclaw-user-automation-editor-page .settings-row--stacked {
+  gap: 10px;
+}
+
+openclaw-user-automation-editor-page textarea.settings-input {
+  min-height: 180px;
+  resize: vertical;
+  line-height: 1.6;
+}

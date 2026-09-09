@@ -1,4 +1,5 @@
 import { html } from "lit";
+import { enterpriseErrorMessage } from "../../../i18n/enterprise-errors.ts";
 import { eu } from "../../../i18n/enterprise-user.ts";
 import { OpenClawLightDomElement } from "../../../lit/openclaw-element.ts";
 import { loadEnterpriseStatus } from "../../enterprise/services/enterprise-api.ts";
@@ -8,6 +9,12 @@ import {
   loadEnterpriseUserMe,
   type EnterpriseUserAuthAccount,
 } from "../services/user-enterprise-api.ts";
+import {
+  clearThienlyPendingState,
+  loadThienlyAttempt,
+  storedThienlyAttemptId,
+  storedThienlySuccessDeadline,
+} from "../services/user-thienly-auth.ts";
 import { setEnterpriseUserSessionAccount } from "../state/user-auth-session.ts";
 import "../styles/auth.css";
 import "./user-change-password-page.ts";
@@ -15,11 +22,40 @@ import "./user-login-page.ts";
 
 type State =
   | { phase: "checking" }
-  | { phase: "login"; bootstrapped: boolean; error?: string }
+  | { phase: "login"; bootstrapped: boolean; error?: unknown }
   | { phase: "password"; account: EnterpriseUserAuthAccount }
   | { phase: "ready"; account: EnterpriseUserAuthAccount }
   | { phase: "disabled" }
-  | { phase: "error"; message: string };
+  | { phase: "error"; error: unknown };
+
+async function shouldHoldForThienlyAttempt(): Promise<boolean> {
+  if (storedThienlySuccessDeadline() !== null) {
+    return true;
+  }
+  const attemptId = storedThienlyAttemptId();
+  if (!attemptId) {
+    return false;
+  }
+  try {
+    const { attempt } = await loadThienlyAttempt(attemptId);
+    if (
+      attempt.phase === "waiting" ||
+      attempt.phase === "verifying" ||
+      attempt.phase === "account" ||
+      attempt.phase === "link_required" ||
+      attempt.phase === "agent" ||
+      attempt.phase === "ready" ||
+      attempt.phase === "completed"
+    ) {
+      return true;
+    }
+    clearThienlyPendingState();
+    return false;
+  } catch {
+    // If an old attempt cannot be recovered, let the regular /me check decide.
+    return false;
+  }
+}
 
 export class EnterpriseUserAuthGate extends OpenClawLightDomElement {
   private state: State = { phase: "checking" };
@@ -75,6 +111,13 @@ export class EnterpriseUserAuthGate extends OpenClawLightDomElement {
         this.publish({ phase: "login", bootstrapped: false });
         return;
       }
+      // The Thiên Lý complete endpoint sets the session cookie before the UI
+      // starts its three-second success handoff. Keep the flow mounted across
+      // a reload until that deadline rather than letting /me bypass it.
+      if (await shouldHoldForThienlyAttempt()) {
+        this.publish({ phase: "login", bootstrapped: true });
+        return;
+      }
       try {
         this.accept((await loadEnterpriseUserMe()).account);
       } catch (error) {
@@ -87,7 +130,7 @@ export class EnterpriseUserAuthGate extends OpenClawLightDomElement {
     } catch (error) {
       this.publish({
         phase: "error",
-        message: error instanceof Error ? error.message : eu("portalCheckFailed"),
+        error,
       });
     }
   }
@@ -110,7 +153,9 @@ export class EnterpriseUserAuthGate extends OpenClawLightDomElement {
     if (this.state.phase === "error") {
       return html`<main class="eu-auth-screen">
         <section class="card eu-auth-card">
-          <div class="callout danger" role="alert">${this.state.message}</div>
+          <div class="callout danger" role="alert">
+            ${enterpriseErrorMessage(this.state.error, eu("portalCheckFailed"))}
+          </div>
           <button class="btn" type="button" @click=${() => void this.load()}>${eu("retry")}</button>
         </section>
       </main>`;

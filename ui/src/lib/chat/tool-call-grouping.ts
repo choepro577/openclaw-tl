@@ -3,18 +3,18 @@
  * "Ran 13 commands, read 6 files, edited 9 files, created a file".
  */
 
+import { enterpriseUserChatCopy } from "../../i18n/enterprise-user-chat.ts";
 import { t } from "../../i18n/index.ts";
+import type { ToolCard } from "./chat-types.ts";
 import {
   resolveToolCallFileOperations,
   resolveToolCallKind,
   resolveToolCallTargetPaths,
   type ToolCallKind,
 } from "./tool-call-view.ts";
+import { isToolCardSkipped } from "./tool-cards.ts";
 
-type ToolGroupSummaryInput = {
-  name: string;
-  args?: unknown;
-};
+type ToolGroupSummaryInput = Pick<ToolCard, "name" | "args" | "details">;
 
 type FileActivity = "read" | "edit" | "write" | "delete";
 
@@ -28,8 +28,11 @@ type GroupCounts = {
   files: Record<FileActivity, FileActivityCounts>;
   searches: number;
   fetches: number;
+  knowledgeSearches: number;
+  knowledgeReads: number;
   otherNames: Set<string>;
   others: number;
+  skipped: number;
 };
 
 function countFiles(counts: GroupCounts, activity: FileActivity, paths: readonly string[]): void {
@@ -43,6 +46,14 @@ function countFiles(counts: GroupCounts, activity: FileActivity, paths: readonly
 }
 
 function countCard(counts: GroupCounts, card: ToolGroupSummaryInput): void {
+  if (isToolCardSkipped(card)) {
+    counts.skipped++;
+    return;
+  }
+  if (card.name === "enterprise_knowledge_search" || card.name === "enterprise_knowledge_get") {
+    counts[card.name === "enterprise_knowledge_search" ? "knowledgeSearches" : "knowledgeReads"]++;
+    return;
+  }
   const kind: ToolCallKind = resolveToolCallKind(card.name, card.args);
   const fileOperations = resolveToolCallFileOperations(card.name, card.args);
   if (fileOperations) {
@@ -101,14 +112,20 @@ export function summarizeToolGroup(cards: readonly ToolGroupSummaryInput[]): str
     },
     searches: 0,
     fetches: 0,
+    knowledgeSearches: 0,
+    knowledgeReads: 0,
     otherNames: new Set(),
     others: 0,
+    skipped: 0,
   };
   for (const card of cards) {
     countCard(counts, card);
   }
 
   const segments: string[] = [];
+  if (counts.skipped > 0) {
+    segments.push(enterpriseUserChatCopy("toolGroupSkipped", { count: String(counts.skipped) }));
+  }
   if (counts.commands > 0) {
     segments.push(
       countLabel(
@@ -153,6 +170,11 @@ export function summarizeToolGroup(cards: readonly ToolGroupSummaryInput[]): str
         "chat.toolCards.group.fetchesMany",
       ),
     );
+  }
+  for (const key of ["knowledgeSearches", "knowledgeReads"] as const) {
+    if (counts[key] > 0) {
+      segments.push(t(`chat.toolCards.group.${key}`, { count: String(counts[key]) }));
+    }
   }
   if (counts.others > 0) {
     const names = [...counts.otherNames].slice(0, 2).join(", ");

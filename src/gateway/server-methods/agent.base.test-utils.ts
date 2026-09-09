@@ -76,9 +76,19 @@ describe("gateway agent handler", () => {
     const publishedConfig = {
       agents: { list: [{ id: "main", workspace: "/tmp/global-main-workspace" }] },
     };
-    const scopedConfig = markGatewayRequestScopedRuntimeConfig({
-      agents: { list: [{ id: "main", workspace: "/tmp/enterprise-main-workspace" }] },
-    });
+    const scopedConfig = markGatewayRequestScopedRuntimeConfig(
+      {
+        agents: { list: [{ id: "main", workspace: "/tmp/enterprise-main-workspace" }] },
+      },
+      {
+        enterpriseUser: {
+          accountId: "account-1",
+          displayName: "Enterprise user",
+          personalAgentId: "main",
+          personalAgentTemplateId: "template-main",
+        },
+      },
+    );
     mocks.loadConfigReturn = publishedConfig;
     primeMainAgentRun({ cfg: publishedConfig });
     const context = {
@@ -97,8 +107,18 @@ describe("gateway agent handler", () => {
     );
 
     const dispatchCall = mocks.agentCommand.mock.calls.at(-1) as unknown[] | undefined;
-    const commandRuntimeContext = dispatchCall?.[4] as { config?: unknown } | undefined;
+    const commandRuntimeContext = dispatchCall?.[4] as
+      | { config?: unknown; pluginGeneration?: unknown }
+      | undefined;
+    expect(mocks.loadSessionEntry).toHaveBeenCalledWith(
+      "agent:main:main",
+      expect.objectContaining({ cfg: scopedConfig }),
+    );
     expect(commandRuntimeContext?.config).toBe(scopedConfig);
+    expect(commandRuntimeContext?.pluginGeneration).toBeDefined();
+    expect(mocks.loadPublishedGatewayReplyDispatchRuntime).toHaveBeenCalledWith({
+      agentId: "template-main",
+    });
   });
 
   it("carries exact cron creator authority through direct local agent RPC", async () => {

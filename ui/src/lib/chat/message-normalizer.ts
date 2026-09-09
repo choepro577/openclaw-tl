@@ -586,6 +586,10 @@ export function normalizeMessage(message: unknown): NormalizedMessage {
     }
   } else if (contentItems) {
     content = contentItems.flatMap((item) => {
+      // Raw thinking remains available to its separate disclosure, not visible reply content.
+      if (item.type === "thinking") {
+        return [];
+      }
       if (isAssistantMessage) {
         const managedMediaAttachment = coerceManagedMediaContentBlock(item);
         if (managedMediaAttachment) {
@@ -663,14 +667,7 @@ export function normalizeMessage(message: unknown): NormalizedMessage {
           }
           return expanded.content;
         }
-        return [
-          {
-            type: "text" as const,
-            text: item.text,
-            name: undefined,
-            args: undefined,
-          },
-        ];
+        return [{ type: "text" as const, text: item.text, name: undefined, args: undefined }];
       }
       return [
         {

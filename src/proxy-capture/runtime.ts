@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import { URL } from "node:url";
 import { normalizeRequestInitHeadersForFetch } from "../infra/fetch-headers.js";
 import { readChunkWithIdleTimeout } from "../infra/http-body.js";
+import { isPrivateRunObservationScope } from "../infra/private-run-observations.js";
 import {
   hasRegisteredSecretValuesForRedaction,
   redactRegisteredSecretValues,
@@ -347,6 +348,11 @@ function installDebugProxyGlobalFetchPatch(
   const originalFetch = fetchImpl.bind(fetchTarget);
   fetchTarget[DEBUG_PROXY_FETCH_PATCH_KEY] = { originalFetch };
   const patchedFetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+    // The configured proxy may capture outside this process, so do not send
+    // private preparation traffic through it even when local sinks are gated.
+    if (isPrivateRunObservationScope()) {
+      throw new Error("PRIVATE_PREPARATION_CAPTURE_UNAVAILABLE");
+    }
     const url = resolveUrlString(input);
     const normalizedInit = normalizeRequestInitHeadersForFetch(init);
     try {
@@ -485,6 +491,9 @@ export function captureHttpExchange(
   resolved?: DebugProxySettings,
   deps: DebugProxyCaptureRuntimeDeps = {},
 ): void {
+  if (isPrivateRunObservationScope()) {
+    return;
+  }
   const settings = resolved ?? resolveDebugProxySettings();
   if (!settings.enabled) {
     return;
@@ -644,6 +653,9 @@ export function captureWsEvent(
   resolved?: DebugProxySettings,
   deps: DebugProxyCaptureRuntimeDeps = {},
 ): void {
+  if (isPrivateRunObservationScope()) {
+    return;
+  }
   const settings = resolved ?? resolveDebugProxySettings();
   if (!settings.enabled) {
     return;

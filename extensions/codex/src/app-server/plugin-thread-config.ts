@@ -14,6 +14,10 @@ import {
   type ResolvedCodexPluginsPolicy,
 } from "./config.js";
 import {
+  collectCodexNativePluginMcpServerOwners,
+  type CodexNativePluginMcpServerOwners,
+} from "./native-plugin-grants.js";
+import {
   ensureCodexPluginActivation,
   type CodexPluginActivationResult,
 } from "./plugin-activation.js";
@@ -73,6 +77,33 @@ export type PluginAppPolicyContext = {
   pluginAppIds: Record<string, string[]>;
 };
 
+/**
+ * Returns only app ids whose ownership was proven by a configured plugin.
+ *
+ * Account connected apps intentionally stay out of this list.  A restricted
+ * Codex turn may use this list to re-enable the shared `codex_apps` surface
+ * without accidentally admitting every account connector.
+ */
+export function collectCodexPluginAppIdsFromPolicyContext(
+  policyContext: PluginAppPolicyContext | undefined,
+): string[] {
+  if (!policyContext) {
+    return [];
+  }
+  return Object.entries(policyContext.apps)
+    .filter(
+      ([appId, entry]) =>
+        appId.trim().length > 0 &&
+        entry.source !== "account" &&
+        typeof entry.pluginName === "string" &&
+        entry.pluginName.trim().length > 0 &&
+        typeof entry.marketplaceName === "string" &&
+        entry.marketplaceName.trim().length > 0,
+    )
+    .map(([appId]) => appId)
+    .toSorted();
+}
+
 /** Diagnostic emitted while building app config for a native Codex thread. */
 type CodexPluginThreadConfigDiagnostic =
   | CodexPluginInventoryDiagnostic
@@ -97,6 +128,8 @@ export type CodexPluginThreadConfig = {
   fingerprint: string;
   inputFingerprint: string;
   policyContext: PluginAppPolicyContext;
+  /** Trusted plugin MCP ownership passed to the native hook relay at startup. */
+  nativePluginMcpServerOwners?: CodexNativePluginMcpServerOwners;
   inventory?: CodexPluginInventory;
   diagnostics: CodexPluginThreadConfigDiagnostic[];
 };
@@ -451,6 +484,7 @@ export async function buildCodexPluginThreadConfig(
 
   const configPatch = { apps };
   const policyContext = buildPluginAppPolicyContext(policyApps, pluginAppIds);
+  const nativePluginMcpServerOwners = collectCodexNativePluginMcpServerOwners(inventory.records);
   return {
     enabled: true,
     configPatch,
@@ -462,9 +496,11 @@ export async function buildCodexPluginThreadConfig(
       inputFingerprint,
       configPatch,
       policyContext,
+      nativePluginMcpServerOwners: nativePluginMcpServerOwners.map((owner) => ({ ...owner })),
     }),
     inputFingerprint,
     policyContext,
+    ...(nativePluginMcpServerOwners.length > 0 ? { nativePluginMcpServerOwners } : {}),
     inventory,
     diagnostics,
   };

@@ -19,7 +19,6 @@ import {
 } from "./memory-tool-manager.test-mocks.js";
 import { applyProjectRanking } from "./memory/project-ranking.js";
 import { createMemorySearchTool, testing as memoryToolsTesting } from "./tools.js";
-import { buildMemorySearchUnavailableResult } from "./tools.shared.js";
 import {
   asOpenClawConfig,
   createMemorySearchToolOrThrow,
@@ -238,11 +237,7 @@ describe("memory_search unavailable payloads", () => {
 
     const tool = createMemorySearchToolOrThrow();
     const result = await tool.execute("quota", { query: "hello" });
-    expectUnavailableMemorySearchDetails(result.details, {
-      error: "openai embeddings failed: 429 insufficient_quota",
-      warning: "Memory search is unavailable because the embedding provider quota is exhausted.",
-      action: "Top up or switch embedding provider, then retry memory_search.",
-    });
+    expectUnavailableMemorySearchDetails(result.details);
   });
 
   it("returns explicit unavailable metadata for missing node:sqlite failures", async () => {
@@ -254,26 +249,7 @@ describe("memory_search unavailable payloads", () => {
 
     const tool = createMemorySearchToolOrThrow();
     const result = await tool.execute("missing-node-sqlite", { query: "hello" });
-    expectUnavailableMemorySearchDetails(result.details, {
-      error,
-      warning:
-        "Memory search is unavailable because this OpenClaw Node runtime does not provide SQLite support.",
-      action:
-        "Run OpenClaw with a Node runtime that includes node:sqlite, then retry memory_search.",
-    });
-  });
-
-  it("keeps explicit unavailable metadata overrides for missing node:sqlite reasons", () => {
-    const result = buildMemorySearchUnavailableResult("missing node:sqlite", {
-      warning: "custom warning",
-      action: "custom action",
-    });
-
-    expectUnavailableMemorySearchDetails(result, {
-      error: "missing node:sqlite",
-      warning: "custom warning",
-      action: "custom action",
-    });
+    expectUnavailableMemorySearchDetails(result.details);
   });
 
   it("returns explicit unavailable metadata for non-quota failures", async () => {
@@ -283,11 +259,7 @@ describe("memory_search unavailable payloads", () => {
 
     const tool = createMemorySearchToolOrThrow();
     const result = await tool.execute("generic", { query: "hello" });
-    expectUnavailableMemorySearchDetails(result.details, {
-      error: "embedding provider timeout",
-      warning: "Memory search is unavailable due to an embedding/provider error.",
-      action: "Check embedding provider configuration and retry memory_search.",
-    });
+    expectUnavailableMemorySearchDetails(result.details);
   });
 
   it("returns unavailable metadata when memory search does not settle", async () => {
@@ -306,19 +278,11 @@ describe("memory_search unavailable payloads", () => {
       await vi.advanceTimersByTimeAsync(15_000);
 
       const result = await resultPromise;
-      expectUnavailableMemorySearchDetails(result.details, {
-        error: "memory_search timed out after 15s",
-        warning: "Memory search is unavailable due to an embedding/provider error.",
-        action: "Check embedding provider configuration and retry memory_search.",
-      });
+      expectUnavailableMemorySearchDetails(result.details);
       // The deadline must abort the orphaned search, not just race past it.
       expect(searchSignal?.aborted).toBe(true);
       const cooldownResult = await tool.execute("search-cooldown", { query: "hello again" });
-      expectUnavailableMemorySearchDetails(cooldownResult.details, {
-        error: "memory_search timed out after 15s",
-        warning: "Memory search is unavailable due to an embedding/provider error.",
-        action: "Check embedding provider configuration and retry memory_search.",
-      });
+      expectUnavailableMemorySearchDetails(cooldownResult.details);
       expect(searchCalls).toBe(1);
     } finally {
       vi.useRealTimers();
@@ -344,11 +308,7 @@ describe("memory_search unavailable payloads", () => {
       await vi.advanceTimersByTimeAsync(15_000);
 
       const result = await resultPromise;
-      expectUnavailableMemorySearchDetails(result.details, {
-        error: "memory_search timed out after 15s",
-        warning: "Memory search is unavailable due to an embedding/provider error.",
-        action: "Check embedding provider configuration and retry memory_search.",
-      });
+      expectUnavailableMemorySearchDetails(result.details);
     } finally {
       vi.useRealTimers();
     }
@@ -548,9 +508,13 @@ describe("memory_search unavailable payloads", () => {
     expect(result.details).toMatchObject({
       results: [],
       stale: true,
-      warning: "Memory index is dirty. Search results may be incomplete.",
-      action: "Run: openclaw memory status --index --agent main",
+      warning:
+        "Recalled information may be incomplete; confirm missing facts before relying on it.",
+      action: expect.stringContaining(
+        "Continue with information confirmed in the current conversation",
+      ),
     });
+    expect(JSON.stringify(result)).not.toContain("openclaw memory");
     expect(getMemorySyncMockCalls()).toBe(0);
   });
 
@@ -580,53 +544,62 @@ describe("memory_search unavailable payloads", () => {
     const result = await tool.execute("bootstrap-debug", { query: "unknown memory" });
     const details = result.details as {
       results?: unknown[];
-      debug?: { embeddingBootstrap?: MemorySearchRuntimeDebug["embeddingBootstrap"] };
+      debug?: {
+        embeddingBootstrap?: Omit<
+          NonNullable<MemorySearchRuntimeDebug["embeddingBootstrap"]>,
+          "reason"
+        >;
+      };
     };
 
     expect(details.results).toEqual([]);
     expect(details.debug?.embeddingBootstrap).toEqual({
       ok: false,
       provider: "openai",
-      reason:
-        'MissingProviderAuthError: No API key resolved for provider "openai" (auth mode: api-key, checked: OPENAI_API_KEY).',
       degradedTo: "keyword-only",
     });
+    expect(JSON.stringify(result)).not.toContain("MissingProviderAuthError");
     expect(searchCalls).toBe(1);
     expect(getMemorySyncMockCalls()).toBe(0);
   });
 
-  it("returns unavailable metadata when the index identity is paused", async () => {
-    let searchCalls = 0;
-    setMemorySearchImpl(async () => {
-      searchCalls += 1;
-      return [];
-    });
-    const reason = "index was built for provider openai, expected ollama";
-    setMemoryCustomStatus({
-      indexIdentity: {
-        status: "mismatched",
-        reason,
-      },
-    });
+  it.each([undefined, "all"] as const)(
+    "keeps paused-index diagnostics out of corpus=%s model results without rebuilding",
+    async (corpus) => {
+      let searchCalls = 0;
+      setMemorySearchImpl(async () => {
+        searchCalls += 1;
+        return [];
+      });
+      const reason = "index was built for provider openai, expected ollama";
+      setMemoryCustomStatus({
+        indexIdentity: {
+          status: "mismatched",
+          reason,
+        },
+      });
 
-    const tool = createMemorySearchToolOrThrow({
-      config: {
-        agents: { list: [{ id: "main", default: true }] },
-        memory: { citations: "off" },
-      },
-    });
-    const result = await tool.execute("paused-index", { query: "hidden thread codename" });
+      const tool = createMemorySearchToolOrThrow({
+        config: {
+          agents: { list: [{ id: "main", default: true }] },
+          memory: { citations: "off" },
+        },
+      });
+      const result = await tool.execute("paused-index", {
+        query: "hidden thread codename",
+        ...(corpus ? { corpus } : {}),
+      });
 
-    expectUnavailableMemorySearchDetails(result.details, {
-      error: reason,
-      warning:
-        "Tell the user: memory search is paused because the memory index was built with a different embedding provider/model/settings.",
-      action:
-        "Tell the user to run: openclaw memory status --index or openclaw memory index --force.",
-    });
-    expect(searchCalls).toBe(1);
-    expect(getMemorySyncMockCalls()).toBe(0);
-  });
+      expect(result.details).toMatchObject({ results: [] });
+      const modelPayload = JSON.stringify(result);
+      expect(modelPayload).toContain("Memory recall is temporarily unavailable");
+      expect(modelPayload).not.toContain(reason);
+      expect(modelPayload).not.toContain("openclaw memory");
+      expect(modelPayload).not.toContain("embedding provider/model/settings");
+      expect(searchCalls).toBe(1);
+      expect(getMemorySyncMockCalls()).toBe(0);
+    },
+  );
 
   it("includes manager acquisition timing and cache-state debug payload", async () => {
     setMemorySearchManagerImpl(async () => ({

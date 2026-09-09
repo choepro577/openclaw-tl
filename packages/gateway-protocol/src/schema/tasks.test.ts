@@ -1,6 +1,6 @@
 import { Value } from "typebox/value";
 import { describe, expect, it } from "vitest";
-import { TaskSummarySchema } from "./tasks.js";
+import { TaskSummarySchema, TasksGetResultSchema } from "./tasks.js";
 
 describe("TaskSummarySchema", () => {
   it("accepts bounded live subagent progress and keeps diff stats closed", () => {
@@ -25,6 +25,22 @@ describe("TaskSummarySchema", () => {
       Value.Check(TaskSummarySchema, {
         ...summary,
         diffStat: { ...summary.diffStat, unchanged: 8 },
+      }),
+    ).toBe(false);
+  });
+});
+
+describe("TasksGetResultSchema", () => {
+  it("accepts only a bounded child tool transcript", () => {
+    const result = {
+      task: { id: "task-1", status: "running" },
+      toolMessages: [{ role: "tool", content: "done" }],
+    };
+    expect(Value.Check(TasksGetResultSchema, result)).toBe(true);
+    expect(
+      Value.Check(TasksGetResultSchema, {
+        ...result,
+        toolMessages: Array.from({ length: 201 }, () => ({})),
       }),
     ).toBe(false);
   });

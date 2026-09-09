@@ -19,6 +19,7 @@ import {
   validateSessionsFilesSetParams,
 } from "../../../packages/gateway-protocol/src/index.js";
 import { resolveAgentWorkspaceDir } from "../../agents/agent-scope.js";
+import { DEFAULT_SANDBOX_WORKDIR } from "../../agents/sandbox/constants.js";
 import { resolveToCwd as resolveSessionToolPathToCwd } from "../../agents/sessions/tools/path-utils.js";
 import { runGit } from "../../agents/worktrees/git.js";
 import type { OpenClawConfig } from "../../config/types.openclaw.js";
@@ -346,8 +347,11 @@ function resolveTouchedFilePath(params: {
   if (!params.root) {
     return undefined;
   }
-  const base = params.fileRoot ?? params.root;
-  const resolved = resolveSessionToolPathToCwd(params.filePath, base);
+  const sandboxWorkspacePath = params.filePath.startsWith(`${DEFAULT_SANDBOX_WORKDIR}/`)
+    ? path.posix.relative(DEFAULT_SANDBOX_WORKDIR, params.filePath)
+    : undefined;
+  const base = sandboxWorkspacePath === undefined ? (params.fileRoot ?? params.root) : params.root;
+  const resolved = resolveSessionToolPathToCwd(sandboxWorkspacePath ?? params.filePath, base);
   if (!isPathInside(params.root, resolved)) {
     return undefined;
   }
@@ -537,6 +541,7 @@ async function toSessionFileEntry(
 }
 
 function loadSessionFileRoot(params: {
+  defaultWorkspaceDir?: string;
   sessionKey: string;
   agentId?: string;
   cfg?: OpenClawConfig;
@@ -559,7 +564,9 @@ function loadSessionFileRoot(params: {
   const configuredWorkspaceDir =
     spawnedCwd || spawnedWorkspaceDir
       ? undefined
-      : normalizeOptionalString(resolveAgentWorkspaceDir(loaded.cfg, agentId));
+      : normalizeOptionalString(
+          params.defaultWorkspaceDir ?? resolveAgentWorkspaceDir(loaded.cfg, agentId),
+        );
   // Keep this cwd precedence aligned with sessions.diff so the advertised
   // checkout state cannot disagree with the panel's fallback result.
   const diffCwd = spawnedCwd ?? spawnedWorkspaceDir ?? configuredWorkspaceDir;
@@ -584,6 +591,7 @@ function loadSessionFileRoot(params: {
  * case; callers here get "no local root" and their own absent-workspace path.
  */
 export function resolveLocalSessionWorkspaceRoot(params: {
+  defaultWorkspaceDir?: string;
   sessionKey: string;
   agentId?: string;
   cfg?: OpenClawConfig;

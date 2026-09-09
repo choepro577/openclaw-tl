@@ -2092,6 +2092,51 @@ describe("Codex app-server dynamic tool build", () => {
     });
   });
 
+  it("reads granted skill files through Codex without granting sibling file access", async () => {
+    const root = await fs.realpath(tempDir);
+    const workspaceDir = path.join(root, "workspace");
+    const skillDir = path.join(root, "granted-skill");
+    await fs.mkdir(workspaceDir, { recursive: true });
+    await fs.mkdir(skillDir, { recursive: true });
+    const skillFile = path.join(skillDir, "SKILL.md");
+    await fs.writeFile(skillFile, "# Granted skill\nRun scripts/query.sh\n");
+    const outsideFile = path.join(root, "private.txt");
+    await fs.writeFile(outsideFile, "not granted");
+    const params = createParams(path.join(root, "session.jsonl"), workspaceDir);
+    params.disableTools = false;
+    params.runtimePlan = createCodexRuntimePlanFixture();
+    params.config = { tools: { fs: { workspaceOnly: true } } };
+    params.skillsSnapshot = {
+      prompt: "Granted skill",
+      skills: [{ name: "granted" }],
+      resolvedSkills: [
+        {
+          name: "granted",
+          description: "Granted skill",
+          filePath: skillFile,
+          baseDir: skillDir,
+          source: "test",
+          sourceInfo: { path: skillFile, source: "test", scope: "temporary", origin: "top-level" },
+          disableModelInvocation: false,
+        },
+      ],
+    };
+    setOpenClawCodingToolsFactoryForTests((options) =>
+      createOpenClawCodingTools(options).filter((tool) => tool.name === "read"),
+    );
+    const tools = await buildDynamicToolsForTest(params, workspaceDir, {
+      sandbox: null as never,
+      nativeToolSurfaceEnabled: false,
+    });
+    const read = expectDefined(tools.find((tool) => tool.name === "read"));
+    expect(JSON.stringify(await read.execute("read-granted", { path: skillFile }))).toContain(
+      "Run scripts/query.sh",
+    );
+    await expect(read.execute("read-private", { path: outsideFile })).rejects.toThrow(
+      /Path escapes sandbox root/,
+    );
+  });
+
   it("quarantines exposed Codex memory writes and edits after a network tool", async () => {
     vi.stubEnv("OPENCLAW_BUILD_PRIVATE_QA", "1");
     vi.stubEnv("OPENCLAW_QA_FORCE_RUNTIME", "codex");

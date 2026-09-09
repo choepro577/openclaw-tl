@@ -1,3 +1,6 @@
+import { adminShellCopy } from "../../i18n/enterprise-admin-shell.ts";
+import { enterpriseErrorMessage } from "../../i18n/enterprise-errors.ts";
+import { i18n } from "../../i18n/index.ts";
 export type AdminPage =
   | "accounts"
   | "agents"
@@ -89,12 +92,12 @@ export function formatDate(value: number | null | undefined): string {
     return "—";
   }
   const milliseconds = value < 10_000_000_000 ? value * 1000 : value;
-  return new Intl.DateTimeFormat("vi-VN", {
+  return new Intl.DateTimeFormat(i18n.getLocale(), {
     dateStyle: "medium",
     timeStyle: "short",
   }).format(milliseconds);
 }
 
 export function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : "Đã xảy ra lỗi. Vui lòng thử lại.";
+  return enterpriseErrorMessage(error, adminShellCopy("Đã xảy ra lỗi. Vui lòng thử lại."));
 }

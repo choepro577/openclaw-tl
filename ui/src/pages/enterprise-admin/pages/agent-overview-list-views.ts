@@ -1,3 +1,4 @@
+import { isRecord } from "@openclaw/normalization-core/record-coerce";
 import { html, nothing } from "lit";
 import { icons } from "../../../components/icons.ts";
 import {
@@ -6,6 +7,8 @@ import {
   renderSettingsStatus,
   renderSettingsValue,
 } from "../../../components/settings-ui.ts";
+import { eaa } from "../../../i18n/enterprise-admin-agents.ts";
+import { ea } from "../../../i18n/enterprise-admin.ts";
 import type {
   EnterprisePersonalAgent,
   EnterpriseSharedAgent,
@@ -27,22 +30,25 @@ export function renderAdminAgentOverview(props: {
   const value = props.selected.value;
   const shared = props.selected.kind === "shared" ? props.selected.value : undefined;
   const personal = props.selected.kind === "personal" ? props.selected.value : undefined;
-  const agent = (props.data?.agent ?? {}) as Record<string, unknown>;
-  const displayName = String(agent.name ?? shared?.name ?? personal?.ownerDisplayName ?? "Agent");
+  const agent = isRecord(props.data?.agent) ? props.data.agent : {};
+  const defaults = isRecord(props.data?.defaults) ? props.data.defaults : undefined;
+  const displayName = String(
+    agent.name ?? shared?.name ?? personal?.ownerDisplayName ?? ea("Agent"),
+  );
   const workspace = String(
     props.data?.workspace ?? agent.workspace ?? shared?.workspace ?? "default",
   );
   const model =
     (typeof agent.model === "string" ? agent.model : null) ??
     value.model ??
-    String((props.data?.defaults as Record<string, unknown> | undefined)?.model ?? "Mặc định");
+    String(defaults?.model ?? ea("Mặc định"));
   const thinkingDefault = typeof agent.thinkingDefault === "string" ? agent.thinkingDefault : "—";
   const selectedSkills = Array.isArray(agent.skills) ? agent.skills.length : null;
   const skillsFilter = personal
-    ? `Tất cả skills (${personal.skillCount})`
+    ? `${ea("Tất cả")} ${ea("Skills")} (${personal.skillCount})`
     : selectedSkills === null
-      ? "Tất cả skills"
-      : `${selectedSkills} skills đã chọn`;
+      ? `${ea("Tất cả")} ${ea("Skills")}`
+      : eaa("{count} skills selected", { count: String(selectedSkills) });
   const statusReady = personal ? personal.enabled : true;
   const identity = html`
     <div class="settings-row settings-row--stacked">
@@ -54,7 +60,7 @@ export function renderAdminAgentOverview(props: {
         </span>
         <div class="agent-identity-editor__fields">
           <label class="field">
-            <span>Tên hiển thị</span>
+            <span>${ea("Tên hiển thị")}</span>
             <input
               type="text"
               name=${shared ? "name" : nothing}
@@ -65,7 +71,7 @@ export function renderAdminAgentOverview(props: {
             />
           </label>
           <label class="field agent-identity-editor__emoji">
-            <span>${shared ? "Agent ID" : "Username"}</span>
+            <span>${shared ? ea("Agent ID") : ea("Username")}</span>
             <input
               type="text"
               .value=${shared ? shared.agentId : `@${personal?.username ?? "—"}`}
@@ -77,36 +83,36 @@ export function renderAdminAgentOverview(props: {
       ${shared
         ? html`<div class="agent-identity-editor__actions">
             <button class="btn btn--sm primary" type="submit" ?disabled=${props.saving}>
-              ${props.saving ? "Đang lưu…" : "Lưu"}
+              ${props.saving ? ea("Đang lưu…") : ea("Lưu")}
             </button>
           </div>`
         : nothing}
       <div class="settings-row__desc agent-identity-editor__hint">
         ${personal
-          ? "Dữ liệu cá nhân; mọi thao tác đọc/sửa của quản trị viên đều được audit."
-          : "Tên hiển thị được lưu bằng config hash CAS để tránh ghi đè revision mới hơn."}
+          ? ea("Dữ liệu cá nhân; mọi thao tác đọc/sửa của quản trị viên đều được audit.")
+          : ea("Tên hiển thị được lưu bằng config hash CAS để tránh ghi đè revision mới hơn.")}
       </div>
     </div>
   `;
   const overview = html`
     <dl class="settings-kv">
-      <dt>Workspace</dt>
+      <dt>${ea("Workspace")}</dt>
       <dd><code>${workspace}</code></dd>
-      <dt>Primary Model</dt>
+      <dt>${eaa("Primary Model")}</dt>
       <dd><code>${model}</code></dd>
-      <dt>Runtime</dt>
+      <dt>${eaa("Runtime")}</dt>
       <dd><code>${shared?.runtimeType ?? personal?.runtimeAgentId ?? "openclaw"}</code></dd>
-      <dt>Thinking Default</dt>
+      <dt>${eaa("Thinking Default")}</dt>
       <dd><code>${thinkingDefault}</code></dd>
-      <dt>Skills Filter</dt>
+      <dt>${eaa("Skills Filter")}</dt>
       <dd>${skillsFilter}</dd>
-      <dt>Loại</dt>
-      <dd>${shared ? "Shared" : "Personal"}</dd>
-      <dt>Trạng thái</dt>
+      <dt>${eaa("Loại")}</dt>
+      <dd>${shared ? ea("Shared") : ea("Personal")}</dd>
+      <dt>${ea("Trạng thái")}</dt>
       <dd>
         ${renderSettingsStatus({
           kind: statusReady ? "ok" : "muted",
-          label: statusReady ? "Ready" : "Off",
+          label: statusReady ? eaa("Ready") : eaa("Off"),
         })}
       </dd>
     </dl>
@@ -116,32 +122,36 @@ export function renderAdminAgentOverview(props: {
     return html`
       <div class="settings-stack">
         ${renderSettingsSection(
-          { title: "Identity", description: "Tên và định danh hiển thị của personal agent." },
+          {
+            title: ea("Identity"),
+            description: ea("Tên và định danh hiển thị của personal agent."),
+          },
           identity,
         )}
         ${renderSettingsSection(
-          { title: "Overview", description: "Workspace và cấu hình hiệu lực của agent." },
+          { title: ea("Overview"), description: ea("Workspace và cấu hình hiệu lực của agent.") },
           overview,
         )}
         ${renderSettingsSection(
           {
-            title: "Model selection",
-            description: "Personal agent kế thừa model và chính sách từ template tài khoản.",
+            title: ea("Model selection"),
+            description: ea("Personal agent kế thừa model và chính sách từ template tài khoản."),
           },
           html`
             ${renderSettingsRow({
-              title: "Template agent",
+              title: eaa("Template agent"),
               control: renderSettingsValue(personal.runtimeAgentId ?? "—", { mono: true }),
             })}
             ${renderSettingsRow({
-              title: "Model hiệu lực",
+              title: ea("Model hiệu lực"),
               control: renderSettingsValue(model, { mono: true }),
             })}
             ${renderSettingsRow({
-              title: "Quyền quản trị",
-              description:
+              title: ea("Quyền quản trị"),
+              description: eaa(
                 "Files dùng workspace riêng; Tools và Skills được resolve từ preset/entitlement.",
-              control: renderSettingsValue("Managed"),
+              ),
+              control: renderSettingsValue(eaa("Managed")),
             })}
           `,
         )}
@@ -153,62 +163,63 @@ export function renderAdminAgentOverview(props: {
     <form class="settings-stack" @submit=${props.onSave}>
       ${props.error ? html`<div class="callout danger" role="alert">${props.error}</div>` : nothing}
       ${renderSettingsSection(
-        { title: "Identity", description: "Tên và định danh hiển thị của shared agent." },
+        { title: ea("Identity"), description: ea("Tên và định danh hiển thị của shared agent.") },
         identity,
       )}
       ${renderSettingsSection(
-        { title: "Overview", description: "Workspace và cấu hình hiệu lực của agent." },
+        { title: ea("Overview"), description: ea("Workspace và cấu hình hiệu lực của agent.") },
         overview,
       )}
       ${renderSettingsSection(
         {
-          title: "Model selection",
-          description: "Để trống để kế thừa cấu hình mặc định của hệ thống.",
+          title: ea("Model selection"),
+          description: ea("Để trống để kế thừa cấu hình mặc định của hệ thống."),
           actions: html`<button class="btn btn--sm primary" type="submit" ?disabled=${props.saving}>
-            ${props.saving ? "Đang lưu…" : "Lưu"}
+            ${props.saving ? ea("Đang lưu…") : ea("Lưu")}
           </button>`,
         },
         html`
           ${renderSettingsRow({
-            title: "Primary Model",
+            title: eaa("Primary Model"),
             control: html`<input
               class="settings-input"
               name="model"
-              aria-label="Primary Model"
+              aria-label=${eaa("Primary Model")}
               .value=${typeof agent.model === "string" ? agent.model : (shared?.model ?? "")}
-              placeholder="Kế thừa model mặc định"
+              placeholder=${ea("Kế thừa model mặc định")}
             />`,
           })}
           ${renderSettingsRow({
-            title: "Workspace",
+            title: ea("Workspace"),
             control: html`<input
               class="settings-input"
               name="workspace"
-              aria-label="Workspace"
+              aria-label=${ea("Workspace")}
               .value=${String(agent.workspace ?? shared?.workspace ?? "")}
-              placeholder="Kế thừa workspace mặc định"
+              placeholder=${ea("Kế thừa workspace mặc định")}
             />`,
           })}
           ${renderSettingsRow({
-            title: "Revision-safe",
-            description:
+            title: eaa("Revision-safe"),
+            description: eaa(
               "Nếu config đổi ở nơi khác, thao tác sẽ dừng để tải revision mới thay vì ghi đè.",
-            control: renderSettingsStatus({ kind: "ok", label: "CAS" }),
+            ),
+            control: renderSettingsStatus({ kind: "ok", label: eaa("CAS") }),
           })}
         `,
       )}
       ${renderSettingsSection(
-        { title: "Danger zone", danger: true },
+        { title: eaa("Danger zone"), danger: true },
         renderSettingsRow({
-          title: "Xóa shared agent",
-          description: "Không thể hoàn tác sau khi agent đã bị xóa.",
+          title: ea("Xóa shared agent"),
+          description: ea("Không thể hoàn tác sau khi agent đã bị xóa."),
           control: html`<button
             class="btn btn--sm danger"
             type="button"
             ?disabled=${props.saving}
             @click=${props.onDelete}
           >
-            Xóa agent
+            ${ea("Xóa agent")}
           </button>`,
         }),
       )}
@@ -217,14 +228,17 @@ export function renderAdminAgentOverview(props: {
 }
 
 export function renderAdminAgentCatalog(props: {
-  tab: "shared" | "personal";
+  tab: "shared" | "personal" | "delegation" | "access-requests";
   allSharedCount: number;
   allPersonalCount: number;
+  accessRequestsCount: number;
   shared: EnterpriseSharedAgent[];
   personal: EnterprisePersonalAgent[];
   loading: boolean;
   error: string;
-  onTab: (tab: "shared" | "personal") => void;
+  onTab: (tab: "shared" | "personal" | "delegation" | "access-requests") => void;
+  accessRequestsContent?: ReturnType<typeof html>;
+  delegationContent?: ReturnType<typeof html>;
   onQuery: (query: string) => void;
   onCreate: () => void;
   onOpen: (selected: AdminSelectedAgent) => void;
@@ -232,47 +246,70 @@ export function renderAdminAgentCatalog(props: {
   return html`<section class="ea-page">
     <header class="ea-page-header">
       <div>
-        <h1>Quản lý agent</h1>
-        <p>Shared agent nghiệp vụ và personal agent theo từng tài khoản</p>
+        <h1>${ea("Quản lý agent")}</h1>
+        <p>${eaa("Shared agent nghiệp vụ và personal agent theo từng tài khoản")}</p>
       </div>
-      <button class="ea-button ea-button--primary" type="button" @click=${props.onCreate}>
-        ${icons.plus} Tạo shared agent
-      </button>
+      ${props.tab === "delegation" || props.tab === "access-requests"
+        ? nothing
+        : html`<button class="ea-button ea-button--primary" type="button" @click=${props.onCreate}>
+            ${icons.plus} ${ea("Tạo shared agent")}
+          </button>`}
     </header>
-    <nav class="ea-tabs" aria-label="Loại agent">
+    <nav class="ea-tabs" aria-label=${eaa("Loại agent")}>
       <button
         class="ea-tab ${props.tab === "shared" ? "ea-tab--active" : ""}"
         @click=${() => props.onTab("shared")}
       >
-        Shared Agents (${props.allSharedCount})
+        ${eaa("Shared Agents")} (${props.allSharedCount})
       </button>
       <button
         class="ea-tab ${props.tab === "personal" ? "ea-tab--active" : ""}"
         @click=${() => props.onTab("personal")}
       >
-        Personal Agents (${props.allPersonalCount})
+        ${eaa("Personal Agents")} (${props.allPersonalCount})
+      </button>
+      <button
+        class="ea-tab ${props.tab === "delegation" ? "ea-tab--active" : ""}"
+        @click=${() => props.onTab("delegation")}
+      >
+        ${eaa("Điều phối Agent")}
+      </button>
+      <button
+        class="ea-tab ${props.tab === "access-requests" ? "ea-tab--active" : ""}"
+        type="button"
+        @click=${() => props.onTab("access-requests")}
+      >
+        ${eaa("Yêu cầu truy cập")} (${props.accessRequestsCount})
       </button>
     </nav>
-    <div class="ea-toolbar">
-      <input
-        class="ea-input"
-        type="search"
-        placeholder="Tìm agent…"
-        aria-label="Tìm agent"
-        @input=${(event: Event) => props.onQuery((event.currentTarget as HTMLInputElement).value)}
-      />
-      <span class="ea-spacer"></span
-      ><span class="ea-badge">Reserved internal agents đã được ẩn</span>
-    </div>
-    <div class="ea-card ea-table-wrap">
-      ${props.loading
-        ? html`<div class="ea-loading">Đang tải catalog agent…</div>`
-        : props.error
-          ? html`<div class="ea-empty"><p class="ea-error">${props.error}</p></div>`
-          : props.tab === "shared"
-            ? renderSharedTable(props.shared, props.onOpen)
-            : renderPersonalTable(props.personal, props.onOpen)}
-    </div>
+    ${props.tab === "delegation"
+      ? (props.delegationContent ?? nothing)
+      : props.tab === "access-requests"
+        ? (props.accessRequestsContent ?? nothing)
+        : html`<div class="ea-toolbar">
+              <input
+                class="ea-input"
+                type="search"
+                placeholder=${eaa("Tìm agent…")}
+                aria-label=${eaa("Tìm agent")}
+                @input=${(event: Event) => {
+                  if (event.currentTarget instanceof HTMLInputElement) {
+                    props.onQuery(event.currentTarget.value);
+                  }
+                }}
+              />
+              <span class="ea-spacer"></span
+              ><span class="ea-badge">${eaa("Reserved internal agents đã được ẩn")}</span>
+            </div>
+            <div class="ea-card ea-table-wrap">
+              ${props.loading
+                ? html`<div class="ea-loading">${ea("Đang tải catalog agent…")}</div>`
+                : props.error
+                  ? html`<div class="ea-empty"><p class="ea-error">${props.error}</p></div>`
+                  : props.tab === "shared"
+                    ? renderSharedTable(props.shared, props.onOpen)
+                    : renderPersonalTable(props.personal, props.onOpen)}
+            </div>`}
   </section>`;
 }
 
@@ -283,14 +320,14 @@ function renderSharedTable(
   return html`<table class="ea-table">
       <thead>
         <tr>
-          <th>Agent</th>
-          <th>Model</th>
-          <th>Runtime</th>
-          <th>Workspace</th>
-          <th>User</th>
-          <th>Skill/Tool</th>
-          <th>Cập nhật</th>
-          <th class="ea-table__action">Thao tác</th>
+          <th>${ea("Agent")}</th>
+          <th class="ea-table__model">${eaa("Primary Model")}</th>
+          <th>${eaa("Runtime")}</th>
+          <th>${ea("Workspace")}</th>
+          <th>${eaa("User")}</th>
+          <th>${eaa("Skill/Tool")}</th>
+          <th>${ea("Cập nhật")}</th>
+          <th class="ea-table__action">${ea("Thao tác")}</th>
         </tr>
       </thead>
       <tbody>
@@ -300,19 +337,23 @@ function renderSharedTable(
               <strong>${agent.name}</strong>
               <div class="ea-muted">${agent.agentId}</div>
             </td>
-            <td>${agent.model ?? "Mặc định"}</td>
+            <td class="ea-table__model">
+              <span class="ea-table__model-value" title=${agent.model ?? ea("Mặc định")}
+                >${agent.model ?? ea("Mặc định")}</span
+              >
+            </td>
             <td><span class="ea-badge ea-badge--good">${agent.runtimeType}</span></td>
             <td>${agent.workspace ?? "—"}</td>
             <td>${agent.assignedUserCount}</td>
             <td>${agent.skillCount ?? 0} / ${agent.toolCount ?? 0}</td>
             <td>${formatDate(agent.updatedAt)}</td>
-            <td class="ea-table__action"><button class="ea-button">Xem</button></td>
+            <td class="ea-table__action"><button class="ea-button">${ea("Xem")}</button></td>
           </tr>`,
         )}
       </tbody>
     </table>
     ${agents.length === 0
-      ? html`<div class="ea-empty">Không có shared agent phù hợp.</div>`
+      ? html`<div class="ea-empty">${eaa("Không có shared agent phù hợp.")}</div>`
       : nothing}`;
 }
 
@@ -323,14 +364,14 @@ function renderPersonalTable(
   return html`<table class="ea-table">
       <thead>
         <tr>
-          <th>Owner</th>
-          <th>Runtime agent</th>
-          <th>Workspace</th>
-          <th>Model</th>
-          <th>Sessions</th>
-          <th>Skill/Tool</th>
-          <th>Cập nhật</th>
-          <th class="ea-table__action">Thao tác</th>
+          <th>${eaa("Owner")}</th>
+          <th>${eaa("Runtime agent")}</th>
+          <th>${ea("Workspace")}</th>
+          <th class="ea-table__model">${eaa("Primary Model")}</th>
+          <th>${eaa("Sessions")}</th>
+          <th>${eaa("Skill/Tool")}</th>
+          <th>${ea("Cập nhật")}</th>
+          <th class="ea-table__action">${ea("Thao tác")}</th>
         </tr>
       </thead>
       <tbody>
@@ -346,17 +387,21 @@ function renderPersonalTable(
                 >${agent.workspaceStatus}</span
               >
             </td>
-            <td>${agent.model ?? "Mặc định"}</td>
+            <td class="ea-table__model">
+              <span class="ea-table__model-value" title=${agent.model ?? ea("Mặc định")}
+                >${agent.model ?? ea("Mặc định")}</span
+              >
+            </td>
             <td>${agent.activeSessionCount ?? 0}</td>
             <td>${agent.skillCount ?? 0} / ${agent.toolCount ?? 0}</td>
             <td>${formatDate(agent.updatedAt)}</td>
-            <td class="ea-table__action"><button class="ea-button">Xem</button></td>
+            <td class="ea-table__action"><button class="ea-button">${ea("Xem")}</button></td>
           </tr>`,
         )}
       </tbody>
     </table>
     ${agents.length === 0
-      ? html`<div class="ea-empty">Không có personal agent phù hợp.</div>`
+      ? html`<div class="ea-empty">${eaa("Không có personal agent phù hợp.")}</div>`
       : nothing}`;
 }
 
@@ -372,26 +417,38 @@ export function renderCreateSharedAgentDialog(props: {
   }
   return html`<openclaw-enterprise-admin-dialog
     .open=${true}
-    heading="Tạo shared agent"
-    description="Ghi config bằng CAS; reserved internal ID bị từ chối"
+    .heading=${ea("Tạo shared agent")}
+    .description=${eaa("Ghi config bằng CAS; reserved internal ID bị từ chối")}
     .onClose=${props.onClose}
   >
     <form class="ea-form-grid" @submit=${props.onSubmit}>
       <label class="ea-field"
-        >Agent ID<input class="ea-input" name="id" pattern="[a-z0-9][a-z0-9_-]{0,63}" required
+        >${ea("Agent ID")}<input
+          class="ea-input"
+          name="id"
+          pattern="[a-z0-9][a-z0-9_\\-]{0,63}"
+          required
       /></label>
-      <label class="ea-field">Tên hiển thị<input class="ea-input" name="name" required /></label>
       <label class="ea-field"
-        >Model<input class="ea-input" name="model" placeholder="provider/model hoặc để trống"
+        >${ea("Tên hiển thị")}<input class="ea-input" name="name" required
       /></label>
       <label class="ea-field"
-        >Workspace<input class="ea-input" name="workspace" placeholder="Để trống dùng mặc định"
+        >${eaa("Model")}<input
+          class="ea-input"
+          name="model"
+          placeholder=${eaa("provider/model hoặc để trống")}
+      /></label>
+      <label class="ea-field"
+        >${ea("Workspace")}<input
+          class="ea-input"
+          name="workspace"
+          placeholder=${ea("Để trống dùng mặc định")}
       /></label>
       ${props.error ? html`<p class="ea-error ea-form-grid__full">${props.error}</p>` : nothing}
       <div class="ea-form-actions ea-form-grid__full">
-        <button class="ea-button" type="button" @click=${props.onClose}>Hủy</button
+        <button class="ea-button" type="button" @click=${props.onClose}>${ea("Hủy")}</button
         ><button class="ea-button ea-button--primary" type="submit" ?disabled=${props.creating}>
-          ${props.creating ? "Đang tạo…" : "Tạo shared agent"}
+          ${props.creating ? ea("Đang tạo…") : ea("Tạo shared agent")}
         </button>
       </div>
     </form>

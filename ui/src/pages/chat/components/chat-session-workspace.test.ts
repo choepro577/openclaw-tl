@@ -49,6 +49,33 @@ describe("session workspace state", () => {
     expect(state.settings?.chatWorkspaceDock).toBe("right");
   });
 
+  it("waits to list workspace files until the collapsed rail is opened", () => {
+    const listFiles = vi.fn().mockResolvedValue({
+      sessionKey: "agent:main:current",
+      root: "/workspace",
+      gitCheckout: true,
+      files: [],
+    });
+    const state = {
+      client: { request: vi.fn().mockResolvedValue({ artifacts: [] }) },
+      connected: true,
+      handleOpenSidebar: vi.fn(),
+      hello: gatewayHello(["sessions.diff"]),
+      agentsList: { agents: [] },
+      requestUpdate: vi.fn(),
+      sessionKey: "agent:main:current",
+      sidebarContent: null,
+      sessions: { listFiles },
+    } as unknown as SessionWorkspaceHost;
+
+    const collapsed = createSessionWorkspaceProps(state);
+    expect(collapsed.collapsed).toBe(true);
+    expect(listFiles).not.toHaveBeenCalled();
+
+    collapsed.onToggleCollapsed();
+    expect(listFiles).toHaveBeenCalledOnce();
+  });
+
   it("rotates Files and Review ownership across a same-client reconnect", async () => {
     let resolveReplacementList!: (value: {
       sessionKey: string;
@@ -279,8 +306,10 @@ describe("session workspace artifacts", () => {
     await vi.waitFor(() =>
       expect(createSessionWorkspaceProps(state).error).toMatch(/InvalidCharacterError|invalid/i),
     );
-    expect(handleOpenSidebar).toHaveBeenCalledOnce();
-    expect(handleOpenSidebar).toHaveBeenCalledWith(null);
+    expect(await loadedSidebarContent(handleOpenSidebar)).toMatchObject({
+      kind: "markdown",
+      rawText: createSessionWorkspaceProps(state).error,
+    });
   });
 });
 
@@ -452,6 +481,30 @@ describe("openSessionWorkspaceFile", () => {
     },
   );
 
+  it("shows a failed file request in Review instead of leaving it empty", async () => {
+    const handleOpenSidebar = vi.fn();
+    const state = {
+      client: {},
+      connected: true,
+      handleOpenSidebar,
+      hello: gatewayHello([]),
+      sessionKey: "agent:main:current",
+      sidebarContent: null,
+      sessions: {
+        getFile: vi.fn().mockRejectedValue(new Error("session file not found")),
+      },
+    } as unknown as SessionWorkspaceHost;
+
+    openSessionWorkspaceFile(state, { path: "/workspace/generated/quote.md" });
+
+    expect(await loadedSidebarContent(handleOpenSidebar)).toEqual({
+      kind: "markdown",
+      content: "`session file not found`",
+      rawText: "session file not found",
+    });
+    expect(createSessionWorkspaceProps(state).error).toBe("session file not found");
+  });
+
   it("opens base64 session images in the existing image sidebar", async () => {
     const handleOpenSidebar = vi.fn();
     const state = {
@@ -524,8 +577,11 @@ describe("openSessionWorkspaceFile", () => {
         "Failed to load screenshots/result.png",
       ),
     );
-    expect(handleOpenSidebar).toHaveBeenCalledOnce();
-    expect(handleOpenSidebar).toHaveBeenCalledWith(null);
+    expect(await loadedSidebarContent(handleOpenSidebar)).toEqual({
+      kind: "markdown",
+      content: "`Failed to load screenshots/result.png`",
+      rawText: "Failed to load screenshots/result.png",
+    });
   });
 
   it("does not render base64 content as text when the preview discriminator disagrees", async () => {
@@ -558,8 +614,11 @@ describe("openSessionWorkspaceFile", () => {
     await vi.waitFor(() =>
       expect(createSessionWorkspaceProps(state).error).toBe("Failed to load notes.txt"),
     );
-    expect(handleOpenSidebar).toHaveBeenCalledOnce();
-    expect(handleOpenSidebar).toHaveBeenCalledWith(null);
+    expect(await loadedSidebarContent(handleOpenSidebar)).toEqual({
+      kind: "markdown",
+      content: "`Failed to load notes.txt`",
+      rawText: "Failed to load notes.txt",
+    });
   });
 
   it("opens unsupported session files as metadata without treating bytes as text", async () => {

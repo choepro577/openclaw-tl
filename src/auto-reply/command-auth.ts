@@ -550,7 +550,7 @@ export function resolveCommandAuthorization(params: {
     ownerList: ownerState.explicitOwners,
     senderId: senderId || undefined,
     senderIsOwner,
-    isAuthorizedSender,
+    isAuthorizedSender: ctx.CommandInterpretationSuppressed !== true && isAuthorizedSender,
     from: from || undefined,
     to: to || undefined,
   };

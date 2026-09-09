@@ -43,7 +43,7 @@ export class EnterpriseUserTopbar extends OpenClawLightDomContentsElement {
         <span aria-hidden="true">${activeAgent ? presentUserAgentAvatar(activeAgent) : "◌"}</span>
         <span class="eu-topbar__agent-label">
           <small>${eu("activeAgent")}</small>
-          <strong>${activeAgent?.name ?? "OpenClaw"}</strong>
+          <strong>${activeAgent?.name ?? "MAAP"}</strong>
         </span>
       </button>
     </header>`;

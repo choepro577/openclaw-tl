@@ -1,5 +1,6 @@
 import { html, type TemplateResult } from "lit";
 import type { ApplicationContext } from "../../app/context.ts";
+import { showNativeConfirm } from "../../branding/display-dialog.ts";
 import { t } from "../../i18n/index.ts";
 import type { BoardWidget } from "../../lib/board/types.ts";
 import type { BoardWidgetFrameUrl } from "../../lib/board/view-types.ts";
@@ -404,7 +405,7 @@ export class BoardWidgetFrameLifecycle {
       controlUiBaseUrl: `${window.location.origin}${this.host.context()?.basePath ?? ""}`,
       client: this.host.context()?.gateway.snapshot.client ?? undefined,
       resolveFrameUrl,
-      confirmPrompt: (prompt) => window.confirm(`${t("common.confirm")}:\n\n${prompt}`),
+      confirmPrompt: (prompt) => showNativeConfirm(`${t("common.confirm")}:\n\n${prompt}`),
       onFrameUrl: (url) => {
         this.lastFrameUrl = url;
       },

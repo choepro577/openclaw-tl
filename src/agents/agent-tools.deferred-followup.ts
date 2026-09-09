@@ -11,6 +11,12 @@ function replaceDescription(tool: AnyAgentTool, description: string): AnyAgentTo
 }
 
 const TOOL_FOLLOWUPS = [
+  [
+    "enterprise_delegate",
+    "sessions_yield",
+    "end this turn; the result will return through the background completion flow.",
+    "call sessions_yield at that dependency barrier; the result will return through the background completion flow.",
+  ],
   ["gateway", "openclaw", " unavailable; ask human.", ": use openclaw tool."],
   [
     "sessions_search",

@@ -24,6 +24,7 @@ import {
   renderSessionWorkspaceRail,
   type SessionWorkspaceProps,
 } from "./components/chat-session-workspace.ts";
+import { renderTaskDetailPanel } from "./components/chat-task-detail.ts";
 import {
   SIDEBAR_NARROW_BREAKPOINT_PX,
   isSidebarSlotVisible,
@@ -34,6 +35,7 @@ import {
 
 const ENTERPRISE_USER_SIDEBAR_SLOTS = [
   "detail",
+  "tasks",
   "workspace",
   "browser",
 ] as const satisfies readonly SidebarSlotId[];
@@ -114,6 +116,24 @@ export abstract class ChatPaneLayoutRender extends ChatPaneBrowserAnnotationRend
     const desktopPresented =
       this.active && this.presented && isSidebarSlotVisible(renderedSidebarLayout, "desktop");
     const desktopRefreshOnPresentation = !this.pendingPanelToggleRequests.has("desktop");
+    const taskDetailInSubagents =
+      enterpriseUserPresentation && backgroundTasks.openTaskId !== undefined;
+    const subagentsTask = taskDetailInSubagents
+      ? renderTaskDetailPanel({
+          backgroundTasks,
+          chat: chatProps,
+          host: state,
+          task: backgroundTasks.tasks?.find((task) => task.id === backgroundTasks.openTaskId),
+          transcript: this.taskSidebarTranscript,
+          onBack: () => {
+            state.sidebarContent = null;
+            state.requestUpdate?.();
+          },
+        })
+      : renderBackgroundTasksRail(backgroundTasks, {
+          embedded: true,
+          subagents: enterpriseUserPresentation,
+        });
     const unrestrictedPanelDefinitions = sidebarPanelDefinitions({
       state,
       themeMode: this.context.theme.resolvedMode,
@@ -125,7 +145,9 @@ export abstract class ChatPaneLayoutRender extends ChatPaneBrowserAnnotationRend
       hasBoard: board.hasBoard,
       chat,
       workspace: renderSessionWorkspaceRail(sessionWorkspace, { embedded: true }),
-      tasks: renderBackgroundTasksRail(backgroundTasks, { embedded: true }),
+      tasks: subagentsTask,
+      subagents: enterpriseUserPresentation,
+      taskDetailsInTasksSlot: enterpriseUserPresentation,
       detailOpen:
         this.presented &&
         renderedSidebarLayout.open === true &&

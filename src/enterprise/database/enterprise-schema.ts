@@ -1,5 +1,6 @@
 // Enterprise account storage is feature-local and additive to OpenClaw shared state.
 import type { DatabaseSync } from "node:sqlite";
+import { isRecord } from "@openclaw/normalization-core/record-coerce";
 import {
   openOpenClawStateDatabase,
   runOpenClawStateWriteTransaction,
@@ -62,6 +63,30 @@ CREATE INDEX IF NOT EXISTS idx_enterprise_entitlements_lookup
 CREATE INDEX IF NOT EXISTS idx_enterprise_entitlements_resource
   ON enterprise_entitlements(resource_type, resource_id, effect, account_id);
 
+CREATE TABLE IF NOT EXISTS enterprise_agent_access_requests (
+  id TEXT NOT NULL PRIMARY KEY,
+  requester_account_id TEXT NOT NULL,
+  agent_resource_key TEXT NOT NULL,
+  agent_id TEXT NOT NULL,
+  state TEXT NOT NULL CHECK (state IN ('pending', 'approved', 'rejected', 'cancelled')),
+  reviewer_account_id TEXT,
+  decision_reason TEXT,
+  revision INTEGER NOT NULL DEFAULT 1,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL,
+  decided_at INTEGER,
+  FOREIGN KEY (requester_account_id) REFERENCES enterprise_accounts(id) ON DELETE CASCADE,
+  FOREIGN KEY (reviewer_account_id) REFERENCES enterprise_accounts(id) ON DELETE SET NULL
+) STRICT;
+
+CREATE INDEX IF NOT EXISTS idx_enterprise_agent_access_requests_account
+  ON enterprise_agent_access_requests(requester_account_id, agent_resource_key, updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_enterprise_agent_access_requests_admin
+  ON enterprise_agent_access_requests(state, created_at ASC);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_enterprise_agent_access_requests_pending
+  ON enterprise_agent_access_requests(requester_account_id, agent_resource_key)
+  WHERE state = 'pending';
+
 CREATE TABLE IF NOT EXISTS enterprise_audit_events (
   id TEXT NOT NULL PRIMARY KEY,
   actor_account_id TEXT,
@@ -86,6 +111,61 @@ CREATE TABLE IF NOT EXISTS enterprise_settings (
   created_at INTEGER NOT NULL,
   updated_at INTEGER NOT NULL
 ) STRICT;
+
+CREATE TABLE IF NOT EXISTS enterprise_delegation_policy (
+  singleton_id INTEGER NOT NULL PRIMARY KEY CHECK (singleton_id = 1),
+  rollout TEXT NOT NULL CHECK (rollout IN ('off', 'shadow', 'on')),
+  router_model TEXT NOT NULL,
+  auto_threshold REAL NOT NULL CHECK (auto_threshold >= 0 AND auto_threshold <= 1),
+  clarify_threshold REAL NOT NULL CHECK (clarify_threshold >= 0 AND clarify_threshold <= 1),
+  minimum_margin REAL NOT NULL CHECK (minimum_margin >= 0 AND minimum_margin <= 1),
+  max_delegates_per_turn INTEGER NOT NULL CHECK (max_delegates_per_turn BETWEEN 1 AND 3),
+  event_retention_days INTEGER NOT NULL CHECK (event_retention_days BETWEEN 1 AND 3650),
+  revision INTEGER NOT NULL,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+) STRICT;
+
+CREATE TABLE IF NOT EXISTS enterprise_delegation_overrides (
+  account_id TEXT NOT NULL,
+  agent_resource_key TEXT NOT NULL,
+  mode TEXT NOT NULL CHECK (mode IN ('inherit', 'confirm_before_handoff', 'explicit_only', 'disabled')),
+  revision INTEGER NOT NULL,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL,
+  PRIMARY KEY (account_id, agent_resource_key),
+  FOREIGN KEY (account_id) REFERENCES enterprise_accounts(id) ON DELETE CASCADE
+) STRICT;
+
+CREATE INDEX IF NOT EXISTS idx_enterprise_delegation_overrides_agent
+  ON enterprise_delegation_overrides(agent_resource_key, updated_at DESC, account_id);
+
+CREATE TABLE IF NOT EXISTS enterprise_delegation_events (
+  id TEXT NOT NULL PRIMARY KEY,
+  account_id TEXT NOT NULL,
+  personal_agent_id TEXT NOT NULL,
+  shared_agent_ids_json TEXT NOT NULL,
+  parent_session_key_hash TEXT,
+  parent_run_id_hash TEXT,
+  child_run_ids_json TEXT NOT NULL,
+  prompt_hash TEXT NOT NULL,
+  decision_source TEXT NOT NULL CHECK (decision_source IN ('explicit', 'rule', 'ai', 'system')),
+  outcome TEXT NOT NULL CHECK (outcome IN ('delegated', 'clarified', 'local', 'blocked', 'failed', 'cancelled', 'shadow')),
+  confidence_band TEXT CHECK (confidence_band IS NULL OR confidence_band IN ('clear', 'ambiguous', 'low')),
+  reason_code TEXT NOT NULL,
+  policy_revision INTEGER NOT NULL,
+  profile_revisions_json TEXT NOT NULL,
+  confirmation_state TEXT NOT NULL CHECK (confirmation_state IN ('not_required', 'pending', 'approved', 'denied', 'expired')),
+  latency_ms INTEGER,
+  created_at INTEGER NOT NULL,
+  FOREIGN KEY (account_id) REFERENCES enterprise_accounts(id) ON DELETE CASCADE
+) STRICT;
+
+CREATE INDEX IF NOT EXISTS idx_enterprise_delegation_events_created
+  ON enterprise_delegation_events(created_at DESC, outcome, decision_source);
+
+CREATE INDEX IF NOT EXISTS idx_enterprise_delegation_events_account
+  ON enterprise_delegation_events(account_id, created_at DESC);
 
 CREATE TABLE IF NOT EXISTS enterprise_personal_agent_profiles (
   account_id TEXT NOT NULL PRIMARY KEY,
@@ -254,6 +334,75 @@ CREATE TABLE IF NOT EXISTS enterprise_account_plugin_grants (
 CREATE INDEX IF NOT EXISTS idx_enterprise_account_plugin_grants_active
   ON enterprise_account_plugin_grants(account_id, state, updated_at DESC);
 
+-- Codex plugins are owned by the Codex app-server and have a different
+-- identity/install contract from ClawHub native plugins. Keep their request
+-- and grant lifecycle in additive tables instead of widening the ClawHub
+-- package-family CHECK above.
+CREATE TABLE IF NOT EXISTS enterprise_codex_plugin_requests (
+  id TEXT NOT NULL PRIMARY KEY,
+  requester_account_id TEXT NOT NULL,
+  agent_key TEXT NOT NULL,
+  runtime_agent_id TEXT NOT NULL,
+  plugin_name TEXT NOT NULL,
+  marketplace_name TEXT NOT NULL,
+  remote_plugin_id TEXT,
+  request_kind TEXT NOT NULL CHECK (request_kind IN ('install', 'access')),
+  catalog_snapshot_json TEXT NOT NULL,
+  capability_snapshot_json TEXT NOT NULL,
+  capability_digest TEXT NOT NULL,
+  state TEXT NOT NULL CHECK (state IN ('pending', 'approving', 'available', 'rejected', 'cancelled', 'install_failed')),
+  installed_plugin_id TEXT,
+  auth_required INTEGER NOT NULL DEFAULT 0 CHECK (auth_required IN (0, 1)),
+  apps_needing_auth_json TEXT NOT NULL DEFAULT '[]',
+  connect_urls_json TEXT NOT NULL DEFAULT '[]',
+  reviewer_account_id TEXT,
+  decision_reason TEXT,
+  safe_error_code TEXT,
+  revision INTEGER NOT NULL DEFAULT 1,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL,
+  decided_at INTEGER,
+  FOREIGN KEY (requester_account_id) REFERENCES enterprise_accounts(id) ON DELETE CASCADE,
+  FOREIGN KEY (reviewer_account_id) REFERENCES enterprise_accounts(id) ON DELETE SET NULL
+) STRICT;
+
+CREATE INDEX IF NOT EXISTS idx_enterprise_codex_plugin_requests_account
+  ON enterprise_codex_plugin_requests(requester_account_id, runtime_agent_id, state, updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_enterprise_codex_plugin_requests_admin
+  ON enterprise_codex_plugin_requests(state, created_at ASC);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_enterprise_codex_plugin_requests_open
+  ON enterprise_codex_plugin_requests(
+    requester_account_id, runtime_agent_id, plugin_name, marketplace_name
+  ) WHERE state IN ('pending', 'approving');
+
+CREATE TABLE IF NOT EXISTS enterprise_codex_plugin_grants (
+  id TEXT NOT NULL PRIMARY KEY,
+  account_id TEXT NOT NULL,
+  agent_key TEXT NOT NULL,
+  runtime_agent_id TEXT NOT NULL,
+  plugin_name TEXT NOT NULL,
+  marketplace_name TEXT NOT NULL,
+  remote_plugin_id TEXT,
+  installed_plugin_id TEXT,
+  capability_snapshot_json TEXT NOT NULL,
+  capability_digest TEXT NOT NULL,
+  source_request_id TEXT NOT NULL,
+  auth_required INTEGER NOT NULL DEFAULT 0 CHECK (auth_required IN (0, 1)),
+  apps_needing_auth_json TEXT NOT NULL DEFAULT '[]',
+  connect_urls_json TEXT NOT NULL DEFAULT '[]',
+  ready INTEGER NOT NULL DEFAULT 0 CHECK (ready IN (0, 1)),
+  state TEXT NOT NULL CHECK (state IN ('active', 'disabled', 'unavailable', 'revoked')),
+  revision INTEGER NOT NULL DEFAULT 1,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL,
+  FOREIGN KEY (account_id) REFERENCES enterprise_accounts(id) ON DELETE CASCADE,
+  FOREIGN KEY (source_request_id) REFERENCES enterprise_codex_plugin_requests(id) ON DELETE RESTRICT,
+  UNIQUE (account_id, runtime_agent_id, plugin_name, marketplace_name)
+) STRICT;
+
+CREATE INDEX IF NOT EXISTS idx_enterprise_codex_plugin_grants_active
+  ON enterprise_codex_plugin_grants(account_id, runtime_agent_id, state, updated_at DESC);
+
 CREATE TABLE IF NOT EXISTS enterprise_extension_idempotency (
   audience TEXT NOT NULL CHECK (audience IN ('admin', 'user')),
   actor_account_id TEXT NOT NULL,
@@ -324,6 +473,16 @@ CREATE TABLE IF NOT EXISTS enterprise_knowledge_agent_zone_bindings (
 ) STRICT;
 CREATE INDEX IF NOT EXISTS idx_enterprise_knowledge_bindings_agent
   ON enterprise_knowledge_agent_zone_bindings(agent_resource_key, zone_id);
+
+CREATE TABLE IF NOT EXISTS enterprise_knowledge_evidence_transfer_grants (
+  zone_id TEXT NOT NULL,
+  target_agent_resource_key TEXT NOT NULL,
+  created_by_account_id TEXT,
+  created_at INTEGER NOT NULL,
+  PRIMARY KEY (zone_id, target_agent_resource_key),
+  FOREIGN KEY (zone_id) REFERENCES enterprise_knowledge_zones(id) ON DELETE CASCADE,
+  FOREIGN KEY (created_by_account_id) REFERENCES enterprise_accounts(id) ON DELETE SET NULL
+) STRICT;
 
 CREATE TABLE IF NOT EXISTS enterprise_knowledge_sources (
   id TEXT NOT NULL PRIMARY KEY,
@@ -673,8 +832,10 @@ CREATE INDEX IF NOT EXISTS idx_enterprise_knowledge_idempotency_expiry
 const ensuredDatabases = new WeakSet<DatabaseSync>();
 
 function tableColumns(db: DatabaseSync, table: string): Set<string> {
-  const rows = db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>;
-  return new Set(rows.map((row) => row.name));
+  const rows = db.prepare(`PRAGMA table_info(${table})`).all();
+  return new Set(
+    rows.flatMap((row) => (isRecord(row) && typeof row.name === "string" ? [row.name] : [])),
+  );
 }
 
 function ensureAdditiveColumns(db: DatabaseSync): void {
@@ -722,7 +883,21 @@ function ensureAdditiveColumns(db: DatabaseSync): void {
          FROM enterprise_conversation_project_sessions
          ORDER BY account_id ASC, project_id ASC, updated_at DESC, session_key ASC`,
       )
-      .all() as Array<{ account_id: string; project_id: string; session_key: string }>;
+      .all()
+      .flatMap((row) =>
+        isRecord(row) &&
+        typeof row.account_id === "string" &&
+        typeof row.project_id === "string" &&
+        typeof row.session_key === "string"
+          ? [
+              {
+                account_id: row.account_id,
+                project_id: row.project_id,
+                session_key: row.session_key,
+              },
+            ]
+          : [],
+      );
     const nextPosition = new Map<string, number>();
     const updatePosition = db.prepare(
       `UPDATE enterprise_conversation_project_sessions SET position = ?
@@ -756,6 +931,27 @@ function ensureAdditiveColumns(db: DatabaseSync): void {
   ] as const) {
     if (!knowledgeUploadColumns.has(name)) {
       db.exec(`ALTER TABLE enterprise_knowledge_uploads ADD COLUMN ${name} ${definition}`);
+    }
+  }
+  const codexRequestColumns = tableColumns(db, "enterprise_codex_plugin_requests");
+  for (const [name, definition] of [
+    ["auth_required", "INTEGER NOT NULL DEFAULT 0"],
+    ["apps_needing_auth_json", "TEXT NOT NULL DEFAULT '[]'"],
+    ["connect_urls_json", "TEXT NOT NULL DEFAULT '[]'"],
+  ] as const) {
+    if (!codexRequestColumns.has(name)) {
+      db.exec(`ALTER TABLE enterprise_codex_plugin_requests ADD COLUMN ${name} ${definition}`);
+    }
+  }
+  const codexGrantColumns = tableColumns(db, "enterprise_codex_plugin_grants");
+  for (const [name, definition] of [
+    ["auth_required", "INTEGER NOT NULL DEFAULT 0"],
+    ["apps_needing_auth_json", "TEXT NOT NULL DEFAULT '[]'"],
+    ["connect_urls_json", "TEXT NOT NULL DEFAULT '[]'"],
+    ["ready", "INTEGER NOT NULL DEFAULT 0"],
+  ] as const) {
+    if (!codexGrantColumns.has(name)) {
+      db.exec(`ALTER TABLE enterprise_codex_plugin_grants ADD COLUMN ${name} ${definition}`);
     }
   }
   const knowledgeZoneColumns = tableColumns(db, "enterprise_knowledge_zones");

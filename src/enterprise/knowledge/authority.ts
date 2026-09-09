@@ -8,6 +8,12 @@ import { getActiveEnterpriseSession } from "../auth/session-store.js";
 import { resolveEnterpriseResourceAccess } from "../entitlements/entitlement-store.js";
 import { createEnterpriseKnowledgeEmbeddingRuntime } from "./embedding-runtime.js";
 import {
+  createKnowledgeEvidenceTransfer,
+  type EnterpriseEvidenceTransfer,
+  type EnterpriseEvidenceTransferInput,
+  type RetrievedKnowledgeEvidenceReceipt,
+} from "./evidence-transfer.js";
+import {
   getKnowledgeGenerationEvidence,
   searchKnowledgeGenerationIndexWithGraph,
   verifyKnowledgeCitationReference,
@@ -43,6 +49,8 @@ export type EnterpriseKnowledgeAuthority = {
     citation: KnowledgeCitation;
     trust: "untrusted_enterprise_data";
   }>;
+  /** Host-only transfer validation; never exposed as an agent tool. */
+  createEvidenceTransfer(input: EnterpriseEvidenceTransferInput): EnterpriseEvidenceTransfer;
   evaluateGrounding(
     finalText: string,
   ): { action: "accept" } | { action: "revise"; instruction: string };
@@ -88,6 +96,7 @@ export function createEnterpriseKnowledgeAuthority(params: {
   const env = params.env ?? process.env;
   const searchedCitationIds = new Set<string>();
   const retrievedCitationIds = new Set<string>();
+  const retrievedEvidence = new Map<string, RetrievedKnowledgeEvidenceReceipt>();
   let searchAttempted = false;
   let groundingRevisionRequested = false;
 
@@ -121,6 +130,18 @@ export function createEnterpriseKnowledgeAuthority(params: {
     accountId: params.accountId,
     sessionId: params.sessionId,
     agentResourceKey: params.agentResourceKey,
+    createEvidenceTransfer(input) {
+      return createKnowledgeEvidenceTransfer({
+        accountId: params.accountId,
+        sessionId: params.sessionId,
+        agentResourceKey: params.agentResourceKey,
+        config: params.config ?? loadConfig(),
+        options,
+        assertRuntimeAccess,
+        receipts: retrievedEvidence,
+        input,
+      });
+    },
     hasPublishedKnowledge() {
       try {
         return zones().length > 0;
@@ -358,7 +379,7 @@ export function createEnterpriseKnowledgeAuthority(params: {
           },
           options,
         );
-        return {
+        const result = {
           evidence: evidence.text,
           citation: {
             citationId,
@@ -368,8 +389,15 @@ export function createEnterpriseKnowledgeAuthority(params: {
             locator: evidence.locator,
             publishedAt: new Date(after.publishedAt).toISOString(),
           },
-          trust: "untrusted_enterprise_data",
+          trust: "untrusted_enterprise_data" as const,
         };
+        retrievedEvidence.set(citationId, {
+          reference,
+          accessRevision: after.accessRevision,
+          evidence: evidence.text,
+          citation: result.citation,
+        });
+        return result;
       } catch (error) {
         appendEnterpriseAuditEvent(
           {

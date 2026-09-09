@@ -7,6 +7,8 @@ const sessionRow = vi.hoisted(() => ({
   sessionId: "sess-main",
   status: "done",
   updatedAt: 1,
+  modelProvider: "openai",
+  model: "gpt-5.6-luna",
   thinkingLevel: "ultra" as string | undefined,
   thinkingLevels: [{ id: "ultra", label: "ultra" }],
   thinkingOptions: ["ultra"],
@@ -470,13 +472,14 @@ describe("createTranscriptUpdateBroadcastHandler", () => {
     });
   });
 
-  it("keeps stable thinking state without catalog-derived picker metadata", async () => {
-    const payload = await emitAssistantTranscriptUpdate(false);
+  it("keeps persisted thinking without unscoped model selection metadata", async () => {
+    // Match the JSON merge event the browser receives; undefined fields are absent.
+    // oxlint-disable-next-line unicorn/prefer-structured-clone -- verify gateway JSON wire shape
+    const payload = JSON.parse(JSON.stringify(await emitAssistantTranscriptUpdate(false)));
 
     expect(payload).toMatchObject({
       session: {
         thinkingLevel: "ultra",
-        agentRuntime: { id: "openclaw" },
       },
     });
     expect(payload).not.toHaveProperty("thinkingLevels");
@@ -485,6 +488,10 @@ describe("createTranscriptUpdateBroadcastHandler", () => {
     expect(payload).not.toHaveProperty("session.thinkingLevels");
     expect(payload).not.toHaveProperty("session.thinkingOptions");
     expect(payload).not.toHaveProperty("session.thinkingDefault");
+    for (const field of ["modelProvider", "model", "agentRuntime"]) {
+      expect(payload).not.toHaveProperty(field);
+      expect(payload).not.toHaveProperty(`session.${field}`);
+    }
   });
 
   it("emits an explicit null when the thinking override is cleared", async () => {

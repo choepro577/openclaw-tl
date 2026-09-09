@@ -37,6 +37,25 @@ export type AgentRuntimeConfig =
       acp?: AgentRuntimeAcpConfig;
     };
 
+export type AgentDelegationTargetConfig = {
+  /** Draft profiles remain directly usable but are excluded from automatic routing. */
+  status: "draft" | "active" | "disabled";
+  /** Additional human-facing names that count as an explicit delegation request. */
+  aliases: string[];
+  /** The least restrictive handoff behavior this specialist permits. */
+  handlingMode: "auto_when_certain" | "confirm_before_handoff" | "explicit_only";
+  /** Positive, administrator-reviewed examples used by the deterministic and model routers. */
+  useWhen: string[];
+  /** Negative examples always take precedence over positive matches. */
+  avoidWhen: string[];
+  /** Information the router must collect before a specialist can be invoked. */
+  requiredInputs: Array<{
+    id: string;
+    label: string;
+    question: string;
+  }>;
+};
+
 export type AgentBindingMatch = {
   channel: string;
   /**
@@ -88,6 +107,8 @@ export type AgentConfig = {
   name?: string;
   /** Optional human-authored agent description. */
   description?: string;
+  /** Enterprise-only, administrator-reviewed specialist routing profile. */
+  delegationTarget?: AgentDelegationTargetConfig;
   workspace?: string;
   agentDir?: string;
   model?: AgentModelConfig;

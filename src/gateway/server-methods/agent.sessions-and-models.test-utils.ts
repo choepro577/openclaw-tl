@@ -2315,7 +2315,7 @@ describe("gateway agent handler", () => {
     );
     expect(globalLoadCalls.length).toBeGreaterThan(0);
     for (const [, options] of globalLoadCalls) {
-      expect(options).toEqual({ agentId: "work", clone: false });
+      expect(options).toEqual(expect.objectContaining({ agentId: "work", clone: false }));
     }
   });
 
@@ -2366,7 +2366,7 @@ describe("gateway agent handler", () => {
     );
     expect(globalLoadCalls.length).toBeGreaterThan(0);
     for (const [, options] of globalLoadCalls) {
-      expect(options).toEqual({ agentId: "ops", clone: false });
+      expect(options).toEqual(expect.objectContaining({ agentId: "ops", clone: false }));
     }
   });
 

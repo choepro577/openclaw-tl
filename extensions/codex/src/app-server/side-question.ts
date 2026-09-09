@@ -81,9 +81,15 @@ import {
   buildCodexNativeHookRelayConfig,
   buildCodexNativeHookRelayDisabledConfig,
   CODEX_NATIVE_HOOK_RELAY_EVENTS,
+  createCodexNativeHookRelayRunBeforeToolCall,
   emitCodexNativePreToolUseFailureDiagnostic,
   type CodexNativePreToolUseFailure,
 } from "./native-hook-relay.js";
+import {
+  collectCodexNativePluginMcpServerOwnersFromPolicyContext,
+  resolveCodexNativePluginMcpToolOwnerFromStatus,
+  type CodexNativePluginMcpServerOwners,
+} from "./native-plugin-grants.js";
 import { isCodexNotificationForTurn } from "./notification-correlation.js";
 import {
   buildCodexPluginAppsConfigPatchFromPolicyContext,
@@ -658,6 +664,9 @@ export async function runCodexAppServerSideQuestion(
       configuredEvents: options.nativeHookRelay?.events,
       approvalPolicy,
     });
+    const nativePluginMcpServerOwners = binding.pluginAppPolicyContext
+      ? collectCodexNativePluginMcpServerOwnersFromPolicyContext(binding.pluginAppPolicyContext)
+      : [];
     nativeHookRelay = options.nativeHookRelay
       ? registerCodexSideNativeHookRelay({
           options: options.nativeHookRelay,
@@ -681,6 +690,15 @@ export async function runCodexAppServerSideQuestion(
           loopDetectionPreToolUseRelay: appServer.loopDetectionPreToolUseRelay,
           signal: runAbortController.signal,
           hostCapabilities: sideRunParams.hostCapabilities,
+          nativePluginMcpServerOwners,
+          resolveNativePluginMcpToolOwner: (toolName) =>
+            resolveCodexNativePluginMcpToolOwnerFromStatus({
+              client,
+              threadId: childThreadId,
+              toolName,
+              pluginAppPolicyContext: binding.pluginAppPolicyContext,
+              nativePluginMcpServerOwners,
+            }),
           onPreToolUseFailure: (failure) => {
             if (nativePreToolUseFailureFallbackActive) {
               emitNativePreToolUseFailure(failure);
@@ -944,6 +962,12 @@ function registerCodexSideNativeHookRelay(params: {
   loopDetectionPreToolUseRelay: boolean;
   signal: AbortSignal;
   hostCapabilities: EmbeddedRunAttemptParamsV2["hostCapabilities"];
+  /** Trusted plugin MCP ownership from the persisted thread policy context. */
+  nativePluginMcpServerOwners?: CodexNativePluginMcpServerOwners;
+  /** Live connector/server owner lookup for shared Codex MCP surfaces. */
+  resolveNativePluginMcpToolOwner?: NonNullable<
+    Parameters<typeof createCodexNativeHookRelayRunBeforeToolCall>[0]
+  >["resolveNativePluginMcpToolOwner"];
   onPreToolUseFailure: (failure: CodexNativePreToolUseFailure) => void;
 }): NativeHookRelayRegistrationHandle | undefined {
   if (params.options.enabled === false) {
@@ -965,7 +989,11 @@ function registerCodexSideNativeHookRelay(params: {
       completionTimeoutMs: params.completionTimeoutMs,
     }),
     signal: params.signal,
-    runBeforeToolCall: params.hostCapabilities.runBeforeToolCall,
+    runBeforeToolCall: createCodexNativeHookRelayRunBeforeToolCall({
+      hostCapabilities: params.hostCapabilities,
+      nativePluginMcpServerOwners: params.nativePluginMcpServerOwners,
+      resolveNativePluginMcpToolOwner: params.resolveNativePluginMcpToolOwner,
+    }),
     assertActive: params.hostCapabilities.assertActive,
     onPreToolUseFailure: params.onPreToolUseFailure,
     command: {

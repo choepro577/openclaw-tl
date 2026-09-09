@@ -4,14 +4,22 @@ import type { JsonObject, JsonValue } from "./protocol-json.js";
 export type CodexPluginSummary = {
   id: string;
   remotePluginId?: string | null;
+  version?: string | null;
+  localVersion?: string | null;
   name: string;
   source?: JsonObject;
   installed: boolean;
+  installedAt?: number | null;
   enabled: boolean;
   installPolicy?: string;
+  installPolicySource?: string | null;
   mustShowInstallationInterstitial?: boolean | null;
   authPolicy?: string;
   availability?: string;
+  disabledReason?: string | null;
+  eligiblePlanTypes?: string[] | null;
+  keywords?: string[];
+  shareContext?: JsonValue | null;
   interface?: JsonValue;
 };
 
@@ -27,10 +35,14 @@ export type CodexPluginDetail = {
   marketplaceName?: string;
   marketplacePath?: string | null;
   summary: CodexPluginSummary;
+  shareUrl?: string | null;
   description?: string | null;
   skills?: JsonValue[];
+  hooks?: JsonValue[];
   apps: CodexAppSummary[];
+  appTemplates?: JsonValue[];
   mcpServers: string[];
+  scheduledTasks?: JsonValue[] | null;
 };
 
 export type CodexPluginMarketplaceEntry = {
@@ -84,7 +96,17 @@ export type CodexPluginReadParams = {
   pluginName: string;
 };
 
-export type CodexPluginInstallParams = CodexPluginReadParams;
+export type CodexPluginInstallParams = CodexPluginReadParams & {
+  /** Client supplied id used to correlate a long running install attempt. */
+  installAttemptId?: string | null;
+};
+
+export type CodexPluginUninstallParams = {
+  /** Canonical local plugin id (`<plugin>@<marketplace>`) or remote backend id. */
+  pluginId: string;
+};
+
+export type CodexPluginUninstallResponse = Record<string, never>;
 
 export type CodexPluginInstallResponse = {
   authPolicy: string;
@@ -159,6 +181,7 @@ type CodexConnectorMetadata = {
 
 export type CodexAppsReadParams = {
   appIds: string[];
+  threadId?: string | null;
   includeTools?: boolean;
 };
 

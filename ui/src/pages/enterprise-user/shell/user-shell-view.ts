@@ -10,6 +10,7 @@ import { eu } from "../../../i18n/enterprise-user.ts";
 import { t } from "../../../i18n/index.ts";
 import "../../../app/router-outlet.ts";
 import "../../../components/modal-dialog.ts";
+import "../../../lib/toast.ts";
 import "./user-sidebar.ts";
 import "./user-topbar.ts";
 
@@ -86,6 +87,7 @@ export function renderEnterpriseUserShell(host: EnterpriseUserShellHost) {
           .retryContext=${context}
         ></openclaw-router-outlet>
       </main>
+      <openclaw-toast-host></openclaw-toast-host>
     </div>
   `;
 }

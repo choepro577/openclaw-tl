@@ -1,0 +1,71 @@
+- main [ref=f4e2]:
+  - generic [ref=f4e5]:
+    - generic [ref=f4e7]:
+      - heading "Agent Library" [level=1] [ref=f4e8]
+      - paragraph [ref=f4e9]: Choose your Personal Agent or an Agent assigned by your company.
+    - generic [ref=f4e10]:
+      - article [ref=f4e12]:
+        - generic [ref=f4e13]:
+          - generic [aria-hidden] [ref=f4e14]: 🤖
+          - generic [ref=f4e15]:
+            - generic [ref=f4e16]: Personal Agent
+            - heading "Personal Agent" [level=2] [ref=f4e17]
+        - paragraph [ref=f4e18]: Xin chào, tôi có thể giúp gì cho bạn hôm nay?
+        - generic [ref=f4e19]:
+          - status [ref=f4e20]:
+            - generic [ref=f4e21]: Ready to chat
+          - generic [ref=f4e22]:
+            - button "Start chat" [ref=f4e23]
+            - button "Edit" [ref=f4e24]
+      - article [ref=f4e26]:
+        - generic [ref=f4e27]:
+          - generic [aria-hidden] [ref=f4e28]: M
+          - generic [ref=f4e29]:
+            - generic [ref=f4e30]: Enterprise Agent
+            - heading "main" [level=2] [ref=f4e31]
+        - paragraph [ref=f4e32]: Managed by company
+        - generic [ref=f4e33]:
+          - status [ref=f4e34]:
+            - generic [ref=f4e35]: Access not granted
+          - generic [ref=f4e36]:
+            - button "Request access" [ref=f4e37]
+            - button "View capabilities" [ref=f4e38]
+      - article [ref=f4e40]:
+        - generic [ref=f4e41]:
+          - generic [aria-hidden] [ref=f4e42]: C
+          - generic [ref=f4e43]:
+            - generic [ref=f4e44]: Enterprise Agent
+            - heading "Chuyên gia Hợp đồng & Pháp chế" [level=2] [ref=f4e45]
+        - paragraph [ref=f4e46]: Chuyên kiểm tra điều khoản, rủi ro, nghĩa vụ và điểm bất lợi trong hợp đồng doanh nghiệp.
+        - generic [ref=f4e47]:
+          - status [ref=f4e48]:
+            - generic [ref=f4e49]: Access not granted
+          - generic [ref=f4e50]:
+            - button "Request access" [ref=f4e51]
+            - button "View capabilities" [ref=f4e52]
+      - article [ref=f4e54]:
+        - generic [ref=f4e55]:
+          - generic [aria-hidden] [ref=f4e56]: C
+          - generic [ref=f4e57]:
+            - generic [ref=f4e58]: Enterprise Agent
+            - heading "Chuyên gia Tài chính & Ngân sách" [level=2] [ref=f4e59]
+        - paragraph [ref=f4e60]: Chuyên phân tích ngân sách, dòng tiền, chi phí và chênh lệch tài chính doanh nghiệp.
+        - generic [ref=f4e61]:
+          - status [ref=f4e62]:
+            - generic [ref=f4e63]: Access not granted
+          - generic [ref=f4e64]:
+            - button "Request access" [ref=f4e65]
+            - button "View capabilities" [ref=f4e66]
+      - article [ref=f4e68]:
+        - generic [ref=f4e69]:
+          - generic [aria-hidden] [ref=f4e70]: C
+          - generic [ref=f4e71]:
+            - generic [ref=f4e72]: Enterprise Agent
+            - heading "Chuyên gia Nhân sự & Chính sách" [level=2] [ref=f4e73]
+        - paragraph [ref=f4e74]: Chuyên xử lý chính sách nhân sự, tuyển dụng, đào tạo và quy trình đánh giá nhân viên.
+        - generic [ref=f4e75]:
+          - status [ref=f4e76]:
+            - generic [ref=f4e77]: Access not granted
+          - generic [ref=f4e78]:
+            - button "Request access" [ref=f4e79]
+            - button "View capabilities" [ref=f4e80]

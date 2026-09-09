@@ -152,7 +152,9 @@ export const pluginsHandlers: GatewayRequestHandlers = {
           lifecycleError?.kind === "invalid-request"
             ? ErrorCodes.INVALID_REQUEST
             : ErrorCodes.UNAVAILABLE,
-          formatErrorMessage(error),
+          // Lifecycle errors already summarize the failed operation. Keep internal
+          // causes for diagnostics instead of serializing them into the UI message.
+          formatErrorMessage(lifecycleError?.message ?? error),
           details ? { details } : undefined,
         ),
       );

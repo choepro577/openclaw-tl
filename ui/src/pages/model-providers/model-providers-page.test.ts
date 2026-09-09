@@ -46,7 +46,7 @@ function deferred<T>() {
   return { promise, resolve };
 }
 
-function createHarness(initialScopeId: string) {
+function createHarness(initialScopeId: string, options: { deferProviderUsage?: boolean } = {}) {
   let pendingAuthStatus: Promise<void> | null = null;
   let releaseAuthStatus: (() => void) | null = null;
   const deferNextAuthStatus = () => {
@@ -162,6 +162,7 @@ function createHarness(initialScopeId: string) {
       snapshot: { updateRunning: false, updateReconciliationPending: false },
       subscribe,
     },
+    deferProviderUsage: options.deferProviderUsage ?? false,
     navigate: vi.fn(),
   } as unknown as ApplicationContext;
   return {
@@ -216,6 +217,30 @@ afterEach(() => {
 });
 
 describe("ModelProvidersPage agent scope", () => {
+  it("renders critical provider data before deferred usage completes", async () => {
+    const { context, request } = createHarness("main", { deferProviderUsage: true });
+    const originalRequest = request.getMockImplementation()!;
+    let releaseUsage!: () => void;
+    const usageGate = new Promise<void>((resolve) => {
+      releaseUsage = resolve;
+    });
+    request.mockImplementation(async (method: string, params?: unknown) => {
+      if (method === "usage.status") {
+        await usageGate;
+      }
+      return originalRequest(method, params);
+    });
+
+    const page = appendPage(context);
+    await waitForFast(() => expect(page.data?.config).toEqual({}));
+
+    expect(page.data?.providerUsage).toBeNull();
+    expect(requestCount(request, "usage.status")).toBe(1);
+
+    releaseUsage();
+    await waitForFast(() => expect(page.data?.providerUsage).toMatchObject({ ok: true }));
+  });
+
   it.each(["direct", "preload"] as const)(
     "recovers a failed %s provider usage result on the next page activation",
     async (loadSource) => {

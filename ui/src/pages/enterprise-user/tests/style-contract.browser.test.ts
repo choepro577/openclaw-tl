@@ -53,7 +53,6 @@ function fixtureHtml(): string {
                 <div class="sidebar-shell">
                   <div class="sidebar-shell__content">
                     <div class="sidebar-shell__body">
-                      <div class="eu-sidebar-brand">OpenClaw Enterprise</div>
                       <div style="display: contents">
                         <details class="eu-agent-switcher">
                           <summary><span class="eu-agent-switcher__avatar">✨</span><span class="eu-agent-switcher__identity"><small>Active Agent</small><strong>Personal Agent</strong></span><span class="eu-agent-switcher__chevron">⌄</span></summary>
@@ -81,7 +80,11 @@ function fixtureHtml(): string {
                         </details>
                       </div>
                       <button class="btn primary eu-new-chat" type="button">New chat</button>
-                      <button class="nav-item" type="button">Agents</button>
+                      <nav class="sidebar-nav">
+                        <button class="nav-item active" type="button"><span class="nav-item__icon">A</span><span>Agents</span></button>
+                        <button class="nav-item" type="button"><span class="nav-item__icon">C</span><span>Automations</span></button>
+                        <div class="eu-session-organizer"><div class="eu-session-organizer__toolbar"><span>Projects</span></div></div>
+                      </nav>
                     </div>
                   </div>
                 </div>
@@ -95,8 +98,14 @@ function fixtureHtml(): string {
                 <div class="eu-agent-grid">
                   <div style="display: contents">
                     <article class="card eu-agent-card">
-                      <div class="eu-agent-card__identity"><span class="eu-agent-card__avatar">✨</span><div><h2>Personal Agent</h2><p>Description</p></div></div>
-                      <button class="btn primary" type="button">Start chat</button>
+                      <div class="eu-agent-card__identity"><span class="eu-agent-card__avatar">✨</span><div class="eu-agent-card__copy"><span class="eu-agent-card__kind">Personal Agent</span><h2>Personal Agent</h2><p class="eu-agent-card__description">Description</p></div></div>
+                      <div class="eu-actions eu-agent-card__actions"><button class="btn primary" type="button">Start chat</button></div>
+                    </article>
+                  </div>
+                  <div style="display: contents">
+                    <article class="card eu-agent-card">
+                      <div class="eu-agent-card__identity"><span class="eu-agent-card__avatar">M</span><div class="eu-agent-card__copy"><span class="eu-agent-card__kind">Enterprise Agent</span><h2>main</h2><p class="eu-agent-card__description">Managed by company</p></div></div>
+                      <div class="eu-actions eu-agent-card__actions"><button class="btn primary" type="button">Start chat</button></div>
                     </article>
                   </div>
                 </div>
@@ -130,7 +139,7 @@ afterAll(async () => {
 });
 
 describeBrowserLayout("Enterprise User inherited style contract", () => {
-  it("keeps the canonical desktop shell width and full-height sidebar", async () => {
+  it("uses the wider desktop sidebar without overflowing the content", async () => {
     const page = await openFixture({ width: 1440, height: 900 });
     try {
       const geometry = await page.evaluate(() => {
@@ -141,11 +150,93 @@ describeBrowserLayout("Enterprise User inherited style contract", () => {
         return { agentCard, settingsPage, shellNav, sidebar };
       });
 
-      expect(geometry.shellNav.width).toBe(258);
-      expect(geometry.sidebar.width).toBe(257);
+      expect(geometry.shellNav.width).toBe(316);
+      expect(geometry.sidebar.width).toBe(315);
       expect(geometry.sidebar.height).toBe(900);
-      expect(geometry.settingsPage.width).toBe(1120);
+      expect(geometry.settingsPage.right).toBeLessThanOrEqual(1440);
       expect(geometry.agentCard.width).toBeLessThan(geometry.settingsPage.width / 2);
+    } finally {
+      await page.close();
+    }
+  });
+
+  it("aligns the agent controls and active navigation item to the full sidebar width", async () => {
+    const page = await openFixture({ width: 1440, height: 900 });
+    try {
+      const geometry = await page.evaluate(() => {
+        const rect = (selector: string) => {
+          const bounds = document.querySelector(selector)!.getBoundingClientRect();
+          return { left: bounds.left, right: bounds.right, width: bounds.width };
+        };
+        return {
+          activeItem: rect(".sidebar-nav > .nav-item.active"),
+          agentSwitcher: rect(".eu-agent-switcher > summary"),
+          navigation: rect(".sidebar-nav"),
+          newChat: rect(".eu-new-chat"),
+        };
+      });
+
+      for (const control of [geometry.agentSwitcher, geometry.newChat, geometry.activeItem]) {
+        expect(control.left).toBeCloseTo(geometry.navigation.left, 4);
+        expect(control.right).toBeCloseTo(geometry.navigation.right, 4);
+        expect(control.width).toBeCloseTo(geometry.navigation.width, 4);
+      }
+    } finally {
+      await page.close();
+    }
+  });
+
+  it("centers the Project folder glyph and keeps page text selectable", async () => {
+    const page = await openFixture({ width: 1440, height: 900 });
+    try {
+      await page.locator(".eu-session-organizer").evaluate((organizer) => {
+        organizer.insertAdjacentHTML(
+          "beforeend",
+          `<section class="eu-session-section eu-session-project">
+            <div class="eu-session-section__header">
+              <button class="eu-session-section__toggle" type="button">
+                <span class="eu-session-section__folder-icon"><svg viewBox="0 0 24 24"><path d="M3 5h6l2 2h10v12H3z"></path></svg></span>
+                <span class="eu-session-section__name">Example Project</span>
+              </button>
+            </div>
+          </section>`,
+        );
+      });
+
+      const presentation = await page.evaluate(() => {
+        const centerY = (element: Element) => {
+          const bounds = element.getBoundingClientRect();
+          return bounds.top + bounds.height / 2;
+        };
+        const icon = document.querySelector(".eu-session-section__folder-icon")!;
+        const svg = icon.querySelector("svg")!;
+        const name = icon.nextElementSibling!;
+        return {
+          bodyUserSelect: getComputedStyle(document.body).userSelect,
+          iconCenter: centerY(svg),
+          nameCenter: centerY(name),
+        };
+      });
+
+      const headingBounds = await page
+        .getByRole("heading", { name: "Agent Library" })
+        .boundingBox();
+      expect(headingBounds).not.toBeNull();
+      await page.mouse.dblclick(
+        (headingBounds?.x ?? 0) + 10,
+        (headingBounds?.y ?? 0) + (headingBounds?.height ?? 0) / 2,
+      );
+      const selectedText = await page.evaluate(() => window.getSelection()?.toString() ?? "");
+
+      await page.locator("body").evaluate((body) => body.classList.add("eu-session-drag-active"));
+      const dragUserSelect = await page
+        .getByText("Example Project", { exact: true })
+        .evaluate((name) => getComputedStyle(name).userSelect);
+
+      expect(presentation.bodyUserSelect).toBe("text");
+      expect(presentation.iconCenter).toBeCloseTo(presentation.nameCenter, 4);
+      expect(selectedText.length).toBeGreaterThan(0);
+      expect(dragUserSelect).toBe("none");
     } finally {
       await page.close();
     }

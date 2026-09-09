@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { SessionObserverDigest } from "../../packages/gateway-protocol/src/schema/sessions.js";
 import type { OpenClawConfig } from "../config/types.openclaw.js";
+import { clearAgentRunContext, registerAgentRunContext } from "../infra/agent-run-registry.js";
+import { markGatewayRequestScopedRuntimeConfig } from "./request-runtime-config.js";
 import {
   createHarness,
   declareObserverVisibility,
@@ -37,6 +39,64 @@ describe("session observer", () => {
     expect(harness.prepareModel).toHaveBeenCalledOnce();
     expect(harness.completeModel).toHaveBeenCalledOnce();
     harness.observer.dispose();
+  });
+
+  it("uses the run-owned request config for utility model preparation and completion", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(0);
+    const globalConfig = {
+      gateway: { controlUi: { sessionObserver: true } },
+      agents: { defaults: { utilityModel: "openai/global-observer" } },
+    } satisfies OpenClawConfig;
+    const scopedConfig = markGatewayRequestScopedRuntimeConfig({
+      ...globalConfig,
+      agents: {
+        defaults: { utilityModel: "openai/scoped-observer" },
+        ownership: "explicit",
+        entries: {
+          "enterprise-personal-account": { utilityModel: "openai/scoped-observer" },
+        },
+      },
+    });
+    const resolveUtilityModelRef = vi.fn(({ cfg }: { cfg: OpenClawConfig }) =>
+      cfg === scopedConfig ? "openai/scoped-observer" : "openai/global-observer",
+    );
+    const harness = createHarness({
+      subscribe: false,
+      config: globalConfig,
+      resolveUtilityModelRef,
+    });
+    harness.subscribers
+      .subscribe("conn-1", "agent:enterprise-personal-account:session-1")
+      ?.commit();
+    declareObserverVisibility(harness.observer);
+    registerAgentRunContext("run-scoped", {
+      sessionKey: "agent:enterprise-personal-account:session-1",
+      agentId: "enterprise-personal-account",
+      runtimeConfig: scopedConfig,
+    });
+
+    startAndAddToolNotes(harness.observer, {
+      runId: "run-scoped",
+      sessionKey: "agent:enterprise-personal-account:session-1",
+      agentId: "enterprise-personal-account",
+    });
+    await vi.advanceTimersByTimeAsync(12_000);
+    await flushObserver();
+
+    expect(resolveUtilityModelRef).toHaveBeenCalled();
+    expect(resolveUtilityModelRef.mock.calls.every(([params]) => params.cfg === scopedConfig)).toBe(
+      true,
+    );
+    expect(harness.prepareModel).toHaveBeenCalledWith(
+      expect.objectContaining({ cfg: scopedConfig, agentId: "enterprise-personal-account" }),
+    );
+    expect(harness.completeModel).toHaveBeenCalledWith(
+      expect.objectContaining({ cfg: scopedConfig }),
+    );
+
+    harness.observer.dispose();
+    clearAgentRunContext("run-scoped");
   });
 
   it("publishes safe preambles immediately without a model call", async () => {

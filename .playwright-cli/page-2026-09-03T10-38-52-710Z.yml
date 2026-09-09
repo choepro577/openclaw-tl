@@ -1,0 +1,147 @@
+- main [ref=f4e5]:
+  - complementary [ref=f4e6]:
+    - generic [ref=f4e19]:
+      - strong [ref=f4e20]: OpenClaw
+      - generic [ref=f4e21]: Enterprise Admin
+    - navigation "Quản trị Enterprise" [ref=f4e22]:
+      - button "Quản lý tài khoản" [ref=f4e23]
+      - button "Quản lý agent" [ref=f4e31]
+      - button "Tri thức doanh nghiệp" [ref=f4e37]
+      - button "Quản lý skill" [ref=f4e42]
+      - button "Plugins" [ref=f4e50]
+      - button "Config" [ref=f4e56]
+    - generic [ref=f4e62]:
+      - generic [ref=f4e63]:
+        - generic [ref=f4e64]: Q
+        - generic [ref=f4e65]:
+          - strong [ref=f4e66]: QA Admin
+          - generic [ref=f4e67]: "@qaadmin"
+      - button "Đổi mật khẩu" [ref=f4e68]
+      - button "Đăng xuất" [ref=f4e75]
+  - generic [ref=f4e2008]:
+    - generic [ref=f4e2010]:
+      - heading "Quản lý agent" [level=1] [ref=f4e2011]
+      - paragraph [ref=f4e2012]: Shared agent nghiệp vụ và personal agent theo từng tài khoản
+    - navigation "Loại agent" [ref=f4e2015]:
+      - button "Shared Agents (2)" [ref=f4e2016]
+      - button "Personal Agents (2)" [ref=f4e2017]
+      - button "Điều phối Agent" [active] [ref=f4e2018]
+    - generic [ref=f4e2063]:
+      - generic [ref=f4e2064]:
+        - generic [ref=f4e2065]:
+          - generic [ref=f4e2066]: DELEGATION STATUS
+          - heading "Off" [level=2] [ref=f4e2067]
+          - paragraph [ref=f4e2068]: Personal Agents delegate only to assigned specialists that are currently eligible. Changes apply from the next request.
+        - button "Preview activation" [ref=f4e2070]
+      - region "Four setup steps" [ref=f4e2071]:
+        - generic [ref=f4e2072]:
+          - generic [ref=f4e2073]: "1"
+          - generic [ref=f4e2074]:
+            - strong [ref=f4e2075]: Choose a routing model
+            - generic [ref=f4e2076]: Not complete
+        - generic [ref=f4e2077]:
+          - generic [ref=f4e2078]: "2"
+          - generic [ref=f4e2079]:
+            - strong [ref=f4e2080]: Complete specialist profiles
+            - generic [ref=f4e2081]: 0 ready
+        - generic [ref=f4e2082]:
+          - generic [ref=f4e2083]: "3"
+          - generic [ref=f4e2084]:
+            - strong [ref=f4e2085]: Review affected users
+            - generic [ref=f4e2086]: 1 Personal Agents
+        - generic [ref=f4e2087]:
+          - generic [ref=f4e2088]: "4"
+          - generic [ref=f4e2089]:
+            - strong [ref=f4e2090]: Activate safely
+            - generic [ref=f4e2091]: "Off"
+      - generic [ref=f4e2092]:
+        - generic [ref=f4e2093]:
+          - generic [ref=f4e2094]: Users with Personal Agent
+          - strong [ref=f4e2095]: "1"
+        - generic [ref=f4e2096]:
+          - generic [ref=f4e2097]: Assignments
+          - strong [ref=f4e2098]: "0"
+        - generic [ref=f4e2099]:
+          - generic [ref=f4e2100]: Effective
+          - strong [ref=f4e2101]: "0"
+        - generic [ref=f4e2102]:
+          - generic [ref=f4e2103]: Ready to delegate
+          - strong [ref=f4e2104]: "0"
+        - generic [ref=f4e2105]:
+          - generic [ref=f4e2106]: Delegated
+          - strong [ref=f4e2107]: "0"
+        - generic [ref=f4e2108]:
+          - generic [ref=f4e2109]: Asked for clarification
+          - strong [ref=f4e2110]: 0%
+        - generic [ref=f4e2111]:
+          - generic [ref=f4e2112]: Blocked
+          - strong [ref=f4e2113]: "0"
+        - generic [ref=f4e2114]:
+          - generic [ref=f4e2115]: Failed
+          - strong [ref=f4e2116]: 0%
+      - generic [ref=f4e2117]:
+        - generic [ref=f4e2118]:
+          - generic [ref=f4e2119]:
+            - heading "General settings" [level=3] [ref=f4e2120]
+            - paragraph [ref=f4e2121]: Safe defaults are already filled in.
+          - generic [ref=f4e2122]: Revision 0
+        - generic [ref=f4e2123]:
+          - text: Routing model
+          - combobox "Routing model If this model becomes unavailable, routing stops and does not switch models automatically." [ref=f4e2124]:
+            - option "Choose a model…" [selected]
+          - generic [ref=f4e2125]: If this model becomes unavailable, routing stops and does not switch models automatically.
+        - generic [ref=f4e2126]:
+          - text: Operating mode
+          - combobox "Operating mode" [ref=f4e2127]:
+            - option "Off" [selected]
+            - option "Shadow mode, record decisions only"
+            - option "Active"
+        - group [ref=f4e2128]:
+          - generic "Advanced settings" [ref=f4e2129]
+        - button "Save settings" [ref=f4e2131]
+      - generic [ref=f4e2132]:
+        - generic [ref=f4e2133]:
+          - generic [ref=f4e2134]:
+            - heading "Routing log" [level=3] [ref=f4e2135]
+            - paragraph [ref=f4e2136]: Prompts and responses are not stored; only hashes and administrative reason codes are retained.
+          - generic [ref=f4e2137]: 0 events
+        - generic "Routing log filters" [ref=f4e2138]:
+          - generic [ref=f4e2139]:
+            - text: From
+            - textbox "From" [ref=f4e2140]
+          - generic [ref=f4e2141]:
+            - text: To
+            - textbox "To" [ref=f4e2142]
+          - generic [ref=f4e2143]:
+            - text: Account ID
+            - textbox "Account ID" [ref=f4e2144]
+          - generic [ref=f4e2145]:
+            - text: Agent ID
+            - textbox "Agent ID" [ref=f4e2146]
+          - generic [ref=f4e2147]:
+            - text: Outcome
+            - combobox "Outcome" [ref=f4e2148]:
+              - option "All" [selected]
+              - option "delegated"
+              - option "clarified"
+              - option "local"
+              - option "blocked"
+              - option "failed"
+              - option "cancelled"
+              - option "shadow"
+          - generic [ref=f4e2149]:
+            - text: Reason code
+            - textbox "Reason code" [ref=f4e2150]
+          - button "Apply filters" [ref=f4e2151]
+        - table [ref=f4e2152]:
+          - rowgroup [ref=f4e2153]:
+            - row [ref=f4e2154]:
+              - columnheader "Time" [ref=f4e2155]
+              - columnheader "Account" [ref=f4e2156]
+              - columnheader "Agent" [ref=f4e2157]
+              - columnheader "Outcome" [ref=f4e2158]
+              - columnheader "Source" [ref=f4e2159]
+              - columnheader "Reason" [ref=f4e2160]
+              - columnheader "Latency" [ref=f4e2161]
+          - rowgroup
+        - generic [ref=f4e2162]: No routing events yet.

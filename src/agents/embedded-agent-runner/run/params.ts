@@ -51,6 +51,7 @@ import type { ContextEngineTurnAttemptFacts } from "../../harness/context-engine
 import type { ExpectedAgentHarnessRuntimeArtifact } from "../../harness/runtime-artifact.types.js";
 import type { AgentInternalEvent } from "../../internal-events.js";
 import type { PreparedModelThinkingCapability } from "../../model-catalog-lookup.js";
+import type { ResolvePrivateModelContext } from "../../private-model-context.js";
 import type { AgentRunSessionTarget } from "../../run-session-target.js";
 import type { AgentMessage } from "../../runtime/index.js";
 import type { ScheduledToolPolicyContext } from "../../scheduled-tool-policy.js";
@@ -85,6 +86,8 @@ export type CurrentInboundPromptContext = {
 };
 
 export type RunEmbeddedAgentParams = {
+  /** Process-only authority resolved again at each actual model request, never persisted. */
+  resolvePrivateModelContext?: ResolvePrivateModelContext;
   /** Already-admitted internal execution; mutually exclusive with preparedRunAdmission. */
   admittedRunContext?: AdmittedRunContext;
   /** Host-only post-prepare continuation, removed before plugin invocation. */

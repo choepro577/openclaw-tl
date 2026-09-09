@@ -12,6 +12,7 @@ import { loadSessionEntryReadOnly as loadSessionEntry } from "../../../config/se
 import { resolvePersistedSessionStoreOwnerForKey } from "../../../config/sessions/session-store-owner.js";
 import type { OpenClawConfig } from "../../../config/types.openclaw.js";
 import { callGateway } from "../../../gateway/call.js";
+import type { GatewayContextResolver } from "../../../gateway/server-methods/types.js";
 import { resolveExternalBestEffortDeliveryTarget } from "../../../infra/outbound/best-effort-delivery.js";
 import { createBoundDeliveryRouter } from "../../../infra/outbound/bound-delivery-router.js";
 import { resolveConversationIdFromTargets } from "../../../infra/outbound/conversation-id.js";
@@ -51,6 +52,7 @@ export type SubagentAnnounceDeliveryDeps = {
   getRequesterSessionActivity: (
     requesterSessionKey: string,
     requesterAgentId?: string,
+    config?: OpenClawConfig,
   ) => {
     sessionId?: string;
     isActive: boolean;
@@ -106,8 +108,9 @@ export function tryResolveSubagentRequesterAgentId(
 function loadDefaultRequesterSessionEntry(
   requesterSessionKey: string,
   explicitAgentId?: string,
+  config?: OpenClawConfig,
 ): RequesterSessionEntryResult {
-  const cfg = subagentAnnounceDeliveryDeps.getRuntimeConfig();
+  const cfg = config ?? subagentAnnounceDeliveryDeps.getRuntimeConfig();
   const rawStorageKey = requesterSessionKey.trim();
   const canonicalKey = resolveRequesterStoreKey(cfg, requesterSessionKey, explicitAgentId);
   const configuredMainKey = normalizeMainKey(cfg.session?.mainKey);
@@ -132,8 +135,12 @@ const defaultSubagentAnnounceDeliveryDeps: SubagentAnnounceDeliveryDeps = {
   dispatchGatewayMethodInProcess: ((...args) =>
     dispatchGatewayMethodInProcess(...args)) as typeof dispatchGatewayMethodInProcess,
   getRuntimeConfig: () => getRuntimeConfig(),
-  getRequesterSessionActivity: (requesterSessionKey: string, requesterAgentId?: string) => {
-    const cfg = getRuntimeConfig();
+  getRequesterSessionActivity: (
+    requesterSessionKey: string,
+    requesterAgentId?: string,
+    config?: OpenClawConfig,
+  ) => {
+    const cfg = config ?? getRuntimeConfig();
     const resolvedAgentId = tryResolveSubagentRequesterAgentId(
       cfg,
       requesterSessionKey,
@@ -142,8 +149,8 @@ const defaultSubagentAnnounceDeliveryDeps: SubagentAnnounceDeliveryDeps = {
     if (!resolvedAgentId) {
       return { isActive: false };
     }
-    const storedSessionId = loadRequesterSessionEntry(requesterSessionKey, resolvedAgentId).entry
-      ?.sessionId;
+    const storedSessionId = loadRequesterSessionEntry(requesterSessionKey, resolvedAgentId, cfg)
+      .entry?.sessionId;
     // Unscoped active-run keys are ambiguous across agents. An explicit owner
     // must use its logical store entry instead of accepting another agent's run.
     const activeSessionId = parseAgentSessionKey(requesterSessionKey)
@@ -197,14 +204,30 @@ export function getSubagentAnnounceRuntimeConfig() {
   return subagentAnnounceDeliveryDeps.getRuntimeConfig();
 }
 
+export function resolveSubagentAnnounceRuntimeConfig(
+  resolveGatewayContext?: GatewayContextResolver,
+): OpenClawConfig {
+  const context = resolveGatewayContext?.();
+  return typeof context?.getRuntimeConfig === "function"
+    ? context.getRuntimeConfig()
+    : getSubagentAnnounceRuntimeConfig();
+}
+
 export function getSubagentRequesterSessionActivity(
   requesterSessionKey: string,
   requesterAgentId?: string,
+  config?: OpenClawConfig,
 ) {
-  return subagentAnnounceDeliveryDeps.getRequesterSessionActivity(
-    requesterSessionKey,
-    requesterAgentId,
-  );
+  return config
+    ? subagentAnnounceDeliveryDeps.getRequesterSessionActivity(
+        requesterSessionKey,
+        requesterAgentId,
+        config,
+      )
+    : subagentAnnounceDeliveryDeps.getRequesterSessionActivity(
+        requesterSessionKey,
+        requesterAgentId,
+      );
 }
 
 export function isSubagentRequesterSessionAbandoned(
@@ -217,11 +240,15 @@ export function isSubagentRequesterSessionAbandoned(
 export function loadRequesterSessionEntry(
   requesterSessionKey: string,
   explicitAgentId?: string,
+  config?: OpenClawConfig,
 ): RequesterSessionEntryResult {
-  return subagentAnnounceDeliveryDeps.loadRequesterSessionEntry(
-    requesterSessionKey,
-    explicitAgentId,
-  );
+  return config
+    ? subagentAnnounceDeliveryDeps.loadRequesterSessionEntry(
+        requesterSessionKey,
+        explicitAgentId,
+        config,
+      )
+    : subagentAnnounceDeliveryDeps.loadRequesterSessionEntry(requesterSessionKey, explicitAgentId);
 }
 
 export function loadSessionEntryByKey(sessionKey: string, explicitAgentId?: string) {

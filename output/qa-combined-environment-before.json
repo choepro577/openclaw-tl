@@ -1,0 +1,78 @@
+{
+  "publications": [
+    {
+      "name": "[KIỂM THỬ] CNTT & An toàn thông tin",
+      "active_publication_id": "094dafcd-2713-4c0d-826a-cd645390cb27",
+      "egress_policy": "external_allowed",
+      "publication_number": 2,
+      "vector_status": "ready",
+      "updated_at": 1788506165191
+    },
+    {
+      "name": "[KIỂM THỬ] Dự án & Vận hành",
+      "active_publication_id": "0f4ee7c5-d421-4383-9166-6abd5242cef9",
+      "egress_policy": "external_allowed",
+      "publication_number": 3,
+      "vector_status": "ready",
+      "updated_at": 1788506267375
+    },
+    {
+      "name": "[KIỂM THỬ] Nhân sự & Onboarding",
+      "active_publication_id": "b3e8dbbc-012d-4df3-9049-7bf768861e34",
+      "egress_policy": "external_allowed",
+      "publication_number": 3,
+      "vector_status": "ready",
+      "updated_at": 1788506190584
+    },
+    {
+      "name": "[KIỂM THỬ] Pháp chế & Mua sắm",
+      "active_publication_id": "f746a0fb-083b-4114-99ec-ab202fdb4ff8",
+      "egress_policy": "external_allowed",
+      "publication_number": 2,
+      "vector_status": "ready",
+      "updated_at": 1788505995879
+    },
+    {
+      "name": "[KIỂM THỬ] Sản phẩm & Chăm sóc khách hàng",
+      "active_publication_id": "feeba391-8313-43bd-bed3-1de6a910a4bf",
+      "egress_policy": "external_allowed",
+      "publication_number": 2,
+      "vector_status": "ready",
+      "updated_at": 1788506242229
+    },
+    {
+      "name": "[KIỂM THỬ] Tài chính & Chi phí",
+      "active_publication_id": "b1c002af-74a6-4790-9abf-4e99b3809965",
+      "egress_policy": "external_allowed",
+      "publication_number": 2,
+      "vector_status": "ready",
+      "updated_at": 1788506214938
+    }
+  ],
+  "bindings": [
+    {
+      "zone_id": "0ee8b68b-8b2d-46db-87c2-d7c624abd7f9",
+      "agent_resource_key": "agent:personal:68264167-a2d8-48b1-a00a-d31a06a7fd92"
+    },
+    {
+      "zone_id": "26f44d58-4a43-46f2-85a7-09f10c9c833d",
+      "agent_resource_key": "agent:personal:68264167-a2d8-48b1-a00a-d31a06a7fd92"
+    },
+    {
+      "zone_id": "58f2e858-97bf-4953-965f-2637158b0169",
+      "agent_resource_key": "agent:personal:68264167-a2d8-48b1-a00a-d31a06a7fd92"
+    },
+    {
+      "zone_id": "766b3227-d307-4c04-9c47-4e79d392ea2f",
+      "agent_resource_key": "agent:personal:68264167-a2d8-48b1-a00a-d31a06a7fd92"
+    },
+    {
+      "zone_id": "dab5a778-619c-424d-9c60-c67d19634bda",
+      "agent_resource_key": "agent:personal:68264167-a2d8-48b1-a00a-d31a06a7fd92"
+    },
+    {
+      "zone_id": "ec9cfb6f-7eb6-49e1-bcf0-7d671ed199d5",
+      "agent_resource_key": "agent:personal:68264167-a2d8-48b1-a00a-d31a06a7fd92"
+    }
+  ]
+}

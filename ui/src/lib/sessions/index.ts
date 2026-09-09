@@ -142,6 +142,7 @@ export function createSessionCapability(
     publish,
     observerError: () => sessionEventSubscriptionError,
     decorate: decorateRows,
+    canonicalListRevision: () => canonicalListRevision,
     onCanonicalList(result) {
       mutations.settlePrepared(result);
       canonicalListRevision += 1;

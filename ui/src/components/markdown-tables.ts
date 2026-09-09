@@ -1,5 +1,6 @@
 import { render } from "lit";
 import type { MarkdownIt } from "markdown-it";
+import { originalDisplayText } from "../branding/display-projection.ts";
 import { t } from "../i18n/index.ts";
 import { copyToClipboard } from "../lib/clipboard.ts";
 import { toolIcons } from "./icons-tools.ts";
@@ -46,7 +47,7 @@ export function installMarkdownTables(markdownParser: MarkdownIt): void {
 
 function tableText(table: HTMLTableElement): string {
   return [...table.rows]
-    .map((row) => [...row.cells].map((cell) => cell.textContent?.trim() ?? "").join("\t"))
+    .map((row) => [...row.cells].map((cell) => originalDisplayText(cell).trim()).join("\t"))
     .join("\n");
 }
 

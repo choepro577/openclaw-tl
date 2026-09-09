@@ -224,6 +224,12 @@ describe("buildPromptSection", () => {
     expect(lazy.get.description).toContain("status=ok");
     expect(lazy.get.description).toContain("status=not_found");
     expect(lazy.get.description).toContain("results are partial");
+    for (const text of [lazy.search.description, prompt]) {
+      expect(text).toContain("not already available in the current conversation");
+      expect(text).toContain("Do not search memory just to summarize");
+      expect(text).toContain("current authoritative sources");
+      expect(text).not.toContain("Mandatory recall step");
+    }
     expect(prompt).toContain("status=ok");
     expect(prompt).toContain("status=not_found");
     expect(prompt).toContain("results are partial");

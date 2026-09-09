@@ -4,6 +4,7 @@ import type { GatewayBrowserClient } from "../../api/gateway.ts";
 import type { GatewaySessionRow } from "../../api/types.ts";
 import type { ApplicationContext } from "../../app/context.ts";
 import { requestChatSessionSnapshot } from "./chat-history.ts";
+import { CHAT_HISTORY_COMMITTED_EVENT } from "./chat-pane-session.ts";
 import {
   appendChatMessageToCache,
   cacheChatSessionSnapshot,
@@ -24,6 +25,7 @@ type ChatSnapshotKeyHost = Parameters<typeof resolveChatSnapshotKey>[0];
 type SessionPrefetchSnapshot = {
   client: GatewayBrowserClient | null;
   listRevision: number;
+  historyReady: boolean;
   openSessionKeys: readonly string[];
   rows: readonly GatewaySessionRow[] | null;
   snapshotHost: ChatSnapshotKeyHost;
@@ -88,9 +90,10 @@ class SessionPrefetcher {
       !previous ||
       previous.client !== snapshot.client ||
       previous.listRevision !== snapshot.listRevision ||
+      previous.historyReady !== snapshot.historyReady ||
       !sameKeys(previous.openSessionKeys, snapshot.openSessionKeys)
     ) {
-      this.schedule();
+      this.schedule(snapshot.historyReady && !previous?.historyReady ? 0 : undefined);
     }
   }
 
@@ -172,6 +175,9 @@ class SessionPrefetcher {
       document.visibilityState === "hidden" ||
       !this.connected
     ) {
+      return;
+    }
+    if (!snapshot.historyReady) {
       return;
     }
     await this.snapshotStore.loadSavedAtIndex();
@@ -339,7 +345,8 @@ class SessionPrefetcher {
       this.connected &&
       document.visibilityState !== "hidden" &&
       this.snapshot?.client === snapshot.client &&
-      this.snapshot.listRevision === snapshot.listRevision
+      this.snapshot.listRevision === snapshot.listRevision &&
+      this.snapshot.historyReady
     );
   }
 
@@ -386,7 +393,7 @@ class SessionPrefetcher {
   }
 }
 
-type SessionPrefetchHost = ReactiveControllerHost & ParentNode;
+type SessionPrefetchHost = ReactiveControllerHost & ParentNode & EventTarget;
 
 class SessionPrefetchController implements ReactiveController {
   private readonly prefetcher: SessionPrefetcher;
@@ -404,6 +411,7 @@ class SessionPrefetchController implements ReactiveController {
   }
 
   hostConnected(): void {
+    this.host.addEventListener(CHAT_HISTORY_COMMITTED_EVENT, this.handleHistoryCommitted);
     this.prefetcher.connect();
     this.sync();
   }
@@ -413,9 +421,18 @@ class SessionPrefetchController implements ReactiveController {
   }
 
   hostDisconnected(): void {
+    this.host.removeEventListener(CHAT_HISTORY_COMMITTED_EVENT, this.handleHistoryCommitted);
     this.clearSubscriptions();
     this.prefetcher.disconnect();
   }
+
+  private readonly handleHistoryCommitted = () => {
+    // A pane commits its transcript through its private render lifecycle, so
+    // the parent page is not guaranteed to receive a Lit update. The commit
+    // event is the one-shot wake-up that lets prefetch enter its normal idle
+    // window without polling the DOM every 250ms.
+    this.sync();
+  };
 
   private readonly sync = () => {
     const context = this.readContext();
@@ -429,16 +446,31 @@ class SessionPrefetchController implements ReactiveController {
     if (!context) {
       return;
     }
-    const panes = this.host.querySelectorAll<Element & { sessionKey?: string }>(
-      "openclaw-chat-pane",
-    );
+    const panes = this.host.querySelectorAll<
+      Element & {
+        sessionHistoryReady?: boolean;
+        sessionKey?: string;
+        visuallyPresented?: boolean;
+      }
+    >("openclaw-chat-pane");
     const openSessionKeys = [...panes].flatMap((pane) =>
       pane.sessionKey ? [pane.sessionKey] : [],
     );
+    const visiblePanes = [
+      ...this.host.querySelectorAll<
+        Element & {
+          sessionHistoryReady?: boolean;
+          visuallyPresented?: boolean;
+        }
+      >("openclaw-chat-pane"),
+    ].filter((pane) => pane.visuallyPresented !== false);
+    const historyReady =
+      visiblePanes.length > 0 && visiblePanes.every((pane) => pane.sessionHistoryReady === true);
     this.prefetcher.update({
       client:
         context.gateway.snapshot.phase === "connected" ? context.gateway.snapshot.client : null,
       listRevision: context.sessions.canonicalListRevision,
+      historyReady,
       openSessionKeys,
       rows: context.sessions.state.result?.sessions ?? null,
       snapshotHost: {

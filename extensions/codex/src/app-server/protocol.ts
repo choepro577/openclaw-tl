@@ -28,6 +28,8 @@ import type {
   CodexPluginReadParams,
   CodexPluginReadResponse,
   CodexPluginSummary,
+  CodexPluginUninstallParams,
+  CodexPluginUninstallResponse,
   CodexSkillsListParams,
   CodexSkillsListResponse,
 } from "./protocol-control-plane.js";
@@ -35,14 +37,28 @@ import type { JsonObject, JsonValue } from "./protocol-json.js";
 import type * as CodexMcpProtocol from "./protocol-mcp.js";
 
 export type {
+  CodexAppInfo,
+  CodexAppSummary,
+  CodexAppsInstalledResponse,
+  CodexAppsListResponse,
+  CodexAppsReadResponse,
   CodexConfigEdit,
   CodexConfigReadResponse,
   CodexConfigRequirementsReadResponse,
   CodexPluginDetail,
+  CodexPluginInstalledResponse,
+  CodexPluginInstallResponse,
   CodexPluginListResponse,
   CodexPluginReadResponse,
+  CodexPluginUninstallParams,
+  CodexPluginUninstallResponse,
 } from "./protocol-control-plane.js";
-export type { CodexListMcpServerStatusResponse, CodexMcpServerStatus } from "./protocol-mcp.js";
+export type {
+  CodexListMcpServerStatusResponse,
+  CodexMcpServerStatus,
+  McpServerOauthLoginParams,
+  McpServerOauthLoginResponse,
+} from "./protocol-mcp.js";
 export type { JsonObject, JsonValue } from "./protocol-json.js";
 
 export type CodexServiceTier = string;
@@ -617,6 +633,7 @@ export declare namespace v2 {
   export type AppInfo = CodexAppInfo;
   export type AppSummary = CodexAppSummary;
   export type AppsInstalledResponse = CodexAppsInstalledResponse;
+  export type AppsReadResponse = CodexAppsReadResponse;
   export type HooksListParams = CodexHooksListParams;
   export type HooksListResponse = CodexHooksListResponse;
   export type InstalledApp = CodexInstalledApp;
@@ -631,8 +648,12 @@ export declare namespace v2 {
   export type PluginReadParams = CodexPluginReadParams;
   export type PluginReadResponse = CodexPluginReadResponse;
   export type PluginSummary = CodexPluginSummary;
+  export type PluginUninstallParams = CodexPluginUninstallParams;
+  export type PluginUninstallResponse = CodexPluginUninstallResponse;
   export type SkillsListParams = CodexSkillsListParams;
   export type SkillsListResponse = CodexSkillsListResponse;
+  export type McpServerOauthLoginParams = CodexMcpProtocol.McpServerOauthLoginParams;
+  export type McpServerOauthLoginResponse = CodexMcpProtocol.McpServerOauthLoginResponse;
 }
 
 type CodexAppServerRequestParamsOverride = {
@@ -647,6 +668,7 @@ type CodexAppServerRequestParamsOverride = {
   "plugin/install": CodexPluginInstallParams;
   "plugin/list": CodexPluginListParams;
   "plugin/read": CodexPluginReadParams;
+  "plugin/uninstall": CodexPluginUninstallParams;
   "thread/fork": CodexThreadForkParams;
   "thread/archive": CodexThreadArchiveParams;
   "thread/delete": CodexThreadDeleteParams;
@@ -664,6 +686,7 @@ type CodexAppServerRequestParamsOverride = {
   "turn/interrupt": CodexTurnInterruptParams;
   "mcpServer/resource/read": CodexMcpProtocol.ResourceReadParams;
   "mcpServer/tool/call": CodexMcpProtocol.ToolCallParams;
+  "mcpServer/oauth/login": CodexMcpProtocol.McpServerOauthLoginParams;
 };
 
 type CodexAppServerRequestResultMap = {
@@ -685,6 +708,7 @@ type CodexAppServerRequestResultMap = {
   "hooks/list": CodexHooksListResponse;
   "marketplace/add": JsonValue;
   "mcpServerStatus/list": CodexMcpProtocol.CodexListMcpServerStatusResponse;
+  "mcpServer/oauth/login": CodexMcpProtocol.McpServerOauthLoginResponse;
   "mcpServer/resource/read": CodexMcpProtocol.ResourceReadResult;
   "mcpServer/tool/call": CodexMcpProtocol.ToolCallResult;
   "model/list": CodexModelListResponse;
@@ -693,6 +717,7 @@ type CodexAppServerRequestResultMap = {
   "plugin/install": CodexPluginInstallResponse;
   "plugin/list": CodexPluginListResponse;
   "plugin/read": CodexPluginReadResponse;
+  "plugin/uninstall": CodexPluginUninstallResponse;
   "review/start": JsonValue;
   "skills/list": CodexSkillsListResponse;
   "thread/compact/start": JsonValue;

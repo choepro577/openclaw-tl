@@ -14,6 +14,7 @@ import {
   getInProcessGatewayRequestContext,
   hasInProcessGatewayContext,
 } from "../../gateway/server-plugins.js";
+import { getGatewayToolCallerIdentity } from "./gateway-caller-context.js";
 import { runWithGatewaySessionSpawnContext } from "./gateway-session-spawn-context.js";
 import { callGatewayTool } from "./gateway.js";
 
@@ -76,7 +77,8 @@ export const callAgentToolGatewayRequest: AgentToolGatewayRequestCaller = async 
   request: AgentToolGatewayRequest,
 ): Promise<T> => {
   const runtimeIdentity = agentToolGatewayRuntimeIdentities.get(request);
-  if (!hasInProcessGatewayContext()) {
+  const gatewayContextResolver = getGatewayToolCallerIdentity()?.gatewayContextResolver;
+  if (!hasInProcessGatewayContext(gatewayContextResolver)) {
     if (runtimeIdentity) {
       throw new Error("trusted agent runtime identity requires in-process Gateway dispatch");
     }
@@ -96,6 +98,7 @@ export const callAgentToolGatewayRequest: AgentToolGatewayRequestCaller = async 
       : (request.timeoutMs ?? DEFAULT_IN_PROCESS_GATEWAY_REQUEST_TIMEOUT_MS);
   const dispatchOptions = {
     forceSyntheticClient: true,
+    ...(gatewayContextResolver ? { resolveGatewayContext: gatewayContextResolver } : {}),
     ...(request.agentRunTracking ? { agentRunTracking: request.agentRunTracking } : {}),
     ...(request.agentToolCaller ? { agentToolCaller: request.agentToolCaller } : {}),
     syntheticScopes: scopes,

@@ -39,7 +39,10 @@ import { refreshCurrentChatSessionList } from "./chat-session.ts";
 import type { ChatPageHost } from "./chat-state-host.ts";
 import { requestChatPageUpdate } from "./chat-state-render.ts";
 import { resolveChatAgentId, selectedChatSessionRow } from "./chat-state-route.ts";
-import { handleBackgroundTasksEvent } from "./components/chat-background-tasks.ts";
+import {
+  handleBackgroundTasksEvent,
+  requestBackgroundTasksRefresh,
+} from "./components/chat-background-tasks.ts";
 import {
   refreshSessionWorkspace,
   retireSessionWorkspaceCheckout,
@@ -56,6 +59,79 @@ import { handleAgentEvent, handleSessionOperationEvent } from "./tool-stream.ts"
 
 const BRANCH_TOPOLOGY_REASONS = new Set(["rewind", "branch-switch", "fork", "reset", "new"]);
 type ChatPanePresentation = () => boolean;
+let nextUnknownChatHistoryEventRevision = 0;
+const unknownChatHistoryEventRevisions = new WeakMap<object, string>();
+
+function readRevisionValue(record: Record<string, unknown> | null, key: string): string | null {
+  const value = record?.[key];
+  if (typeof value === "string" && value.trim()) {
+    return value.trim();
+  }
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return String(value);
+  }
+  return null;
+}
+
+function unknownChatHistoryEventRevision(payload: unknown): string {
+  if (typeof payload === "object" && payload !== null) {
+    const existing = unknownChatHistoryEventRevisions.get(payload);
+    if (existing) {
+      return existing;
+    }
+    const revision = `event:unknown:${++nextUnknownChatHistoryEventRevision}`;
+    unknownChatHistoryEventRevisions.set(payload, revision);
+    return revision;
+  }
+  return `event:unknown:${++nextUnknownChatHistoryEventRevision}`;
+}
+
+/**
+ * Event identity is intentionally based on wire metadata rather than arrival
+ * time. This lets a duplicate session.message coalesce while a later message
+ * (including one received while the first full-tail history request is still
+ * pending) gets one trailing authoritative snapshot.
+ */
+export function readChatHistoryEventRevision(payload: unknown): string {
+  const record = asNullableRecord(payload);
+  if (!record) {
+    return unknownChatHistoryEventRevision(payload);
+  }
+  const session = asNullableRecord(record.session);
+  const message = asNullableRecord(record.message);
+  const messageMarker = asNullableRecord(message?.["__openclaw"]);
+  const readValues = (candidates: Array<[Record<string, unknown> | null, string]>) =>
+    candidates
+      .map(([candidate, key]) => readRevisionValue(candidate, key))
+      .filter((value): value is string => value !== null);
+  const messageIdentity = readValues([
+    [record, "messageId"],
+    [record, "messageSeq"],
+    [record, "seq"],
+    [session, "messageId"],
+    [session, "messageSeq"],
+    [message, "messageId"],
+    [message, "id"],
+    [messageMarker, "id"],
+    [messageMarker, "seq"],
+  ]);
+  if (messageIdentity.length > 0) {
+    return `message:${messageIdentity.join("\u0001")}`;
+  }
+  const fallback = readValues([
+    [record, "runId"],
+    [record, "clientRunId"],
+    [record, "state"],
+    [record, "phase"],
+    [record, "reason"],
+    [record, "status"],
+    [record, "ts"],
+    [session, "updatedAt"],
+  ]);
+  return fallback.length > 0
+    ? `event:${fallback.join("\u0001")}`
+    : unknownChatHistoryEventRevision(payload);
+}
 
 function sessionMessageMatchesChat(
   state: ChatPageHost,
@@ -105,6 +181,7 @@ function finishSessionMessageRunReconcile(
   runId: string | null,
   row: SessionChangedResult["row"] | undefined,
   presentation: ChatPanePresentation,
+  eventRevision?: string,
 ): boolean {
   const cleared = row
     ? reconcileChatRunFromSessionRow(state, row, { publishRunStatus: true })
@@ -113,12 +190,13 @@ function finishSessionMessageRunReconcile(
     return false;
   }
   clearPendingQueueItemsForRun(state, runId ?? undefined);
-  void loadChatHistory(state, { deferBranches: !presentation() })
+  void loadChatHistory(state, { deferBranches: !presentation(), eventRevision })
     .finally(() => {
       if (!areUiSessionKeysEquivalent(state.sessionKey, sessionKey)) {
         return;
       }
       void flushChatQueueForEvent(state);
+      requestBackgroundTasksRefresh(state, sessionKey);
       state.requestUpdate?.();
     })
     .catch(() => undefined);
@@ -135,6 +213,7 @@ function handleSessionMessageEvent(
     return;
   }
   const matchesChat = sessionMessageMatchesChat(state, event);
+  const eventRevision = readChatHistoryEventRevision(payload);
   if (matchesChat) {
     // A previous run can persist its final after the next local run starts.
     // Admit that sequenced row now so the later unsequenced chat.final replay
@@ -153,11 +232,22 @@ function handleSessionMessageEvent(
   if (runIdBeforeApply && matchesChat) {
     const runId = event.clientRunId ?? event.runId ?? runIdBeforeApply;
     state.pendingSessionMessageReloadSessionKey = event.key;
+    state.pendingSessionMessageReloadRevision = eventRevision;
     if (event.hasActiveRun === true) {
       return;
     }
-    if (finishSessionMessageRunReconcile(state, event.key, runId, result.row, presentation)) {
+    if (
+      finishSessionMessageRunReconcile(
+        state,
+        event.key,
+        runId,
+        result.row,
+        presentation,
+        eventRevision,
+      )
+    ) {
       state.pendingSessionMessageReloadSessionKey = null;
+      state.pendingSessionMessageReloadRevision = null;
       return;
     }
     void refreshCurrentChatSessionList(state).then(() => {
@@ -171,16 +261,19 @@ function handleSessionMessageEvent(
           runId,
           undefined,
           presentation,
+          state.pendingSessionMessageReloadRevision ?? eventRevision,
         )
       ) {
         state.pendingSessionMessageReloadSessionKey = null;
+        state.pendingSessionMessageReloadRevision = null;
       }
     });
     return;
   }
   if (matchesChat) {
     state.pendingSessionMessageReloadSessionKey = null;
-    void loadChatHistory(state, { deferBranches: !presentation() }).finally(() =>
+    state.pendingSessionMessageReloadRevision = null;
+    void loadChatHistory(state, { deferBranches: !presentation(), eventRevision }).finally(() =>
       state.requestUpdate?.(),
     );
   }
@@ -192,20 +285,38 @@ function replayPendingSessionMessageReload(
   presentation: ChatPanePresentation,
 ) {
   const pendingSessionKey = state.pendingSessionMessageReloadSessionKey;
+  const pendingRevision = state.pendingSessionMessageReloadRevision;
   const payloadSessionKey = payload?.sessionKey?.trim();
-  if (
-    !pendingSessionKey ||
+  const terminal =
+    payload?.state === "final" || payload?.state === "aborted" || payload?.state === "error";
+  if (pendingSessionKey) {
+    if (
+      !payloadSessionKey ||
+      !areUiSessionKeysEquivalent(pendingSessionKey, payloadSessionKey) ||
+      !areUiSessionKeysEquivalent(payloadSessionKey, state.sessionKey) ||
+      state.chatRunId
+    ) {
+      return;
+    }
+  } else if (
+    !terminal ||
     !payloadSessionKey ||
-    !areUiSessionKeysEquivalent(pendingSessionKey, payloadSessionKey) ||
-    !areUiSessionKeysEquivalent(payloadSessionKey, state.sessionKey) ||
-    state.chatRunId
+    !chatScopedEventSessionMatches(state, payloadSessionKey, payload.agentId)
   ) {
     return;
   }
   state.pendingSessionMessageReloadSessionKey = null;
-  void loadChatHistory(state, { deferBranches: !presentation() }).finally(() =>
-    state.requestUpdate?.(),
-  );
+  state.pendingSessionMessageReloadRevision = null;
+  const refreshSessionKey = pendingSessionKey ?? payloadSessionKey;
+  void loadChatHistory(state, {
+    deferBranches: !presentation(),
+    eventRevision: pendingRevision ?? (payload ? readChatHistoryEventRevision(payload) : undefined),
+  }).finally(() => {
+    if (terminal && refreshSessionKey) {
+      requestBackgroundTasksRefresh(state, refreshSessionKey);
+    }
+    state.requestUpdate?.();
+  });
 }
 
 function handleSessionsChangedEvent(
@@ -216,6 +327,7 @@ function handleSessionsChangedEvent(
   const presented = presentation();
   const runIdBeforeApply = state.chatRunId;
   const event = readSessionChangedEvent(payload);
+  const eventRevision = readChatHistoryEventRevision(payload);
   const matchesChat = Boolean(
     event && globalSessionEventMatchesChat(state, event) && sessionMessageMatchesChat(state, event),
   );
@@ -250,7 +362,7 @@ function handleSessionsChangedEvent(
   }
   const result = reconcileSessionEvent(state, payload);
   if (resetsSelectedSession) {
-    void loadChatHistory(state, { deferBranches: !presented }).finally(() =>
+    void loadChatHistory(state, { deferBranches: !presented, eventRevision }).finally(() =>
       state.requestUpdate?.(),
     );
     return;
@@ -264,7 +376,7 @@ function handleSessionsChangedEvent(
   ) {
     // Legacy multi-message writes cannot prove individual message cursors.
     // One scoped authoritative snapshot recovers them without ending a run.
-    void loadChatHistory(state, { deferBranches: !presented }).finally(() =>
+    void loadChatHistory(state, { deferBranches: !presented, eventRevision }).finally(() =>
       state.requestUpdate?.(),
     );
     return;
@@ -280,6 +392,7 @@ function handleSessionsChangedEvent(
       event.clientRunId ?? event.runId ?? runIdBeforeApply,
       result.row,
       presentation,
+      eventRevision,
     )
   ) {
     return;

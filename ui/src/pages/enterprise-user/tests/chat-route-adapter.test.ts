@@ -51,4 +51,26 @@ describe("Enterprise User Chat route adapter", () => {
     expect(() => navigateToUserConversationSession(context, "main")).toThrow();
     expect(calls).toEqual([]);
   });
+
+  it("merges a Codex starter prompt into the new chat draft handoff", () => {
+    const { context } = createContext();
+    const sessionKey = "agent:enterprise-personal-runtime:main:session-2";
+    const prompt = "Find my unread Gmail messages from today.";
+
+    navigateToUserConversationSession(context, sessionKey, {
+      focusComposer: true,
+      draft: prompt,
+    });
+
+    expect(context.navigate).toHaveBeenCalledWith(
+      "chat",
+      expect.objectContaining({ search: expect.any(String) }),
+    );
+    const calls = (context.navigate as unknown as { mock: { calls: unknown[][] } }).mock.calls;
+    const search = new URLSearchParams(
+      String((calls[0]?.[1] as { search?: string } | undefined)?.search ?? ""),
+    );
+    expect(search.get("draft")).toBe(prompt);
+    expect(search.get("__openclawComposerFocus")).toBe("1");
+  });
 });

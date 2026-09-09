@@ -2,6 +2,7 @@ import { html } from "lit";
 import { property } from "lit/decorators.js";
 import { inferBasePathFromPathname } from "../../../app-route-paths.ts";
 import { OpenClawLightDomElement } from "../../../lit/openclaw-element.ts";
+import { enterpriseCopy } from "../enterprise-copy.ts";
 import type { EnterpriseEffectivePolicy } from "../services/enterprise-api.ts";
 
 export class EnterpriseAllowedAgentsPage extends OpenClawLightDomElement {
@@ -21,13 +22,13 @@ export class EnterpriseAllowedAgentsPage extends OpenClawLightDomElement {
     return html`
       <section class="enterprise-panel enterprise-stack">
         <div>
-          <h2>Agent hệ thống được cấp</h2>
-          <p class="enterprise-muted">Mỗi Agent dùng workspace, session và memory riêng của bạn.</p>
+          <h2>${enterpriseCopy("agentListTitle")}</h2>
+          <p class="enterprise-muted">${enterpriseCopy("agentListDescription")}</p>
         </div>
         ${this.policy?.role === "administrator"
-          ? html`<p>Administrator được phép sử dụng toàn bộ Agent hiện có.</p>`
+          ? html`<p>${enterpriseCopy("administratorAllAgents")}</p>`
           : allowed.length === 0
-            ? html`<p class="enterprise-muted">Chưa được cấp Agent hệ thống nào.</p>`
+            ? html`<p class="enterprise-muted">${enterpriseCopy("noAssignedAgents")}</p>`
             : html`
                 <div class="enterprise-grid">
                   ${allowed.map(
@@ -38,7 +39,7 @@ export class EnterpriseAllowedAgentsPage extends OpenClawLightDomElement {
                           class="enterprise-button"
                           href=${`${basePath}/new?agent=${encodeURIComponent(item.resourceId)}`}
                         >
-                          Tạo session mới
+                          ${enterpriseCopy("newSession")}
                         </a>
                       </article>
                     `,

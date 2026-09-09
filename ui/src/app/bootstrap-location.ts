@@ -1,6 +1,5 @@
 import type { RouteLocation } from "@openclaw/uirouter";
 import { pathForRoute } from "../app-route-paths.ts";
-import { routeIdFromPath } from "../app-routes.ts";
 import { pathForSession } from "../app-session-path-builder.ts";
 import type { BoardFace } from "../lib/board/settings.ts";
 import {
@@ -9,7 +8,6 @@ import {
   resolveUiDefaultAgentId,
   type UiSessionDefaultsHost,
 } from "../lib/sessions/session-key.ts";
-import { isDefaultChatLanding } from "../pages/model-setup/first-run.ts";
 import type { ApplicationGateway } from "./context.ts";
 import { waitForGatewayClient } from "./gateway-readiness.ts";
 
@@ -91,7 +89,7 @@ export function normalizeInitialApplicationLocation(
   fallbackAgentId: string,
   mainKey?: string | null,
 ) {
-  if (!isDefaultChatLanding(location, basePath, routeIdFromPath) || !sessionKey.trim()) {
+  if (!sessionKey.trim()) {
     return location;
   }
   const agentId = parseAgentSessionKey(sessionKey)?.agentId ?? fallbackAgentId.trim();
@@ -105,6 +103,7 @@ export function normalizeInitialApplicationLocation(
 export async function resolveInitialApplicationLocation(params: {
   location: RouteLocation;
   basePath: string;
+  defaultChatLanding: boolean;
   sessionKey: string;
   gateway: Pick<ApplicationGateway, "snapshot" | "subscribe">;
   agentsList: () => UiSessionDefaultsHost["agentsList"];
@@ -114,11 +113,11 @@ export async function resolveInitialApplicationLocation(params: {
   if (releasedLocation) {
     return releasedLocation;
   }
-  if (!isDefaultChatLanding(params.location, params.basePath, routeIdFromPath)) {
+  // The active portal owns landing policy; its explicit routes must start
+  // without waiting for Gateway defaults or restoring a saved Chat.
+  if (!params.defaultChatLanding) {
     return params.location;
   }
-  // Explicit routes must start immediately; only the implicit session landing
-  // needs gateway defaults before its key and agent can be made authoritative.
   if (!parseAgentSessionKey(params.sessionKey)) {
     await waitForGatewayClient(params.gateway, params.signal);
   }

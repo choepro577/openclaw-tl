@@ -1,6 +1,13 @@
 import { html } from "lit";
 import { property } from "lit/decorators.js";
+import { eu } from "../../../i18n/enterprise-user.ts";
 import { OpenClawLightDomElement } from "../../../lit/openclaw-element.ts";
+import {
+  enterpriseCopy,
+  enterpriseEffectLabel,
+  enterpriseResourceTypeLabel,
+  enterpriseRoleLabel,
+} from "../enterprise-copy.ts";
 import type { EnterpriseEffectivePolicy } from "../services/enterprise-api.ts";
 
 export class EnterpriseEffectivePolicyPage extends OpenClawLightDomElement {
@@ -12,35 +19,40 @@ export class EnterpriseEffectivePolicyPage extends OpenClawLightDomElement {
     }
     return html`
       <section class="enterprise-panel enterprise-stack">
-        <h3>Quyền hiệu lực</h3>
-        <p>Role: <strong>${this.policy.role}</strong></p>
-        <p>Personal Agent: <strong>${this.policy.personalAgentEnabled ? "Bật" : "Tắt"}</strong></p>
+        <h3>${enterpriseCopy("effectivePolicy")}</h3>
+        <p>${eu("role")}: <strong>${enterpriseRoleLabel(this.policy.role)}</strong></p>
         <p>
-          Agent mặc định:
+          ${eu("personalAgent")}:
+          <strong
+            >${enterpriseCopy(this.policy.personalAgentEnabled ? "enabled" : "disabled")}</strong
+          >
+        </p>
+        <p>
+          ${enterpriseCopy("defaultAgent")}:
           <span class="enterprise-code">${this.policy.defaultAgentId ?? "main"}</span>
         </p>
         <table class="enterprise-table">
           <thead>
             <tr>
-              <th>Loại</th>
+              <th>${enterpriseCopy("resourceType")}</th>
               <th>ID</th>
-              <th>Hiệu lực</th>
+              <th>${enterpriseCopy("effective")}</th>
             </tr>
           </thead>
           <tbody>
             ${this.policy.entitlements.map(
               (item) =>
                 html`<tr>
-                  <td>${item.resourceType}</td>
+                  <td>${enterpriseResourceTypeLabel(item.resourceType)}</td>
                   <td class="enterprise-code">${item.resourceId}</td>
-                  <td>${item.effect}</td>
+                  <td>${enterpriseEffectLabel(item.effect)}</td>
                 </tr>`,
             )}
           </tbody>
         </table>
         ${this.policy.employeeHardDeniedTools.length
           ? html`<p class="enterprise-muted">
-              Tool luôn bị khóa với Employee:
+              ${enterpriseCopy("employeeDeniedTools")}
               <span class="enterprise-code">${this.policy.employeeHardDeniedTools.join(", ")}</span>
             </p>`
           : ""}

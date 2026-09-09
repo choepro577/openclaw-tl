@@ -1,11 +1,12 @@
 // Control UI module implements main behavior.
 import "./styles.css";
-import "./app/app-host.ts";
 import { inferControlUiPublicAssetPath } from "./app/public-assets.ts";
+import "./app/app-host.ts";
 import {
   installMissingStylesheetRecovery,
   installStaleChunkReloadListener,
 } from "./app/stale-chunk-reload.ts";
+import { observeDisplayRoot, projectDisplay } from "./branding/display-projection.ts";
 import { CONTROL_UI_BUILD_INFO } from "./build-info.ts";
 
 type ViteImportMeta = ImportMeta & {
@@ -17,6 +18,8 @@ type ViteImportMeta = ImportMeta & {
 const isProd = (import.meta as ViteImportMeta).env?.PROD === true;
 const currentControlUiBuildId = CONTROL_UI_BUILD_INFO.buildId;
 
+observeDisplayRoot(document.body);
+projectDisplay(document.body);
 syncDocumentPublicAssetLinks();
 installStaleChunkReloadListener();
 installMissingStylesheetRecovery();
@@ -46,6 +49,7 @@ if (isProd && "serviceWorker" in navigator) {
 function syncDocumentPublicAssetLinks() {
   setDocumentLinkHref('link[rel="icon"][type="image/svg+xml"]', "favicon.svg");
   setDocumentLinkHref('link[rel="icon"][type="image/png"]', "favicon-32.png");
+  setDocumentLinkHref('link[rel="icon"][type="image/x-icon"]', "favicon.ico");
   setDocumentLinkHref('link[rel="apple-touch-icon"]', "apple-touch-icon.png");
   setDocumentLinkHref('link[rel="manifest"]', "manifest.webmanifest");
 }

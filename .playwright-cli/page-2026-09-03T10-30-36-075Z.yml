@@ -1,0 +1,152 @@
+- main [ref=e30]:
+  - complementary [ref=e31]:
+    - generic [ref=e44]:
+      - strong [ref=e45]: OpenClaw
+      - generic [ref=e46]: Enterprise Admin
+    - navigation "Quản trị Enterprise" [ref=e47]:
+      - button "Quản lý tài khoản" [ref=e48]
+      - button "Quản lý agent" [ref=e56]
+      - button "Tri thức doanh nghiệp" [ref=e62]
+      - button "Quản lý skill" [ref=e67]
+      - button "Plugins" [ref=e75]
+      - button "Config" [ref=e81]
+    - generic [ref=e87]:
+      - generic [ref=e88]:
+        - generic [ref=e89]: Q
+        - generic [ref=e90]:
+          - strong [ref=e91]: QA Admin
+          - generic [ref=e92]: "@qaadmin"
+      - button "Đổi mật khẩu" [ref=e93]
+      - button "Đăng xuất" [ref=e100]
+  - generic [ref=e157]:
+    - generic [ref=e158]:
+      - generic [ref=e159]:
+        - generic [ref=e160]:
+          - heading "Quản lý agent" [level=1] [ref=e161]
+          - paragraph [ref=e162]: Shared agent nghiệp vụ và personal agent theo từng tài khoản
+        - button "Tạo shared agent" [ref=e370]
+      - navigation "Loại agent" [ref=e165]:
+        - button "Shared Agents (2)" [ref=e229]
+        - button "Personal Agents (1)" [ref=e175]
+        - button "Điều phối Agent" [ref=e168]
+      - generic [ref=e372]:
+        - searchbox "Tìm agent" [ref=e373]
+        - generic [ref=e374]: Reserved internal agents đã được ẩn
+      - generic [ref=e375]: Đang tải catalog agent…
+    - dialog "Agent Hợp đồng" [ref=e417]:
+      - generic [ref=e419]:
+        - generic [ref=e420]:
+          - generic [ref=e421]:
+            - heading "Agent Hợp đồng" [level=2] [ref=e422]
+            - paragraph [ref=e423]: contract
+          - button "Đóng" [ref=e424]
+        - generic [ref=e430]:
+          - generic [ref=e433]:
+            - button "Copy ID" [ref=e434]
+            - button "Quản lý user" [ref=e435]
+            - button "Refresh" [ref=e436]
+            - generic [ref=e437]: Revision-safe
+          - generic [ref=e439]:
+            - generic "Chi tiết agent" [ref=e440]:
+              - tablist "Chi tiết agent" [ref=e444]:
+                - generic:
+                  - tab "Overview" [ref=e445]
+                  - tab "Specialty & routing" [selected] [ref=e447]
+                  - tab "Danh xưng 0" [ref=e449]:
+                    - generic [ref=e450] [cursor=pointer]:
+                      - generic:
+                        - text: Danh xưng
+                        - generic [ref=e451]: "0"
+                  - tab "Files" [ref=e452]
+                  - tab "Tools 61" [ref=e454]:
+                    - generic [ref=e455] [cursor=pointer]:
+                      - generic:
+                        - text: Tools
+                        - generic [ref=e456]: "61"
+                  - tab "Skills 54" [ref=e457]:
+                    - generic [ref=e458] [cursor=pointer]:
+                      - generic:
+                        - text: Skills
+                        - generic [ref=e459]: "54"
+                  - tab "Channels" [ref=e460]
+                  - tab "Cron" [ref=e462]
+                  - tab "Memory" [ref=e464]
+            - tabpanel "Specialty & routing" [ref=e547]:
+              - generic [ref=e548]:
+                - generic [ref=e549]: Descriptions and examples are router reference data, not system instructions. AI creates a draft only; an administrator must activate it.
+                - generic [ref=e550]:
+                  - text: Specialist description
+                  - textbox "Specialist description 20–500 characters · 61/500" [ref=e616]: Chuyên kiểm tra hợp đồng và phân tích các điều khoản pháp lý.
+                  - generic [ref=e552]: 20–500 characters · 61/500
+                - generic [ref=e553]:
+                  - text: When to use
+                  - textbox "When to use Enter one concrete example per line; at least 2 are required." [invalid] [ref=e554]
+                  - generic [ref=e555]: Enter one concrete example per line; at least 2 are required.
+                - generic [ref=e556]:
+                  - text: When not to use
+                  - textbox "When not to use Up to 20 examples, 5–240 characters each." [ref=e557]
+                  - generic [ref=e558]: Up to 20 examples, 5–240 characters each.
+                - generic [ref=e559]:
+                  - text: Other names
+                  - textbox "Other names Up to 20 unique names, 64 characters each." [ref=e560]
+                  - generic [ref=e561]: Up to 20 unique names, 64 characters each.
+                - group "Delegation behavior" [ref=e562]:
+                  - generic [ref=e564]:
+                    - radio "Automatic when certain" [ref=e565]
+                    - text: Automatic when certain
+                  - generic [ref=e566]:
+                    - radio "Always ask before delegating" [ref=e567]
+                    - text: Always ask before delegating
+                  - generic [ref=e568]:
+                    - radio "Only when the user names the Agent" [checked] [ref=e569]
+                    - text: Only when the user names the Agent
+                - generic [ref=e571]:
+                  - generic [ref=e572]:
+                    - heading "Information to ask for first" [level=3] [ref=e573]
+                    - paragraph [ref=e574]: The router asks this exact question when information is missing.
+                  - button "Add question" [ref=e575]
+                - generic [ref=e576]:
+                  - heading "Activation checklist" [level=3] [ref=e577]
+                  - generic [ref=e578]:
+                    - generic [aria-hidden] [ref=e579]: ✓
+                    - generic [ref=e580]: Description is valid
+                  - generic [ref=e581]:
+                    - generic [aria-hidden] [ref=e582]: ✓
+                    - generic [ref=e583]: Other names are valid and unique
+                  - generic [ref=e584]:
+                    - generic [aria-hidden] [ref=e585]: "!"
+                    - generic [ref=e586]: At least 2 use examples
+                  - generic [ref=e587]:
+                    - generic [aria-hidden] [ref=e588]: ✓
+                    - generic [ref=e589]: Negative examples are valid
+                  - generic [ref=e590]:
+                    - generic [aria-hidden] [ref=e591]: ✓
+                    - generic [ref=e592]: Required questions are complete
+                  - generic [ref=e593]:
+                    - generic [aria-hidden] [ref=e594]: "!"
+                    - generic [ref=e595]: Routing model selected
+                  - generic [ref=e596]:
+                    - generic [aria-hidden] [ref=e597]: ✓
+                    - generic [ref=e598]: Agent still exists
+                - generic [ref=e599]:
+                  - button "Suggest with AI" [disabled] [ref=e600]
+                  - button "Save draft" [disabled] [ref=e601]
+                  - button "Activate" [disabled] [ref=e602]
+                - generic [ref=e603]:
+                  - generic [ref=e604]:
+                    - heading "Routing simulator" [level=3] [ref=e605]
+                    - paragraph [ref=e606]: Does not spawn an Agent or call tools.
+                  - generic [ref=e607]:
+                    - generic [ref=e608]:
+                      - text: Search accounts
+                      - searchbox "Search accounts" [ref=e609]
+                    - button "Search" [disabled] [ref=e610]
+                  - generic [ref=e611]:
+                    - text: Account
+                    - combobox "Account" [ref=e612]:
+                      - option "Choose an account…" [selected]
+                      - option "QA Admin (@qaadmin)"
+                  - generic [ref=e613]:
+                    - text: Test prompt
+                    - textbox "Test prompt" [ref=e614]
+                  - button "Check" [disabled] [ref=e615]

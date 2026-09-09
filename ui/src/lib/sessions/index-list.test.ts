@@ -187,6 +187,41 @@ describe("session list requests", () => {
     }
   });
 
+  it("shares an exact direct-list request and keeps a forced refresh trailing", async () => {
+    let resolveFirst!: (result: SessionsListResult) => void;
+    let resolveSecond!: (result: SessionsListResult) => void;
+    const firstResult = new Promise<SessionsListResult>((resolve) => {
+      resolveFirst = resolve;
+    });
+    const secondResult = new Promise<SessionsListResult>((resolve) => {
+      resolveSecond = resolve;
+    });
+    const request = vi
+      .fn()
+      .mockImplementationOnce(async () => firstResult)
+      .mockImplementationOnce(async () => secondResult);
+    const { sessions } = sessionHarness(request);
+    const options = {
+      agentId: "main",
+      limit: 50,
+      includeDerivedTitles: true,
+      includeLastMessage: true,
+    };
+
+    const directList = sessions.list(options);
+    const forcedRefresh = sessions.refresh({ ...options, force: true });
+    expect(request).toHaveBeenCalledOnce();
+
+    resolveFirst(listResult(["agent:main:first"]));
+    await vi.waitFor(() => expect(request).toHaveBeenCalledTimes(2));
+    expect(sessions.state.result).toBeNull();
+
+    resolveSecond(listResult(["agent:main:second"]));
+    await Promise.all([directList, forcedRefresh]);
+    expect(sessions.state.result?.sessions[0]?.key).toBe("agent:main:second");
+    sessions.dispose();
+  });
+
   it("retains an in-flight managed query while its route subscriber is replaced", async () => {
     let resolveRequest!: (result: SessionsListResult) => void;
     const pendingResult = new Promise<SessionsListResult>((resolve) => {

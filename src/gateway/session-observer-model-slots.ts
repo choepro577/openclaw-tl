@@ -3,7 +3,7 @@ import type { SessionObserverState } from "./session-observer-model.js";
 export function createSessionObserverModelSlots(params: {
   states: Map<string, SessionObserverState>;
   maxSessions: number;
-  resolve: (agentId: string) => string | undefined;
+  resolve: (agentId: string, current?: SessionObserverState) => string | undefined;
   demote: (state: SessionObserverState) => void;
 }) {
   const demoted = new WeakSet<SessionObserverState>();
@@ -26,7 +26,7 @@ export function createSessionObserverModelSlots(params: {
     },
 
     claim(agentId: string, current?: SessionObserverState): string | undefined {
-      const resolved = params.resolve(agentId);
+      const resolved = params.resolve(agentId, current);
       if (!resolved || current?.utilityModelRef === resolved) {
         return resolved;
       }

@@ -2,6 +2,8 @@
 
 import { nothing, render } from "lit";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { i18n } from "../../../i18n/index.ts";
+import { captureI18nStateForTesting } from "../../../i18n/lib/translate.test-support.ts";
 import { installDialogPolyfill } from "../../../test-helpers/modal-dialog.ts";
 import type { EnterpriseAgentFile } from "../../enterprise/services/enterprise-api.ts";
 import type { EnterpriseSharedRelationshipProfile } from "../../enterprise/services/enterprise-api.ts";
@@ -26,6 +28,7 @@ type MutableAgentPage = {
 
 let container: HTMLDivElement;
 let restoreDialogPolyfill: () => void;
+let restoreI18n: () => Promise<void>;
 
 function button(label: string): HTMLButtonElement {
   const match = Array.from(container.querySelectorAll("button")).find(
@@ -42,17 +45,20 @@ async function settle(): Promise<void> {
 }
 
 describe("Enterprise admin agent detail panels", () => {
-  beforeEach(() => {
+  beforeEach(async () => {
+    restoreI18n = captureI18nStateForTesting();
+    await i18n.setLocale("vi");
     restoreDialogPolyfill = installDialogPolyfill();
     container = document.createElement("div");
     document.body.append(container);
   });
 
-  afterEach(() => {
+  afterEach(async () => {
     vi.unstubAllGlobals();
     render(nothing, container);
     container.remove();
     restoreDialogPolyfill();
+    await restoreI18n();
   });
 
   it("uses the canonical Agents settings layout in a wide detail drawer", () => {
@@ -97,7 +103,7 @@ describe("Enterprise admin agent detail panels", () => {
       Array.from(container.querySelectorAll(".settings-section__heading")).map((item) =>
         item.textContent?.trim(),
       ),
-    ).toEqual(["Identity", "Overview", "Model selection"]);
+    ).toEqual(["Danh tính", "Tổng quan", "Chọn model"]);
     expect(container.querySelector(".ea-kpis")).toBeNull();
   });
 
@@ -332,7 +338,7 @@ describe("Enterprise admin agent detail panels", () => {
     expect(preview?.querySelector("strong")?.textContent).toBe("Hiện tại");
     expect(preview?.querySelector("script")).toBeNull();
 
-    button("Preview").click();
+    button("Xem trước").click();
     await settle();
     expect(
       (container.querySelector("openclaw-modal-dialog") as HTMLElement & { open: boolean }).open,
@@ -506,8 +512,8 @@ describe("Enterprise admin agent detail panels", () => {
       ]),
     );
     expect(permissions).toMatchObject({
-      read: "Đã cấp",
-      write: "Đã cấp",
+      read: "Được cấp",
+      write: "Được cấp",
       session_status: "Đã chặn",
       gateway: "Bị khóa",
     });

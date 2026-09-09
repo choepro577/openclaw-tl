@@ -131,7 +131,7 @@ export function groupMessages(items: ChatItem[]): Array<ChatItem | MessageGroup>
   }
   return stampReplyAttribution(result);
 }
-function mergeToolCallResultPair(callItem: ChatItem, resultItem: ChatItem): ChatItem | null {
+export function mergeToolCallResultPair(callItem: ChatItem, resultItem: ChatItem): ChatItem | null {
   if (callItem.kind !== "message" || resultItem.kind !== "message") {
     return null;
   }

@@ -41,7 +41,7 @@ type AgentTaskCompletionInternalEvent = {
 
 type TaskCompletionPromptMode = "plain" | "protected";
 
-const MAX_TASK_COMPLETION_RESULT_ESCAPED_CHARS = 6_000;
+const MAX_TASK_COMPLETION_RESULT_ESCAPED_CHARS = 32_768;
 const TASK_COMPLETION_RESULT_TRUNCATION_NOTICE = "\n[child result truncated]";
 // Status labels embed provider/lifecycle error text ("failed: <cause>",
 // "timed out: <cause>"), which is caller-supplied and unbounded. Keep the

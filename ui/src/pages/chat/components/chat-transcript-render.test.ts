@@ -3,6 +3,7 @@
 import { render } from "lit";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { GatewaySessionRow, SessionsListResult } from "../../../api/types.ts";
+import type { TaskSummary } from "../../../lib/tasks/task-summary.ts";
 import { createTestTranscript } from "../chat-view.test-helpers.ts";
 import { renderTranscriptSearch, toggleTranscriptSearch } from "./chat-thread-interactions.ts";
 import { renderChatThread } from "./chat-thread.ts";
@@ -38,6 +39,74 @@ function touchPointerUp(element: Element): void {
 describe("chat transcript rendering", () => {
   beforeEach(installTranscriptDomMocks);
   afterEach(resetTranscriptTestDom);
+
+  it("updates specialist lifecycle from task events with unchanged transcript messages and no operator task rail", async () => {
+    const sessionKey = "agent:personal:dashboard:delegation";
+    const transcript = createTestTranscript();
+    const container = document.body.appendChild(document.createElement("div"));
+    const delegationTask: TaskSummary = {
+      id: "task",
+      taskId: "task",
+      runtime: "subagent",
+      sessionKey,
+      agentId: "hr",
+      runId: "child",
+      status: "running",
+    };
+    const props = {
+      ...threadProps("delegation-pane", sessionKey, [
+        { role: "user", content: "Ask HR", timestamp: 1_000 },
+        {
+          role: "toolResult",
+          toolName: "enterprise_delegate",
+          toolCallId: "delegate",
+          timestamp: 2_000,
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify({
+                delegates: [
+                  {
+                    agent: { id: "hr", name: "HR Specialist" },
+                    runId: "child",
+                    status: "accepted",
+                  },
+                ],
+              }),
+            },
+          ],
+        },
+      ]),
+      enterpriseUserPresentation: true,
+      showToolCalls: true,
+      delegationTasks: [delegationTask],
+    };
+    const rerender = () => {
+      render(renderChatThread(props, transcript), container);
+      transcript.hostUpdated();
+    };
+    rerender();
+    transcript.hostConnected();
+    await flushDeferredRowPrune();
+    expect(container.textContent).toContain("Specialist is working");
+    render(
+      renderChatThread(
+        {
+          ...props,
+          delegationTasks: [
+            { ...delegationTask, status: "completed", deliveryStatus: "delivered" },
+          ],
+        },
+        transcript,
+      ),
+      container,
+    );
+    transcript.hostUpdated();
+    expect(container.textContent).toContain("Result returned to Personal Agent");
+    expect(container.textContent).not.toContain("Specialist is working");
+    expect(container.querySelector('[data-virtual-row-key="background-tasks"]')).toBeNull();
+    transcript.hostDisconnected();
+  });
 
   it("renders canonical archive attribution as a timestamped notice without a speech bubble", async () => {
     const sessionKey = "agent:main:archived-notice";

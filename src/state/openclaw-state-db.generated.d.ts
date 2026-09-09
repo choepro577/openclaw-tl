@@ -659,6 +659,20 @@ export interface DiagnosticStabilityBundles {
   reason: string;
 }
 
+export interface EnterpriseAgentAccessRequests {
+  agent_id: string;
+  agent_resource_key: string;
+  created_at: number;
+  decided_at: number | null;
+  decision_reason: string | null;
+  id: string;
+  requester_account_id: string;
+  reviewer_account_id: string | null;
+  revision: Generated<number>;
+  state: string;
+  updated_at: number;
+}
+
 export interface EnterpriseKnowledgeAgentZoneBindings {
   agent_resource_key: string;
   created_at: number;
@@ -687,6 +701,13 @@ export interface EnterpriseKnowledgeChanges {
   sequence: Generated<number>;
   stage: string | null;
   status: string | null;
+  zone_id: string;
+}
+
+export interface EnterpriseKnowledgeEvidenceTransferGrants {
+  created_at: number;
+  created_by_account_id: string | null;
+  target_agent_resource_key: string;
   zone_id: string;
 }
 
@@ -2153,9 +2174,11 @@ export interface DB {
   device_pairing_pending: DevicePairingPending;
   diagnostic_events: DiagnosticEvents;
   diagnostic_stability_bundles: DiagnosticStabilityBundles;
+  enterprise_agent_access_requests: EnterpriseAgentAccessRequests;
   enterprise_knowledge_agent_zone_bindings: EnterpriseKnowledgeAgentZoneBindings;
   enterprise_knowledge_artifact_revisions: EnterpriseKnowledgeArtifactRevisions;
   enterprise_knowledge_changes: EnterpriseKnowledgeChanges;
+  enterprise_knowledge_evidence_transfer_grants: EnterpriseKnowledgeEvidenceTransferGrants;
   enterprise_knowledge_generation_artifacts: EnterpriseKnowledgeGenerationArtifacts;
   enterprise_knowledge_graph_edge_reviews: EnterpriseKnowledgeGraphEdgeReviews;
   enterprise_knowledge_graph_exports: EnterpriseKnowledgeGraphExports;

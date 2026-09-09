@@ -2,10 +2,12 @@ import { ContextProvider } from "@lit/context";
 import { html, nothing, type PropertyValues } from "lit";
 import { property, state } from "lit/decorators.js";
 import { GatewayRequestError, type GatewayBrowserClient } from "../../../api/gateway.ts";
+import type { AgentsListResult } from "../../../api/types.ts";
 import { createAgentSelectionCapability } from "../../../app/agent-selection.ts";
-import { applicationContext, type ApplicationContext } from "../../../app/context.ts";
+import { modelManagementContext, type ModelManagementContext } from "../../../app/context.ts";
 import type { ApplicationGateway } from "../../../app/gateway.ts";
 import type { ApplicationOverlays } from "../../../app/overlays-types.ts";
+import { ea } from "../../../i18n/enterprise-admin.ts";
 import { createAgentCapability } from "../../../lib/agents/index.ts";
 import { createRuntimeConfigCapability } from "../../../lib/config/runtime-config-capability.ts";
 import { OpenClawLightDomElement } from "../../../lit/openclaw-element.ts";
@@ -33,6 +35,21 @@ function requestSignal(options?: RequestOptions): AbortSignal | undefined {
 export const testApi = { requestSignal };
 
 class EnterpriseAdminModelClient {
+  constructor(private readonly modelContext: EnterpriseAdminModelContext) {}
+
+  private cachedAgentsList(): AgentsListResult {
+    return {
+      defaultId: this.modelContext.agents.defaultId,
+      mainKey: this.modelContext.agents.mainKey,
+      scope: this.modelContext.agents.scope === "global" ? "global" : "per-sender",
+      agents: this.modelContext.agents.agents.map((agent) => ({
+        id: agent.id,
+        ...(agent.kind === "agent" || agent.kind === "system" ? { kind: agent.kind } : {}),
+        ...(agent.name ? { name: agent.name } : {}),
+      })),
+    };
+  }
+
   async request<T = unknown>(
     method: string,
     params?: unknown,
@@ -41,8 +58,9 @@ class EnterpriseAdminModelClient {
     const signal = requestSignal(options);
     try {
       if (method === "agents.list") {
-        const result = await loadAdminModelContext(signal);
-        return result.agents as T;
+        // The REST bootstrap already contains the canonical agent roster. Reusing it
+        // avoids a second /models/context GET when the shared capability warms up.
+        return this.cachedAgentsList() as T;
       }
       return await requestAdminModelAction<T>(
         method as EnterpriseAdminModelMethod,
@@ -76,7 +94,7 @@ function createGateway(
 ): ApplicationGateway {
   const snapshot: ApplicationGateway["snapshot"] = {
     // SAFETY: the Enterprise REST adapter implements the browser client's request contract.
-    client: client as GatewayBrowserClient,
+    client: client as unknown as GatewayBrowserClient,
     phase: "connected",
     offlineStable: false,
     hello: {
@@ -151,11 +169,10 @@ export class EnterpriseAdminModelsPage extends OpenClawLightDomElement {
   @property({ type: Boolean }) setup = false;
   @state() private loading = true;
   @state() private loadError = "";
-  private readonly provider = new ContextProvider(this, { context: applicationContext });
+  private readonly provider = new ContextProvider(this, { context: modelManagementContext });
   private initializedSetup: boolean | undefined;
   private initializeGeneration = 0;
   private runtime?: {
-    context: ApplicationContext;
     stop: () => void;
   };
 
@@ -187,38 +204,27 @@ export class EnterpriseAdminModelsPage extends OpenClawLightDomElement {
       if (generation !== this.initializeGeneration) {
         return;
       }
-      const client = new EnterpriseAdminModelClient();
+      const client = new EnterpriseAdminModelClient(modelContext);
       const gateway = createGateway(client, modelContext);
       const runtimeConfig = createRuntimeConfigCapability(gateway);
       const agents = createAgentCapability(gateway);
       const agentSelection = createAgentSelectionCapability(gateway, agents);
       const basePath = globalThis.location?.pathname.split("/admin", 1)[0] ?? "";
-      const context = {
-        basePath: `${basePath}/app`,
+      const context: ModelManagementContext = {
         resourceBasePath: basePath,
         gateway,
         runtimeConfig,
         agents,
         agentSelection,
         overlays: createOverlays(),
+        deferProviderUsage: true,
+        reuseRuntimeConfig: true,
         navigate: (routeId: string) => {
           navigateAdmin(routeId === "model-setup" ? "/config/models/setup" : "/config/models");
         },
-        navigateAndWait: async (routeId: string) => {
-          navigateAdmin(routeId === "model-setup" ? "/config/models/setup" : "/config/models");
-        },
-        replace: (routeId: string) => {
-          navigateAdmin(
-            routeId === "model-setup" ? "/config/models/setup" : "/config/models",
-            true,
-          );
-        },
-        revalidate: async () => undefined,
-        preload: async () => undefined,
-      } as ApplicationContext;
+      };
       this.runtime?.stop();
       this.runtime = {
-        context,
         stop: () => {
           runtimeConfig.dispose();
           agents.dispose();
@@ -228,8 +234,9 @@ export class EnterpriseAdminModelsPage extends OpenClawLightDomElement {
       this.provider.setValue(context);
       // The canonical pages own their request state. Mount them as soon as the
       // authenticated REST transport exists so setup detection can run in
-      // parallel with the shared-agent and runtime-config warmup.
-      void agents.ensureList();
+      // parallel with the runtime-config warmup. The agent capability is backed
+      // by modelContext above, so an eager agents.list would only duplicate the
+      // bootstrap request.
       void runtimeConfig.ensureLoaded();
     } catch (error) {
       if (generation === this.initializeGeneration) {
@@ -251,16 +258,16 @@ export class EnterpriseAdminModelsPage extends OpenClawLightDomElement {
               type="button"
               @click=${() => navigateAdmin("/config/models")}
             >
-              ← Quay lại Models
+              ${ea("← Quay lại Models")}
             </button>`
           : nothing}
         ${this.loading
-          ? html`<div class="ea-loading" role="status">Đang tải cấu hình Models…</div>`
+          ? html`<div class="ea-loading" role="status">${ea("Đang tải cấu hình Models…")}</div>`
           : this.loadError
             ? html`<div class="ea-card ea-load-error">
                 <p class="ea-error" role="alert">${this.loadError}</p>
                 <button class="ea-button" type="button" @click=${() => void this.initialize()}>
-                  Thử lại
+                  ${ea("Thử lại")}
                 </button>
               </div>`
             : this.setup

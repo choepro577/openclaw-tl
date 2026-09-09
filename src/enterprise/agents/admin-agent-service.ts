@@ -17,12 +17,13 @@ import { readConfigFileSnapshot, writeConfigFile } from "../../config/io.js";
 import { hashConfigRaw } from "../../config/io.read-helpers.js";
 import { redactConfigObject } from "../../config/redact-snapshot.js";
 import { buildConfigSchemaCore } from "../../config/schema.js";
-import type { AgentEntryConfig } from "../../config/types.agents.js";
+import type { AgentDelegationTargetConfig, AgentEntryConfig } from "../../config/types.agents.js";
 import type { OpenClawConfig } from "../../config/types.openclaw.js";
 import type { ToolProfileId } from "../../config/types.tools.js";
 import type { CronJobCreate, CronJobPatch } from "../../cron/types.js";
 import { buildToolsCatalogResult } from "../../gateway/server-methods/tools-catalog.js";
 import type { GatewayRequestContext } from "../../gateway/server-methods/types.js";
+import { generateSecureUuid } from "../../infra/secure-random.js";
 import { getActiveRuntimeWebToolsMetadataFromState } from "../../secrets/runtime-web-tools-state.js";
 import { buildWorkspaceSkillStatus } from "../../skills/discovery/status.js";
 import { isReservedSystemAgentId } from "../../system-agent/agent-id.js";
@@ -32,8 +33,9 @@ import {
   writeEnterpriseAccountToolPolicy,
 } from "../accounts/account-tool-policy-store.js";
 import type { EnterpriseAccount } from "../accounts/account-types.js";
-import { listEnterpriseEntitlementsForResource } from "../entitlements/entitlement-store.js";
+import { markEnterpriseAgentEntitlementsOrphaned } from "../entitlements/entitlement-store.js";
 import {
+  ENTERPRISE_DELEGATION_MANAGED_TOOL_IDS,
   ENTERPRISE_NON_DELEGABLE_TOOL_IDS,
   isEnterpriseNonDelegableToolId,
   sharedAgentResourceKey,
@@ -48,6 +50,8 @@ import {
   writeEnterpriseAgentCoreFile,
 } from "./admin-agent-files.js";
 import { readEnterpriseSharedRelationshipsPanel } from "./admin-agent-relationship-service.js";
+import { cancelPendingEnterpriseAgentAccessRequestsForResource } from "./agent-access-request-store.js";
+import { withEnterpriseAgentLifecycleLocks } from "./enterprise-agent-lifecycle-lock.js";
 
 export type EnterpriseAgentScope = "shared" | "personal";
 export type EnterpriseAgentPanel =
@@ -303,8 +307,33 @@ export async function readEnterpriseAgentPanel(
         group.tools.map((tool) => normalizeToolPolicyName(tool.id)),
       );
       const lockedToolIds = catalogToolIds.filter(isEnterpriseNonDelegableToolId).toSorted();
+      const effectivePolicy = resolveEffectiveToolPolicy({
+        config: effectiveConfig,
+        agentId: agent.id,
+      });
+      const effectivePolicyLayers = [
+        mergeAlsoAllowPolicy(
+          resolveToolProfilePolicy(effectivePolicy.profile),
+          effectivePolicy.profileAlsoAllow,
+        ),
+        mergeAlsoAllowPolicy(
+          resolveToolProfilePolicy(effectivePolicy.providerProfile),
+          effectivePolicy.providerProfileAlsoAllow,
+        ),
+        effectivePolicy.globalPolicy,
+        effectivePolicy.globalProviderPolicy,
+        effectivePolicy.agentPolicy,
+        effectivePolicy.agentProviderPolicy,
+      ];
       const accountCompiledPolicy = resolved.account
-        ? compileEnterpriseToolPolicy(config, resolved.account, accountToolPolicy ?? undefined)
+        ? mergeAlsoAllowPolicy(
+            compileEnterpriseToolPolicy(config, resolved.account, accountToolPolicy ?? undefined),
+            // Managed coordination grants are already authorized by the scoped runtime.
+            // An unchanged Admin save must not turn their absence from the preset into a deny.
+            ENTERPRISE_DELEGATION_MANAGED_TOOL_IDS.filter((toolId) =>
+              isToolAllowedByPolicies(toolId, effectivePolicyLayers),
+            ),
+          )
         : null;
       const profile = projectedPolicy?.profile ?? null;
       const baseProfilePolicy = resolveToolProfilePolicy(profile ?? inheritedProfile);
@@ -353,24 +382,6 @@ export async function readEnterpriseAgentPanel(
           group.tools.map((tool) => normalizeToolPolicyName(tool.id)),
         ),
       );
-      const effectivePolicy = resolveEffectiveToolPolicy({
-        config: effectiveConfig,
-        agentId: agent.id,
-      });
-      const effectivePolicyLayers = [
-        mergeAlsoAllowPolicy(
-          resolveToolProfilePolicy(effectivePolicy.profile),
-          effectivePolicy.profileAlsoAllow,
-        ),
-        mergeAlsoAllowPolicy(
-          resolveToolProfilePolicy(effectivePolicy.providerProfile),
-          effectivePolicy.providerProfileAlsoAllow,
-        ),
-        effectivePolicy.globalPolicy,
-        effectivePolicy.globalProviderPolicy,
-        effectivePolicy.agentPolicy,
-        effectivePolicy.agentProviderPolicy,
-      ];
       const sandboxRuntime = resolveSandboxRuntimeStatus({
         cfg: effectiveConfig,
         agentId: agent.id,
@@ -624,6 +635,38 @@ export async function updateEnterpriseAgentSkills(
   }));
 }
 
+export async function updateEnterpriseAgentDelegationProfile(
+  agentId: string,
+  input: {
+    description: string;
+    profile: Omit<AgentDelegationTargetConfig, "requiredInputs"> & {
+      requiredInputs: Array<{ id?: string; label: string; question: string }>;
+    };
+    baseHash: string;
+  },
+) {
+  const requiredInputs = input.profile.requiredInputs.map((item) => ({
+    id:
+      item.id && /^[a-z][a-z0-9_-]{0,63}$/.test(item.id)
+        ? item.id
+        : `input_${generateSecureUuid().replaceAll("-", "").slice(0, 12)}`,
+    label: item.label.trim(),
+    question: item.question.trim(),
+  }));
+  return await writeAgentEntryPatch("shared", agentId, input.baseHash, (entry) => ({
+    ...entry,
+    description: input.description.trim(),
+    delegationTarget: {
+      status: input.profile.status,
+      aliases: [...new Set(input.profile.aliases.map((value) => value.trim()).filter(Boolean))],
+      handlingMode: input.profile.handlingMode,
+      useWhen: [...new Set(input.profile.useWhen.map((value) => value.trim()).filter(Boolean))],
+      avoidWhen: [...new Set(input.profile.avoidWhen.map((value) => value.trim()).filter(Boolean))],
+      requiredInputs,
+    },
+  }));
+}
+
 function requireCronRuntime(runtime?: EnterpriseAgentRuntimeServices) {
   const cron = runtime?.gatewayContext?.cron;
   if (!cron) {
@@ -771,29 +814,31 @@ export async function createEnterpriseSharedAgent(input: {
   baseHash: string;
 }) {
   const agentId = requireAgentId(input.id);
-  const current = await currentConfigForMutation(input.baseHash);
-  if (listAgentEntries(current.config).some((entry) => entry.id === agentId)) {
-    throw new Error("AGENT_EXISTS");
-  }
-  const entry: AgentEntryConfig = {
-    name: input.name.trim() || agentId,
-    ...(input.model ? { model: input.model } : {}),
-    ...(input.workspace ? { workspace: input.workspace } : {}),
-  };
-  const next: OpenClawConfig = {
-    ...current.config,
-    agents: {
-      ...current.config.agents,
-      entries: { ...(current.config.agents?.entries ?? {}), [agentId]: entry },
-      list: undefined,
-    },
-  };
-  const result = await writeConfigFile(next, {
-    baseSnapshot: current.snapshot,
-    allowDestructiveWrite: true,
-    auditOrigin: "config-rpc",
+  return await withEnterpriseAgentLifecycleLocks([sharedAgentResourceKey(agentId)], async () => {
+    const current = await currentConfigForMutation(input.baseHash);
+    if (listAgentEntries(current.config).some((entry) => entry.id === agentId)) {
+      throw new Error("AGENT_EXISTS");
+    }
+    const entry: AgentEntryConfig = {
+      name: input.name.trim() || agentId,
+      ...(input.model ? { model: input.model } : {}),
+      ...(input.workspace ? { workspace: input.workspace } : {}),
+    };
+    const next: OpenClawConfig = {
+      ...current.config,
+      agents: {
+        ...current.config.agents,
+        entries: { ...(current.config.agents?.entries ?? {}), [agentId]: entry },
+        list: undefined,
+      },
+    };
+    const result = await writeConfigFile(next, {
+      baseSnapshot: current.snapshot,
+      allowDestructiveWrite: true,
+      auditOrigin: "config-rpc",
+    });
+    return { agentId, hash: result.persistedHash };
   });
-  return { agentId, hash: result.persistedHash };
 }
 
 export async function updateEnterpriseSharedAgent(
@@ -831,29 +876,36 @@ export async function updateEnterpriseSharedAgent(
 
 export async function deleteEnterpriseSharedAgent(agentIdInput: string, baseHash: string) {
   const agentId = requireAgentId(agentIdInput);
-  const current = await currentConfigForMutation(baseHash);
-  const entry = current.config.agents?.entries?.[agentId];
-  if (!entry) {
-    throw new Error("AGENT_NOT_FOUND");
-  }
-  const assigned =
-    listEnterpriseEntitlementsForResource("agent", sharedAgentResourceKey(agentId)).length > 0;
-  const usedAsDefault = listEnterpriseAccounts().some(
-    (account) => account.defaultAgentId === agentId,
-  );
-  if (entry.default === true || assigned || usedAsDefault) {
-    throw new Error("AGENT_IN_USE");
-  }
-  const entries = { ...(current.config.agents?.entries ?? {}) };
-  delete entries[agentId];
-  const next: OpenClawConfig = {
-    ...current.config,
-    agents: { ...current.config.agents, entries, list: undefined },
-  };
-  const result = await writeConfigFile(next, {
-    baseSnapshot: current.snapshot,
-    allowDestructiveWrite: true,
-    auditOrigin: "config-rpc",
+  return await withEnterpriseAgentLifecycleLocks([sharedAgentResourceKey(agentId)], async () => {
+    const current = await currentConfigForMutation(baseHash);
+    const entry = current.config.agents?.entries?.[agentId];
+    if (!entry) {
+      throw new Error("AGENT_NOT_FOUND");
+    }
+    const usedAsDefault = listEnterpriseAccounts().some(
+      (account) => account.defaultAgentId === agentId,
+    );
+    if (entry.default === true || usedAsDefault) {
+      throw new Error("AGENT_IN_USE");
+    }
+    const entries = { ...(current.config.agents?.entries ?? {}) };
+    delete entries[agentId];
+    const next: OpenClawConfig = {
+      ...current.config,
+      agents: { ...current.config.agents, entries, list: undefined },
+    };
+    const result = await writeConfigFile(next, {
+      baseSnapshot: current.snapshot,
+      allowDestructiveWrite: true,
+      auditOrigin: "config-rpc",
+    });
+    const orphanedAssignments = markEnterpriseAgentEntitlementsOrphaned(
+      sharedAgentResourceKey(agentId),
+    );
+    cancelPendingEnterpriseAgentAccessRequestsForResource(
+      sharedAgentResourceKey(agentId),
+      "Agent removed",
+    );
+    return { agentId, hash: result.persistedHash, orphanedAssignments };
   });
-  return { agentId, hash: result.persistedHash };
 }

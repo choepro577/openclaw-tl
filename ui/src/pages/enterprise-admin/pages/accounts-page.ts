@@ -1,34 +1,108 @@
 import { html, nothing } from "lit";
 import { state } from "lit/decorators.js";
+import { showNativeConfirm, showNativePrompt } from "../../../branding/display-dialog.ts";
 import { icons } from "../../../components/icons.ts";
+import {
+  eaa,
+  enterpriseAdminPresetDescription,
+  enterpriseAdminPresetLabel,
+  type EnterpriseAdminAccountsCopyKey,
+} from "../../../i18n/enterprise-admin-accounts.ts";
+import { ea } from "../../../i18n/enterprise-admin.ts";
+import {
+  enterpriseDomainCopy,
+  type EnterpriseDelegationKey,
+} from "../../../i18n/enterprise-domain.ts";
 import { OpenClawLightDomElement } from "../../../lit/openclaw-element.ts";
 import {
   createAdminAccount,
+  applyAdminAccessChanges,
   listAdminAccounts,
+  listAdminAgentCatalog,
+  listAdminSkillCatalog,
   loadAdminAccount,
+  loadAdminAccountDelegation,
   resetAdminAccountPassword,
   revokeAdminAccountSession,
+  saveAdminAccountDelegationOverride,
   updateAdminAccount,
   type EnterpriseAccount,
+  type EnterpriseAccessPreset,
   type EnterprisePageInfo,
+  type EnterpriseSharedAgent,
+  type EnterpriseSkillCatalogItem,
 } from "../../enterprise/services/enterprise-api.ts";
 import { errorMessage, formatDate } from "../utils.ts";
 import "../components/admin-dialog.ts";
+import { renderAccountCreateDialog } from "./account-create-dialog-view.ts";
 
 type AccountDetail = Awaited<ReturnType<typeof loadAdminAccount>>;
+type AccountDelegation = Awaited<ReturnType<typeof loadAdminAccountDelegation>>;
+type AccountDetailTab = "info" | "agents" | "sessions" | "advanced";
+type OverrideMode = "inherit" | "confirm_before_handoff" | "explicit_only" | "disabled";
+const d = (key: EnterpriseDelegationKey, params?: Record<string, string>) =>
+  enterpriseDomainCopy(`enterpriseDelegation.${key}`, params);
+
+function eventValue(event: Event): string {
+  const target = event.currentTarget;
+  return target instanceof HTMLInputElement || target instanceof HTMLSelectElement
+    ? target.value
+    : "";
+}
+
+function eventChecked(event: Event): boolean {
+  return event.currentTarget instanceof HTMLInputElement && event.currentTarget.checked;
+}
+
+function accountRole(value: FormDataEntryValue | null): "administrator" | "employee" {
+  return value === "administrator" ? "administrator" : "employee";
+}
+
+function overrideMode(value: string): OverrideMode {
+  return value === "confirm_before_handoff" || value === "explicit_only" || value === "disabled"
+    ? value
+    : "inherit";
+}
+
+function accessPresetLabel(presetKey: string, presets: readonly EnterpriseAccessPreset[]): string {
+  const preset = presets.find((item) => item.key === presetKey);
+  return enterpriseAdminPresetLabel(presetKey, preset?.label ?? presetKey);
+}
 
 export class EnterpriseAdminAccountsPage extends OpenClawLightDomElement {
   @state() private accounts: EnterpriseAccount[] = [];
   @state() private pageInfo: EnterprisePageInfo = { total: 0, nextCursor: null };
   @state() private loading = true;
   @state() private error = "";
+  @state() private accessPresets: EnterpriseAccessPreset[] = [];
   @state() private createOpen = false;
   @state() private createStep: 1 | 2 = 1;
   @state() private createRole: "administrator" | "employee" = "employee";
   @state() private creating = false;
+  @state() private createPersonalAgentEnabled = true;
+  @state() private createAccessPresetKey = "basic@1";
+  @state() private createDefaultAgentId = "";
+  @state() private createSelectedAgentKeys: string[] = [];
+  @state() private createAgentQuery = "";
+  @state() private createSelectedSkillKeys: string[] = [];
+  @state() private createSkillQuery = "";
+  @state() private createCatalogLoading = false;
+  @state() private createCatalogError = "";
+  @state() private createCatalogErrorKeys: EnterpriseAdminAccountsCopyKey[] = [];
+  @state() private createPasswordMismatch = false;
+  @state() private createSharedAgents: EnterpriseSharedAgent[] = [];
+  @state() private createSkills: EnterpriseSkillCatalogItem[] = [];
   @state() private selected?: AccountDetail;
+  @state() private accountDelegation?: AccountDelegation;
+  @state() private detailTab: AccountDetailTab = "info";
+  @state() private detailAgentQuery = "";
+  @state() private assignmentDraft = new Map<string, boolean>();
+  @state() private assignmentSource = new Map<string, boolean>();
+  @state() private overrideDraft = new Map<string, OverrideMode>();
+  @state() private overrideSource = new Map<string, OverrideMode>();
   @state() private detailLoading = false;
   @state() private saving = false;
+  @state() private detailAccessPresetKey = "";
   @state() private drawerDirty = false;
   private query = "";
   private roleFilter = "";
@@ -68,6 +142,7 @@ export class EnterpriseAdminAccountsPage extends OpenClawLightDomElement {
       });
       this.accounts = result.accounts;
       this.pageInfo = result.pageInfo;
+      this.accessPresets = result.accessPresets ?? [];
     } catch (error) {
       this.error = errorMessage(error);
     } finally {
@@ -108,40 +183,110 @@ export class EnterpriseAdminAccountsPage extends OpenClawLightDomElement {
     void this.load();
   }
 
+  private openCreateDialog(): void {
+    this.error = "";
+    this.createOpen = true;
+    this.createStep = 1;
+    this.createRole = "employee";
+    this.createPersonalAgentEnabled = true;
+    this.createAccessPresetKey = "basic@1";
+    this.createDefaultAgentId = "";
+    this.createSelectedAgentKeys = [];
+    this.createAgentQuery = "";
+    this.createSelectedSkillKeys = [];
+    this.createSkillQuery = "";
+    this.createCatalogErrorKeys = [];
+    this.createPasswordMismatch = false;
+    void this.loadCreateCatalog();
+  }
+
+  private closeCreateDialog(): void {
+    this.createOpen = false;
+    this.createStep = 1;
+  }
+
+  private async loadCreateCatalog(): Promise<void> {
+    this.createCatalogLoading = true;
+    this.createCatalogError = "";
+    this.createCatalogErrorKeys = [];
+    const [agentResult, skillResult] = await Promise.allSettled([
+      listAdminAgentCatalog(),
+      listAdminSkillCatalog(),
+    ]);
+    const errors: EnterpriseAdminAccountsCopyKey[] = [];
+    if (agentResult.status === "fulfilled") {
+      this.createSharedAgents = agentResult.value.shared;
+    } else {
+      this.createSharedAgents = [];
+      errors.push("sharedAgentCatalogUnavailable");
+    }
+    if (skillResult.status === "fulfilled") {
+      this.createSkills = skillResult.value.items;
+    } else {
+      this.createSkills = [];
+      errors.push("skillCatalogUnavailable");
+    }
+    this.createCatalogErrorKeys = errors;
+    this.createCatalogError = errors.map((key) => eaa(key)).join(" ");
+    this.createCatalogLoading = false;
+  }
+
+  private toggleCreateSkill(resourceKey: string, selected: boolean): void {
+    this.createSelectedSkillKeys = selected
+      ? [...new Set([...this.createSelectedSkillKeys, resourceKey])]
+      : this.createSelectedSkillKeys.filter((value) => value !== resourceKey);
+  }
+
+  private toggleCreateAgent(resourceKey: string, selected: boolean): void {
+    this.createSelectedAgentKeys = selected
+      ? [...new Set([...this.createSelectedAgentKeys, resourceKey])]
+      : this.createSelectedAgentKeys.filter((value) => value !== resourceKey);
+  }
+
   private async create(event: SubmitEvent): Promise<void> {
     event.preventDefault();
-    const form = event.currentTarget as HTMLFormElement;
+    const form = event.currentTarget;
+    if (!(form instanceof HTMLFormElement)) {
+      return;
+    }
     if (this.createStep === 1) {
       const data = new FormData(form);
       if (data.get("initialPassword") !== data.get("confirmPassword")) {
-        this.error = "Mật khẩu xác nhận không khớp.";
+        this.createPasswordMismatch = true;
+        this.error = ea("Mật khẩu xác nhận không khớp.");
         return;
       }
+      this.createPasswordMismatch = false;
       this.error = "";
+      this.createPersonalAgentEnabled = this.createRole === "employee";
+      this.createAccessPresetKey = this.createRole === "employee" ? "basic@1" : "none";
+      this.createDefaultAgentId = "";
+      this.createSelectedAgentKeys = [];
+      this.createAgentQuery = "";
+      this.createSelectedSkillKeys = [];
+      this.createSkillQuery = "";
       this.createStep = 2;
       return;
     }
     const data = new FormData(form);
     this.creating = true;
+    this.createPasswordMismatch = false;
     this.error = "";
     try {
       await createAdminAccount({
         username: String(data.get("username") ?? ""),
         displayName: String(data.get("displayName") ?? ""),
         initialPassword: String(data.get("initialPassword") ?? ""),
-        role: String(data.get("role")) as "administrator" | "employee",
+        role: accountRole(data.get("role")),
         enabled: data.get("enabled") === "on",
         personalAgentEnabled: data.get("personalAgentEnabled") === "on",
         defaultAgentId: String(data.get("defaultAgentId") ?? "").trim() || null,
         accessPresetKey: String(data.get("accessPresetKey") ?? "none"),
-        skillGrants: String(data.get("skillGrants") ?? "")
-          .split(",")
-          .map((value) => value.trim())
-          .filter(Boolean),
+        skillGrants: data.getAll("skillGrants").map(String),
+        agentGrants: data.getAll("agentGrants").map(String),
       });
       form.reset();
-      this.createOpen = false;
-      this.createStep = 1;
+      this.closeCreateDialog();
       await this.load();
     } catch (error) {
       this.error = errorMessage(error);
@@ -153,6 +298,10 @@ export class EnterpriseAdminAccountsPage extends OpenClawLightDomElement {
   private async openDetail(account: EnterpriseAccount): Promise<void> {
     this.detailLoading = true;
     this.drawerDirty = false;
+    this.detailAccessPresetKey = account.accessPresetKey;
+    this.detailTab = "info";
+    this.detailAgentQuery = "";
+    this.accountDelegation = undefined;
     this.selected = {
       account,
       entitlements: [],
@@ -167,7 +316,18 @@ export class EnterpriseAdminAccountsPage extends OpenClawLightDomElement {
       sessions: [],
     };
     try {
-      this.selected = await loadAdminAccount(account.id);
+      const [detail, delegation, catalog] = await Promise.all([
+        loadAdminAccount(account.id),
+        loadAdminAccountDelegation(account.id),
+        this.createSharedAgents.length > 0 ? Promise.resolve(null) : listAdminAgentCatalog(),
+      ]);
+      this.selected = detail;
+      this.detailAccessPresetKey = detail.account.accessPresetKey;
+      this.accountDelegation = delegation;
+      if (catalog) {
+        this.createSharedAgents = catalog.shared;
+      }
+      this.initializeDelegationDrafts(detail, delegation);
     } catch (error) {
       this.error = errorMessage(error);
     } finally {
@@ -176,31 +336,95 @@ export class EnterpriseAdminAccountsPage extends OpenClawLightDomElement {
   }
 
   private closeDetail(): void {
-    if (this.drawerDirty && !globalThis.confirm("Bỏ các thay đổi chưa lưu?")) {
+    if (this.drawerDirty && !showNativeConfirm(d("confirmDiscard"))) {
       return;
     }
     this.selected = undefined;
+    this.accountDelegation = undefined;
     this.drawerDirty = false;
   }
 
-  private async saveDetail(event: SubmitEvent): Promise<void> {
-    event.preventDefault();
-    if (!this.selected) {
+  private initializeDelegationDrafts(detail: AccountDetail, delegation: AccountDelegation): void {
+    const assignments = new Map<string, boolean>();
+    for (const agent of this.createSharedAgents) {
+      const entitlement = detail.entitlements.find(
+        (item) => item.resourceType === "agent" && item.resourceId === agent.resourceKey,
+      );
+      assignments.set(
+        agent.resourceKey,
+        entitlement?.effect === "allow" && entitlement.resourceState === "active",
+      );
+    }
+    const overrides = new Map<string, OverrideMode>(
+      delegation.overrides.map((item) => [item.agentResourceKey, item.mode]),
+    );
+    this.assignmentDraft = assignments;
+    this.assignmentSource = new Map(assignments);
+    this.overrideDraft = overrides;
+    this.overrideSource = new Map(overrides);
+  }
+
+  private setAssignment(resourceKey: string, enabled: boolean): void {
+    this.assignmentDraft = new Map(this.assignmentDraft).set(resourceKey, enabled);
+    this.drawerDirty = true;
+  }
+
+  private setOverride(resourceKey: string, mode: OverrideMode): void {
+    this.overrideDraft = new Map(this.overrideDraft).set(resourceKey, mode);
+    this.drawerDirty = true;
+  }
+
+  private async saveDelegation(): Promise<void> {
+    if (!this.selected || !this.accountDelegation || this.saving) {
       return;
     }
-    const data = new FormData(event.currentTarget as HTMLFormElement);
     this.saving = true;
     this.error = "";
     try {
-      const result = await updateAdminAccount(this.selected.account.id, {
-        displayName: String(data.get("displayName") ?? ""),
-        role: String(data.get("role")) as "administrator" | "employee",
-        enabled: data.get("enabled") === "on",
-        personalAgentEnabled: data.get("personalAgentEnabled") === "on",
-        defaultAgentId: String(data.get("defaultAgentId") ?? "").trim() || null,
-        accessPresetKey: String(data.get("accessPresetKey") ?? "none"),
-      });
-      this.selected = { ...this.selected, account: result.account };
+      const accountId = this.selected.account.id;
+      const assignmentChanges = this.createSharedAgents
+        .filter(
+          (agent) =>
+            this.assignmentDraft.get(agent.resourceKey) !==
+            this.assignmentSource.get(agent.resourceKey),
+        )
+        .map((agent) => ({
+          accountId,
+          resourceType: "agent" as const,
+          resourceKey: agent.resourceKey,
+          effect: this.assignmentDraft.get(agent.resourceKey) ? ("allow" as const) : null,
+        }));
+      let accountRevision = this.selected.account.policyRevision;
+      if (assignmentChanges.length > 0) {
+        const result = await applyAdminAccessChanges({
+          changes: assignmentChanges,
+          baseRevisions: { [accountId]: accountRevision },
+        });
+        accountRevision = result.policyRevisions[accountId] ?? accountRevision;
+      }
+      for (const [resourceKey, mode] of this.overrideDraft) {
+        if (mode === (this.overrideSource.get(resourceKey) ?? "inherit")) {
+          continue;
+        }
+        const current = this.accountDelegation.overrides.find(
+          (item) => item.agentResourceKey === resourceKey,
+        );
+        const result = await saveAdminAccountDelegationOverride({
+          accountId,
+          agentResourceKey: resourceKey,
+          mode,
+          baseRevision: current?.revision ?? 0,
+          baseAccountPolicyRevision: accountRevision,
+        });
+        accountRevision = result.accountPolicyRevision;
+      }
+      const [detail, delegation] = await Promise.all([
+        loadAdminAccount(accountId),
+        loadAdminAccountDelegation(accountId),
+      ]);
+      this.selected = detail;
+      this.accountDelegation = delegation;
+      this.initializeDelegationDrafts(detail, delegation);
       this.drawerDirty = false;
       await this.load();
     } catch (error) {
@@ -210,11 +434,60 @@ export class EnterpriseAdminAccountsPage extends OpenClawLightDomElement {
     }
   }
 
+  private async saveDetail(event: SubmitEvent): Promise<void> {
+    event.preventDefault();
+    const form = event.currentTarget;
+    if (!this.selected || !(form instanceof HTMLFormElement)) {
+      return;
+    }
+    await this.persistDetail(form, false);
+  }
+
+  private async persistDetail(form: HTMLFormElement, forceApplyPreset: boolean): Promise<void> {
+    if (!this.selected) {
+      return;
+    }
+    const data = new FormData(form);
+    const accessPresetKey = String(data.get("accessPresetKey") ?? "none");
+    this.saving = true;
+    this.error = "";
+    try {
+      const result = await updateAdminAccount(this.selected.account.id, {
+        displayName: String(data.get("displayName") ?? ""),
+        role: accountRole(data.get("role")),
+        enabled: data.get("enabled") === "on",
+        personalAgentEnabled: data.get("personalAgentEnabled") === "on",
+        defaultAgentId: String(data.get("defaultAgentId") ?? "").trim() || null,
+        accessPresetKey,
+        ...(forceApplyPreset || accessPresetKey !== this.selected.account.accessPresetKey
+          ? { applyAccessPreset: true }
+          : {}),
+      });
+      this.selected = await loadAdminAccount(result.account.id);
+      this.detailAccessPresetKey = this.selected.account.accessPresetKey;
+      this.drawerDirty = false;
+      await this.load();
+    } catch (error) {
+      this.error = errorMessage(error);
+    } finally {
+      this.saving = false;
+    }
+  }
+
+  private async applyAccessPreset(event: Event): Promise<void> {
+    const trigger = event.currentTarget;
+    const form = trigger instanceof HTMLElement ? trigger.closest("form") : null;
+    if (!form || this.saving || !this.detailAccessPresetKey) {
+      return;
+    }
+    await this.persistDetail(form, true);
+  }
+
   private async resetPassword(): Promise<void> {
     if (!this.selected) {
       return;
     }
-    const password = globalThis.prompt("Nhập mật khẩu tạm mới (tối thiểu 10 ký tự):");
+    const password = showNativePrompt(eaa("resetPasswordPrompt"));
     if (!password) {
       return;
     }
@@ -239,142 +512,47 @@ export class EnterpriseAdminAccountsPage extends OpenClawLightDomElement {
   }
 
   private renderCreateDialog() {
-    return html`
-      <openclaw-enterprise-admin-dialog
-        .open=${true}
-        heading="Tạo tài khoản"
-        description="Bước ${this
-          .createStep}/2 · tài khoản mới bắt buộc đổi mật khẩu khi đăng nhập lần đầu"
-        .onClose=${() => {
-          this.createOpen = false;
-          this.createStep = 1;
-        }}
-      >
-        <form class="ea-form-grid" @submit=${(event: SubmitEvent) => void this.create(event)}>
-          <label class="ea-field">
-            Username
-            <input
-              class="ea-input"
-              name="username"
-              required
-              maxlength="64"
-              ?readonly=${this.createStep === 2}
-            />
-          </label>
-          <label class="ea-field">
-            Tên hiển thị
-            <input
-              class="ea-input"
-              name="displayName"
-              required
-              maxlength="128"
-              ?readonly=${this.createStep === 2}
-            />
-          </label>
-          <label class="ea-field">
-            Role
-            <select
-              class="ea-select"
-              name="role"
-              .value=${this.createRole}
-              ?disabled=${this.createStep === 2}
-              @change=${(event: Event) => {
-                this.createRole = (event.currentTarget as HTMLSelectElement).value as
-                  | "administrator"
-                  | "employee";
-              }}
-            >
-              <option value="employee">Employee</option>
-              <option value="administrator">Administrator</option>
-            </select>
-            ${this.createStep === 2
-              ? html`<input type="hidden" name="role" value=${this.createRole} />`
-              : nothing}
-          </label>
-          <label class="ea-switch-row">
-            <span>Kích hoạt ngay</span>
-            <input name="enabled" type="checkbox" checked />
-          </label>
-          <label class="ea-field">
-            Mật khẩu tạm
-            <input
-              class="ea-input"
-              name="initialPassword"
-              type="password"
-              minlength="10"
-              required
-              ?readonly=${this.createStep === 2}
-            />
-          </label>
-          <label class="ea-field">
-            Xác nhận mật khẩu
-            <input
-              class="ea-input"
-              name="confirmPassword"
-              type="password"
-              minlength="10"
-              required
-              ?readonly=${this.createStep === 2}
-            />
-          </label>
-          ${this.createStep === 2
-            ? html`
-                <label class="ea-switch-row ea-form-grid__full">
-                  <span>
-                    <strong>Personal agent</strong>
-                    <span class="ea-muted">Workspace riêng, quyền filesystem 0700</span>
-                  </span>
-                  <input
-                    name="personalAgentEnabled"
-                    type="checkbox"
-                    .checked=${this.createRole === "employee"}
-                  />
-                </label>
-                <label class="ea-field">
-                  Access preset
-                  <select class="ea-select" name="accessPresetKey">
-                    <option value="standard-coding@1" ?selected=${this.createRole === "employee"}>
-                      Standard Coding v1
-                    </option>
-                    <option value="none" ?selected=${this.createRole === "administrator"}>
-                      Không cấp preset
-                    </option>
-                  </select>
-                </label>
-                <label class="ea-field">
-                  Shared/default agent
-                  <input
-                    class="ea-input"
-                    name="defaultAgentId"
-                    placeholder="Để trống để dùng personal agent"
-                  />
-                </label>
-                <label class="ea-field ea-form-grid__full">
-                  Skill ban đầu
-                  <input
-                    class="ea-input"
-                    name="skillGrants"
-                    placeholder="skill:global:source:key, … (không bắt buộc)"
-                  />
-                </label>
-              `
-            : nothing}
-          ${this.error
-            ? html`<p class="ea-error ea-form-grid__full" role="alert">${this.error}</p>`
-            : nothing}
-          <div class="ea-form-actions ea-form-grid__full">
-            ${this.createStep === 2
-              ? html`<button class="ea-button" type="button" @click=${() => (this.createStep = 1)}>
-                  Quay lại
-                </button>`
-              : nothing}
-            <button class="ea-button ea-button--primary" type="submit" ?disabled=${this.creating}>
-              ${this.createStep === 1 ? "Tiếp tục" : this.creating ? "Đang tạo…" : "Tạo tài khoản"}
-            </button>
-          </div>
-        </form>
-      </openclaw-enterprise-admin-dialog>
-    `;
+    return renderAccountCreateDialog({
+      step: this.createStep,
+      role: this.createRole,
+      personalAgentEnabled: this.createPersonalAgentEnabled,
+      accessPresetKey: this.createAccessPresetKey,
+      defaultAgentId: this.createDefaultAgentId,
+      selectedAgentKeys: this.createSelectedAgentKeys,
+      agentQuery: this.createAgentQuery,
+      selectedSkillKeys: this.createSelectedSkillKeys,
+      skillQuery: this.createSkillQuery,
+      accessPresets: this.accessPresets,
+      catalogLoading: this.createCatalogLoading,
+      catalogError: this.createCatalogErrorKeys.length
+        ? this.createCatalogErrorKeys.map((key) => eaa(key)).join(" ")
+        : this.createCatalogError,
+      sharedAgents: this.createSharedAgents,
+      skills: this.createSkills,
+      error: this.createPasswordMismatch ? ea("Mật khẩu xác nhận không khớp.") : this.error,
+      creating: this.creating,
+      onClose: () => this.closeCreateDialog(),
+      onSubmit: (event) => void this.create(event),
+      onBack: () => (this.createStep = 1),
+      onRoleChange: (role) => (this.createRole = role),
+      onPersonalAgentChange: (enabled) => {
+        this.createPersonalAgentEnabled = enabled;
+        if (enabled) {
+          this.createDefaultAgentId = "";
+        }
+      },
+      onAccessPresetChange: (presetKey) => (this.createAccessPresetKey = presetKey),
+      onDefaultAgentChange: (agentId) => (this.createDefaultAgentId = agentId),
+      onAgentQueryChange: (query) => (this.createAgentQuery = query),
+      onAgentToggle: (resourceKey, selected) => this.toggleCreateAgent(resourceKey, selected),
+      onConfigureAgent: (agentId) => {
+        this.closeCreateDialog();
+        globalThis.location.href = `${globalThis.location.pathname.replace(/\/accounts$/, "/agents")}?type=shared&agent=${encodeURIComponent(agentId)}&panel=delegation`;
+      },
+      onSkillQueryChange: (query) => (this.createSkillQuery = query),
+      onSkillToggle: (resourceKey, selected) => this.toggleCreateSkill(resourceKey, selected),
+      onRetryCatalog: () => void this.loadCreateCatalog(),
+    });
   }
 
   private renderDetailDrawer() {
@@ -383,126 +561,367 @@ export class EnterpriseAdminAccountsPage extends OpenClawLightDomElement {
       return nothing;
     }
     const account = detail.account;
+    const selectedPreset = this.accessPresets.find(
+      (preset) => preset.key === this.detailAccessPresetKey,
+    );
+    const renderInfo = () => html`
+      <form
+        class="ea-form-grid"
+        @input=${() => (this.drawerDirty = true)}
+        @change=${() => (this.drawerDirty = true)}
+        @submit=${(event: SubmitEvent) => void this.saveDetail(event)}
+      >
+        <label class="ea-field ea-form-grid__full">
+          ${ea("Tên hiển thị")}
+          <input class="ea-input" name="displayName" .value=${account.displayName} required />
+        </label>
+        <label class="ea-field">
+          ${ea("Role")}
+          <select class="ea-select" name="role" .value=${account.role}>
+            <option value="employee">${ea("Employee")}</option>
+            <option value="administrator">${ea("Administrator")}</option>
+          </select>
+        </label>
+        <label class="ea-field">
+          ${ea("Access preset")}
+          <select
+            class="ea-select"
+            name="accessPresetKey"
+            .value=${this.detailAccessPresetKey || account.accessPresetKey}
+            @change=${(event: Event) => {
+              const accessPresetKey = eventValue(event);
+              this.detailAccessPresetKey = accessPresetKey;
+              this.drawerDirty = true;
+            }}
+          >
+            ${this.accessPresets.map(
+              (preset) => html`<option
+                value=${preset.key}
+                ?selected=${this.detailAccessPresetKey === preset.key}
+              >
+                ${enterpriseAdminPresetLabel(preset.key, preset.label)}
+              </option>`,
+            )}
+          </select>
+        </label>
+        <div class="ea-account-selection-card">
+          <strong
+            >${selectedPreset
+              ? enterpriseAdminPresetLabel(selectedPreset.key, selectedPreset.label)
+              : enterpriseAdminPresetLabel(
+                  this.detailAccessPresetKey || account.accessPresetKey,
+                  this.detailAccessPresetKey || account.accessPresetKey,
+                )}</strong
+          >
+          <span>
+            ${selectedPreset
+              ? enterpriseAdminPresetDescription(selectedPreset.key, selectedPreset.description)
+              : ea("Danh mục preset chưa tải được; hãy tải lại trang quản trị.")}
+          </span>
+          <span class="ea-muted"> ${eaa("presetApplyNote")} </span>
+          <span class="ea-muted"> ${eaa("presetSessionNote")} </span>
+          ${selectedPreset?.toolIds.length
+            ? html`<div class="ea-account-tool-list">
+                ${selectedPreset.toolIds.map(
+                  (toolId) => html`<span class="ea-badge">${toolId}</span>`,
+                )}
+              </div>`
+            : nothing}
+          <button
+            class="ea-button"
+            type="button"
+            ?disabled=${this.saving || !selectedPreset}
+            @click=${(event: Event) => void this.applyAccessPreset(event)}
+          >
+            ${eaa("applyPresetAgain")}
+          </button>
+        </div>
+        <label class="ea-switch-row">
+          <span>${ea("Đang hoạt động")}</span>
+          <input name="enabled" type="checkbox" .checked=${account.enabled} />
+        </label>
+        <label class="ea-switch-row">
+          <span>${ea("Personal Agent")}</span>
+          <input
+            name="personalAgentEnabled"
+            type="checkbox"
+            .checked=${account.personalAgentEnabled}
+          />
+        </label>
+        <label class="ea-field ea-form-grid__full">
+          ${ea("Agent mặc định")}
+          <input class="ea-input" name="defaultAgentId" .value=${account.defaultAgentId ?? ""} />
+        </label>
+        <div class="ea-banner ea-form-grid__full">
+          ${eaa("statusChangeNote", { revision: String(account.policyRevision) })}
+        </div>
+        ${this.error
+          ? html`<p class="ea-error ea-form-grid__full" role="alert">${this.error}</p>`
+          : nothing}
+        <div class="ea-form-actions ea-form-grid__full ea-sticky-actions">
+          <button
+            class="ea-button ea-button--danger"
+            type="button"
+            @click=${() => void this.resetPassword()}
+          >
+            ${eaa("resetPasswordAction")}
+          </button>
+          <button class="ea-button ea-button--primary" type="submit" ?disabled=${this.saving}>
+            ${this.saving ? ea("Đang lưu…") : ea("Lưu thay đổi")}
+          </button>
+        </div>
+      </form>
+    `;
+    const candidateMap = new Map(
+      (this.accountDelegation?.specialists ?? []).map((item) => [item.resourceKey, item]),
+    );
+    const query = this.detailAgentQuery.trim().toLowerCase();
+    const visibleAgents = this.createSharedAgents.filter(
+      (agent) =>
+        !query ||
+        [agent.name, agent.description ?? "", agent.agentId].some((value) =>
+          value.toLowerCase().includes(query),
+        ),
+    );
+    const changedAssignments = this.createSharedAgents.filter(
+      (agent) =>
+        this.assignmentDraft.get(agent.resourceKey) !==
+        this.assignmentSource.get(agent.resourceKey),
+    );
+    const changedOverrides = [...this.overrideDraft].filter(
+      ([key, value]) => value !== (this.overrideSource.get(key) ?? "inherit"),
+    );
+    const renderAgents = () => html`
+      <section class="ea-stack">
+        <div class="ea-delegation-summary">
+          <div>
+            <span>${d("personalAgent")}</span
+            ><strong>${account.personalAgentEnabled ? d("enabled") : d("disabled")}</strong>
+          </div>
+          <div>
+            <span>${d("automaticDelegation")}</span
+            ><strong
+              >${this.accountDelegation?.policy.rollout === "on"
+                ? d("stateOn")
+                : d("notActivated")}</strong
+            >
+          </div>
+          <div>
+            <span>${d("assigned")}</span
+            ><strong>${[...this.assignmentDraft.values()].filter(Boolean).length}</strong>
+          </div>
+          <div>
+            <span>${d("eligible")}</span
+            ><strong
+              >${(this.accountDelegation?.specialists ?? []).filter((item) => item.routable)
+                .length}</strong
+            >
+          </div>
+        </div>
+        <input
+          class="ea-input"
+          type="search"
+          placeholder=${d("searchSpecialistsShort")}
+          aria-label=${d("specialists")}
+          .value=${this.detailAgentQuery}
+          @input=${(event: Event) => (this.detailAgentQuery = eventValue(event))}
+        />
+        <div class="ea-specialist-grid">
+          ${visibleAgents.map((agent) => {
+            const candidate = candidateMap.get(agent.resourceKey);
+            const assigned = this.assignmentDraft.get(agent.resourceKey) === true;
+            const storedOverride = this.accountDelegation?.overrides.find(
+              (item) => item.agentResourceKey === agent.resourceKey,
+            );
+            const mode = this.overrideDraft.get(agent.resourceKey) ?? "inherit";
+            const readiness =
+              agent.delegationReadiness !== "ready"
+                ? { label: d("notConfigured"), good: false }
+                : candidate?.reasonCodes.includes("explicit_deny")
+                  ? { label: d("accessBlocked"), good: false }
+                  : candidate?.effectiveMode === "disabled"
+                    ? { label: d("disabled"), good: false }
+                    : { label: d("ready"), good: true };
+            const baseMode = agent.delegationTarget?.handlingMode ?? "explicit_only";
+            const rank: Record<
+              "auto_when_certain" | "confirm_before_handoff" | "explicit_only" | "disabled",
+              number
+            > = {
+              auto_when_certain: 0,
+              confirm_before_handoff: 1,
+              explicit_only: 2,
+              disabled: 3,
+            };
+            return html`
+              <article class="ea-specialist-card ${assigned ? "is-assigned" : ""}">
+                <div class="ea-specialist-card__heading">
+                  <div>
+                    <strong>${agent.name}</strong>
+                    <p>${agent.description || d("noDescription")}</p>
+                  </div>
+                  <span class="ea-badge ${readiness.good ? "ea-badge--good" : "ea-badge--warn"}"
+                    >${readiness.label}</span
+                  >
+                </div>
+                <label class="ea-switch-row">
+                  <span>${assigned ? d("assignedToUser") : d("notAssigned")}</span>
+                  <input
+                    type="checkbox"
+                    .checked=${assigned}
+                    ?disabled=${agent.delegationReadiness !== "ready"}
+                    @change=${(event: Event) =>
+                      this.setAssignment(agent.resourceKey, eventChecked(event))}
+                  />
+                </label>
+                ${!assigned && storedOverride && storedOverride.mode !== "inherit"
+                  ? html`<div class="ea-banner">
+                      ${d("restorePrevious", {
+                        mode:
+                          storedOverride.mode === "explicit_only"
+                            ? d("explicitOnly")
+                            : storedOverride.mode === "disabled"
+                              ? d("noAutomaticDelegation")
+                              : d("confirmBeforeHandoff"),
+                      })}
+                    </div>`
+                  : nothing}
+                <label class="ea-field">
+                  ${d("userSpecificMode")}
+                  <select
+                    class="ea-select"
+                    .value=${mode}
+                    ?disabled=${!assigned}
+                    @change=${(event: Event) =>
+                      this.setOverride(agent.resourceKey, overrideMode(eventValue(event)))}
+                  >
+                    <option value="inherit">${d("inheritAgentMode")}</option>
+                    <option
+                      value="confirm_before_handoff"
+                      ?disabled=${rank.confirm_before_handoff < rank[baseMode]}
+                    >
+                      ${d("confirmBeforeHandoff")}
+                    </option>
+                    <option value="explicit_only" ?disabled=${rank.explicit_only < rank[baseMode]}>
+                      ${d("explicitOnly")}
+                    </option>
+                    <option value="disabled">${d("noAutomaticDelegation")}</option>
+                  </select>
+                </label>
+              </article>
+            `;
+          })}
+        </div>
+        ${this.error ? html`<p class="ea-error" role="alert">${this.error}</p>` : nothing}
+        <footer class="ea-sticky-actions ea-specialist-footer">
+          <span
+            >${d("changesSummary", {
+              added: String(
+                changedAssignments.filter((agent) => this.assignmentDraft.get(agent.resourceKey))
+                  .length,
+              ),
+              removed: String(
+                changedAssignments.filter((agent) => !this.assignmentDraft.get(agent.resourceKey))
+                  .length,
+              ),
+              overrides: changedOverrides.length
+                ? d("overrideChanges", { count: String(changedOverrides.length) })
+                : "",
+            })}</span
+          >
+          <div class="ea-row-actions">
+            <button
+              class="ea-button"
+              type="button"
+              @click=${() => this.initializeDelegationDrafts(detail, this.accountDelegation!)}
+            >
+              ${d("cancel")}
+            </button>
+            <button
+              class="ea-button ea-button--primary"
+              type="button"
+              ?disabled=${this.saving || (!changedAssignments.length && !changedOverrides.length)}
+              @click=${() => void this.saveDelegation()}
+            >
+              ${this.saving ? d("saving") : d("saveChanges")}
+            </button>
+          </div>
+        </footer>
+      </section>
+    `;
+    const renderSessions = () => html`
+      <section class="ea-stack">
+        <div class="ea-access-list">
+          ${detail.sessions.map(
+            (session) => html`
+              <div class="ea-access-row">
+                <div>
+                  <strong>${String(session.audience ?? "legacy")}</strong>
+                  <div class="ea-muted">
+                    ${formatDate(Number(session.lastSeenAt ?? 0))} ·
+                    ${session.revokedAt ? eaa("sessionRevoked") : ea("Đang hoạt động")}
+                  </div>
+                </div>
+                <button
+                  class="ea-button ea-button--danger"
+                  type="button"
+                  ?disabled=${Boolean(session.revokedAt)}
+                  @click=${() => void this.revokeSession(String(session.id ?? ""))}
+                >
+                  ${ea("Thu hồi")}
+                </button>
+              </div>
+            `,
+          )}
+          ${detail.sessions.length === 0
+            ? html`<div class="ea-empty">${ea("Không có phiên đăng nhập.")}</div>`
+            : nothing}
+        </div>
+      </section>
+    `;
+    const renderAdvanced = () => html`
+      <section class="ea-stack">
+        <div class="ea-banner">${eaa("advancedDataNote")}</div>
+        <strong>${eaa("effectivePermissions")}</strong>
+        <pre class="ea-code">${JSON.stringify(detail.effectivePolicy, null, 2)}</pre>
+        <strong>${eaa("entitlements")}</strong>
+        <pre class="ea-code">${JSON.stringify(detail.entitlements, null, 2)}</pre>
+      </section>
+    `;
     return html`
       <openclaw-enterprise-admin-dialog
         .open=${true}
         .drawer=${true}
         heading=${account.displayName}
-        description="@${account.username} · username không thể thay đổi"
+        description=${eaa("accountDrawerDescription", { username: account.username })}
         .onClose=${() => this.closeDetail()}
       >
+        <nav class="ea-tabs" aria-label=${ea("Chi tiết tài khoản")}>
+          ${(
+            [
+              ["info", ea("Thông tin")],
+              ["agents", ea("Agent & chuyên gia")],
+              ["sessions", ea("Phiên đăng nhập")],
+              ["advanced", ea("Quyền nâng cao")],
+            ] as const
+          ).map(
+            ([id, label]) => html`<button
+              class="ea-tab ${this.detailTab === id ? "ea-tab--active" : ""}"
+              type="button"
+              @click=${() => (this.detailTab = id)}
+            >
+              ${label}
+            </button>`,
+          )}
+        </nav>
         ${this.detailLoading
-          ? html`<div class="ea-loading">Đang tải tài khoản…</div>`
-          : html`
-              <form
-                class="ea-form-grid"
-                @input=${() => (this.drawerDirty = true)}
-                @change=${() => (this.drawerDirty = true)}
-                @submit=${(event: SubmitEvent) => void this.saveDetail(event)}
-              >
-                <label class="ea-field ea-form-grid__full">
-                  Tên hiển thị
-                  <input
-                    class="ea-input"
-                    name="displayName"
-                    .value=${account.displayName}
-                    required
-                  />
-                </label>
-                <label class="ea-field">
-                  Role
-                  <select class="ea-select" name="role" .value=${account.role}>
-                    <option value="employee">Employee</option>
-                    <option value="administrator">Administrator</option>
-                  </select>
-                </label>
-                <label class="ea-field">
-                  Access preset
-                  <select
-                    class="ea-select"
-                    name="accessPresetKey"
-                    .value=${account.accessPresetKey}
-                  >
-                    <option value="standard-coding@1">Standard Coding v1</option>
-                    <option value="none">Không cấp preset</option>
-                  </select>
-                </label>
-                <label class="ea-switch-row">
-                  <span>Đang hoạt động</span>
-                  <input name="enabled" type="checkbox" .checked=${account.enabled} />
-                </label>
-                <label class="ea-switch-row">
-                  <span>Personal agent</span>
-                  <input
-                    name="personalAgentEnabled"
-                    type="checkbox"
-                    .checked=${account.personalAgentEnabled}
-                  />
-                </label>
-                <label class="ea-field ea-form-grid__full">
-                  Default agent
-                  <input
-                    class="ea-input"
-                    name="defaultAgentId"
-                    .value=${account.defaultAgentId ?? ""}
-                  />
-                </label>
-                <div class="ea-form-grid__full ea-stack">
-                  <div class="ea-banner">
-                    Policy revision ${account.policyRevision}. Role, trạng thái và reset mật khẩu sẽ
-                    thu hồi session phù hợp.
-                  </div>
-                  <strong>Quyền effective</strong>
-                  <div class="ea-code">${JSON.stringify(detail.effectivePolicy, null, 2)}</div>
-                  <strong>Phiên đăng nhập (${detail.sessions.length})</strong>
-                  <div class="ea-access-list">
-                    ${detail.sessions.map(
-                      (session) => html`
-                        <div class="ea-access-row">
-                          <div>
-                            <strong>${String(session.audience ?? "legacy")}</strong>
-                            <div class="ea-muted">
-                              ${formatDate(Number(session.lastSeenAt ?? 0))} ·
-                              ${session.revokedAt ? "đã thu hồi" : "đang hoạt động"}
-                            </div>
-                          </div>
-                          <button
-                            class="ea-button ea-button--danger"
-                            type="button"
-                            ?disabled=${Boolean(session.revokedAt)}
-                            @click=${() => void this.revokeSession(String(session.id ?? ""))}
-                          >
-                            Thu hồi
-                          </button>
-                        </div>
-                      `,
-                    )}
-                    ${detail.sessions.length === 0
-                      ? html`<span class="ea-muted">Không có phiên đăng nhập.</span>`
-                      : nothing}
-                  </div>
-                </div>
-                ${this.error
-                  ? html`<p class="ea-error ea-form-grid__full">${this.error}</p>`
-                  : nothing}
-                <div class="ea-form-actions ea-form-grid__full">
-                  <button
-                    class="ea-button ea-button--danger"
-                    type="button"
-                    @click=${() => void this.resetPassword()}
-                  >
-                    Reset mật khẩu
-                  </button>
-                  <button
-                    class="ea-button ea-button--primary"
-                    type="submit"
-                    ?disabled=${this.saving}
-                  >
-                    ${this.saving ? "Đang lưu…" : "Lưu thay đổi"}
-                  </button>
-                </div>
-              </form>
-            `}
+          ? html`<div class="ea-loading">${ea("Đang tải tài khoản…")}</div>`
+          : this.detailTab === "info"
+            ? renderInfo()
+            : this.detailTab === "agents"
+              ? renderAgents()
+              : this.detailTab === "sessions"
+                ? renderSessions()
+                : renderAdvanced()}
       </openclaw-enterprise-admin-dialog>
     `;
   }
@@ -512,114 +931,117 @@ export class EnterpriseAdminAccountsPage extends OpenClawLightDomElement {
       <section class="ea-page">
         <header class="ea-page-header">
           <div>
-            <h1>Quản lý tài khoản</h1>
-            <p>${this.pageInfo.total} tài khoản · quyền truy cập và phiên đăng nhập Enterprise</p>
+            <h1>${ea("Quản lý tài khoản")}</h1>
+            <p>${eaa("accountListSummary", { count: String(this.pageInfo.total) })}</p>
           </div>
           <button
             class="ea-button ea-button--primary"
             type="button"
-            @click=${() => {
-              this.error = "";
-              this.createOpen = true;
-            }}
+            @click=${() => this.openCreateDialog()}
           >
-            ${icons.plus} Tạo tài khoản
+            ${icons.plus} ${ea("Tạo tài khoản")}
           </button>
         </header>
         <div class="ea-toolbar">
           <input
             class="ea-input"
             type="search"
-            placeholder="Tìm tên hoặc username…"
-            aria-label="Tìm tài khoản"
+            placeholder=${ea("Tìm tên hoặc username…")}
+            aria-label=${ea("Tìm tài khoản")}
             @input=${(event: Event) => {
-              this.query = (event.currentTarget as HTMLInputElement).value;
+              this.query = eventValue(event);
               this.scheduleLoad();
             }}
           />
           <select
             class="ea-select"
-            aria-label="Lọc role"
+            aria-label=${ea("Lọc role")}
             @change=${(event: Event) => {
-              this.roleFilter = (event.currentTarget as HTMLSelectElement).value;
+              this.roleFilter = eventValue(event);
               this.resetAndLoad();
             }}
           >
-            <option value="">Tất cả role</option>
-            <option value="administrator">Administrator</option>
-            <option value="employee">Employee</option>
+            <option value="">${ea("Tất cả role")}</option>
+            <option value="administrator">${ea("Administrator")}</option>
+            <option value="employee">${ea("Employee")}</option>
           </select>
           <select
             class="ea-select"
-            aria-label="Lọc trạng thái"
+            aria-label=${ea("Lọc trạng thái")}
             @change=${(event: Event) => {
-              this.status = (event.currentTarget as HTMLSelectElement).value;
+              this.status = eventValue(event);
               this.resetAndLoad();
             }}
           >
-            <option value="">Tất cả trạng thái</option>
-            <option value="enabled">Đang hoạt động</option>
-            <option value="disabled">Đã khóa</option>
+            <option value="">${ea("Tất cả trạng thái")}</option>
+            <option value="enabled">${ea("Đang hoạt động")}</option>
+            <option value="disabled">${ea("Đã khóa")}</option>
           </select>
           <select
             class="ea-select"
-            aria-label="Lọc preset"
+            aria-label=${ea("Lọc preset")}
             @change=${(event: Event) => {
-              this.preset = (event.currentTarget as HTMLSelectElement).value;
+              this.preset = eventValue(event);
               this.resetAndLoad();
             }}
           >
-            <option value="">Tất cả preset</option>
-            <option value="standard-coding@1">Standard Coding v1</option>
-            <option value="none">Không có preset</option>
+            <option value="">${ea("Tất cả preset")}</option>
+            ${this.accessPresets.map(
+              (preset) =>
+                html`<option value=${preset.key}>
+                  ${enterpriseAdminPresetLabel(preset.key, preset.label)}
+                </option>`,
+            )}
           </select>
           <select
             class="ea-select"
-            aria-label="Lọc personal agent"
+            aria-label=${ea("Lọc personal agent")}
             @change=${(event: Event) => {
-              this.personalAgent = (event.currentTarget as HTMLSelectElement).value;
+              this.personalAgent = eventValue(event);
               this.resetAndLoad();
             }}
           >
-            <option value="">Tất cả personal agent</option>
-            <option value="enabled">Đã bật personal agent</option>
-            <option value="disabled">Không có personal agent</option>
+            <option value="">${ea("Tất cả personal agent")}</option>
+            <option value="enabled">${ea("Đã bật personal agent")}</option>
+            <option value="disabled">${ea("Không có personal agent")}</option>
           </select>
           <span class="ea-spacer"></span>
           <select
             class="ea-select"
-            aria-label="Sắp xếp"
+            aria-label=${ea("Sắp xếp")}
             @change=${(event: Event) => {
-              this.sort = (event.currentTarget as HTMLSelectElement).value;
+              this.sort = eventValue(event);
               this.resetAndLoad();
             }}
           >
-            <option value="username">Username A–Z</option>
-            <option value="-updatedAt">Mới cập nhật</option>
-            <option value="-lastLoginAt">Đăng nhập gần nhất</option>
+            <option value="username">${ea("Username A–Z")}</option>
+            <option value="-updatedAt">${ea("Mới cập nhật")}</option>
+            <option value="-lastLoginAt">${ea("Đăng nhập gần nhất")}</option>
           </select>
         </div>
         <div class="ea-card ea-table-wrap">
           ${this.loading
-            ? html`<div class="ea-loading">Đang tải danh sách tài khoản…</div>`
+            ? html`<div class="ea-loading">${ea("Đang tải danh sách tài khoản…")}</div>`
             : this.error
               ? html`<div class="ea-empty">
                   <p class="ea-error">${this.error}</p>
-                  <button class="ea-button" @click=${() => void this.load()}>Thử lại</button>
+                  <button class="ea-button" @click=${() => void this.load()}>
+                    ${ea("Thử lại")}
+                  </button>
                 </div>`
               : html`
                   <table class="ea-table">
                     <thead>
                       <tr>
-                        <th><input type="checkbox" aria-label="Chọn tất cả" /></th>
-                        <th>Tài khoản</th>
-                        <th>Role</th>
-                        <th>Trạng thái</th>
-                        <th>Agent</th>
-                        <th>Access preset</th>
-                        <th>Đăng nhập cuối</th>
-                        <th>Cập nhật</th>
-                        <th class="ea-table__action">Thao tác</th>
+                        <th><input type="checkbox" aria-label=${ea("Chọn tất cả")} /></th>
+                        <th>${ea("Tài khoản")}</th>
+                        <th>${ea("Role")}</th>
+                        <th>${ea("Trạng thái")}</th>
+                        <th>${ea("Agent")}</th>
+                        <th>${ea("Access preset")}</th>
+                        <th>${ea("Đăng nhập cuối")}</th>
+                        <th>${ea("Cập nhật")}</th>
+                        <th class="ea-table__action">${ea("Thao tác")}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -627,31 +1049,42 @@ export class EnterpriseAdminAccountsPage extends OpenClawLightDomElement {
                         (account) => html`
                           <tr @click=${() => void this.openDetail(account)}>
                             <td @click=${(event: Event) => event.stopPropagation()}>
-                              <input type="checkbox" aria-label="Chọn ${account.username}" />
+                              <input
+                                type="checkbox"
+                                aria-label="${eaa("selectAccount")} ${account.username}"
+                              />
                             </td>
                             <td>
                               <strong>${account.displayName}</strong>
                               <div class="ea-muted">@${account.username}</div>
                             </td>
-                            <td>${account.role}</td>
+                            <td>
+                              ${account.role === "administrator"
+                                ? ea("Administrator")
+                                : ea("Employee")}
+                            </td>
                             <td>
                               <span
                                 class="ea-badge ${account.enabled
                                   ? "ea-badge--good"
                                   : "ea-badge--bad"}"
-                                >${account.enabled ? "Hoạt động" : "Đã khóa"}</span
+                                >${account.enabled ? ea("Hoạt động") : ea("Đã khóa")}</span
                               >
                             </td>
                             <td>
                               ${account.personalAgentEnabled
-                                ? "Personal"
+                                ? ea("Personal")
                                 : (account.defaultAgentId ?? "—")}
                             </td>
-                            <td><span class="ea-badge">${account.accessPresetKey}</span></td>
+                            <td>
+                              <span class="ea-badge">
+                                ${accessPresetLabel(account.accessPresetKey, this.accessPresets)}
+                              </span>
+                            </td>
                             <td>${formatDate(account.lastLoginAt)}</td>
                             <td>${formatDate(account.updatedAt)}</td>
                             <td class="ea-table__action">
-                              <button class="ea-button" type="button">Xem</button>
+                              <button class="ea-button" type="button">${ea("Xem")}</button>
                             </td>
                           </tr>
                         `,
@@ -659,19 +1092,19 @@ export class EnterpriseAdminAccountsPage extends OpenClawLightDomElement {
                     </tbody>
                   </table>
                   ${this.accounts.length === 0
-                    ? html`<div class="ea-empty">Không có tài khoản phù hợp.</div>`
+                    ? html`<div class="ea-empty">${ea("Không có tài khoản phù hợp.")}</div>`
                     : nothing}
                 `}
         </div>
         <div class="ea-toolbar" style="justify-content: flex-end; margin-top: 14px">
-          <span class="ea-muted">Trang ${this.previousCursors.length + 1}</span>
+          <span class="ea-muted">${ea("Trang")} ${this.previousCursors.length + 1}</span>
           <button
             class="ea-button"
             type="button"
             ?disabled=${this.previousCursors.length === 0}
             @click=${() => this.previousPage()}
           >
-            Trước
+            ${ea("Trước")}
           </button>
           <button
             class="ea-button"
@@ -679,7 +1112,7 @@ export class EnterpriseAdminAccountsPage extends OpenClawLightDomElement {
             ?disabled=${!this.pageInfo.nextCursor}
             @click=${() => this.nextPage()}
           >
-            Sau
+            ${ea("Sau")}
           </button>
         </div>
       </section>

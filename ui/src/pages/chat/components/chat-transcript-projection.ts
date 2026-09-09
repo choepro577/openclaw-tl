@@ -33,6 +33,7 @@ import {
 import { getToolTitlesVersion } from "../tool-titles.ts";
 import { renderAgentRunFrame } from "./chat-agent-run-frame.ts";
 import { renderBackgroundTasksStatusRow } from "./chat-background-tasks-status.ts";
+import { projectDelegationTimeline } from "./chat-delegation-timeline.ts";
 import { renderChatDivider, renderChatNotice } from "./chat-divider.ts";
 import { resolveMessageGroupSenderLabel } from "./chat-message-group.ts";
 import { resolveMessageReplyText } from "./chat-message-markdown.ts";
@@ -283,6 +284,7 @@ export function projectChatTranscript(
   };
   const sharedMessageRenderOptions = {
     onOpenSidebar: props.onOpenSidebar,
+    onOpenSubagents: props.backgroundTasks?.onOpenList,
     sessionKey: props.sessionKey,
     boardProvider: props.boardProvider,
     agentId: props.fullMessageAgentId,
@@ -317,6 +319,13 @@ export function projectChatTranscript(
       ...sharedMessageRenderOptions,
       showReasoning,
       showToolCalls: props.showToolCalls,
+      delegationTasks: props.delegationTasks ?? props.backgroundTasks?.tasks ?? [],
+      delegationExpanded: transcriptItems.some(
+        (parent) =>
+          parent.kind === "work-group" &&
+          expandedToolCards.get(parent.key) &&
+          parent.groups.some((group) => group.key === item.key),
+      ),
       autoExpandToolCalls: Boolean(props.autoExpandToolCalls),
       isToolMessageExpanded: (messageId: string) => expandedToolCards.get(messageId),
       onToggleToolMessageExpanded: (messageId: string, expanded?: boolean) => {
@@ -421,6 +430,9 @@ export function projectChatTranscript(
     if (item.kind === "work-group") {
       const workExpanded = expandedToolCards.get(item.key) ?? false;
       return renderWorkGroupSummary(item, {
+        sessionKey: props.sessionKey,
+        delegationTasks: props.delegationTasks,
+        onOpenSubagents: props.backgroundTasks?.onOpenList,
         expanded: workExpanded,
         onToggle: () => {
           setExpansionState(expandedToolCards, item.key, !workExpanded);
@@ -576,7 +588,7 @@ export function projectChatTranscript(
   }
   // New row keys measure expanded work immediately; existing keys keep their
   // cached height until ResizeObserver reports the changed layout.
-  const transcriptRows = transcriptItems.flatMap((item): TranscriptRow<ChatRenderItem>[] =>
+  let transcriptRows = transcriptItems.flatMap((item): TranscriptRow<ChatRenderItem>[] =>
     [{ kind: "item" as const, key: item.key, item }].concat(
       item.kind === "work-group" && expandedToolCards.get(item.key)
         ? item.groups.map((group) => ({
@@ -587,6 +599,15 @@ export function projectChatTranscript(
         : [],
     ),
   );
+  if (props.enterpriseUserPresentation && props.showToolCalls && !searchFiltering) {
+    transcriptRows = projectDelegationTimeline(
+      transcriptRows,
+      props.sessionKey,
+      props.delegationTasks ?? props.backgroundTasks?.tasks ?? [],
+      props.messages,
+      props.backgroundTasks?.onOpenList,
+    );
+  }
   const realtimeConversation = renderRealtimeTalkConversation(props);
   if (realtimeConversation !== nothing) {
     transcriptRows.push({
@@ -603,7 +624,7 @@ export function projectChatTranscript(
     });
   }
   const backgroundTasks =
-    !props.runWorking && !isEmpty && !showLoadingSkeleton
+    !props.enterpriseUserPresentation && !props.runWorking && !isEmpty && !showLoadingSkeleton
       ? renderBackgroundTasksStatusRow(props.backgroundTasks)
       : nothing;
   if (backgroundTasks !== nothing) {
@@ -642,6 +663,8 @@ export function projectChatTranscript(
     Boolean(props.loadFullAssistantMessage),
     showReasoning,
     props.showToolCalls,
+    props.backgroundTasks?.tasks,
+    props.delegationTasks,
     Boolean(props.runActive),
     Boolean(props.runWorking),
     props.startupStatus?.phase,

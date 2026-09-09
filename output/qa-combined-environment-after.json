@@ -1,0 +1,235 @@
+{
+  "capturedAt": "2026-09-04T08:10:16.241Z",
+  "routing": [
+    {
+      "id": "13ac72ef-36b7-4d38-8d04-e8679e83d08f",
+      "shared_agent_ids_json": "[]",
+      "child_run_ids_json": "[]",
+      "outcome": "local",
+      "decision_source": "ai",
+      "reason_code": "router_no_candidate",
+      "confirmation_state": "not_required",
+      "latency_ms": 3295,
+      "created_at": 1788507990718
+    },
+    {
+      "id": "f10a6e75-7238-4d3d-a4d1-e548f8476c2f",
+      "shared_agent_ids_json": "[\"enterprise-finance-specialist\"]",
+      "child_run_ids_json": "[]",
+      "outcome": "clarified",
+      "decision_source": "ai",
+      "reason_code": "handoff_confirmation_required",
+      "confirmation_state": "pending",
+      "latency_ms": 4683,
+      "created_at": 1788508026579
+    },
+    {
+      "id": "5b891539-ca16-4c32-8dfa-d2188bdcdf9a",
+      "shared_agent_ids_json": "[\"enterprise-finance-specialist\"]",
+      "child_run_ids_json": "[\"02c8ddfb-a50e-4a35-8af4-dcfd8af5c72f\"]",
+      "outcome": "delegated",
+      "decision_source": "ai",
+      "reason_code": "delegate_started",
+      "confirmation_state": "approved",
+      "latency_ms": 61,
+      "created_at": 1788508069139
+    },
+    {
+      "id": "fb362ac2-b883-4850-ab89-410be6b98772",
+      "shared_agent_ids_json": "[\"enterprise-finance-specialist\"]",
+      "child_run_ids_json": "[\"02c8ddfb-a50e-4a35-8af4-dcfd8af5c72f\"]",
+      "outcome": "blocked",
+      "decision_source": "system",
+      "reason_code": "mutation_confirmation_expired",
+      "confirmation_state": "expired",
+      "latency_ms": null,
+      "created_at": 1788508083242
+    },
+    {
+      "id": "0cb716e8-3050-4d0b-bd98-c3e597e5fe94",
+      "shared_agent_ids_json": "[\"enterprise-finance-specialist\"]",
+      "child_run_ids_json": "[]",
+      "outcome": "clarified",
+      "decision_source": "ai",
+      "reason_code": "handoff_confirmation_required",
+      "confirmation_state": "pending",
+      "latency_ms": 18980,
+      "created_at": 1788508211560
+    },
+    {
+      "id": "616f3cd5-2d3f-47d9-9a09-aa1563e2bb4a",
+      "shared_agent_ids_json": "[\"enterprise-finance-specialist\",\"enterprise-contract-specialist\"]",
+      "child_run_ids_json": "[]",
+      "outcome": "clarified",
+      "decision_source": "ai",
+      "reason_code": "handoff_confirmation_required",
+      "confirmation_state": "pending",
+      "latency_ms": 6294,
+      "created_at": 1788508336889
+    },
+    {
+      "id": "46aaae50-d1cb-4c5c-b3e3-17d8645f1c90",
+      "shared_agent_ids_json": "[\"enterprise-finance-specialist\",\"enterprise-contract-specialist\"]",
+      "child_run_ids_json": "[]",
+      "outcome": "clarified",
+      "decision_source": "ai",
+      "reason_code": "required_input_missing:input_a759abfedeed",
+      "confirmation_state": "pending",
+      "latency_ms": 6415,
+      "created_at": 1788508396509
+    },
+    {
+      "id": "c5d648cb-5c39-4296-808c-d99aef8c093f",
+      "shared_agent_ids_json": "[\"enterprise-finance-specialist\",\"enterprise-contract-specialist\"]",
+      "child_run_ids_json": "[]",
+      "outcome": "clarified",
+      "decision_source": "ai",
+      "reason_code": "handoff_confirmation_required",
+      "confirmation_state": "pending",
+      "latency_ms": 5725,
+      "created_at": 1788508442866
+    },
+    {
+      "id": "b3cc5501-da4c-482e-93b5-9e30709f0947",
+      "shared_agent_ids_json": "[]",
+      "child_run_ids_json": "[]",
+      "outcome": "local",
+      "decision_source": "ai",
+      "reason_code": "router_no_candidate",
+      "confirmation_state": "not_required",
+      "latency_ms": 3052,
+      "created_at": 1788508714304
+    },
+    {
+      "id": "9211065d-0896-43fe-9d49-a84ae6d71882",
+      "shared_agent_ids_json": "[]",
+      "child_run_ids_json": "[]",
+      "outcome": "local",
+      "decision_source": "ai",
+      "reason_code": "router_no_candidate",
+      "confirmation_state": "not_required",
+      "latency_ms": 3300,
+      "created_at": 1788508814930
+    },
+    {
+      "id": "326f715d-7b71-4b54-9d31-80042e817f11",
+      "shared_agent_ids_json": "[]",
+      "child_run_ids_json": "[]",
+      "outcome": "local",
+      "decision_source": "ai",
+      "reason_code": "router_no_candidate",
+      "confirmation_state": "not_required",
+      "latency_ms": 2601,
+      "created_at": 1788508880441
+    },
+    {
+      "id": "597c1fd2-b337-4f3a-999c-2181aacc0a00",
+      "shared_agent_ids_json": "[\"enterprise-contract-specialist\"]",
+      "child_run_ids_json": "[]",
+      "outcome": "clarified",
+      "decision_source": "ai",
+      "reason_code": "required_input_missing:input_a759abfedeed",
+      "confirmation_state": "not_required",
+      "latency_ms": 5276,
+      "created_at": 1788508975871
+    },
+    {
+      "id": "888ca8c8-9c64-4144-930b-e1f319efe39f",
+      "shared_agent_ids_json": "[]",
+      "child_run_ids_json": "[]",
+      "outcome": "local",
+      "decision_source": "ai",
+      "reason_code": "router_no_candidate",
+      "confirmation_state": "not_required",
+      "latency_ms": 4520,
+      "created_at": 1788509011051
+    },
+    {
+      "id": "b8d36efe-fdec-4e82-9f85-9620d5ae3bf0",
+      "shared_agent_ids_json": "[]",
+      "child_run_ids_json": "[]",
+      "outcome": "local",
+      "decision_source": "ai",
+      "reason_code": "router_no_candidate",
+      "confirmation_state": "not_required",
+      "latency_ms": 2756,
+      "created_at": 1788509069824
+    }
+  ],
+  "publications": [
+    {
+      "name": "[KIỂM THỬ] CNTT & An toàn thông tin",
+      "active_publication_id": "094dafcd-2713-4c0d-826a-cd645390cb27",
+      "egress_policy": "external_allowed",
+      "publication_number": 2,
+      "vector_status": "ready",
+      "updated_at": 1788506165191
+    },
+    {
+      "name": "[KIỂM THỬ] Dự án & Vận hành",
+      "active_publication_id": "0f4ee7c5-d421-4383-9166-6abd5242cef9",
+      "egress_policy": "external_allowed",
+      "publication_number": 3,
+      "vector_status": "ready",
+      "updated_at": 1788506267375
+    },
+    {
+      "name": "[KIỂM THỬ] Nhân sự & Onboarding",
+      "active_publication_id": "b3e8dbbc-012d-4df3-9049-7bf768861e34",
+      "egress_policy": "external_allowed",
+      "publication_number": 3,
+      "vector_status": "ready",
+      "updated_at": 1788506190584
+    },
+    {
+      "name": "[KIỂM THỬ] Pháp chế & Mua sắm",
+      "active_publication_id": "f746a0fb-083b-4114-99ec-ab202fdb4ff8",
+      "egress_policy": "external_allowed",
+      "publication_number": 2,
+      "vector_status": "ready",
+      "updated_at": 1788505995879
+    },
+    {
+      "name": "[KIỂM THỬ] Sản phẩm & Chăm sóc khách hàng",
+      "active_publication_id": "feeba391-8313-43bd-bed3-1de6a910a4bf",
+      "egress_policy": "external_allowed",
+      "publication_number": 2,
+      "vector_status": "ready",
+      "updated_at": 1788506242229
+    },
+    {
+      "name": "[KIỂM THỬ] Tài chính & Chi phí",
+      "active_publication_id": "b1c002af-74a6-4790-9abf-4e99b3809965",
+      "egress_policy": "external_allowed",
+      "publication_number": 2,
+      "vector_status": "ready",
+      "updated_at": 1788506214938
+    }
+  ],
+  "bindings": [
+    {
+      "zone_id": "0ee8b68b-8b2d-46db-87c2-d7c624abd7f9",
+      "agent_resource_key": "agent:personal:68264167-a2d8-48b1-a00a-d31a06a7fd92"
+    },
+    {
+      "zone_id": "26f44d58-4a43-46f2-85a7-09f10c9c833d",
+      "agent_resource_key": "agent:personal:68264167-a2d8-48b1-a00a-d31a06a7fd92"
+    },
+    {
+      "zone_id": "58f2e858-97bf-4953-965f-2637158b0169",
+      "agent_resource_key": "agent:personal:68264167-a2d8-48b1-a00a-d31a06a7fd92"
+    },
+    {
+      "zone_id": "766b3227-d307-4c04-9c47-4e79d392ea2f",
+      "agent_resource_key": "agent:personal:68264167-a2d8-48b1-a00a-d31a06a7fd92"
+    },
+    {
+      "zone_id": "dab5a778-619c-424d-9c60-c67d19634bda",
+      "agent_resource_key": "agent:personal:68264167-a2d8-48b1-a00a-d31a06a7fd92"
+    },
+    {
+      "zone_id": "ec9cfb6f-7eb6-49e1-bcf0-7d671ed199d5",
+      "agent_resource_key": "agent:personal:68264167-a2d8-48b1-a00a-d31a06a7fd92"
+    }
+  ]
+}

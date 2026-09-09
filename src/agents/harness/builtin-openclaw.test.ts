@@ -134,6 +134,20 @@ describe("createOpenClawAgentHarness", () => {
     expect(runEmbeddedAttempt).not.toHaveBeenCalled();
   });
 
+  it("retains the private per-request guard during settled-turn finalization", async () => {
+    const resolvePrivateModelContext = vi.fn(async () => "private source");
+    const admittedRunContext = { operationalRunInstance: { runId: "private-finalization" } };
+    await createOpenClawAgentHarness().finalizeSettledTurn?.({
+      attempt: { resolvePrivateModelContext, admittedRunContext } as never,
+      settledAttempt: {} as never,
+    });
+
+    expect(runEmbeddedAttempt.mock.calls[0]?.[0]).toEqual(
+      expect.objectContaining({ resolvePrivateModelContext, admittedRunContext }),
+    );
+    expect(resolvePrivateModelContext).not.toHaveBeenCalled();
+  });
+
   it("rejects harness-owned isolated authorization", async () => {
     const params = {
       authorization: {

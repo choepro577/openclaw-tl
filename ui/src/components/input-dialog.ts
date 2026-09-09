@@ -1,6 +1,7 @@
 // Control UI helper presents Promise-based text input without relying on a native prompt bridge.
 import { html, nothing, render } from "lit";
 import { t } from "../i18n/index.ts";
+import { copyToClipboard } from "../lib/clipboard.ts";
 import { formatUiError } from "../lib/format-error.ts";
 import "./modal-dialog.ts";
 
@@ -8,6 +9,9 @@ type InputDialogOptions = {
   title: string;
   label?: string;
   defaultValue?: string;
+  /** Optional source value exposed through a dedicated copy affordance. */
+  copyValue?: string;
+  copyLabel?: string;
   submitLabel?: string;
   cancelLabel?: string;
   signal?: AbortSignal;
@@ -42,6 +46,7 @@ function presentInputDialog(options: InputDialogOptions): Promise<string | null>
     let settled = false;
     let submitting = false;
     let failure: string | null = null;
+    let copyState: "idle" | "copying" | "copied" | "failed" = "idle";
     const entryValue = (raw: string) => (options.requireValue === true ? raw.trim() : raw);
     const submitBlocked = (raw: string) => {
       const value = entryValue(raw);
@@ -76,6 +81,16 @@ function presentInputDialog(options: InputDialogOptions): Promise<string | null>
         paint();
       }
     };
+
+    async function handleCopy(): Promise<void> {
+      if (options.copyValue === undefined || submitting || copyState === "copying") return;
+      copyState = "copying";
+      paint();
+      const copied = await copyToClipboard(options.copyValue);
+      if (settled) return;
+      copyState = copied ? "copied" : "failed";
+      paint();
+    }
 
     async function handleSubmit(event: Event) {
       event.preventDefault();
@@ -159,6 +174,19 @@ function presentInputDialog(options: InputDialogOptions): Promise<string | null>
                   autofocus
                 />
               </label>
+              ${options.copyValue !== undefined
+                ? html`<button
+                    type="button"
+                    class="btn"
+                    data-input-dialog-copy
+                    ?disabled=${submitting || copyState === "copying"}
+                    @click=${handleCopy}
+                  >
+                    ${copyState === "copied" || copyState === "failed"
+                      ? t(copyState === "copied" ? "common.copied" : "common.copyFailed")
+                      : (options.copyLabel ?? t("common.copy"))}
+                  </button>`
+                : nothing}
               ${failure
                 ? html`<div class="exec-approval-error" role="alert">${failure}</div>`
                 : nothing}

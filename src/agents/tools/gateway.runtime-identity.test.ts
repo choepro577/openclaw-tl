@@ -8,15 +8,23 @@ import {
 } from "../../gateway/agent-runtime-identity-token.js";
 import { resolveExecutionIdentitySpawnFacts } from "../../gateway/agent-turn/agent-run-execution-lineage.js";
 import type { CallGatewayOptions } from "../../gateway/call.js";
+import { ExecApprovalManager } from "../../gateway/exec-approval-manager.js";
 import {
   mintMessageActionTurnCapability,
   revokeMessageActionTurnCapability,
 } from "../../gateway/message-action-turn-capability.js";
+import { createGatewayMethodRegistry } from "../../gateway/methods/registry.js";
+import { createPluginApprovalHandlers } from "../../gateway/server-methods/plugin-approval.js";
+import type {
+  GatewayRequestContext,
+  GatewayRequestHandler,
+} from "../../gateway/server-methods/types.js";
 import {
   claimAgentRunDelegatedAuthority,
   releaseAgentRunDelegatedAuthority,
   validateAgentRunDelegatedAuthority,
 } from "../../infra/agent-run-registry.js";
+import type { PluginApprovalRequestPayload } from "../../infra/plugin-approvals.js";
 import { createOperationalRunInstanceRef } from "../admitted-run-context.js";
 import {
   withGatewayToolApprovalOwner,
@@ -74,6 +82,153 @@ describe("gateway tool runtime identity", () => {
       revokeMessageActionTurnCapability(token);
     }
   });
+
+  it("routes admitted approval requests through the owning accounts-mode gateway", async () => {
+    mocks.callGateway.mockRejectedValue(new Error("unauthorized: enterprise_session_invalid"));
+    const handler: GatewayRequestHandler = ({ client, respond }) => {
+      expect(client?.internal?.agentRuntimeIdentity).toMatchObject({
+        agentId: "hrm",
+        approvalOwnerPluginId: "codex",
+      });
+      expect(client?.connect.scopes).toEqual(["operator.approvals"]);
+      respond(true, { id: "approval-1", status: "accepted" });
+    };
+    const registry = createGatewayMethodRegistry([
+      {
+        name: "plugin.approval.request",
+        owner: { kind: "core", area: "approvals" },
+        scope: "operator.approvals",
+        handler,
+      },
+    ]);
+    const context = {
+      getRuntimeConfig: () => ({
+        agents: { list: [{ id: "hrm" }] },
+        gateway: { auth: { mode: "accounts" } },
+      }),
+      getGatewayMethodRegistry: () => registry,
+      validateAgentRuntimeApprovalAuthority: createAgentRuntimeApprovalAuthorityValidator(),
+    } as GatewayRequestContext;
+    await withActiveGatewayToolCallerIdentity(
+      {
+        agentId: "hrm",
+        sessionKey: "agent:hrm:subagent:lookup",
+        operationalRunInstance: createOperationalRunInstanceRef("hrm-lookup"),
+        gatewayContextResolver: () => context,
+      },
+      async () => {
+        await expect(
+          withGatewayToolApprovalOwner("codex", () =>
+            callGatewayTool("plugin.approval.request", {}, { request: { title: "Read skill" } }),
+          ),
+        ).resolves.toMatchObject({ id: "approval-1" });
+      },
+    );
+    expect(mocks.callGateway).not.toHaveBeenCalled();
+  });
+
+  it("keeps approval decisions scoped to the requesting live run", async () => {
+    const manager = new ExecApprovalManager<PluginApprovalRequestPayload>({
+      approvalKind: "plugin",
+      validateAgentRuntimeDelegatedAuthority: validateAgentRunDelegatedAuthority,
+    });
+    const handlers = createPluginApprovalHandlers(manager);
+    const registry = createGatewayMethodRegistry(
+      Object.entries(handlers).map(([name, handler]) => ({
+        name,
+        handler,
+        owner: { kind: "core" as const, area: "approvals" },
+        scope: "operator.approvals" as const,
+      })),
+    );
+    const validateAuthority = createAgentRuntimeApprovalAuthorityValidator();
+    let active = true;
+    const context = {
+      getRuntimeConfig: () => ({
+        agents: { list: [{ id: "hrm" }] },
+        gateway: { auth: { mode: "accounts" } },
+      }),
+      getGatewayMethodRegistry: () => registry,
+      validateAgentRuntimeApprovalAuthority: (identity) => active && validateAuthority(identity),
+      pluginApprovalManager: manager,
+      broadcast: vi.fn(),
+      hasExecApprovalClients: () => true,
+      logGateway: { error: vi.fn(), warn: vi.fn(), info: vi.fn(), debug: vi.fn() },
+    } as GatewayRequestContext;
+    const caller = {
+      agentId: "hrm",
+      sessionKey: "agent:hrm:subagent:lookup",
+      operationalRunInstance: createOperationalRunInstanceRef("hrm-lookup"),
+      gatewayContextResolver: () => context,
+    };
+    await withActiveGatewayToolCallerIdentity(caller, async () => {
+      const approval = await withGatewayToolApprovalOwner("codex", () =>
+        callGatewayTool<{ id: string }>(
+          "plugin.approval.request",
+          {},
+          {
+            title: "Read skill",
+            description: "Read the granted HR skill",
+            twoPhase: true,
+            timeoutMs: 10000,
+          },
+        ),
+      );
+      try {
+        expect(manager.getSnapshot(approval.id)?.request).toMatchObject({
+          agentId: "hrm",
+          pluginId: "codex",
+        });
+        await withActiveGatewayToolCallerIdentity(
+          { ...caller, operationalRunInstance: createOperationalRunInstanceRef("other-run") },
+          async () => {
+            await expect(
+              callGatewayTool("plugin.approval.waitDecision", {}, { id: approval.id }),
+            ).rejects.toThrow("does not belong");
+          },
+        );
+        active = false;
+        await expect(
+          callGatewayTool("plugin.approval.waitDecision", {}, { id: approval.id }),
+        ).rejects.toThrow("active agent runtime approval authority required");
+        active = true;
+        expect(manager.resolve(approval.id, "deny")).toBe(true);
+        await expect(
+          callGatewayTool("plugin.approval.waitDecision", {}, { id: approval.id }),
+        ).resolves.toMatchObject({ decision: "deny" });
+      } finally {
+        manager.resolve(approval.id, "deny");
+      }
+    });
+    expect(mocks.callGateway).not.toHaveBeenCalled();
+  });
+
+  it.each(["closed-context", "invalid-token"])(
+    "rejects %s without falling back to the network",
+    async (failure) => {
+      await withActiveGatewayToolCallerIdentity(
+        {
+          agentId: "hrm",
+          sessionKey: "agent:hrm:subagent:lookup",
+          operationalRunInstance: createOperationalRunInstanceRef("hrm-lookup"),
+          gatewayContextResolver: () =>
+            failure === "closed-context"
+              ? undefined
+              : ({
+                  validateAgentRuntimeApprovalAuthority:
+                    createAgentRuntimeApprovalAuthorityValidator(),
+                } as GatewayRequestContext),
+          ...(failure === "invalid-token" ? { signedAgentRuntimeIdentityToken: "invalid" } : {}),
+        },
+        async () => {
+          await expect(callGatewayTool("plugin.approval.request", {}, {})).rejects.toThrow(
+            "active agent runtime approval authority required",
+          );
+        },
+      );
+      expect(mocks.callGateway).not.toHaveBeenCalled();
+    },
+  );
 
   it("omits runtime identity outside trusted agent context", async () => {
     mocks.callGateway.mockResolvedValueOnce({ id: "job-1" });

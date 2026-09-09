@@ -20,6 +20,15 @@ each entry shape: `defineToolPlugin`, `definePluginEntry`,
 
 ## Package entries
 
+### Published gateway config contract
+
+`openclaw/plugin-sdk/gateway-config-runtime` retains `resolveGatewayPort` for
+published external packages such as `@openclaw/diffs@2026.8.1`. It delegates to
+the same canonical resolver exported by `openclaw/plugin-sdk/core`, including
+environment port precedence. New plugins should import from `core`; the narrow
+deprecated entry can be removed after this published release leaves the supported
+plugin compatibility window. Bundled plugins use the current SDK entrypoints.
+
 Installed plugins point `package.json` `openclaw` fields at both source and
 built entries:
 

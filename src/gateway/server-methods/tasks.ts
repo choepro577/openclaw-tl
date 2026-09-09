@@ -1,3 +1,4 @@
+import { asOptionalRecord } from "@openclaw/normalization-core/record-coerce";
 // Task gateway methods expose detached task list/get/cancel operations with
 // bounded public summaries over the runtime task registry.
 import { normalizeOptionalString } from "@openclaw/normalization-core/string-coerce";
@@ -15,17 +16,30 @@ import {
   dismissSubagentCompletionDelivery,
   retrySubagentCompletionDelivery,
 } from "../../agents/subagents/completion/subagent-completion-delivery.js";
+import {
+  isToolCallContentType,
+  isToolResultContentType,
+  resolveToolUseId,
+} from "../../chat/tool-content.js";
 import { canonicalizeMainSessionAlias } from "../../config/sessions.js";
+import type { OpenClawConfig } from "../../config/types.openclaw.js";
 import { getTaskById, listTaskRecordPage } from "../../tasks/runtime-internal.js";
-import type { TaskStatus } from "../../tasks/task-registry.types.js";
+import { getTaskLiveToolActivitySnapshot } from "../../tasks/task-registry-activity.js";
+import type { TaskLiveToolActivity } from "../../tasks/task-registry.process-state.js";
+import type { TaskRecord, TaskStatus } from "../../tasks/task-registry.types.js";
+import { resolveEffectiveChatHistoryMaxChars } from "../chat-display-projection.js";
+import { getMaxChatHistoryMessagesBytes } from "../server-constants.js";
 import { resolveRequestedSessionAgentId } from "../session-request-agent.js";
+import { loadGatewaySessionEntryReadOnly, resolveSessionModelRef } from "../session-utils.js";
 import { canAccessTaskRequesterSession } from "../task-session-access.js";
+import { readChatHistoryPage } from "./chat-history-pages.js";
 import { mapTaskSummary } from "./task-summary.js";
 import type { GatewayRequestHandlers } from "./types.js";
 import { assertValidParams } from "./validation.js";
 
 const DEFAULT_TASKS_LIST_LIMIT = 100;
 const MAX_TASKS_LIST_LIMIT = 500;
+const TASK_TOOL_HISTORY_LIMIT = 200;
 
 type TaskLedgerStatus = TaskSummary["status"];
 
@@ -57,6 +71,118 @@ function parseCursor(cursor: string | undefined): number | null {
   }
   const parsed = Number(cursor);
   return Number.isSafeInteger(parsed) ? parsed : null;
+}
+
+function isTaskToolMessage(message: unknown): boolean {
+  const record = asOptionalRecord(message);
+  const role = normalizeOptionalString(record?.role)?.toLowerCase();
+  if (role === "tool" || role === "function" || Array.isArray(record?.tool_calls)) {
+    return true;
+  }
+  return Array.isArray(record?.content)
+    ? record.content.some((value) => {
+        const block = asOptionalRecord(value);
+        return (
+          isToolCallContentType(block?.type) ||
+          isToolResultContentType(block?.type) ||
+          (typeof block?.name === "string" &&
+            (block.arguments !== undefined ||
+              block.args !== undefined ||
+              block.input !== undefined))
+        );
+      })
+    : false;
+}
+
+function withoutLiveToolCalls(message: unknown, liveIds: ReadonlySet<string>): unknown | null {
+  const record = asOptionalRecord(message);
+  if (!record) {
+    return message;
+  }
+  const topLevelId = resolveToolUseId({ ...record, id: undefined });
+  if (topLevelId && liveIds.has(topLevelId)) {
+    return null;
+  }
+  if (!Array.isArray(record.content)) {
+    return message;
+  }
+  const content = record.content.filter((value) => {
+    const block = asOptionalRecord(value);
+    if (!block || (!isToolCallContentType(block.type) && !isToolResultContentType(block.type))) {
+      return true;
+    }
+    const id = resolveToolUseId(block) ?? topLevelId;
+    return !id || !liveIds.has(id);
+  });
+  return content.length === record.content.length
+    ? message
+    : content.length > 0
+      ? { ...record, content }
+      : null;
+}
+
+function liveToolMessage(task: TaskRecord, tool: TaskLiveToolActivity): Record<string, unknown> {
+  return {
+    role: "assistant",
+    runId: task.runId,
+    toolCallId: tool.toolCallId,
+    timestamp: tool.startedAt,
+    content: [
+      {
+        type: "toolcall",
+        id: tool.toolCallId,
+        name: tool.name,
+        arguments: tool.args ?? {},
+      },
+      ...(tool.resultReceived
+        ? [
+            {
+              type: "toolresult",
+              id: tool.toolCallId,
+              name: tool.name,
+              text: tool.output ?? "",
+              ...(tool.isError === undefined ? {} : { isError: tool.isError }),
+            },
+          ]
+        : []),
+    ],
+    __openclawToolStreamLive: true,
+    __openclawToolStreamResultReceived: tool.resultReceived,
+  };
+}
+
+async function readTaskToolMessages(task: TaskRecord, cfg: OpenClawConfig): Promise<unknown[]> {
+  const childSessionKey = normalizeOptionalString(task.childSessionKey);
+  if (task.runtime !== "subagent" || !childSessionKey) {
+    return [];
+  }
+  const loaded = loadGatewaySessionEntryReadOnly(childSessionKey, {
+    cfg,
+    includeStoreChildEntries: true,
+  });
+  const model = resolveSessionModelRef(cfg, loaded.entry, loaded.agentId);
+  const page = await readChatHistoryPage({
+    entry: loaded.entry,
+    provider: model.provider,
+    sessionId: loaded.entry?.sessionId,
+    storePath: loaded.storePath,
+    sessionAgentId: loaded.agentId,
+    canonicalKey: loaded.canonicalKey,
+    max: TASK_TOOL_HISTORY_LIMIT,
+    maxHistoryBytes: getMaxChatHistoryMessagesBytes(),
+    effectiveMaxChars: resolveEffectiveChatHistoryMaxChars(cfg),
+    offset: undefined,
+    messageId: undefined,
+  });
+  const liveTools = getTaskLiveToolActivitySnapshot(task.taskId);
+  const liveIds = new Set(liveTools.map((tool) => tool.toolCallId));
+  return [
+    ...page.messages
+      .filter(isTaskToolMessage)
+      .map((message) => withoutLiveToolCalls(message, liveIds))
+      .filter((message): message is unknown => message !== null),
+    ...liveTools.map((tool) => liveToolMessage(task, tool)),
+  ].slice(-TASK_TOOL_HISTORY_LIMIT);
 }
 
 // Control UI task methods expose the stable gateway protocol shape; helpers
@@ -117,16 +243,14 @@ export const tasksHandlers: GatewayRequestHandlers = {
       ...(page.hasMore ? { nextCursor: String(nextOffset) } : {}),
     });
   },
-  "tasks.get": ({ params, respond, context, client }) => {
+  "tasks.get": async ({ params, respond, context, client }) => {
     if (!assertValidParams(params, validateTasksGetParams, "tasks.get", respond)) {
       return;
     }
     const taskId = params.taskId;
     const task = getTaskById(taskId);
-    if (
-      !task ||
-      !canAccessTaskRequesterSession({ cfg: context.getRuntimeConfig(), client, task })
-    ) {
+    const cfg = context.getRuntimeConfig();
+    if (!task || !canAccessTaskRequesterSession({ cfg, client, task })) {
       respond(
         false,
         undefined,
@@ -136,7 +260,10 @@ export const tasksHandlers: GatewayRequestHandlers = {
     }
     // The potentially longer task input is lookup-only. List and event payloads
     // stay compact while detail views can show the operator what was requested.
-    respond(true, { task: mapTaskSummary(task, { includePrompt: true }) });
+    respond(true, {
+      task: mapTaskSummary(task, { includePrompt: true }),
+      toolMessages: await readTaskToolMessages(task, cfg),
+    });
   },
   "tasks.cancel": async ({ params, respond, context, client }) => {
     if (!assertValidParams(params, validateTasksCancelParams, "tasks.cancel", respond)) {

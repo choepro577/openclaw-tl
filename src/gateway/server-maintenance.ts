@@ -58,6 +58,7 @@ import { tryResolveSessionCompatibilityOwnerAgentId } from "./session-request-ag
 // stage-before-row-commit window.
 const DELIVERY_QUEUE_MEDIA_GC_INTERVAL_MS = 60 * 60_000;
 const TELEMETRY_MAINTENANCE_INTERVAL_MS = 5 * 60_000;
+const ENTERPRISE_DELEGATION_EVENT_GC_INTERVAL_MS = 24 * 60 * 60_000;
 
 export function startGatewayMaintenanceTimers(params: {
   broadcast: (
@@ -97,6 +98,10 @@ export function startGatewayMaintenanceTimers(params: {
   runWorktreeGc?: () => Promise<unknown>;
   runDeliveryQueueMediaGc?: () => Promise<unknown>;
   runManagedOutgoingMediaGc?: () => Promise<unknown>;
+  runEnterpriseDelegationEventGc?: () => Promise<{
+    deletedCount: number;
+    retentionDays: number;
+  }>;
   enableSkillCurator?: boolean;
   runSkillCollectionReconcile?: () => Promise<unknown>;
 }): {
@@ -226,6 +231,44 @@ export function startGatewayMaintenanceTimers(params: {
   };
   void performDevicePairSetupCompletionGc(Date.now());
 
+  let nextEnterpriseDelegationEventGcAtMs = 0;
+  let enterpriseDelegationEventGcInFlight: Promise<void> | null = null;
+  const performEnterpriseDelegationEventGc = (nowMs: number) => {
+    if (
+      params.getRuntimeConfig().enterprise?.enabled !== true ||
+      nowMs < nextEnterpriseDelegationEventGcAtMs ||
+      enterpriseDelegationEventGcInFlight
+    ) {
+      return enterpriseDelegationEventGcInFlight;
+    }
+    nextEnterpriseDelegationEventGcAtMs = nowMs + ENTERPRISE_DELEGATION_EVENT_GC_INTERVAL_MS;
+    const runEnterpriseDelegationEventGc =
+      params.runEnterpriseDelegationEventGc ??
+      (async () => {
+        const { pruneEnterpriseDelegationEvents, readEnterpriseDelegationPolicy } =
+          await import("../enterprise/delegation/delegation-store.js");
+        const retentionDays = readEnterpriseDelegationPolicy().eventRetentionDays;
+        return {
+          deletedCount: pruneEnterpriseDelegationEvents(retentionDays),
+          retentionDays,
+        };
+      });
+    enterpriseDelegationEventGcInFlight = runEnterpriseDelegationEventGc()
+      .then(({ deletedCount, retentionDays }) => {
+        params.logHealth.info(
+          `enterprise delegation event cleanup completed: deleted=${deletedCount} retentionDays=${retentionDays}`,
+        );
+      })
+      .catch((error: unknown) => {
+        params.logHealth.error(`enterprise delegation event cleanup failed: ${formatError(error)}`);
+      })
+      .finally(() => {
+        enterpriseDelegationEventGcInFlight = null;
+      });
+    return enterpriseDelegationEventGcInFlight;
+  };
+  void performEnterpriseDelegationEventGc(Date.now());
+
   let skillCuratorCleanup = () => {};
   if (params.enableSkillCurator) {
     skillCuratorCleanup = startSkillCollectionMaintenance({
@@ -249,6 +292,7 @@ export function startGatewayMaintenanceTimers(params: {
     const AGENT_RUN_SEQ_MAX = 10_000;
     const now = Date.now();
     void performDevicePairSetupCompletionGc(now);
+    void performEnterpriseDelegationEventGc(now);
     if (now - deliveryQueueMediaGcStartedAtMs >= DELIVERY_QUEUE_MEDIA_GC_INTERVAL_MS) {
       void performDeliveryQueueMediaGc();
     }

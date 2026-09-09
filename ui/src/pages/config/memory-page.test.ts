@@ -79,7 +79,7 @@ describe("MemorySettingsPage engine slot", () => {
             .querySelector("wa-radio-group.settings-segmented")
             ?.querySelectorAll("wa-radio") ?? []),
         ].map((radio) => radio.textContent?.trim()),
-      ).toEqual(["OpenClaw Memory", "Memory LanceDB", "Off"]);
+      ).toEqual(["MAAP Memory", "Memory LanceDB", "Off"]);
     } finally {
       element.remove();
     }
@@ -830,26 +830,14 @@ describe("MemorySettingsPage tab routing", () => {
 });
 
 describe("MemorySettingsPage dreaming support", () => {
-  it("links the dreaming intro to its guide", async () => {
+  it("keeps the dreaming intro free of external guide links", async () => {
     const { element } = createPage({
       configObject: {},
       routeData: memoryTabRoute("settings"),
     });
     document.body.append(element);
     try {
-      await waitForFast(() =>
-        expect(
-          element.querySelector(
-            '.settings-page__intro a[href="https://docs.openclaw.ai/concepts/dreaming"]',
-          ),
-        ).not.toBeNull(),
-      );
-      const link = element.querySelector<HTMLAnchorElement>(
-        '.settings-page__intro a[href="https://docs.openclaw.ai/concepts/dreaming"]',
-      );
-
-      expect(link?.textContent?.trim()).toBe("Learn more");
-      expect(link?.href).toBe("https://docs.openclaw.ai/concepts/dreaming");
+      await waitForFast(() => expect(element.querySelector(".settings-page__intro a")).toBeNull());
     } finally {
       element.remove();
     }

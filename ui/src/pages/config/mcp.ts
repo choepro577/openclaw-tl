@@ -1,14 +1,8 @@
 import { html, type TemplateResult } from "lit";
 import "../../components/mcp-servers-card.ts";
-import {
-  renderDocsLink,
-  renderSettingsRow,
-  renderSettingsValue,
-} from "../../components/settings-ui.ts";
+import { renderSettingsRow, renderSettingsValue } from "../../components/settings-ui.ts";
 import { t } from "../../i18n/index.ts";
 import { summarizeMcpServers } from "../../lib/config/mcp-servers.ts";
-
-const MCP_DOCS_URL = "https://docs.openclaw.ai/tools/mcp";
 
 type McpViewProps = {
   configObject: Record<string, unknown>;
@@ -25,9 +19,7 @@ export function renderMcp(props: McpViewProps) {
   return html`
     <section class="mcp-page">
       <div class="settings-page">
-        <p class="settings-page__intro">
-          ${t("mcpPage.intro")} ${renderDocsLink(MCP_DOCS_URL, t("common.learnMore"))}
-        </p>
+        <p class="settings-page__intro">${t("mcpPage.intro")}</p>
         <section class="settings-section mcp-page__summary">
           <div class="settings-section__header">
             <h2 class="settings-section__heading">${t("mcpPage.servers")}</h2>
@@ -69,10 +61,7 @@ export function renderMcp(props: McpViewProps) {
           </div>
         </section>
 
-        <openclaw-mcp-servers-card
-          .pluginsHref=${props.pluginsHref}
-          .docsUrl=${MCP_DOCS_URL}
-        ></openclaw-mcp-servers-card>
+        <openclaw-mcp-servers-card .pluginsHref=${props.pluginsHref}></openclaw-mcp-servers-card>
       </div>
 
       ${props.editor}

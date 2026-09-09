@@ -1046,9 +1046,16 @@ describe("gateway startup reconciliation", () => {
       delivery: { mode: "none" },
       createdAtMs: 1_785_338_313_079,
     };
+    const accountRow = {
+      ...declaredRow,
+      id: "account-dreaming",
+      declarationKey: "enterprise:account:memory-dreaming",
+      description: undefined,
+      owner: { accountId: "account" },
+    };
     const { api, harness, onMock } = createDreamingTestContext({
       config: createDreamingConfig({ enabled: true, frequency: "*/3 * * * *" }),
-      initialJobs: [declaredRow],
+      initialJobs: [declaredRow, accountRow],
       cronOptions: { staleJobs: [legacyRow] },
     });
 
@@ -1057,7 +1064,8 @@ describe("gateway startup reconciliation", () => {
       await triggerGatewayStart(onMock, { config: api.config, getCron: () => harness.cron });
 
       expect(harness.staleJobs).toEqual([]);
-      expect(harness.jobs).toHaveLength(1);
+      expect(harness.jobs).toHaveLength(2);
+      expect(harness.jobs).toContainEqual(accountRow);
       expect(harness.jobs[0]).toMatchObject({
         declarationKey: "memory-core:memory-dreaming-promotion",
         name: "Memory Dreaming Promotion",

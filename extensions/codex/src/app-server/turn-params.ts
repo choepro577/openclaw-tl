@@ -66,6 +66,7 @@ export function buildTurnStartParams(
     turnScopedDeveloperInstructions?: string;
     skillsCollaborationInstructions?: string;
     memoryCollaborationInstructions?: string;
+    runtimeModelIdentityInstructions?: string;
     preserveNativeTurnSettings?: boolean;
     clearInheritedServiceTier?: boolean;
   },
@@ -141,6 +142,7 @@ export function buildTurnStartParams(
             turnScopedDeveloperInstructions: options.turnScopedDeveloperInstructions,
             skillsCollaborationInstructions: options.skillsCollaborationInstructions,
             memoryCollaborationInstructions: options.memoryCollaborationInstructions,
+            runtimeModelIdentityInstructions: options.runtimeModelIdentityInstructions,
           }),
         }
       : {}),
@@ -156,6 +158,7 @@ export function buildTurnCollaborationMode(
     turnScopedDeveloperInstructions?: string;
     skillsCollaborationInstructions?: string;
     memoryCollaborationInstructions?: string;
+    runtimeModelIdentityInstructions?: string;
   } = {},
 ): CodexTurnCollaborationMode {
   const model = options.model ?? params.modelId;
@@ -179,12 +182,17 @@ function buildTurnScopedCollaborationInstructions(
     turnScopedDeveloperInstructions?: string;
     skillsCollaborationInstructions?: string;
     memoryCollaborationInstructions?: string;
+    runtimeModelIdentityInstructions?: string;
   } = {},
 ): string | null {
   const contextInstructions = joinPresentSections(
+    // Request policy and routing decisions change on warm threads. Never freeze
+    // this overlay in thread/start's developer instructions.
+    params.extraSystemPrompt,
     options.turnScopedDeveloperInstructions,
     options.memoryCollaborationInstructions,
     options.skillsCollaborationInstructions,
+    options.runtimeModelIdentityInstructions,
   );
   if (params.trigger === "cron") {
     return joinPresentSections(buildCronCollaborationInstructions(), contextInstructions);

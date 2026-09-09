@@ -55,25 +55,14 @@ export function createAutoCitationsMemorySearchTool(agentSessionKey: string) {
   });
 }
 
-export function expectUnavailableMemorySearchDetails(
-  details: unknown,
-  params: {
-    error: string;
-    warning: string;
-    action: string;
-  },
-) {
+export function expectUnavailableMemorySearchDetails(details: unknown) {
   expect(details).toEqual({
     results: [],
     disabled: true,
     unavailable: true,
-    error: params.error,
-    warning: params.warning,
-    action: params.action,
-    debug: {
-      warning: params.warning,
-      action: params.action,
-      error: params.error,
-    },
+    error: "memory_recall_unavailable",
+    warning: "Memory recall is temporarily unavailable; earlier information could not be checked.",
+    action:
+      "Continue with information confirmed in the current conversation. Ask for any missing facts, and suggest contacting the administrator if earlier information is still needed.",
   });
 }

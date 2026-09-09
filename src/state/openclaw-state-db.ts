@@ -65,6 +65,7 @@ import {
 import { openUnpublishedStateDatabase } from "./openclaw-state-db-open.js";
 import * as operatorApprovalMigration from "./openclaw-state-db-operator-approval-migration.js";
 import { ensureOpenClawStatePermissions } from "./openclaw-state-db-permissions.js";
+import { runWithOpenClawStatePostCommitPublications } from "./openclaw-state-db-post-commit.js";
 import {
   ensureAdditiveStateColumns,
   ensureFirstUseAdditiveStateColumnsForStrictMigration,
@@ -117,6 +118,7 @@ export {
   createOpenClawDatabaseVerificationError,
 } from "./openclaw-state-db-maintenance.js";
 export { ensureOpenClawStatePermissions } from "./openclaw-state-db-permissions.js";
+export { deferOpenClawStatePostCommitPublication } from "./openclaw-state-db-post-commit.js";
 export { detectOpenClawStateDatabaseSchemaMigrations } from "./openclaw-state-db-schema-repair.js";
 export { withOpenClawStateStartupMigrationCheckpointDatabase } from "./openclaw-state-db-startup-checkpoint.js";
 
@@ -672,14 +674,6 @@ export function runWithOpenClawStateBusyTimeout<T>(
   }
 }
 
-function acquireOpenClawStateDatabaseForTransaction(
-  options: OpenClawStateDatabaseOptions,
-): OpenClawStateDatabase {
-  return options.database
-    ? openOpenClawStateDatabase(options)
-    : (getOpenClawStateDatabaseIfOpen(options) ?? openOpenClawStateDatabase(options));
-}
-
 /** Run a synchronous immediate transaction against the shared state database. */
 export function runOpenClawStateWriteTransaction<T>(
   operation: (database: OpenClawStateDatabase) => T,
@@ -690,27 +684,31 @@ export function runOpenClawStateWriteTransaction<T>(
   > = {},
 ): T {
   let database = options.database ?? getOpenClawStateDatabaseIfOpen(options);
-  let result: T;
+  let committed: { result: T; publish: () => void };
   try {
-    const acquired = acquireOpenClawStateDatabaseForTransaction(options);
+    const acquired = options.database
+      ? openOpenClawStateDatabase(options)
+      : (getOpenClawStateDatabaseIfOpen(options) ?? openOpenClawStateDatabase(options));
     database = acquired;
-    result = runSqliteImmediateTransactionSync(
-      acquired.db,
-      () => {
-        assertOpenClawStateWriteAllowed({
-          database: acquired.db,
-          databasePath: acquired.path,
-          env: options.env ?? process.env,
-          schemaReady: !options.database && acquired === getOpenClawStateDatabaseIfOpen(options),
-        });
-        return operation(acquired);
-      },
-      {
-        busyTimeoutMs: transactionOptions.busyTimeoutMs ?? readSqliteBusyTimeout(acquired.db),
-        databaseLabel: acquired.path,
-        ...transactionOptions,
-        operationLabel: transactionOptions.operationLabel ?? "state.write",
-      },
+    committed = runWithOpenClawStatePostCommitPublications(acquired, () =>
+      runSqliteImmediateTransactionSync(
+        acquired.db,
+        () => {
+          assertOpenClawStateWriteAllowed({
+            database: acquired.db,
+            databasePath: acquired.path,
+            env: options.env ?? process.env,
+            schemaReady: !options.database && acquired === getOpenClawStateDatabaseIfOpen(options),
+          });
+          return operation(acquired);
+        },
+        {
+          busyTimeoutMs: transactionOptions.busyTimeoutMs ?? readSqliteBusyTimeout(acquired.db),
+          databaseLabel: acquired.path,
+          ...transactionOptions,
+          operationLabel: transactionOptions.operationLabel ?? "state.write",
+        },
+      ),
     );
   } catch (error) {
     if (database) {
@@ -724,7 +722,8 @@ export function runOpenClawStateWriteTransaction<T>(
     // The write already committed; permission hardening is best-effort here so
     // callers never retry an operation that is durable in SQLite.
   }
-  return result;
+  committed.publish();
+  return committed.result;
 }
 
 /**

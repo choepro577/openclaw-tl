@@ -1,0 +1,53 @@
+- main [ref=f7e5]:
+  - complementary [ref=f7e6]:
+    - generic [ref=f7e9]:
+      - strong [ref=f7e10]: MAAP
+      - generic [ref=f7e11]: MAAP Admin
+    - navigation "Quản trị Enterprise" [ref=f7e12]:
+      - button "Quản lý tài khoản" [ref=f7e13]
+      - button "Quản lý agent" [ref=f7e21]
+      - button "Tri thức doanh nghiệp" [ref=f7e27]
+      - button "Quản lý skill" [ref=f7e32]
+      - button "Plugins" [ref=f7e40]
+      - button "Cấu hình" [ref=f7e46]
+    - generic [ref=f7e52]:
+      - generic [ref=f7e53]:
+        - generic [ref=f7e54]: Ngôn ngữ
+        - combobox "Ngôn ngữ" [ref=f7e55]:
+          - option "Tiếng Việt" [selected]
+          - option "English"
+      - generic [ref=f7e56]:
+        - generic [aria-hidden] [ref=f7e57]: S
+        - generic [ref=f7e58]:
+          - strong [ref=f7e59]: Skill QA
+          - generic "@skillqa" [ref=f7e60]
+      - generic [ref=f7e61]:
+        - button "Đổi mật khẩu" [ref=f7e62]
+        - button "Đăng xuất" [ref=f7e69]
+  - generic [ref=f7e77]:
+    - generic [ref=f7e78]:
+      - generic [ref=f7e79]:
+        - heading "Quản lý skill" [level=1] [ref=f7e80]
+        - paragraph [ref=f7e81]: Catalog occurrence-aware, tách trạng thái kỹ thuật khỏi quyền user
+      - generic [ref=f7e82]:
+        - generic [ref=f7e83]: 0 lượt
+        - button "Cài skill bên ngoài" [ref=f7e84]
+    - navigation "Nguồn skill" [ref=f7e86]:
+      - button "Tất cả" [ref=f7e87]
+      - button "Không gian làm việc" [ref=f7e88]
+      - button "Tích hợp sẵn" [ref=f7e89]
+      - button "Được quản lý" [ref=f7e90]
+      - button "Bổ sung" [ref=f7e91]
+      - button "Khác" [ref=f7e92]
+    - generic [ref=f7e93]:
+      - searchbox "Tìm skill" [ref=f7e94]
+      - combobox "Lọc trạng thái" [ref=f7e95]:
+        - option "Tất cả" [selected]
+        - option "Sẵn sàng"
+        - option "Cần thiết lập"
+        - option "Đã tắt"
+      - textbox "Lọc theo agent" [ref=f7e96]:
+        - /placeholder: Lọc theo agent ID
+      - combobox "Lọc theo user" [ref=f7e97]:
+        - option "Tất cả user" [selected]
+    - generic [ref=f7e98]: Đang tổng hợp skill catalog…

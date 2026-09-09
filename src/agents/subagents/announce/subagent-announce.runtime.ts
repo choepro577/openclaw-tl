@@ -17,6 +17,7 @@ export function readSubagentSessionEntry(storePath: string, sessionKey: string) 
 }
 export { callGateway } from "../../../gateway/call.js";
 export { readSessionMessagesAsync } from "../../../gateway/session-transcript-readers.js";
+export { readRecentSessionTranscriptActiveEvents } from "../../../config/sessions/session-accessor.js";
 export {
   isEmbeddedAgentRunActive,
   waitForEmbeddedAgentRunEnd,

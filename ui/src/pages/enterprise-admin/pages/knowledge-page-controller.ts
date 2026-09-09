@@ -1,3 +1,7 @@
+import { showNativeConfirm } from "../../../branding/display-dialog.ts";
+import { showInputDialog } from "../../../components/input-dialog.ts";
+import { kak } from "../../../i18n/enterprise-admin-knowledge.ts";
+import { enterpriseDomainCopy } from "../../../i18n/enterprise-domain.ts";
 import {
   appendEnterpriseKnowledgeUploadChunk,
   beginEnterpriseKnowledgeUpload,
@@ -19,6 +23,7 @@ import {
   purgeEnterpriseKnowledgeZone,
   reprocessEnterpriseKnowledgeVersionV3,
   replaceEnterpriseKnowledgeAgentBindings,
+  replaceEnterpriseKnowledgeEvidenceTransfers,
   replaceEnterpriseKnowledgeMembers,
   retryEnterpriseKnowledgeJob,
   rollbackEnterpriseKnowledgePublication,
@@ -38,6 +43,7 @@ import { errorMessage } from "../utils.ts";
 import {
   emptyKnowledgeZoneDraft,
   validateKnowledgeZoneDraft,
+  type KnowledgeTab,
   type KnowledgeZoneDraft,
   type UploadProgress,
 } from "./knowledge-page-model.ts";
@@ -66,8 +72,6 @@ export class EnterpriseAdminKnowledgeController extends EnterpriseAdminKnowledge
       description: String(data.get("description") ?? this.createDraft.description),
       egressPolicy:
         data.get("egressPolicy") === "external_allowed" ? "external_allowed" : "local_only",
-      graphEnabled: data.get("graphEnabled") === "on",
-      graphEnrichmentEnabled: data.get("graphEnrichmentEnabled") === "on",
       graphAutoApprovalThreshold: Number(
         data.get("graphAutoApprovalThreshold") ?? this.createDraft.graphAutoApprovalThreshold,
       ),
@@ -75,6 +79,10 @@ export class EnterpriseAdminKnowledgeController extends EnterpriseAdminKnowledge
     this.createDraft = draft;
     this.createErrors = validateKnowledgeZoneDraft(draft);
     if (Object.values(this.createErrors).some(Boolean)) {
+      await this.updateComplete;
+      if (form.isConnected) {
+        form.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus();
+      }
       return;
     }
     this.busy = true;
@@ -107,13 +115,13 @@ export class EnterpriseAdminKnowledgeController extends EnterpriseAdminKnowledge
       this.createDraft = emptyKnowledgeZoneDraft();
       await this.load();
       await this.openZone(created);
-      this.notice = "Đã tạo vùng tri thức và áp dụng quyền Agent ban đầu.";
+      this.notice = kak("createSuccess");
     } catch (error) {
       if (created) {
         this.createOpen = false;
         await this.load();
         await this.openZone(created, "agents");
-        this.error = `Zone đã được tạo nhưng chưa áp dụng đủ quyền Agent: ${errorMessage(error)}`;
+        this.error = kak("createPartial", { error: errorMessage(error) });
       } else {
         this.createError = errorMessage(error);
       }
@@ -146,8 +154,6 @@ export class EnterpriseAdminKnowledgeController extends EnterpriseAdminKnowledge
       description: String(data.get("description") ?? this.settingsDraft.description),
       egressPolicy:
         data.get("egressPolicy") === "external_allowed" ? "external_allowed" : "local_only",
-      graphEnabled: data.get("graphEnabled") === "on",
-      graphEnrichmentEnabled: data.get("graphEnrichmentEnabled") === "on",
       graphAutoApprovalThreshold: Number(
         data.get("graphAutoApprovalThreshold") ?? this.settingsDraft.graphAutoApprovalThreshold,
       ),
@@ -192,7 +198,7 @@ export class EnterpriseAdminKnowledgeController extends EnterpriseAdminKnowledge
       }
       await this.load();
       await this.openZone(zone, "settings");
-      this.notice = "Đã cập nhật cấu hình vùng tri thức.";
+      this.notice = kak("settingsSaved");
     } catch (error) {
       this.error = errorMessage(error);
     } finally {
@@ -219,7 +225,7 @@ export class EnterpriseAdminKnowledgeController extends EnterpriseAdminKnowledge
       });
       form.reset();
       await this.openZone(this.selected, "sources");
-      this.notice = "Đã nạp ghi chú và xếp hàng xử lý.";
+      this.notice = kak("noteAdded");
     } catch (error) {
       this.error = errorMessage(error);
     } finally {
@@ -247,7 +253,7 @@ export class EnterpriseAdminKnowledgeController extends EnterpriseAdminKnowledge
       });
       form.reset();
       await this.openZone(this.selected, "sources");
-      this.notice = "Đã nạp URL và xếp hàng xử lý.";
+      this.notice = kak("urlAdded");
     } catch (error) {
       this.error = errorMessage(error);
     } finally {
@@ -267,9 +273,7 @@ export class EnterpriseAdminKnowledgeController extends EnterpriseAdminKnowledge
       return;
     }
     if (files.length > 20 || (targetSource && files.length !== 1)) {
-      this.error = targetSource
-        ? "Chỉ chọn một file để tạo version thay thế."
-        : "Mỗi lần chỉ được chọn tối đa 20 file.";
+      this.error = targetSource ? kak("oneFileOnly") : kak("maxFiles");
       return;
     }
     const selectedZone = this.selected;
@@ -283,15 +287,15 @@ export class EnterpriseAdminKnowledgeController extends EnterpriseAdminKnowledge
         name: file.name,
         uploaded: 0,
         total: file.size,
-        state: "Đang chờ",
+        state: "active",
       }));
       for (const [index, file] of selectedFiles.entries()) {
         let progressId = `local:${index}:${file.name}`;
         try {
           if (file.size > 50 * 1024 * 1024) {
-            throw new Error("File vượt giới hạn 50 MiB.");
+            throw new Error(kak("fileTooLarge"));
           }
-          this.updateUpload(progressId, { state: "Đang tải" });
+          this.updateUpload(progressId, { state: "uploading" });
           const resumable = serverUploads.items.find(
             (item) =>
               item.state === "active" &&
@@ -313,7 +317,7 @@ export class EnterpriseAdminKnowledgeController extends EnterpriseAdminKnowledge
           this.updateUpload(progressId, {
             id: upload.id,
             uploaded: upload.receivedSize,
-            state: resumable ? "Đang tiếp tục" : "Đang tải",
+            state: resumable ? "resuming" : "uploading",
           });
           progressId = upload.id;
           let offset = upload.receivedSize;
@@ -329,15 +333,15 @@ export class EnterpriseAdminKnowledgeController extends EnterpriseAdminKnowledge
             offset = next;
             this.updateUpload(progressId, { uploaded: offset });
           }
-          this.updateUpload(progressId, { state: "Đang xử lý" });
+          this.updateUpload(progressId, { state: "processing" });
           await commitEnterpriseKnowledgeUpload("admin", selectedZone.id, upload.id);
-          this.updateUpload(progressId, { state: "Đã nạp" });
+          this.updateUpload(progressId, { state: "committed" });
         } catch (error) {
-          this.updateUpload(progressId, { state: "Lỗi", error: errorMessage(error) });
+          this.updateUpload(progressId, { state: "error", error: errorMessage(error) });
         }
       }
       await this.openZone(selectedZone, "sources");
-      this.notice = "Đã hoàn tất upload. OCR sẽ tự chạy với file scan hoặc ảnh khi cần.";
+      this.notice = kak("uploadSuccess");
     } catch (error) {
       this.error = errorMessage(error);
     } finally {
@@ -351,7 +355,7 @@ export class EnterpriseAdminKnowledgeController extends EnterpriseAdminKnowledge
     }
     try {
       await cancelEnterpriseKnowledgeUpload("admin", this.selected.id, uploadId);
-      this.updateUpload(uploadId, { state: "Đã hủy" });
+      this.updateUpload(uploadId, { state: "cancelled" });
     } catch (error) {
       this.error = errorMessage(error);
     }
@@ -416,8 +420,7 @@ export class EnterpriseAdminKnowledgeController extends EnterpriseAdminKnowledge
         this.selected.buildRevision,
       );
       await this.openZone(this.selected, "activity");
-      this.notice =
-        "Đã xếp hàng Phân tích lại bằng AI Graph V3. Tiến độ sẽ tự cập nhật, không cần tải lại trang.";
+      this.notice = kak("reprocessQueued");
     } catch (error) {
       this.error = errorMessage(error);
     } finally {
@@ -451,7 +454,7 @@ export class EnterpriseAdminKnowledgeController extends EnterpriseAdminKnowledge
       );
       form.reset();
       await this.openZone(this.selected, "sources");
-      this.notice = "Đã tạo draft version mới.";
+      this.notice = kak("versionCreated");
     } catch (error) {
       this.error = errorMessage(error);
     } finally {
@@ -472,9 +475,7 @@ export class EnterpriseAdminKnowledgeController extends EnterpriseAdminKnowledge
       );
       await this.openZone(this.selected, "sources");
       this.notice =
-        source.status === "staged_remove"
-          ? "Đã hoàn tác gỡ nguồn khỏi candidate."
-          : "Đã đưa nguồn vào danh sách gỡ ở candidate kế tiếp.";
+        source.status === "staged_remove" ? kak("undoSourceRemoval") : kak("stageSourceRemoval");
     } catch (error) {
       this.error = errorMessage(error);
     }
@@ -492,7 +493,7 @@ export class EnterpriseAdminKnowledgeController extends EnterpriseAdminKnowledge
         await retryEnterpriseKnowledgeJob("admin", this.selected.id, job.id);
       }
       await this.openZone(this.selected, "activity");
-      this.notice = action === "cancel" ? "Đã yêu cầu hủy job." : "Đã xếp hàng chạy lại job.";
+      this.notice = action === "cancel" ? kak("cancelJobRequested") : kak("retryJobQueued");
     } catch (error) {
       this.error = errorMessage(error);
     } finally {
@@ -522,7 +523,7 @@ export class EnterpriseAdminKnowledgeController extends EnterpriseAdminKnowledge
         members,
       );
       await this.openZone(result.zone, "members");
-      this.notice = "Đã cập nhật vai trò thành viên.";
+      this.notice = kak("membersSaved");
     } catch (error) {
       this.error = errorMessage(error);
     } finally {
@@ -554,7 +555,7 @@ export class EnterpriseAdminKnowledgeController extends EnterpriseAdminKnowledge
         this.bindingDraft.toSorted(),
       );
       await this.openZone(result.zone, "agents");
-      this.notice = "Đã cập nhật Agent được phép truy cập vùng tri thức.";
+      this.notice = kak("agentBindingsSaved");
     } catch (error) {
       this.error = errorMessage(error);
     } finally {
@@ -562,9 +563,52 @@ export class EnterpriseAdminKnowledgeController extends EnterpriseAdminKnowledge
     }
   }
 
+  protected setEvidenceTransfer(resourceKey: string, checked: boolean): void {
+    const selected = new Set(this.evidenceTransferDraft);
+    if (checked) {
+      selected.add(resourceKey);
+    } else {
+      selected.delete(resourceKey);
+    }
+    this.evidenceTransferDraft = [...selected];
+  }
+
+  protected async saveEvidenceTransfers(event: SubmitEvent): Promise<void> {
+    event.preventDefault();
+    if (!this.selected || this.busy) {
+      return;
+    }
+    const zone = this.selected;
+    const request = this.detailRequest;
+    this.busy = true;
+    this.error = "";
+    try {
+      const result = await replaceEnterpriseKnowledgeEvidenceTransfers(
+        zone.id,
+        zone.revision,
+        this.evidenceTransferDraft.toSorted(),
+      );
+      this.zones = this.zones.map((item) => (item.id === result.zone.id ? result.zone : item));
+      // A late save must not reopen a closed drawer or overwrite another Zone's draft.
+      if (this.selected?.id === zone.id && this.detailRequest === request) {
+        const refreshRequest = request + 1;
+        await this.openZone(result.zone, "agents");
+        if (this.selected?.id === zone.id && this.detailRequest === refreshRequest) {
+          this.notice = enterpriseDomainCopy("enterpriseKnowledge.evidenceTransferSaved");
+        }
+      }
+    } catch (error) {
+      if (this.selected?.id === zone.id && this.detailRequest === request) {
+        this.error = errorMessage(error);
+      }
+    } finally {
+      this.busy = false;
+    }
+  }
+
   protected async search(event: SubmitEvent): Promise<void> {
     event.preventDefault();
-    if (!this.selected) {
+    if (!this.selected || !this.candidate) {
       return;
     }
     const form = formFromEvent(event);
@@ -572,18 +616,32 @@ export class EnterpriseAdminKnowledgeController extends EnterpriseAdminKnowledge
       return;
     }
     const data = new FormData(form);
+    const zone = this.selected;
+    const candidateId = this.candidate.id;
+    this.searchHits = [];
+    this.searchCompleted = false;
     this.busy = true;
     this.error = "";
     try {
-      this.searchHits = (
-        await searchEnterpriseKnowledgeCandidate(
-          "admin",
-          this.selected.id,
-          String(data.get("query") ?? ""),
-        )
-      ).hits;
+      const result = await searchEnterpriseKnowledgeCandidate(
+        "admin",
+        zone.id,
+        String(data.get("query") ?? ""),
+      );
+      if (this.selected?.id !== zone.id || this.candidate?.id !== candidateId) {
+        return;
+      }
+      if (result.candidate.id !== candidateId) {
+        await this.openZone(zone, "search");
+      }
+      if (this.selected?.id === zone.id && this.candidate?.id === result.candidate.id) {
+        this.searchHits = result.hits;
+        this.searchCompleted = true;
+      }
     } catch (error) {
-      this.error = errorMessage(error);
+      if (this.selected?.id === zone.id && this.candidate?.id === candidateId) {
+        this.error = errorMessage(error);
+      }
     } finally {
       this.busy = false;
     }
@@ -593,12 +651,15 @@ export class EnterpriseAdminKnowledgeController extends EnterpriseAdminKnowledge
     if (!this.selected) {
       return;
     }
+    const zone = this.selected;
     this.busy = true;
     this.error = "";
     try {
-      await buildEnterpriseKnowledgeCandidate("admin", this.selected.id, this.selected.revision);
-      await this.openZone(this.selected, "activity");
-      this.notice = "Đã xếp hàng tạo candidate mới.";
+      await buildEnterpriseKnowledgeCandidate("admin", zone.id, zone.revision);
+      await this.refreshAfterPublicationMutation(zone, "activity");
+      if (this.selected?.id === zone.id) {
+        this.notice = kak("candidateQueued");
+      }
     } catch (error) {
       this.error = errorMessage(error);
     } finally {
@@ -610,22 +671,28 @@ export class EnterpriseAdminKnowledgeController extends EnterpriseAdminKnowledge
     if (!this.selected || !this.candidate) {
       return;
     }
+    const zone = this.selected;
+    const candidate = this.candidate;
     const degradedReason = this.degradedReason.trim();
-    if (this.candidate.vectorStatus !== "ready" && !degradedReason) {
-      this.error = "Nhập lý do phê duyệt khi publish ở chế độ FTS-only.";
+    if (candidate.vectorStatus !== "ready" && !degradedReason) {
+      this.error = kak("ftsReasonRequired");
       return;
     }
     this.busy = true;
     this.error = "";
     try {
-      await publishEnterpriseKnowledgeCandidate("admin", this.selected.id, {
-        baseRevision: this.selected.revision,
-        generationId: this.candidate.id,
+      await publishEnterpriseKnowledgeCandidate("admin", zone.id, {
+        baseRevision: zone.revision,
+        generationId: candidate.id,
         degradedReason: degradedReason || undefined,
       });
-      this.degradedReason = "";
-      await this.openZone(this.selected, "search");
-      this.notice = "Đã publish candidate thành công.";
+      if (this.selected?.id === zone.id) {
+        this.degradedReason = "";
+      }
+      await this.refreshAfterPublicationMutation(zone, "search");
+      if (this.selected?.id === zone.id) {
+        this.notice = kak("candidatePublished");
+      }
     } catch (error) {
       this.error = errorMessage(error);
     } finally {
@@ -633,30 +700,78 @@ export class EnterpriseAdminKnowledgeController extends EnterpriseAdminKnowledge
     }
   }
 
-  protected async rollback(publication: EnterpriseKnowledgePublication): Promise<void> {
-    if (!this.selected || publication.id === this.selected.activePublicationId) {
-      return;
-    }
+  protected rollback(publication: EnterpriseKnowledgePublication): void {
     if (
-      !globalThis.confirm(
-        `Rollback ${this.selected.name} về publication #${publication.publicationNumber}?`,
-      )
+      !this.selected ||
+      this.busy ||
+      publication.zoneId !== this.selected.id ||
+      publication.id === this.selected.activePublicationId
     ) {
       return;
     }
+    this.rollbackTarget = { zone: { ...this.selected }, publication: { ...publication } };
+    this.rollbackError = "";
+  }
+
+  protected cancelRollback(): void {
+    if (!this.busy) {
+      this.rollbackTarget = undefined;
+      this.rollbackError = "";
+    }
+  }
+
+  protected async confirmRollback(): Promise<void> {
+    const target = this.rollbackTarget;
+    if (!target || this.busy) {
+      return;
+    }
+    const { zone, publication } = target;
+    // Confirmation authorizes this exact snapshot, not a newer revision loaded
+    // by realtime updates while the administrator is reading the dialog.
+    if (
+      this.selected?.id !== zone.id ||
+      this.selected.revision !== zone.revision ||
+      this.selected.activePublicationId === publication.id
+    ) {
+      this.rollbackError = enterpriseDomainCopy("enterpriseKnowledge.rollbackStale");
+      return;
+    }
     this.busy = true;
+    this.rollbackError = "";
     try {
-      const result = await rollbackEnterpriseKnowledgePublication("admin", this.selected.id, {
-        baseRevision: this.selected.revision,
+      const result = await rollbackEnterpriseKnowledgePublication("admin", zone.id, {
+        baseRevision: zone.revision,
         publicationId: publication.id,
       });
-      await this.openZone(result.zone, "activity");
-      this.notice = `Đã rollback về publication #${publication.publicationNumber}.`;
+      await this.refreshAfterPublicationMutation(result.zone, "activity");
+      if (this.rollbackTarget === target) {
+        this.rollbackTarget = undefined;
+      }
+      if (this.selected?.id === zone.id) {
+        this.notice = enterpriseDomainCopy("enterpriseKnowledge.rollbackSuccess", {
+          number: String(publication.publicationNumber),
+        });
+      }
     } catch (error) {
-      this.error = errorMessage(error);
+      if (this.rollbackTarget === target) {
+        this.rollbackError = errorMessage(error);
+      }
     } finally {
       this.busy = false;
     }
+  }
+
+  private async refreshAfterPublicationMutation(
+    zone: EnterpriseKnowledgeZone,
+    tab: KnowledgeTab,
+  ): Promise<void> {
+    // Mutations outlive their drawer. Refresh the list even if the operator closes
+    // or changes the drawer during either the mutation or its detail refresh.
+    await Promise.all([
+      this.load(),
+      this.loadGraphOverview(),
+      this.selected?.id === zone.id ? this.openZone(zone, tab) : undefined,
+    ]);
   }
 
   protected async openOperations(): Promise<void> {
@@ -684,7 +799,14 @@ export class EnterpriseAdminKnowledgeController extends EnterpriseAdminKnowledge
       return;
     }
     const archived = this.selected.status !== "archived";
-    if (!globalThis.confirm(`${archived ? "Archive" : "Restore"} vùng ${this.selected.name}?`)) {
+    if (
+      !showNativeConfirm(
+        kak("archiveConfirm", {
+          action: archived ? kak("archive") : kak("restore"),
+          name: this.selected.name,
+        }),
+      )
+    ) {
       return;
     }
     this.busy = true;
@@ -700,26 +822,40 @@ export class EnterpriseAdminKnowledgeController extends EnterpriseAdminKnowledge
   }
 
   protected async purgeZone(): Promise<void> {
-    if (!this.selected || this.selected.status !== "archived") {
+    const target = this.selected;
+    if (!target || target.status !== "archived") {
       return;
     }
     this.busy = true;
     try {
-      const { preview } = await previewEnterpriseKnowledgeZonePurge(this.selected.id);
-      const summary = `${preview.sources} nguồn, ${preview.versions} version, ${preview.publications} publication và ${preview.generations} index generation`;
+      const { preview } = await previewEnterpriseKnowledgeZonePurge(target.id);
+      const summary = kak("purgeSummary", {
+        sources: String(preview.sources),
+        versions: String(preview.versions),
+        publications: String(preview.publications),
+        generations: String(preview.generations),
+      });
       if (preview.activeJobs || preview.activeUploads) {
-        throw new Error("Phải hủy toàn bộ job và upload đang hoạt động trước khi purge.");
+        throw new Error(kak("blockedPurge"));
       }
-      const confirmation = globalThis.prompt(
-        `Purge sẽ xóa vĩnh viễn ${summary}. Nhập chính xác slug “${this.selected.slug}” để tiếp tục:`,
-      );
-      if (confirmation !== this.selected.slug) {
+      const confirmation = await showInputDialog({
+        title: kak("purgeTitle"),
+        label: kak("purgePrompt", { summary }),
+        submitLabel: "Purge",
+        cancelLabel: kak("cancel"),
+        // Keep the source slug out of rendered copy. The dedicated copy
+        // affordance exposes the exact API token without weakening the
+        // requirement that the operator manually submits it.
+        copyValue: target.slug,
+        copyLabel: kak("copySlug"),
+      });
+      if (confirmation !== target.slug) {
         return;
       }
-      if (!globalThis.confirm(`Xác nhận xóa vĩnh viễn Zone ${this.selected.name}?`)) {
+      if (!showNativeConfirm(kak("purgeConfirm", { name: target.name }))) {
         return;
       }
-      await purgeEnterpriseKnowledgeZone(this.selected.id, this.selected.revision, confirmation);
+      await purgeEnterpriseKnowledgeZone(target.id, target.revision, confirmation);
       this.closeZone();
       await this.load();
     } catch (error) {

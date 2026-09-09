@@ -24,6 +24,13 @@ export async function runCodexAppServerAttempt(
   params: EmbeddedRunAttemptParamsV2,
   options: CodexRunAttemptOptions,
 ): Promise<EmbeddedRunAttemptResult> {
+  if (params.hostCapabilities.privateModelContext?.required) {
+    // turn/start additionalContext persists in native history. Its internal sampling
+    // and HTTP retries have no host reauthorization callback, even on ephemeral threads.
+    throw new Error(
+      "PRIVATE_MODEL_CONTEXT_UNAVAILABLE: Codex cannot reauthorize each native model request",
+    );
+  }
   const connection = await prepareCodexAttemptConnection({ params, options });
   const runtime = await prepareCodexAttemptRuntime(connection);
   const attemptTools = await prepareCodexAttemptTools(runtime);

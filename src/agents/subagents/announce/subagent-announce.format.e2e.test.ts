@@ -571,7 +571,7 @@ describe("subagent announce formatting", () => {
   });
 
   it("bounds an oversized leaf result only in the parent prompt projection", async () => {
-    const fullResult = `${"<".repeat(6_000)}-unbounded-tail`;
+    const fullResult = `${"<".repeat(32_768)}-unbounded-tail`;
     readLatestAssistantReplyMock.mockResolvedValue(fullResult);
 
     await runSubagentAnnounceFlow({
@@ -586,7 +586,7 @@ describe("subagent announce formatting", () => {
     const prompt = call.params?.message as string;
     const projectedResult = prompt.match(/<prompt-data>\n([\s\S]*?)\n<\/prompt-data>/)?.[1];
 
-    expect(projectedResult?.length).toBeLessThanOrEqual(6_000);
+    expect(projectedResult?.length).toBeLessThanOrEqual(32_768);
     expect(projectedResult?.endsWith("\n[child result truncated]")).toBe(true);
     expect(projectedResult).not.toContain("unbounded-tail");
     expect(call.params?.internalEvents?.[0]?.result).toBe(fullResult);

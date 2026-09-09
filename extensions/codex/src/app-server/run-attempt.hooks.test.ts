@@ -51,6 +51,29 @@ function flushDiagnosticEvents() {
 setupRunAttemptTestHooks();
 
 describe("runCodexAppServerAttempt hooks and model diagnostics", () => {
+  it("rejects private model context before connecting because native sampling cannot reauthorize", async () => {
+    const onStart = vi.fn();
+    const harness = createAppServerHarness(
+      async () => {
+        throw new Error("unexpected connection");
+      },
+      { onStart },
+    );
+    const params = createParams(
+      path.join(tempDir, "private.jsonl"),
+      path.join(tempDir, "private-workspace"),
+    );
+    params.hostCapabilities = {
+      ...params.hostCapabilities,
+      privateModelContext: { required: true },
+    } as typeof params.hostCapabilities;
+    await expect(runCodexAppServerAttempt(params)).rejects.toThrow(
+      "PRIVATE_MODEL_CONTEXT_UNAVAILABLE",
+    );
+    expect(onStart).not.toHaveBeenCalled();
+    expect(harness.requests).toEqual([]);
+  });
+
   it.each([
     { label: "completed", status: "completed" as const, error: undefined },
     { label: "failed", status: "failed" as const, error: "codex exploded" },

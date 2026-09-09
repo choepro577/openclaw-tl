@@ -12,6 +12,7 @@ import {
   resetAgentRunRegistryForTest,
   rotateAgentRunRegistryLifecycleGeneration,
 } from "./agent-run-registry.js";
+import { isPrivateRunObservationScope } from "./private-run-observations.js";
 
 /** Approval event phase for request/resolution transitions. */
 type AgentApprovalEventPhase = "requested" | "resolved";
@@ -197,6 +198,9 @@ function enrichAgentEvent(
   event: Omit<AgentEventPayload, "seq" | "ts">,
   claimId?: string,
 ): AgentEventRuntimePayload | undefined {
+  if (isPrivateRunObservationScope()) {
+    return undefined;
+  }
   const state = getAgentEventState();
   const currentLifecycleGeneration = getAgentRunLifecycleGeneration();
   const owners = getAgentRunContextOwnership(event.runId);

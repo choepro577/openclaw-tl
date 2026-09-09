@@ -31,6 +31,18 @@ describe("Enterprise Knowledge additive schema", () => {
     expect(
       database
         .prepare(
+          "SELECT name FROM pragma_table_info('enterprise_knowledge_evidence_transfer_grants') ORDER BY cid",
+        )
+        .all(),
+    ).toEqual([
+      { name: "zone_id" },
+      { name: "target_agent_resource_key" },
+      { name: "created_by_account_id" },
+      { name: "created_at" },
+    ]);
+    expect(
+      database
+        .prepare(
           `SELECT name FROM sqlite_master WHERE type = 'table' AND name IN
            ('enterprise_user_skill_installs', 'enterprise_plugin_requests',
             'enterprise_account_plugin_grants', 'enterprise_extension_idempotency')
@@ -46,6 +58,19 @@ describe("Enterprise Knowledge additive schema", () => {
     expect(
       database
         .prepare(
+          `SELECT name FROM sqlite_master WHERE type = 'table' AND name IN
+           ('enterprise_delegation_policy', 'enterprise_delegation_overrides',
+            'enterprise_delegation_events') ORDER BY name`,
+        )
+        .all(),
+    ).toEqual([
+      { name: "enterprise_delegation_events" },
+      { name: "enterprise_delegation_overrides" },
+      { name: "enterprise_delegation_policy" },
+    ]);
+    expect(
+      database
+        .prepare(
           `SELECT name FROM pragma_table_info('enterprise_knowledge_uploads')
            WHERE name IN ('target_source_id', 'chunk_claim_token', 'chunk_claim_expires_at')
            ORDER BY name`,
@@ -56,11 +81,38 @@ describe("Enterprise Knowledge additive schema", () => {
       { name: "chunk_claim_token" },
       { name: "target_source_id" },
     ]);
+    database
+      .prepare(`INSERT INTO enterprise_knowledge_zones
+      (id, slug, name, created_at, updated_at) VALUES (?, ?, ?, ?, ?)`)
+      .run("compat-zone", "compat-zone", "Legacy reader contract", 1, 1);
+    database
+      .prepare(`INSERT INTO enterprise_knowledge_agent_zone_bindings
+      (zone_id, agent_resource_key, created_at) VALUES (?, ?, ?)`)
+      .run("compat-zone", "agent:shared:main", 1);
+    database
+      .prepare(`INSERT INTO enterprise_knowledge_evidence_transfer_grants
+      (zone_id, target_agent_resource_key, created_at) VALUES (?, ?, ?)`)
+      .run("compat-zone", "agent:shared:contracts", 1);
     closeOpenClawStateDatabaseForTest();
     const reopened = openOpenClawStateDatabase(options).db;
     expect(
       reopened.prepare("SELECT COUNT(*) AS count FROM enterprise_knowledge_zones").get(),
-    ).toEqual({ count: 0 });
+    ).toEqual({ count: 1 });
+    expect(reopened.prepare("PRAGMA user_version").get()).toEqual(before);
+    // The pre-transfer reader's exact table/column contract remains readable after reopen.
+    expect(
+      reopened
+        .prepare(`SELECT b.agent_resource_key, z.slug FROM enterprise_knowledge_agent_zone_bindings b
+      JOIN enterprise_knowledge_zones z ON z.id = b.zone_id WHERE b.zone_id = ?`)
+        .all("compat-zone"),
+    ).toEqual([{ agent_resource_key: "agent:shared:main", slug: "compat-zone" }]);
+    expect(
+      reopened
+        .prepare(
+          "SELECT target_agent_resource_key FROM enterprise_knowledge_evidence_transfer_grants WHERE zone_id = ?",
+        )
+        .all("compat-zone"),
+    ).toEqual([{ target_agent_resource_key: "agent:shared:contracts" }]);
   });
 
   it("accepts the pre-graph tables and backfills graph lifecycle columns on first use", () => {

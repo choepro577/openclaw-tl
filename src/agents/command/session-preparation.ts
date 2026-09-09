@@ -47,6 +47,7 @@ export async function prepareEmbeddedSessionState(params: {
     registerAgentRunContext(params.runId, {
       ...(params.sessionKey ? { sessionKey: params.sessionKey, sessionId: params.sessionId } : {}),
       agentId: params.sessionAgentId,
+      runtimeConfig: params.cfg,
       lifecycleGeneration: params.lifecycleGeneration,
       verboseLevel: resolvedVerboseLevel,
       isControlUiVisible: !params.suppressVisibleSessionEffects,

@@ -55,7 +55,7 @@ export async function reconcileHeartbeatMonitorJobs(params: {
     const agentId = heartbeatMonitorAgentId(job);
     // Disabled heartbeats retain their stable monitor row (and scratch). Only
     // agents no longer enrolled in heartbeat are pruned.
-    if (!agentId || desired.has(agentId)) {
+    if (!agentId || job.owner?.accountId || desired.has(agentId)) {
       continue;
     }
     // Keep cleanup isolated per agent; a failed removal must not strand later

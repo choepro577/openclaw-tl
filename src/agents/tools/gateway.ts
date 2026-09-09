@@ -594,12 +594,30 @@ export async function callGatewayTool<T = Record<string, unknown>>(
     opts,
     target: gateway.target,
   });
+  const approvalContextResolver =
+    APPROVAL_RUNTIME_METHODS.has(method) &&
+    method !== "exec.approval.resolve" &&
+    gateway.target === "local" &&
+    !trimToUndefined(opts.gatewayUrl) &&
+    !trimToUndefined(opts.gatewayToken)
+      ? getGatewayToolCallerIdentity()?.gatewayContextResolver
+      : undefined;
   const agentRuntimeIdentityToken = await resolveAgentRuntimeIdentityTokenForGatewayTool({
     method,
     opts,
     target: gateway.target,
-    required: extra?.requireAgentRuntimeIdentity,
+    required: extra?.requireAgentRuntimeIdentity || Boolean(approvalContextResolver),
   });
+  if (approvalContextResolver) {
+    const { dispatchAgentApprovalInProcess } = await import("./gateway-agent-approval.js");
+    return await dispatchAgentApprovalInProcess<T>(method, callParams, {
+      resolveContext: approvalContextResolver,
+      identityToken: agentRuntimeIdentityToken,
+      timeoutMs: gateway.timeoutMs,
+      expectFinal: extra?.expectFinal,
+      signal: extra?.signal,
+    });
+  }
   const deviceIdentity = resolveApprovalRequesterDeviceIdentityForGatewayTool({
     method,
     callParams,

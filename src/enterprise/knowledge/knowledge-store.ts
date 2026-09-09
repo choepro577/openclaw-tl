@@ -4,3 +4,4 @@ export * from "./knowledge-job-store.js";
 export * from "./knowledge-publication-store.js";
 export * from "./knowledge-source-store.js";
 export * from "./knowledge-zone-store.js";
+export * from "./knowledge-evidence-transfer-store.js";

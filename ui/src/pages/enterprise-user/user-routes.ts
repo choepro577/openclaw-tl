@@ -3,6 +3,7 @@ import { html } from "lit";
 import type { RouteId } from "../../app-route-paths.ts";
 import type { ApplicationRouter, AppRouteModule } from "../../app-routes.ts";
 import type { ApplicationContext } from "../../app/context.ts";
+import { eu } from "../../i18n/enterprise-user.ts";
 import { pages as chatPages } from "../chat/route.ts";
 
 const userAgentsPage = definePage({
@@ -144,7 +145,7 @@ const userNotFoundPage = definePage({
 
 const chatPage = chatPages.find((page) => page.id === "chat");
 if (!chatPage) {
-  throw new Error("Enterprise User Chat route is unavailable.");
+  throw new Error(eu("chatRouteUnavailable"));
 }
 
 const userRoutes = [

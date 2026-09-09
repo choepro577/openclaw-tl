@@ -1,0 +1,9 @@
+{
+  "observedDuring": "C04 initial clarification, before its consent turn replaced the C03 tool report",
+  "source": "read-only session_nodes.entry_json.systemPromptReport",
+  "sessionId": "c93646ed-9f31-4a25-a620-9933c4a0d22d",
+  "generatedAt": 1788508271954,
+  "generatedAtIso": "2026-09-04T07:51:11.954Z",
+  "tools": ["read", "edit", "write", "apply_patch", "exec", "process", "enterprise_knowledge_search", "enterprise_knowledge_get", "enterprise_specialists_list", "enterprise_delegate", "memory_search", "memory_get"],
+  "observation": "C03 consent turn had enterprise_delegate in the model tool report, but seq 23-25 used exec and returned a local answer. No new subagent run was created."
+}

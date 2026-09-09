@@ -63,14 +63,26 @@ export function renderAgentRunFrame(frame: AgentRunFrameRenderItem, opts: AgentR
       return renderStreamGroupParts(part.parts, opts.streamOptions, "standalone");
     }
     if (part.kind === "work-group") {
+      const firstGroup = part.groups[0];
+      if (!firstGroup) {
+        return nothing;
+      }
       const expanded = opts.isWorkExpanded(part.key);
       return html`
         ${renderWorkGroupSummary(part, {
+          ...opts.renderGroupOptions(firstGroup),
           expanded,
           onToggle: () => opts.onToggleWork(part.key, expanded),
           presentation: "continuation",
         })}
-        ${expanded ? part.groups.map(renderFrameGroup) : nothing}
+        ${expanded
+          ? part.groups.map((group) =>
+              renderMessageGroupContent(group, {
+                ...opts.renderGroupOptions(group),
+                delegationExpanded: true,
+              }),
+            )
+          : nothing}
       `;
     }
     if (part.kind === "activity-run") {

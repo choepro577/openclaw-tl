@@ -1,0 +1,57 @@
+.chat-knowledge {
+  min-width: 0;
+  max-width: 100%;
+  margin-block: 6px;
+  overflow-wrap: anywhere;
+}
+
+.chat-knowledge__heading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+  text-align: start;
+}
+
+.chat-knowledge__heading-text,
+.chat-knowledge__source {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+}
+
+.chat-knowledge__heading-text {
+  flex: 1;
+}
+
+.chat-knowledge__icon svg {
+  display: block;
+  width: 16px;
+  height: 16px;
+}
+
+.chat-knowledge__heading small,
+.chat-knowledge__meta {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.chat-knowledge__body {
+  display: grid;
+  gap: 10px;
+  padding-block: 8px;
+}
+
+.chat-knowledge__body p {
+  margin: 0;
+}
+
+.chat-knowledge__evidence {
+  min-width: 0;
+  margin: 4px 0;
+  padding: 8px 12px;
+  border-inline-start: 2px solid var(--border);
+  color: var(--text);
+  white-space: pre-wrap;
+}

@@ -884,6 +884,7 @@ export async function executeCronRun(params: {
   registerAgentRunContext(params.cronSession.sessionEntry.sessionId, {
     sessionKey: params.runSessionKey,
     sessionId: params.cronSession.sessionEntry.sessionId,
+    runtimeConfig: params.cfg,
     verboseLevel: resolvedVerboseLevel,
   });
   const executor = createCronPromptExecutor({

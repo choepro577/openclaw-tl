@@ -515,7 +515,9 @@ export const startSubagentAnnounceCleanupFlow = (
       return;
     }
     const shouldCreditPriorDelivery =
-      announceOutcome !== "delivered" && (await hasPriorRequesterDeliveryMirror(params, entry));
+      announceOutcome !== "delivered" &&
+      announceOutcome !== "intentional_non_delivery" &&
+      (await hasPriorRequesterDeliveryMirror(params, entry));
     if (!context.isCleanupAttemptCurrent(runId, entry, cleanupGeneration)) {
       await retireSupersededCleanupIfNeeded(context, runId, entry, cleanupGeneration);
       return;

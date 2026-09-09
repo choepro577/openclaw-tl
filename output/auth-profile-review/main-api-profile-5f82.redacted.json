@@ -1,0 +1,14 @@
+{
+  "agentId": "main",
+  "profileId": "openai:setup-3a850079-d525-44ad-9be8-b0e8d20a5f82",
+  "source": {
+    "file": "/Users/hieunguyenduc/.openclaw/agents/main/agent/openclaw-agent.sqlite",
+    "table": "auth_profile_store"
+  },
+  "profile": {
+    "provider": "openai",
+    "type": "api_key",
+    "apiKey": "[REDACTED]"
+  },
+  "note": "Bản xuất để xem. API key và các giá trị xác thực đã được che; không dùng file này để nhập lại cấu hình."
+}

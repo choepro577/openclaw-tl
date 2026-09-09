@@ -792,6 +792,36 @@ describe("gateway broadcaster", () => {
     expectSentEvents(adminSocket, writeVisibleEvents);
   });
 
+  it("does not broadcast unscoped task records to Enterprise portals", () => {
+    const socket = makeRecordingSocket();
+    const client = makeOperatorWsClient("portal", socket, ["operator.admin"]);
+    client.authenticatedUserProfile = {
+      profileId: "profile-a",
+      displayName: null,
+      hasAvatar: false,
+      updatedAt: 1,
+    };
+    client.internal = {
+      enterpriseSession: {
+        sessionId: "session-a",
+        audience: "user",
+        accountId: "a",
+        accountRole: "administrator",
+      },
+    };
+    const canReceiveSessionEvent = vi.fn((_client, keys) => keys.includes("own"));
+    const { broadcast } = createGatewayBroadcaster({
+      clients: new Set([client]),
+      canReceiveSessionEvent,
+    });
+    broadcast("task", { action: "deleted", taskId: "global" });
+    broadcast("task", { action: "deleted", taskId: "foreign" }, { sessionKeys: ["foreign"] });
+    broadcast("task", { action: "deleted", taskId: "own" }, { sessionKeys: ["own"] });
+    expect(socket.sent.map((event) => event.payload)).toEqual([
+      { action: "deleted", taskId: "own" },
+    ]);
+  });
+
   it("projects realtime presence to the current Enterprise profile", () => {
     const portalSocket = makeRecordingSocket();
     const operatorSocket = makeRecordingSocket();

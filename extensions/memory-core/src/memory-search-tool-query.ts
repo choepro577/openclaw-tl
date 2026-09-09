@@ -9,20 +9,8 @@ import type { OpenClawConfig } from "openclaw/plugin-sdk/memory-core-host-runtim
 import type { OpenClawPluginToolContext } from "openclaw/plugin-sdk/plugin-entry";
 import { asNullableRecord } from "openclaw/plugin-sdk/string-coerce-runtime";
 import { filterMemorySearchHitsBySessionVisibility } from "./session-search-visibility.js";
-import { buildMemorySearchUnavailableResult } from "./tools.shared.js";
 
 const MEMORY_SEARCH_POST_FILTER_MAX_CANDIDATES = 200;
-const PAUSED_MEMORY_INDEX_WARNING =
-  "Tell the user: memory search is paused because the memory index was built with a different embedding provider/model/settings.";
-const PAUSED_MEMORY_INDEX_ACTION =
-  "Tell the user to run: openclaw memory status --index or openclaw memory index --force.";
-
-export function buildPausedMemoryIndexUnavailableResult(reason: string) {
-  return buildMemorySearchUnavailableResult(reason, {
-    warning: PAUSED_MEMORY_INDEX_WARNING,
-    action: PAUSED_MEMORY_INDEX_ACTION,
-  });
-}
 
 type ManagerState = { manager: MemorySearchManager; managerMs?: number };
 
@@ -159,6 +147,7 @@ export async function executeMemorySearchToolQuery(params: {
   const postFilterHits = filtered.length;
   const rawResults = filtered.slice(0, query.resultLimit);
   const latestDebug = runtimeDebug.at(-1);
+  const bootstrap = runtimeDebug.findLast((entry) => entry.embeddingBootstrap)?.embeddingBootstrap;
   return {
     status,
     rawResults,
@@ -168,11 +157,11 @@ export async function executeMemorySearchToolQuery(params: {
       backend: status.backend,
       configuredMode: latestDebug?.configuredMode,
       effectiveMode: "n/a",
-      fallback: latestDebug?.fallback,
       managerMs: active.managerMs,
       searchMs: Math.max(0, Date.now() - startedAt),
-      embeddingBootstrap: runtimeDebug.findLast((entry) => entry.embeddingBootstrap)
-        ?.embeddingBootstrap,
+      embeddingBootstrap: bootstrap
+        ? { ok: bootstrap.ok, provider: bootstrap.provider, degradedTo: bootstrap.degradedTo }
+        : undefined,
       hits: rawResults.length,
       candidateHits: searched.candidates.length,
       withheldHits: Math.max(0, searched.candidates.length - postFilterHits),

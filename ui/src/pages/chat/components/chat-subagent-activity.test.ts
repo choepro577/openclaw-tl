@@ -93,6 +93,54 @@ afterEach(() => {
 });
 
 describe("subagent activity rows", () => {
+  it("shows queued specialists as waiting instead of working", () => {
+    const queued = makeTask({ id: "queued-subagent", status: "queued" });
+    const container = renderStatusRow({
+      subagentsOnly: true,
+      tasks: [queued],
+      subagentActivity: deriveSubagentActivity({
+        tasks: [queued],
+        sessionKey: "agent:main:current",
+        terminalObservedAtByTask: new Map(),
+        canonicalizeSessionKey: (sessionKey) => sessionKey ?? "",
+      }),
+    });
+
+    expect(container.textContent).toContain("Map codebase · Waiting to start");
+    expect(container.textContent).not.toContain("Map codebase · Specialist is working");
+  });
+
+  it("keeps a completed specialist visible while its report is pending delivery", () => {
+    const pending = makeTask({
+      id: "pending-report",
+      status: "completed",
+      deliveryStatus: "pending",
+      updatedAt: 1_000,
+      endedAt: 1_000,
+      terminalSummary: "Report ready",
+    });
+    const subagentActivity = deriveSubagentActivity({
+      tasks: [pending],
+      sessionKey: "agent:main:current",
+      terminalObservedAtByTask: new Map([[pending.id, 1_000]]),
+      canonicalizeSessionKey: (sessionKey) => sessionKey ?? "",
+      now: 1_000 + TERMINAL_RETENTION_MS + 1,
+    });
+    const container = renderStatusRow({
+      subagentsOnly: true,
+      tasks: [pending],
+      subagentActivity,
+    });
+
+    expect(subagentActivity.rows.map((task) => task.id)).toEqual([pending.id]);
+    expect(subagentActivity.nextExpiryAt).toBeNull();
+    expect(container.textContent).toContain(
+      "Map codebase · Waiting for the result to reach Personal Agent",
+    );
+    expect(container.textContent).not.toContain("Map codebase · Subagent finished");
+    expect(container.querySelector(".chat-subagent-activity__indicator--pending")).not.toBeNull();
+  });
+
   it("opens the selected subagent from an accessible activity control", () => {
     const task = makeTask({ id: "clickable-subagent" });
     const onOpenTaskDetail = vi.fn();

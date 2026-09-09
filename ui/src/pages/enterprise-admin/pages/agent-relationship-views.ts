@@ -1,4 +1,6 @@
 import { html, nothing } from "lit";
+import { eaa } from "../../../i18n/enterprise-admin-agents.ts";
+import { ea } from "../../../i18n/enterprise-admin.ts";
 import type {
   EnterpriseAgentFile,
   EnterpriseSharedRelationshipItem,
@@ -27,15 +29,17 @@ export function renderAgentRelationshipsPanel(props: {
   const selected = props.items.find((item) => item.accountId === props.selectedAccountId);
   if (props.items.length === 0) {
     return html`<div class="ea-card ea-empty">
-      Chưa có user nào được cấp Agent này hoặc có hồ sơ danh xưng đã lưu.
+      ${eaa("Chưa có user nào được cấp Agent này hoặc có hồ sơ danh xưng đã lưu.")}
     </div>`;
   }
   return html`
     <div class="ea-relationship-layout">
-      <aside class="ea-card ea-relationship-users" aria-label="User dùng shared Agent">
+      <aside class="ea-card ea-relationship-users" aria-label=${eaa("User dùng shared Agent")}>
         <header>
-          <h3>User</h3>
-          <p class="ea-muted">${props.items.length} hồ sơ theo tài khoản</p>
+          <h3>${eaa("User")}</h3>
+          <p class="ea-muted">
+            ${eaa("{count} hồ sơ theo tài khoản", { count: String(props.items.length) })}
+          </p>
         </header>
         <div class="ea-relationship-users__list">
           ${props.items.map(
@@ -54,7 +58,7 @@ export function renderAgentRelationshipsPanel(props: {
                 class="ea-badge ${item.assigned && item.enabled
                   ? "ea-badge--good"
                   : "ea-badge--warn"}"
-                >${item.assigned && item.enabled ? "Được cấp" : "Không hoạt động"}</span
+                >${item.assigned && item.enabled ? ea("Được cấp") : eaa("Không hoạt động")}</span
               >
             </button>`,
           )}
@@ -66,10 +70,12 @@ export function renderAgentRelationshipsPanel(props: {
               <section class="ea-card ea-panel-editor">
                 <div class="ea-toolbar">
                   <div>
-                    <h3>Danh xưng của ${selected.displayName}</h3>
+                    <h3>${eaa("Danh xưng của {name}", { name: selected.displayName })}</h3>
                     <p class="ea-muted">
-                      Agent gốc: <strong>${props.canonicalName}</strong> · Tên hiệu lực:
-                      <strong>${props.profile.agentAlias || props.canonicalName}</strong>
+                      ${eaa("Agent gốc: {canonical} · Tên hiệu lực: {effective}", {
+                        canonical: props.canonicalName,
+                        effective: props.profile.agentAlias || props.canonicalName,
+                      })}
                     </p>
                   </div>
                   <span class="ea-spacer"></span>
@@ -79,12 +85,12 @@ export function renderAgentRelationshipsPanel(props: {
                     ?disabled=${!props.profileDirty || props.saving}
                     @click=${props.onSaveProfile}
                   >
-                    ${props.saving ? "Đang lưu…" : "Lưu danh xưng"}
+                    ${props.saving ? ea("Đang lưu…") : ea("Lưu danh xưng")}
                   </button>
                 </div>
                 <div class="ea-form-grid ea-relationship-form">
                   <label class="ea-field"
-                    >Tên riêng user gọi Agent
+                    >${ea("Tên riêng user gọi Agent")}
                     <input
                       class="ea-input"
                       maxlength="64"
@@ -97,7 +103,7 @@ export function renderAgentRelationshipsPanel(props: {
                     />
                   </label>
                   <label class="ea-field"
-                    >Agent tự xưng là
+                    >${ea("Agent tự xưng là")}
                     <input
                       class="ea-input"
                       maxlength="64"
@@ -109,7 +115,7 @@ export function renderAgentRelationshipsPanel(props: {
                     />
                   </label>
                   <label class="ea-field"
-                    >Agent gọi user là
+                    >${ea("Agent gọi user là")}
                     <input
                       class="ea-input"
                       maxlength="128"
@@ -121,7 +127,7 @@ export function renderAgentRelationshipsPanel(props: {
                     />
                   </label>
                   <label class="ea-field ea-form-grid__full"
-                    >Ghi chú tương tác
+                    >${ea("Ghi chú tương tác")}
                     <textarea
                       class="ea-textarea"
                       maxlength="1200"
@@ -134,17 +140,18 @@ export function renderAgentRelationshipsPanel(props: {
                   </label>
                 </div>
                 <p class="ea-panel-note">
-                  Hồ sơ dùng khóa account + Agent và có revision riêng. Biệt danh không tham gia
-                  định tuyến hoặc phân quyền.
+                  ${eaa(
+                    "Hồ sơ dùng khóa account + Agent và có revision riêng. Biệt danh không tham gia định tuyến hoặc phân quyền.",
+                  )}
                 </p>
               </section>
               <section class="ea-relationship-files">
                 <div class="ea-relationship-files__heading">
                   <div>
-                    <h3>Files riêng của user</h3>
+                    <h3>${ea("Files riêng của user")}</h3>
                     <p class="ea-muted" translate="no">${selected.workspace}</p>
                   </div>
-                  <span class="ea-badge ea-badge--good">Memory tách biệt</span>
+                  <span class="ea-badge ea-badge--good">${eaa("Memory tách biệt")}</span>
                 </div>
                 ${renderAgentFilesPanel({
                   data: { files: selected.files },

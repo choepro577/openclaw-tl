@@ -14,7 +14,7 @@ import { extractText } from "../../lib/chat/message-extract.ts";
 import { loadChatHistory } from "./chat-history.ts";
 import { makeChatHost } from "./chat-host.test-support.ts";
 import { ChatStateController } from "./chat-state-controller.ts";
-import { handlePageGatewayEvent } from "./chat-state-events.ts";
+import { handlePageGatewayEvent, readChatHistoryEventRevision } from "./chat-state-events.ts";
 import type { ChatPageHost } from "./chat-state-host.ts";
 import { createPageState } from "./chat-state-page.ts";
 import {
@@ -40,6 +40,19 @@ afterEach(() => {
   replaceSlashCommands(buildFallbackSlashCommands());
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
+});
+
+describe("chat history event identity", () => {
+  it("does not coalesce separate events that have no stable wire identity", () => {
+    const first = { sessionKey: "agent:main:main", message: {} };
+    const duplicateDelivery = first;
+    const second = { sessionKey: "agent:main:main", message: {} };
+
+    expect(readChatHistoryEventRevision(first)).toBe(
+      readChatHistoryEventRevision(duplicateDelivery),
+    );
+    expect(readChatHistoryEventRevision(second)).not.toBe(readChatHistoryEventRevision(first));
+  });
 });
 
 describe("canonical session message recovery", () => {
@@ -908,7 +921,7 @@ describe("canonical session message recovery", () => {
     expect(state.chatStream).toBe("Current partial reply");
   });
 
-  it("coalesces distinct live peers into one frame and their stale history into one load", async () => {
+  it("coalesces live peer rendering while reconciling a peer event received during history loading", async () => {
     let renderFrame: FrameRequestCallback | undefined;
     vi.spyOn(globalThis, "requestAnimationFrame").mockImplementation((callback) => {
       renderFrame = callback;
@@ -964,11 +977,45 @@ describe("canonical session message recovery", () => {
 
     await vi.waitFor(() => expect(state.chatLoading).toBe(false));
 
-    expect(request).toHaveBeenCalledOnce();
+    // The second peer arrived after the first snapshot started, so one trailing
+    // read is required even when both live messages render in the same frame.
+    expect(request).toHaveBeenCalledTimes(2);
     expect(state.chatMessages).toMatchObject([
       { __openclaw: { id: "canonical-web-same-text", seq: 1 } },
       { __openclaw: { id: "canonical-tui-same-text", seq: 2 } },
     ]);
+  });
+
+  it("trails a new terminal message behind an in-flight full-tail history request", async () => {
+    const firstHistory = createDeferred<Record<string, unknown>>();
+    const secondHistory = createDeferred<Record<string, unknown>>();
+    const { request, state } = createSessionEventState();
+    request.mockReturnValueOnce(firstHistory.promise).mockReturnValueOnce(secondHistory.promise);
+
+    const initialLoad = loadChatHistory(state);
+    expect(request).toHaveBeenCalledOnce();
+    const terminalEvent = {
+      type: "event",
+      event: "chat",
+      payload: {
+        sessionKey: state.sessionKey,
+        runId: "terminal-run",
+        state: "final",
+        message: {
+          role: "assistant",
+          content: [{ type: "text", text: "The persisted answer." }],
+        },
+      },
+    } satisfies Parameters<typeof handlePageGatewayEvent>[1];
+
+    handlePageGatewayEvent(state, terminalEvent);
+    handlePageGatewayEvent(state, terminalEvent);
+    expect(request).toHaveBeenCalledOnce();
+
+    firstHistory.resolve({ messages: [], sessionId: "selected-session" });
+    await vi.waitFor(() => expect(request).toHaveBeenCalledTimes(2));
+    secondHistory.resolve({ messages: [], sessionId: "selected-session" });
+    await Promise.all([initialLoad, vi.waitFor(() => expect(state.chatLoading).toBe(false))]);
   });
 
   it("drops pre-reset live and pending messages before accepting a new session turn", () => {

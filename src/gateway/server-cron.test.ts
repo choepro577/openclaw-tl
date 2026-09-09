@@ -362,6 +362,53 @@ describe("buildGatewayCronService", () => {
     });
   });
 
+  it("executes newly provisioned personal maintenance with the account runtime", async () => {
+    const { withOpenClawTestState } = await import("../test-utils/openclaw-test-state.js");
+    const { createEnterpriseAccount, deleteEnterpriseAccountForBootstrapRollback } =
+      await import("../enterprise/accounts/account-store.js");
+    const { loadCronJobsStoreSync, resolveCronJobsStorePath } = await import("../cron/store.js");
+    const { readGatewayRequestRuntimeMetadata } = await import("./request-runtime-config.js");
+    await withOpenClawTestState({ scenario: "minimal", applyEnv: true }, async (fixture) => {
+      const cfg: OpenClawConfig = {
+        enterprise: { enabled: true },
+        agents: { entries: { main: { default: true, workspace: fixture.workspaceDir } } },
+      };
+      loadConfigMock.mockReturnValue(cfg);
+      const account = createEnterpriseAccount({
+        username: "cron.personal",
+        displayName: "Personal",
+        passwordHash: "unused",
+        role: "employee",
+        mustChangePassword: false,
+      });
+      const jobs = loadCronJobsStoreSync(resolveCronJobsStorePath()).jobs.filter(
+        (job) => job.owner?.accountId === account.id,
+      );
+      // SAFETY: This case mocks the heartbeat and isolated runners, so no CLI dependency is called.
+      const state = buildGatewayCronService({ cfg, deps: {} as CliDeps, broadcast: () => {} });
+      try {
+        for (const job of jobs) {
+          await expect(state.cron.run(job.id, "force")).resolves.toMatchObject({
+            ok: true,
+            ran: true,
+          });
+        }
+        expect(runHeartbeatOnceMock).toHaveBeenCalledTimes(1);
+        expect(runCronIsolatedAgentTurnMock).toHaveBeenCalledTimes(1);
+        for (const mock of [runHeartbeatOnceMock, runCronIsolatedAgentTurnMock]) {
+          // SAFETY: Both runners receive their typed cfg argument; call counts are asserted above.
+          const call = mock.mock.calls[0]?.[0] as { cfg: OpenClawConfig };
+          expect(readGatewayRequestRuntimeMetadata(call.cfg)?.enterpriseUser?.accountId).toBe(
+            account.id,
+          );
+        }
+      } finally {
+        state.cron.stop();
+        deleteEnterpriseAccountForBootstrapRollback(account.id);
+      }
+    });
+  });
+
   it.each(["update", "updateWithPrecondition"] as const)(
     "forwards authority options through the %s lifecycle wrapper",
     async (method) => {

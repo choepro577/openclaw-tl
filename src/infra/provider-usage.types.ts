@@ -86,6 +86,8 @@ export type ProviderUsageSnapshot = {
 export type UsageSummary = {
   updatedAt: number;
   providers: ProviderUsageSnapshot[];
+  /** A cold non-blocking caller can retry after the background provider refresh completes. */
+  refreshing?: boolean;
 };
 
 /** Normalized provider id. Usage providers are discovered from plugin hooks at runtime. */

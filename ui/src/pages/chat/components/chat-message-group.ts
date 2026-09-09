@@ -18,7 +18,7 @@ import {
   resolveToolApprovalReviewOutcome,
 } from "../../../lib/chat/tool-approval-reviews.ts";
 import { summarizeToolGroup } from "../../../lib/chat/tool-call-grouping.ts";
-import { extractToolCardsCached } from "../../../lib/chat/tool-cards.ts";
+import { extractToolCardsCached, isToolCardSkipped } from "../../../lib/chat/tool-cards.ts";
 import type { EmbedSandboxMode } from "../../../lib/chat/tool-display.ts";
 import { fnv1aUtf16 } from "../../../lib/fnv1a.ts";
 import { resolveIdentityHue } from "../../../lib/identity-avatar.ts";
@@ -32,6 +32,8 @@ import {
 import type { LinkFaviconFetcher } from "../link-favicon-loader.ts";
 import { workspaceResultConflictFromTranscript } from "../workspace-conflict.ts";
 import { renderChatAuthorAvatar } from "./chat-author-avatar.ts";
+import { delegationSummary, type DelegationCardContext } from "./chat-delegation-card.ts";
+import { isEnterpriseKnowledgeTool } from "./chat-knowledge-card.ts";
 import { renderGroupedMessage } from "./chat-message-bubble.ts";
 import { renderRewindButton } from "./chat-message-confirmation.ts";
 import {
@@ -65,7 +67,8 @@ type ActiveContinuation = {
 
 type ReplyPreview = MessageReplyTarget & { sourceMessageId: string };
 
-type RenderMessageGroupOptions = {
+type RenderMessageGroupOptions = DelegationCardContext & {
+  hideDelegationYield?: boolean;
   onOpenSidebar?: (content: SidebarContent) => void;
   onOpenWorkspaceFile?: (target: { path: string; line?: number | null }) => void;
   sessionKey?: string;
@@ -156,6 +159,10 @@ function buildGroupedMessageRenderOptions(
   return {
     isStreaming: group.isStreaming && index === group.messages.length - 1,
     sessionKey: opts.sessionKey,
+    delegationTasks: opts.delegationTasks,
+    delegationExpanded: opts.delegationExpanded,
+    onOpenSubagents: opts.onOpenSubagents,
+    hideDelegationYield: opts.hideDelegationYield,
     boardProvider: opts.boardProvider,
     agentId: opts.agentId,
     entryId: persistedMessageEntryId(item.message) ?? undefined,
@@ -262,12 +269,24 @@ export function renderActivityGroup(
   const runningCard = opts.runActive
     ? latestCards.findLast((card) => isRunningToolCard(card, opts.runActive))
     : undefined;
-  const groupSummaryLabel = runningCard
-    ? `${resolveToolRowText(runningCard, opts.runActive)}…`
-    : summarizeToolGroup(cards.map((card) => ({ name: card.name, args: card.args })));
+  const delegationCards = cards.filter(
+    (card) => card.name === "enterprise_delegate" && !isToolCardSkipped(card),
+  );
+  const hasDelegation = delegationCards.length > 0;
+  const skippedCards = cards.filter(isToolCardSkipped);
+  const groupSummaryLabel = hasDelegation
+    ? [
+        ...delegationCards.map((card) => delegationSummary(card, opts)),
+        ...(skippedCards.length ? [summarizeToolGroup(skippedCards)] : []),
+      ].join(" · ")
+    : runningCard
+      ? `${resolveToolRowText(runningCard, opts.runActive)}…`
+      : summarizeToolGroup(cards);
   const activityDisclosureId = `activity:${firstGroup.key}`;
   const activityBodyId = `activity-body-${fnv1aUtf16(firstGroup.key).toString(16)}`;
-  const activityExpanded = opts.isToolMessageExpanded?.(activityDisclosureId) ?? false;
+  const activityExpanded =
+    opts.isToolMessageExpanded?.(activityDisclosureId) ??
+    cards.some((card) => isEnterpriseKnowledgeTool(card.name));
   const approvalReviews = cards.flatMap((card) => readToolApprovalReviews(card.details));
   const recordedReviewOutcomes = cards.flatMap((card) => {
     const outcome = readToolApprovalReviewOutcome(card.details);
@@ -280,6 +299,24 @@ export function renderActivityGroup(
         reviewer,
       })
     : "";
+  const activityBody = () =>
+    groups.map((group) =>
+      group.messages.map((item, index) =>
+        renderGroupedMessage(
+          item.message,
+          item.key,
+          buildGroupedMessageRenderOptions(group, item, index, {
+            ...opts,
+            hideDelegationYield: hasDelegation,
+          }),
+          opts.onOpenSidebar,
+        ),
+      ),
+    );
+  // The parent work disclosure already owns expansion; do not nest a second one.
+  if (hasDelegation && opts.delegationExpanded) {
+    return html`${activityBody()}`;
+  }
   const content = html`
     <div class="chat-activity-group ${activityExpanded ? "is-open" : ""}">
       <button
@@ -317,18 +354,7 @@ export function renderActivityGroup(
         <span class="chat-tool-row__chevron" aria-hidden="true">${icons.chevronRight}</span>
       </button>
       <div class="chat-activity-group__body" id=${activityBodyId} ?hidden=${!activityExpanded}>
-        ${activityExpanded
-          ? groups.map((group) =>
-              group.messages.map((item, index) =>
-                renderGroupedMessage(
-                  item.message,
-                  item.key,
-                  buildGroupedMessageRenderOptions(group, item, index, opts),
-                  opts.onOpenSidebar,
-                ),
-              ),
-            )
-          : nothing}
+        ${activityExpanded ? activityBody() : nothing}
       </div>
     </div>
   `;

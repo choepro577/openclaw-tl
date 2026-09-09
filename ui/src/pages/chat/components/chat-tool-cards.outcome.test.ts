@@ -7,6 +7,32 @@ import { renderToolCard } from "./chat-tool-cards.ts";
 // Outcome presentation for tool cards: neutral collapsed rows, the expanded
 // outcome line, and the compact progress_card receipt.
 describe("tool-card outcomes", () => {
+  it.each(["lookup", "progress_card", "bash", "enterprise_delegate"])(
+    "presents metadata-skipped %s as a non-error outcome",
+    (name) => {
+      const container = document.createElement("div");
+      render(
+        renderToolCard(
+          {
+            id: `skipped:${name}`,
+            name,
+            args: { command: "pwd", markdown: "Update" },
+            outputText: "Skipped due to queued user message.",
+            isError: true,
+            completed: true,
+            details: { status: "skipped", deniedReason: "steering" },
+          },
+          { expanded: true, onToggleExpanded: vi.fn() },
+        ),
+        container,
+      );
+      expect(container.textContent).toContain("Not performed because a newer message arrived");
+      expect(container.querySelector(".chat-tool-card--error")).toBeNull();
+      expect(container.textContent).not.toContain("Tool error");
+      expect(container.textContent).not.toContain("Progress note updated");
+    },
+  );
+
   it("renders error details with the failure outcome in the expanded body", () => {
     const container = document.createElement("div");
     render(
@@ -202,6 +228,7 @@ describe("tool-card outcomes", () => {
     );
 
     expect(container.textContent?.trim()).toBe(expected);
+    expect(container.querySelector(".chat-progress-card-receipt__summary")).not.toBeNull();
     expect(container.querySelector("button")).toBeNull();
     expect(container.querySelector(".chat-tool-msg-body")).toBeNull();
     expect(container.textContent).not.toContain("Waiting on review.");

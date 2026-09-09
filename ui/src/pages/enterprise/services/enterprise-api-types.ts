@@ -4,6 +4,13 @@ export type EnterprisePortalAudience = "admin" | "user";
 export type EnterpriseAccountRole = "administrator" | "employee";
 export type EnterpriseEntitlementEffect = "allow" | "deny";
 
+export type EnterpriseAccessPreset = {
+  key: string;
+  label: string;
+  description: string;
+  toolIds: string[];
+};
+
 export type EnterpriseAccount = {
   id: string;
   profileId: string;
@@ -49,9 +56,11 @@ export type EnterprisePageInfo = { total: number; nextCursor: string | null };
 
 export type EnterpriseAccessDecision = {
   assignedEffect: EnterpriseEntitlementEffect | "none";
+  permissionAllowed: boolean;
   effectiveAllowed: boolean;
   intrinsicStatus: string;
   reasonCodes: string[];
+  setupReason?: string | null;
   policyRevision: number;
   catalogRevision: string;
 };
@@ -61,13 +70,78 @@ export type EnterpriseSharedAgent = {
   agentId: string;
   resourceKey: string;
   name: string;
+  description?: string;
+  delegationTarget?: EnterpriseDelegationProfile | null;
+  delegationReadiness?: "ready" | "needs_setup" | "disabled";
+  evidenceTransferEligible?: boolean;
   model: string | null;
   workspace: string | null;
   runtimeType: string;
   assignedUserCount: number;
+  effectiveUserCount?: number;
+  routableUserCount?: number;
   skillCount: number;
   toolCount: number;
   updatedAt?: number | null;
+};
+
+export type EnterpriseDelegationHandlingMode =
+  | "auto_when_certain"
+  | "confirm_before_handoff"
+  | "explicit_only";
+
+export type EnterpriseDelegationProfile = {
+  status: "draft" | "active" | "disabled";
+  aliases: string[];
+  handlingMode: EnterpriseDelegationHandlingMode;
+  useWhen: string[];
+  avoidWhen: string[];
+  requiredInputs: Array<{ id: string; label: string; question: string }>;
+};
+
+export type EnterpriseDelegationPolicy = {
+  rollout: "off" | "shadow" | "on";
+  routerModel: string;
+  autoThreshold: number;
+  clarifyThreshold: number;
+  minimumMargin: number;
+  maxDelegatesPerTurn: number;
+  eventRetentionDays: number;
+  revision: number;
+  updatedAt: number;
+};
+
+export type EnterpriseDelegationSpecialist = {
+  agentId: string;
+  resourceKey: string;
+  name: string;
+  description: string;
+  profile: EnterpriseDelegationProfile | null;
+  profileRevision: string;
+  assigned: boolean;
+  effective: boolean;
+  routable: boolean;
+  overrideMode: "inherit" | "confirm_before_handoff" | "explicit_only" | "disabled";
+  overrideRevision: number;
+  effectiveMode: EnterpriseDelegationHandlingMode | "disabled";
+  reasonCodes: string[];
+};
+
+export type EnterpriseDelegationEvent = {
+  id: string;
+  accountId: string;
+  personalAgentId: string;
+  sharedAgentIds: string[];
+  childRunIds: string[];
+  promptHash: string;
+  decisionSource: "explicit" | "rule" | "ai" | "system";
+  outcome: "delegated" | "clarified" | "local" | "blocked" | "failed" | "cancelled" | "shadow";
+  confidenceBand: "clear" | "ambiguous" | "low" | null;
+  reasonCode: string;
+  policyRevision: number;
+  confirmationState: "not_required" | "pending" | "approved" | "denied" | "expired";
+  latencyMs: number | null;
+  createdAt: number;
 };
 
 export type EnterprisePersonalAgent = {
@@ -130,6 +204,8 @@ export type EnterpriseToolCatalogItem = {
   nonDelegable: boolean;
   sessionDependent: boolean;
   assignedUserCount: number;
+  intrinsicStatus?: "ready" | "needs_setup" | "disabled";
+  setupReason?: string | null;
   effectiveAccess?: EnterpriseAccessDecision;
 };
 
@@ -245,4 +321,61 @@ export type EnterprisePluginRequestDetail = {
     tools: string[];
   };
   grants: EnterprisePluginGrant[];
+};
+
+export type EnterpriseCodexPluginRequest = {
+  id: string;
+  pluginId?: string;
+  pluginName: string;
+  marketplaceName: string;
+  remotePluginId?: string | null;
+  requesterAccountId: string;
+  agentKey: string;
+  runtimeAgentId?: string;
+  requestKind: "install" | "access";
+  catalogSnapshot?: Record<string, unknown>;
+  capabilitySnapshot?: Record<string, unknown>;
+  capabilityDigest?: string;
+  state: "pending" | "approving" | "available" | "rejected" | "cancelled" | "install_failed";
+  installedPluginId: string | null;
+  reviewerAccountId?: string | null;
+  decisionReason: string | null;
+  safeErrorCode: string | null;
+  authRequired?: boolean;
+  appsNeedingAuth?: Array<{ id: string; name: string; installUrl?: string | null }>;
+  connectUrls?: string[];
+  revision: number;
+  createdAt: number;
+  updatedAt: number;
+  decidedAt: number | null;
+};
+
+export type EnterpriseCodexPluginGrant = {
+  id: string;
+  pluginId?: string;
+  pluginName: string;
+  marketplaceName: string;
+  remotePluginId?: string | null;
+  accountId?: string;
+  agentKey: string;
+  runtimeAgentId?: string;
+  installedPluginId: string | null;
+  capabilitySnapshot?: Record<string, unknown>;
+  capabilityDigest?: string;
+  sourceRequestId?: string;
+  state: "active" | "disabled" | "unavailable" | "revoked";
+  authRequired?: boolean;
+  appsNeedingAuth?: Array<{ id: string; name: string; installUrl?: string | null }>;
+  connectUrls?: string[];
+  ready?: boolean;
+  revision: number;
+  createdAt: number;
+  updatedAt: number;
+};
+
+export type EnterpriseCodexPluginRequestDetail = {
+  request: EnterpriseCodexPluginRequest;
+  account: { id: string; username: string; displayName: string } | null;
+  detail: Record<string, unknown> | null;
+  grant: EnterpriseCodexPluginGrant | null;
 };

@@ -1,12 +1,16 @@
 /* @vitest-environment jsdom */
 
 import { nothing, render } from "lit";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { UserPersonalAgentPage } from "../pages/agents/personal-agent-page.ts";
 import type { PersonalAgentEditorState } from "../state/personal-agent-editor-store.ts";
 import { personalAgentEditorStore } from "../state/personal-agent-editor-store.ts";
 import type { UserBootstrapState } from "../state/user-bootstrap-store.ts";
 import { userBootstrapStore } from "../state/user-bootstrap-store.ts";
+
+const { showToastMock } = vi.hoisted(() => ({ showToastMock: vi.fn() }));
+
+vi.mock("../../../lib/toast.ts", () => ({ showToast: showToastMock }));
 
 type PersonalAgentPanel = "overview" | "instructions" | "knowledge" | "capabilities";
 
@@ -103,11 +107,13 @@ describe("Enterprise User Personal Agent settings", () => {
     previousBootstrapState = userBootstrapStore.state;
     personalAgentEditorStore.state = readyEditorState;
     userBootstrapStore.state = readyBootstrapState;
+    showToastMock.mockClear();
   });
 
   afterEach(() => {
     personalAgentEditorStore.state = previousEditorState;
     userBootstrapStore.state = previousBootstrapState;
+    vi.restoreAllMocks();
     render(nothing, container);
     container.remove();
   });
@@ -157,5 +163,27 @@ describe("Enterprise User Personal Agent settings", () => {
     expect(container.textContent).toContain("Web search");
     expect(container.textContent).toContain("Calendar");
     expect(container.textContent).toContain("Reset customizations to defaults");
+  });
+
+  it.each([
+    ["success", null, "Personal Agent saved successfully."],
+    ["failure", "Gateway unavailable", "Gateway unavailable"],
+  ])("shows a toast after save %s", async (_outcome, error, message) => {
+    personalAgentEditorStore.state = {
+      ...readyEditorState,
+      draft: { ...readyEditorState.draft, name: "Updated Agent" },
+    };
+    vi.spyOn(personalAgentEditorStore, "save").mockImplementation(async () => {
+      const state = personalAgentEditorStore.state;
+      if (state.phase === "ready") {
+        personalAgentEditorStore.state = { ...state, busy: false, error };
+      }
+    });
+    const page = new UserPersonalAgentPage() as unknown as MutablePersonalAgentPage;
+
+    render(page.render(), container);
+    container.querySelector<HTMLButtonElement>(".eu-page-header .btn.primary")?.click();
+
+    await vi.waitFor(() => expect(showToastMock).toHaveBeenCalledWith({ message }));
   });
 });

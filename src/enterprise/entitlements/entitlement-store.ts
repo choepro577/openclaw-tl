@@ -1,19 +1,32 @@
+import { listAgentEntries } from "../../agents/agent-scope.js";
+import { isToolAllowedByPolicyName } from "../../agents/tool-policy-match.js";
+import type { OpenClawConfig } from "../../config/types.openclaw.js";
 // Account-specific Agent, Skill, and Tool grants. Explicit deny always wins.
+import { generateSecureUuid } from "../../infra/secure-random.js";
 import {
   openOpenClawStateDatabase,
   runOpenClawStateWriteTransaction,
   type OpenClawStateDatabaseOptions,
 } from "../../state/openclaw-state-db.js";
+import { readEnterpriseAccountToolPolicy } from "../accounts/account-tool-policy-store.js";
 import type { EnterpriseAccount } from "../accounts/account-types.js";
 import { ensureEnterpriseSchema } from "../database/enterprise-schema.js";
+import { listActiveEnterprisePluginGrantTools } from "../isolation/enterprise-plugin-tool-grants.js";
+import {
+  compileEnterpriseAccountToolPolicy,
+  expandEnterpriseToolPolicyEntries,
+} from "../isolation/enterprise-tool-policy-common.js";
+import { resolveEnterprisePersonalAgentTemplateId } from "../personal-agent/personal-agent-config.js";
 import {
   accessPresetToolIds,
   ENTERPRISE_NON_DELEGABLE_TOOL_IDS,
   enterpriseRuntimeResourceId,
   isEnterpriseNonDelegableToolId,
+  parseEnterpriseResourceKey,
 } from "./resource-keys.js";
+import type { EnterpriseResourceType } from "./resource-types.js";
 
-export type EnterpriseResourceType = "agent" | "skill" | "tool";
+export type { EnterpriseResourceType } from "./resource-types.js";
 export type EnterpriseEntitlementEffect = "allow" | "deny";
 export type EnterpriseEntitlement = {
   accountId: string;
@@ -131,22 +144,125 @@ export function resolveEnterpriseResourceAccess(
   resourceType: EnterpriseResourceType,
   resourceId: string,
   options: OpenClawStateDatabaseOptions = {},
+  config?: OpenClawConfig,
 ): { allowed: boolean; reason: string } {
   if (!account.enabled) {
     return { allowed: false, reason: "account_disabled" };
   }
+  const agentKey =
+    resourceType === "agent" ? parseEnterpriseResourceKey("agent", resourceId) : undefined;
+  if (agentKey?.scope === "personal") {
+    // Personal access belongs to its enabled owner, not to a transferable grant.
+    // Check before administrator access so a user-portal run cannot borrow another owner.
+    if (agentKey.accountId !== account.id) {
+      return { allowed: false, reason: "personal_agent_owner_mismatch" };
+    }
+    if (!account.personalAgentEnabled) {
+      return { allowed: false, reason: "personal_agent_disabled" };
+    }
+    const denied = listEnterpriseEntitlements(account.id, options).some((item) => {
+      const key = parseEnterpriseResourceKey(item.resourceType, item.resourceId);
+      return (
+        item.resourceState === "active" &&
+        item.resourceType === "agent" &&
+        item.effect === "deny" &&
+        key.scope === "personal" &&
+        key.accountId === account.id
+      );
+    });
+    return denied
+      ? { allowed: false, reason: "explicit_deny" }
+      : { allowed: true, reason: "personal_agent_owner" };
+  }
+  // Administrators retain the catalog-level authority they had before tool
+  // presets were introduced. User-runtime projections still apply the
+  // compiled account policy before tools are exposed; this resolver answers
+  // the control-plane resource assignment question.
   if (account.role === "administrator") {
     return { allowed: true, reason: "administrator" };
   }
   const normalized = normalizeResourceId(resourceId);
   const runtimeId = enterpriseRuntimeResourceId(resourceType, normalized);
-  if (resourceType === "tool" && isEnterpriseNonDelegableToolId(runtimeId)) {
-    return { allowed: false, reason: "employee_tool_hard_deny" };
+  if (resourceType === "tool") {
+    const matching = listEnterpriseEntitlements(account.id, options).filter(
+      (item) =>
+        item.resourceState === "active" &&
+        item.resourceType === "tool" &&
+        isToolAllowedByPolicyName(runtimeId, {
+          allow: [enterpriseRuntimeResourceId(item.resourceType, item.resourceId)],
+        }),
+    );
+    const entitlementAllows = matching
+      .filter((item) => item.effect === "allow")
+      .flatMap((item) =>
+        expandEnterpriseToolPolicyEntries([
+          enterpriseRuntimeResourceId(item.resourceType, item.resourceId),
+        ]),
+      );
+    const entitlementDenies = matching
+      .filter((item) => item.effect === "deny")
+      .flatMap((item) =>
+        expandEnterpriseToolPolicyEntries([
+          enterpriseRuntimeResourceId(item.resourceType, item.resourceId),
+        ]),
+      );
+    const storedPolicy = readEnterpriseAccountToolPolicy(account.id, options);
+    const templateId = config
+      ? resolveEnterprisePersonalAgentTemplateId(config, account)
+      : undefined;
+    const template =
+      config && templateId
+        ? listAgentEntries(config).find((entry) => entry.id === templateId)
+        : undefined;
+    const compiled = compileEnterpriseAccountToolPolicy({
+      account,
+      storedPolicy,
+      entitlementAllows,
+      entitlementDenies,
+      pluginGrantTools: listActiveEnterprisePluginGrantTools(account.id),
+      // A legacy configured policy with profile=null inherits only the
+      // runtime profile that the caller supplied. If an authority check has
+      // no runtime config, leave the inherited profile unresolved and fail
+      // closed instead of assuming the host's full profile. basic@1 never
+      // inherits a host profile in the first place.
+      inheritedProfile: template?.tools?.profile ?? config?.tools?.profile,
+    });
+    const allowed =
+      (compiled.allow?.length ?? 0) > 0 &&
+      isToolAllowedByPolicyName(runtimeId, {
+        allow: compiled.allow,
+        deny: compiled.deny,
+      });
+    if (!allowed) {
+      if (isEnterpriseNonDelegableToolId(runtimeId)) {
+        return { allowed: false, reason: "employee_tool_hard_deny" };
+      }
+      if (matching.some((item) => item.effect === "deny")) {
+        return { allowed: false, reason: "explicit_deny" };
+      }
+      if (
+        storedPolicy.configured &&
+        !isToolAllowedByPolicyName(runtimeId, { deny: storedPolicy.deny })
+      ) {
+        return { allowed: false, reason: "explicit_deny" };
+      }
+      return { allowed: false, reason: "not_granted" };
+    }
+    if (matching.some((item) => item.effect === "allow")) {
+      return { allowed: true, reason: "explicit_allow" };
+    }
+    if (accessPresetToolIds(account.accessPresetKey).includes(runtimeId)) {
+      return { allowed: true, reason: "access_preset" };
+    }
+    return { allowed: true, reason: "explicit_allow" };
   }
   const matching = listEnterpriseEntitlements(account.id, options).filter(
     (item) =>
       item.resourceState === "active" &&
       item.resourceType === resourceType &&
+      // A Shared Agent id may equal an account id without sharing its Personal grants.
+      (resourceType !== "agent" ||
+        parseEnterpriseResourceKey("agent", item.resourceId).scope !== "personal") &&
       enterpriseRuntimeResourceId(item.resourceType, item.resourceId) === runtimeId,
   );
   if (matching.some((item) => item.effect === "deny")) {
@@ -154,9 +270,6 @@ export function resolveEnterpriseResourceAccess(
   }
   if (matching.some((item) => item.effect === "allow")) {
     return { allowed: true, reason: "explicit_allow" };
-  }
-  if (resourceType === "tool" && accessPresetToolIds(account.accessPresetKey).includes(runtimeId)) {
-    return { allowed: true, reason: "access_preset" };
   }
   return { allowed: false, reason: "not_granted" };
 }
@@ -210,6 +323,11 @@ export function applyEnterpriseAccessChanges(
   changes: EnterpriseAccessChange[],
   baseRevisions: Record<string, number>,
   options: OpenClawStateDatabaseOptions = {},
+  audit?: {
+    actorAccountId: string;
+    actorSessionId: string;
+    requestId: string | null;
+  },
 ): { entitlements: EnterpriseEntitlement[]; policyRevisions: Record<string, number> } {
   ensureEnterpriseSchema(options);
   if (changes.length === 0 || changes.length > 2_000) {
@@ -281,6 +399,22 @@ export function applyEnterpriseAccessChanges(
           .get(accountId) as { policy_revision: number }; // sqlite-allow-raw -- Return committed revision.
         policyRevisions[accountId] = row.policy_revision;
       }
+      if (audit) {
+        db.prepare(
+          `INSERT INTO enterprise_audit_events
+            (id, actor_account_id, actor_session_id, action, target_type, target_id, request_id,
+             before_json, after_json, outcome, created_at)
+           VALUES (?, ?, ?, 'access.change', 'entitlement', ?, ?, NULL, ?, 'success', ?)`,
+        ).run(
+          generateSecureUuid(),
+          audit.actorAccountId,
+          audit.actorSessionId,
+          accountIds.join(",").slice(0, 256),
+          audit.requestId,
+          JSON.stringify({ changes: normalized, policyRevisions }),
+          now,
+        ); // sqlite-allow-raw -- Entitlement mutation and audit are atomic.
+      }
     },
     options,
     { operationLabel: "enterprise.entitlements.change" },
@@ -289,4 +423,45 @@ export function applyEnterpriseAccessChanges(
     entitlements: accountIds.flatMap((accountId) => listEnterpriseEntitlements(accountId, options)),
     policyRevisions,
   };
+}
+
+export function markEnterpriseAgentEntitlementsOrphaned(
+  resourceId: string,
+  options: OpenClawStateDatabaseOptions = {},
+): number {
+  ensureEnterpriseSchema(options);
+  const normalized = normalizeResourceId(resourceId);
+  return runOpenClawStateWriteTransaction(
+    ({ db }) => {
+      const accountIds = (
+        db
+          .prepare(
+            `SELECT account_id FROM enterprise_entitlements
+             WHERE resource_type = 'agent' AND resource_id = ? AND resource_state = 'active'`,
+          )
+          .all(normalized) as Array<{ account_id: string }>
+      ).map((row) => row.account_id); // sqlite-allow-raw -- Exact deleted-Agent entitlement lookup.
+      if (accountIds.length === 0) {
+        return 0;
+      }
+      const now = Date.now();
+      const changed = Number(
+        db
+          .prepare(
+            `UPDATE enterprise_entitlements SET resource_state = 'orphaned', updated_at = ?
+             WHERE resource_type = 'agent' AND resource_id = ? AND resource_state = 'active'`,
+          )
+          .run(now, normalized).changes,
+      ); // sqlite-allow-raw -- Deleted Agent grants stay dormant until a new explicit assignment.
+      const bump = db.prepare(
+        "UPDATE enterprise_accounts SET policy_revision = policy_revision + 1, updated_at = ? WHERE id = ?",
+      );
+      for (const accountId of new Set(accountIds)) {
+        bump.run(now, accountId); // sqlite-allow-raw -- Invalidate outstanding routing decisions.
+      }
+      return changed;
+    },
+    options,
+    { operationLabel: "enterprise.entitlements.orphan-agent" },
+  );
 }

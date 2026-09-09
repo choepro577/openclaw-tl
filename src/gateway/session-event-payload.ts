@@ -3,8 +3,8 @@ import type { GatewaySessionRow } from "./session-utils.js";
 
 /**
  * Project a catalog-less session row for websocket merge events.
- * Picker metadata comes from catalog-backed list/patch responses; emitting a
- * locally reconstructed subset here would replace richer client state.
+ * Selection belongs to scoped list/patch responses: process-wide defaults can
+ * differ from an Enterprise account's config and must not overwrite its picker.
  */
 export function buildGatewaySessionEventRow(
   sessionRow: GatewaySessionRow,
@@ -14,10 +14,10 @@ export function buildGatewaySessionEventRow(
   delete session.thinkingLevels;
   delete session.thinkingOptions;
   delete session.thinkingDefault;
+  delete session.modelProvider;
+  delete session.model;
+  delete session.agentRuntime;
   if (options.lifecycle) {
-    delete session.modelProvider;
-    delete session.model;
-    delete session.agentRuntime;
     if (session.totalTokensFresh !== true) {
       delete session.totalTokens;
       delete session.totalTokensFresh;

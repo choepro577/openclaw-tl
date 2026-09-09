@@ -224,6 +224,7 @@ export function createPageState(
     refreshSessionsAfterChat: new Map<string, { sessionKey: string; agentId?: string }>(),
     pendingAbort: null,
     pendingSessionMessageReloadSessionKey: null,
+    pendingSessionMessageReloadRevision: null,
     chatSubmitGuards: new Map<string, Promise<void>>(),
     chatSendTimingsByRun: new Map(),
     chatQueue: [],

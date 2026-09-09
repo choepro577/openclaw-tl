@@ -6284,6 +6284,23 @@ describe("runCodexAppServerAttempt", () => {
       const requestParams = request?.params as Record<string, unknown> | undefined;
       expect(requestParams?.model).toBe(runtimeModelId);
     }
+    const threadStartRequest = requests.find((entry) => entry.method === "thread/start");
+    const developerInstructions =
+      (threadStartRequest?.params as { developerInstructions?: string } | undefined)
+        ?.developerInstructions ?? "";
+    expect(developerInstructions).not.toContain("## OpenClaw Runtime Routing Metadata");
+    const turnStartRequest = requests.find((entry) => entry.method === "turn/start");
+    const turnDeveloperInstructions =
+      (
+        turnStartRequest?.params as
+          | {
+              collaborationMode?: { settings?: { developer_instructions?: string | null } };
+            }
+          | undefined
+      )?.collaborationMode?.settings?.developer_instructions ?? "";
+    expect(turnDeveloperInstructions).toContain('"provider":"codex"');
+    expect(turnDeveloperInstructions).toContain(`"model":"${runtimeModelId}"`);
+    expect(turnDeveloperInstructions).not.toContain('"model":"gpt-5.6-sol"');
     expect(onAgentEvent).toHaveBeenCalledWith({
       stream: "codex_app_server.lifecycle",
       data: expect.objectContaining({ phase: "turn_starting", model: "gpt-5.6-sol" }),

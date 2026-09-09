@@ -10,6 +10,7 @@ import type { SkillSnapshot } from "../../skills/types.js";
 import {
   mapSandboxSkillEntriesForPrompt,
   mapSandboxSkillUsagePaths,
+  resolveHarnessSkillSnapshot,
   resolveSandboxSkillRuntimeInputs,
 } from "./sandbox-skills.js";
 
@@ -36,6 +37,49 @@ const snapshot: SkillSnapshot = {
 };
 
 describe("resolveSandboxSkillRuntimeInputs", () => {
+  it.each([false, true])(
+    "hydrates a cold granted snapshot with sandbox=%s without sibling skills",
+    async (sandboxed) => {
+      const root = await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(), "harness-skills-")));
+      try {
+        for (const name of ["demo", "ungranted"]) {
+          const dir = path.join(root, "skills", name);
+          await fs.mkdir(dir, { recursive: true });
+          await fs.writeFile(
+            path.join(dir, "SKILL.md"),
+            `---\nname: ${name}\ndescription: ${name}\n---\n# ${name}\n`,
+          );
+        }
+        const { resolvedSkills: _resolvedSkills, ...coldSnapshot } = snapshot;
+        const result = resolveHarnessSkillSnapshot({
+          sandbox: sandboxed
+            ? {
+                enabled: true,
+                skillsWorkspaceDir: root,
+                containerWorkdir: "/workspace",
+                workspaceAccess: "rw",
+              }
+            : null,
+          skillsAnchorWorkspace: root,
+          skillsSnapshot: {
+            ...coldSnapshot,
+            nodeSkillsEligibility: { canExec: true, node: "build-node" },
+          },
+        });
+        const expectedPath = sandboxed
+          ? "/workspace/.openclaw/sandbox-skills/skills/demo/SKILL.md"
+          : path.join(root, "skills", "demo", "SKILL.md");
+        expect(result?.nodeSkillsEligibility).toEqual({ canExec: true, node: "build-node" });
+        expect(result?.prompt).toContain(expectedPath);
+        expect(result?.prompt).not.toContain(hostSkillPath);
+        expect(result?.prompt).not.toContain("ungranted");
+        expect(result?.resolvedSkills?.map((skill) => skill.filePath)).toEqual([expectedPath]);
+      } finally {
+        await fs.rm(root, { recursive: true, force: true });
+      }
+    },
+  );
+
   it("keeps snapshots for non-sandboxed runs", () => {
     expect(
       resolveSandboxSkillRuntimeInputs({

@@ -1,3 +1,4 @@
+import { inferControlUiPublicAssetPath } from "../../app/public-assets.ts";
 import { fetchLinkFaviconBlobUrl } from "../plugins/icon-loader.ts";
 
 const LINK_FAVICON_BROWSER_TIMEOUT_MS = 15_000;
@@ -13,9 +14,6 @@ export function createLinkFaviconFetcher(params: {
 }
 
 export function hydrateLinkFavicons(root: ParentNode, fetchFavicon?: LinkFaviconFetcher): void {
-  if (!fetchFavicon) {
-    return;
-  }
   for (const image of root.querySelectorAll<HTMLImageElement>(
     "img.markdown-link-favicon[data-link-favicon-host]",
   )) {
@@ -25,6 +23,19 @@ export function hydrateLinkFavicons(root: ParentNode, fetchFavicon?: LinkFavicon
     const hostname = image.dataset.linkFaviconHost?.trim();
     if (!hostname) {
       image.dataset.linkFaviconState = "failed";
+      continue;
+    }
+
+    // Never request a source-controlled OpenClaw favicon. The link destination
+    // is deliberately left untouched, but its presentation icon always uses
+    // the local MAAP mark so the old brand cannot flash during hydration.
+    if (/openclaw/i.test(hostname)) {
+      image.src = inferControlUiPublicAssetPath("favicon.svg");
+      image.classList.add("is-loaded");
+      image.dataset.linkFaviconState = "loaded";
+      continue;
+    }
+    if (!fetchFavicon) {
       continue;
     }
     image.dataset.linkFaviconState = "loading";

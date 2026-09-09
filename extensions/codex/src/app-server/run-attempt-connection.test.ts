@@ -1,5 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
+import * as diagnosticRuntime from "openclaw/plugin-sdk/diagnostic-runtime";
 import { initializeGlobalHookRunner } from "openclaw/plugin-sdk/hook-runtime";
 import { createMockPluginRegistry } from "openclaw/plugin-sdk/plugin-test-runtime";
 import { describe, expect, it, vi } from "vitest";
@@ -28,6 +29,34 @@ import {
 setupRunAttemptTestHooks();
 
 describe("prepareCodexAttemptConnection", () => {
+  it.each(["process", "prepared overlay"])(
+    "refuses private preparation when the %s launch environment enables capture",
+    async (source) => {
+      vi.spyOn(diagnosticRuntime, "isPrivateRunObservationScope").mockReturnValue(true);
+      vi.stubEnv("OPENCLAW_DEBUG_PROXY_ENABLED", source === "process" ? "1" : "0");
+      const sessionFile = path.join(tempDir, "private-capture.jsonl");
+      const params = createParams(sessionFile, path.join(tempDir, "workspace-private-capture"));
+      if (source === "prepared overlay") {
+        params.hostCapabilities = Object.freeze({
+          ...params.hostCapabilities,
+          preparedEnvironment: () =>
+            Object.freeze({
+              credentialScrubEnv: Object.freeze({}),
+              localIdentityEnv: Object.freeze({ OPENCLAW_DEBUG_PROXY_ENABLED: "1" }),
+              managedLocalIdentity: true,
+            }),
+        });
+      }
+      registerCodexTestSessionIdentity(sessionFile, params.sessionId, params.sessionKey);
+      await expect(
+        prepareCodexAttemptConnection({
+          params,
+          options: { bindingStore: testCodexAppServerBindingStore },
+        }),
+      ).rejects.toThrow("PRIVATE_PREPARATION_CAPTURE_UNAVAILABLE");
+    },
+  );
+
   it("preserves native process environment and login-shell behavior for an empty overlay", async () => {
     const sessionFile = path.join(tempDir, "native-local-no-overlay.jsonl");
     const workspaceDir = path.join(tempDir, "workspace-native-local-no-overlay");

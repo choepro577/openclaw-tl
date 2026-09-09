@@ -56,6 +56,10 @@ function resolveSwarmWaitOwnerSessionKeys(
 export type RegisterSubagentRunParams = {
   runId: string;
   requesterTurnRunId?: string;
+  /** Host-only exact idempotency key for the originating user turn. */
+  requesterUserTurnIdempotencyKey?: string;
+  /** Host-only session id that owns requesterUserTurnIdempotencyKey. */
+  requesterUserTurnSessionId?: string;
   childSessionKey: string;
   controllerSessionKey?: string;
   requesterSessionKey: string;
@@ -105,6 +109,8 @@ export class SubagentLaunchManager extends SubagentRecoveryManager {
     const childSessionKey = registerParams.childSessionKey.trim();
     const requesterSessionKey = registerParams.requesterSessionKey.trim();
     const requesterTurnRunId = registerParams.requesterTurnRunId?.trim();
+    const requesterUserTurnIdempotencyKey = registerParams.requesterUserTurnIdempotencyKey?.trim();
+    const requesterUserTurnSessionId = registerParams.requesterUserTurnSessionId?.trim();
     const controllerSessionKey = registerParams.controllerSessionKey?.trim() || requesterSessionKey;
     if (!runId || !childSessionKey || !requesterSessionKey) {
       return;
@@ -126,6 +132,8 @@ export class SubagentLaunchManager extends SubagentRecoveryManager {
       ...(requesterTurnRunId && registerParams.expectsCompletionMessage === true
         ? { requesterTurnRunId }
         : {}),
+      ...(requesterUserTurnIdempotencyKey ? { requesterUserTurnIdempotencyKey } : {}),
+      ...(requesterUserTurnSessionId ? { requesterUserTurnSessionId } : {}),
       childSessionKey,
       controllerSessionKey,
       requesterSessionKey,

@@ -303,6 +303,8 @@ export async function buildDynamicTools(input: DynamicToolBuildParams) {
         ? { mode: input.sessionPermissionPolicy.mode, root: input.sessionPermissionPolicy.root }
         : undefined,
       sandbox: input.sandbox,
+      skillsSnapshot: params.skillsSnapshot,
+      skillUsagePaths: input.sandbox?.skillUsagePaths,
       ...(toolConstructionPlan ? { toolConstructionPlan } : {}),
       messageProvider: resolveCodexMessageToolProvider(params),
       toolPolicyMessageProvider: params.messageProvider ?? params.messageChannel,

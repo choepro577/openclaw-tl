@@ -179,7 +179,7 @@ function loadSessionEntryWithMode(
 
 export function loadGatewaySessionEntry(
   sessionKey: string,
-  opts?: { agentId?: string; clone?: boolean },
+  opts?: { agentId?: string; clone?: boolean; cfg?: OpenClawConfig },
 ) {
   return loadSessionEntryWithMode(sessionKey, opts, false);
 }

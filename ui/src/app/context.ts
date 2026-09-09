@@ -119,3 +119,25 @@ export type ApplicationContext<TRouteId extends string = string> = {
 
 export const applicationContext =
   createContext<ApplicationContext<RouteId>>("openclaw.application");
+
+// Model management also mounts in the REST-only Enterprise Admin portal,
+// which does not own the chat, channel, or native application capabilities.
+export type ModelManagementContext = Pick<
+  ApplicationContext<RouteId>,
+  | "resourceBasePath"
+  | "gateway"
+  | "agents"
+  | "agentSelection"
+  | "runtimeConfig"
+  | "overlays"
+  | "navigate"
+> & {
+  /** Enterprise Admin can render model data before the optional usage snapshot arrives. */
+  readonly deferProviderUsage?: boolean;
+  /** Enterprise Admin already owns the authoritative config.get request. */
+  readonly reuseRuntimeConfig?: boolean;
+};
+
+export const modelManagementContext = createContext<ModelManagementContext>(
+  "openclaw.model-management",
+);

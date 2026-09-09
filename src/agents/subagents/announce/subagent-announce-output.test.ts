@@ -517,6 +517,29 @@ describe("readSubagentOutput", () => {
 });
 
 describe("buildChildCompletionFindings", () => {
+  it.each([1, 2])("retains complete results from %s children when the aggregate fits", (count) => {
+    const children = Array.from({ length: count }, (_, index) => ({
+      childSessionKey: `agent:main:subagent:analysis-${index}`,
+      task: `analysis ${index + 1}`,
+      createdAt: index,
+      completion: {
+        resultText: `${"Assumptions <review>: cash flow 🚀.\n".repeat(24)}Conclusion ${index + 1}: reserve 294, break-even 120.`,
+      },
+      execution: { outcome: { status: "ok" as const } },
+    }));
+
+    const findings = buildChildCompletionFindings(children);
+
+    expect(findings).toBeDefined();
+    expect(findings!.length).toBeLessThanOrEqual(4_096);
+    for (let index = 0; index < count; index += 1) {
+      expect(findings).toContain(`Conclusion ${index + 1}: reserve 294, break-even 120.`);
+    }
+    expect(findings).toContain("&lt;review&gt;");
+    expect(findings).not.toContain("[child result truncated]");
+    expect(findings).not.toContain("omitted");
+  });
+
   it("hard-bounds each child result and the aggregate parent prompt", () => {
     const findings = buildChildCompletionFindings(
       Array.from({ length: 8 }, (_, index) => ({

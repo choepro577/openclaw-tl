@@ -1,6 +1,7 @@
 import { normalizeOptionalString } from "@openclaw/normalization-core/string-coerce";
 import type { WorktreesRemoveResult } from "../../../packages/gateway-protocol/src/index.js";
 import { loadSettings, patchSettings } from "../app/settings.ts";
+import { showNativeAlert } from "../branding/display-dialog.ts";
 import { t } from "../i18n/index.ts";
 import { readSessionMethodAccess } from "../lib/session-method-access.ts";
 import {
@@ -320,7 +321,7 @@ export async function deleteSessionsBatch(
       }
     }
     if (result.preservedWorktrees.length > 0) {
-      window.alert(formatPreservedWorktreesNotice(result.preservedWorktrees));
+      showNativeAlert(formatPreservedWorktreesNotice(result.preservedWorktrees));
       if (!host.sessionData.isSessionMutationScopeCurrent(scope)) {
         return;
       }
@@ -628,7 +629,7 @@ export async function deleteSession(
         requiredScope: "operator.admin",
       });
       if (!removeAccess.allowed) {
-        window.alert(formatPreservedWorktreesNotice([preserved]));
+        showNativeAlert(formatPreservedWorktreesNotice([preserved]));
         if (!host.sessionData.isSessionMutationScopeCurrent(scope)) {
           return;
         }

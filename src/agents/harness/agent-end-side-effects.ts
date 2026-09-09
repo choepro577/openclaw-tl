@@ -1,4 +1,5 @@
 import type { ChatType } from "../../channels/chat-type.js";
+import { isPrivateRunObservationScope } from "../../infra/private-run-observations.js";
 /**
  * Agent-end side effect runner.
  *
@@ -56,12 +57,18 @@ async function runCoreAgentEndSideEffects(params: AgentEndSideEffectsParams): Pr
 
 /** Starts agent-end side effects without waiting for completion. */
 export function runAgentEndSideEffects(params: AgentEndSideEffectsParams): void {
+  if (isPrivateRunObservationScope()) {
+    return;
+  }
   void runCoreAgentEndSideEffects(params);
   runAgentHarnessAgentEndHook(params);
 }
 
 /** Runs agent-end side effects and waits for plugin/core completion. */
 export async function awaitAgentEndSideEffects(params: AgentEndSideEffectsParams): Promise<void> {
+  if (isPrivateRunObservationScope()) {
+    return;
+  }
   await runCoreAgentEndSideEffects(params);
   await awaitAgentHarnessAgentEndHook(params);
 }

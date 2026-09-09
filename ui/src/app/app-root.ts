@@ -22,7 +22,7 @@ import type { EnterpriseUserAuthAccount } from "../pages/enterprise-user/service
 import { shouldRedirectEnterpriseHome } from "../pages/enterprise/state/enterprise-auth-navigation.ts";
 import { isDesktopPanelAvailable } from "./app-shell-chrome.ts";
 import type { ApplicationRuntime } from "./bootstrap.ts";
-import { applicationContext, type ApplicationContext } from "./context.ts";
+import { applicationContext, type ApplicationContext, modelManagementContext } from "./context.ts";
 import {
   APPROVAL_PAGE_ELEMENT,
   DASHBOARD_DOCUMENT_ELEMENT,
@@ -87,6 +87,9 @@ export class OpenClawApp extends OpenClawLightDomElement {
   private runtime: ApplicationRuntime | undefined;
   private readonly contextProvider = new ContextProvider(this, {
     context: applicationContext,
+  });
+  private readonly modelContextProvider = new ContextProvider(this, {
+    context: modelManagementContext,
   });
   private readonly subscriptions = new SubscriptionsController(this);
   private loginGatewaySource: ApplicationContext["gateway"] | null = null;
@@ -164,6 +167,7 @@ export class OpenClawApp extends OpenClawLightDomElement {
     // Context identity changes only across a full app-tree connection epoch;
     // descendants reconnect and rebuild their controller-owned state afterward.
     this.contextProvider.setValue(runtime.context);
+    this.modelContextProvider.setValue(runtime.context);
     this.syncLoginConnection(runtime.context.gateway);
     // The runtime is created after controller hostConnected hooks run. Ensure
     // their lazy source getters bind on both the initial mount and reconnect.

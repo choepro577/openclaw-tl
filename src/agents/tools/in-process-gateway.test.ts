@@ -3,6 +3,9 @@ import { readInProcessAgentRuntimeIdentity } from "../../gateway/in-process-agen
 
 const mocks = vi.hoisted(() => ({
   hasContext: true,
+  callerIdentity: undefined as
+    | { agentId: string; sessionKey: string; gatewayContextResolver: () => object }
+    | undefined,
   dispatch: vi.fn(),
   callGateway: vi.fn(),
   callGatewayTool: vi.fn(),
@@ -15,10 +18,14 @@ vi.mock("../../gateway/method-scopes.js", () => ({
 vi.mock("../../gateway/server-plugins.js", () => ({
   dispatchGatewayMethodInProcess: mocks.dispatch,
   getInProcessGatewayRequestContext: vi.fn(),
-  hasInProcessGatewayContext: () => mocks.hasContext,
+  hasInProcessGatewayContext: (resolver?: () => unknown) =>
+    mocks.hasContext || Boolean(resolver?.()),
 }));
 
 vi.mock("./gateway.js", () => ({ callGatewayTool: mocks.callGatewayTool }));
+vi.mock("./gateway-caller-context.js", () => ({
+  getGatewayToolCallerIdentity: () => mocks.callerIdentity,
+}));
 vi.mock("../../gateway/call.js", () => ({ callGateway: mocks.callGateway }));
 
 import { getGatewaySessionSpawnContext } from "./gateway-session-spawn-context.js";
@@ -31,6 +38,7 @@ import {
 describe("trusted in-process Gateway session creation", () => {
   beforeEach(() => {
     mocks.hasContext = true;
+    mocks.callerIdentity = undefined;
     mocks.dispatch.mockReset().mockResolvedValue({ key: "agent:main:dashboard:child" });
     mocks.callGateway.mockReset().mockResolvedValue({ status: "ok" });
     mocks.callGatewayTool.mockReset().mockResolvedValue({ key: "agent:main:dashboard:child" });
@@ -110,6 +118,7 @@ describe("trusted in-process Gateway session creation", () => {
 describe("request-shaped in-process Gateway dispatch", () => {
   beforeEach(() => {
     mocks.hasContext = true;
+    mocks.callerIdentity = undefined;
     mocks.dispatch.mockReset().mockResolvedValue({ runId: "run-1" });
     mocks.callGateway.mockReset().mockResolvedValue({ runId: "run-1" });
   });
@@ -243,6 +252,29 @@ describe("request-shaped in-process Gateway dispatch", () => {
       timeoutMs: 2_000,
     });
     expect(mocks.dispatch).not.toHaveBeenCalled();
+  });
+
+  it("uses the admitted run's Gateway resolver instead of opening a websocket", async () => {
+    mocks.hasContext = false;
+    const gatewayContext = {};
+    const gatewayContextResolver = () => gatewayContext;
+    mocks.callerIdentity = {
+      agentId: "hrm",
+      sessionKey: "agent:hrm:subagent:child",
+      gatewayContextResolver,
+    };
+
+    await callAgentToolGatewayRequest({ method: "sessions.list", params: { limit: 5 } });
+
+    expect(mocks.dispatch).toHaveBeenCalledWith(
+      "sessions.list",
+      { limit: 5 },
+      expect.objectContaining({
+        forceSyntheticClient: true,
+        resolveGatewayContext: gatewayContextResolver,
+      }),
+    );
+    expect(mocks.callGateway).not.toHaveBeenCalled();
   });
 
   it("does not drop a private runtime identity onto the transport fallback", async () => {

@@ -1,8 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { i18n } from "../../i18n/index.ts";
 import {
   adminHref,
   adminPathname,
   enterprisePortalBase,
+  formatDate,
   navigateAdmin,
   resolveAdminPage,
 } from "./utils.ts";
@@ -30,6 +32,22 @@ describe("Enterprise admin routing", () => {
     expect(resolveAdminPage("/admin/config/system")).toBe("config-system");
     expect(resolveAdminPage("/admin/config/appearance")).toBe("config-appearance");
     expect(resolveAdminPage("/admin/config/history")).toBe("config-history");
+  });
+
+  it("formats timestamps using the selected language", async () => {
+    const timestamp = 1_788_761_040_000;
+    try {
+      for (const locale of ["en", "vi"] as const) {
+        await i18n.setLocale(locale);
+        expect(formatDate(timestamp)).toBe(
+          new Intl.DateTimeFormat(locale, { dateStyle: "medium", timeStyle: "short" }).format(
+            timestamp,
+          ),
+        );
+      }
+    } finally {
+      await i18n.setLocale("en");
+    }
   });
 
   it("updates history and publishes a navigation event", () => {

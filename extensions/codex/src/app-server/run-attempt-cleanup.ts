@@ -1,4 +1,5 @@
 import { clearActiveEmbeddedRun } from "openclaw/plugin-sdk/agent-harness-runtime";
+import { isPrivateRunObservationScope } from "openclaw/plugin-sdk/diagnostic-runtime";
 import { isIncognitoSessionKey } from "../incognito-session.js";
 import {
   CODEX_APP_SERVER_UNSUBSCRIBE_TIMEOUT_MS,
@@ -75,7 +76,9 @@ export async function cleanupCodexAttempt(
     }
     await runCleanupStep("codex-trajectory-flush", () => trajectoryRecorder?.flush());
     const retainLiveIncognitoThread =
-      terminalState.turnSucceeded && isIncognitoSessionKey(params.sessionKey);
+      terminalState.turnSucceeded &&
+      isIncognitoSessionKey(params.sessionKey) &&
+      !isPrivateRunObservationScope();
     // Native-preserved and supervision threads have separate ownership and can
     // never enter the ordinary persistent warm-thread cache.
     const retainedPersistentThread =

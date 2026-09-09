@@ -6,7 +6,6 @@ import {
   DEFAULT_CHAT_HISTORY_TEXT_MAX_CHARS,
   extractAssistantTextForSilentCheck,
   hasAssistantDisplayableNonTextContent,
-  hasAssistantNonTextContent,
   isAssistantTextContentType,
 } from "./chat-display-projection.helpers.js";
 import {
@@ -162,15 +161,15 @@ function sanitizeAssistantErrorDisplayMessage(
   return next;
 }
 
-function isPureStreamErrorFallbackAssistantMessage(message: Record<string, unknown>): boolean {
+function isNonVisibleAssistantErrorMessage(message: Record<string, unknown>): boolean {
   if (message.role !== "assistant" || message.stopReason !== "error") {
     return false;
   }
   const text = extractAssistantTextForSilentCheck(message);
+  // Empty and reasoning-only provider errors can recover within the same turn too.
   return (
-    text !== undefined &&
-    text.trim() === STREAM_ERROR_FALLBACK_TEXT &&
-    !hasAssistantNonTextContent(message)
+    (!text?.trim() || text.trim() === STREAM_ERROR_FALLBACK_TEXT) &&
+    !hasAssistantDisplayableNonTextContent(message)
   );
 }
 
@@ -178,7 +177,7 @@ function hasVisibleAssistantDisplayContent(message: Record<string, unknown>): bo
   if (
     message.role !== "assistant" ||
     message.display === false ||
-    isPureStreamErrorFallbackAssistantMessage(message)
+    isNonVisibleAssistantErrorMessage(message)
   ) {
     return false;
   }
@@ -219,7 +218,7 @@ function projectRepairedStreamErrorFallbackMessages(
       pendingIndexes = [];
       continue;
     }
-    if (isPureStreamErrorFallbackAssistantMessage(message)) {
+    if (isNonVisibleAssistantErrorMessage(message)) {
       pending = true;
       pendingIndexes.push(index);
       continue;
