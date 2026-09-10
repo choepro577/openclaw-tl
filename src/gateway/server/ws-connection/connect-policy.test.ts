@@ -189,6 +189,23 @@ describe("ws connect policy", () => {
     );
   });
 
+  test("accounts auth skips pairing for the enterprise user control-ui", () => {
+    const device = deviceRaw("enterprise-browser");
+
+    expectSkipPairing(
+      { isControlUi: true, device, role: "operator", authMode: "accounts", authMethod: "accounts" },
+      "enterprise-account",
+    );
+    expectSkipPairing(
+      { isControlUi: true, device, role: "node", authMode: "accounts", authMethod: "accounts" },
+      null,
+    );
+    expectSkipPairing(
+      { device, role: "operator", authMode: "accounts", authMethod: "accounts" },
+      null,
+    );
+  });
+
   test("trusted-proxy control-ui bypass only applies to operator + trusted-proxy auth", () => {
     const cases: Array<{
       role: "operator" | "node";

@@ -1,6 +1,11 @@
 // Auth modes suite covers password, token, none, Tailscale, and control-UI
 // origin behavior across gateway WebSocket authentication modes.
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from "vitest";
+import { createEnterpriseAccount } from "../enterprise/accounts/account-store.js";
+import { loginEnterpriseAccount } from "../enterprise/auth/auth-service.js";
+import { ENTERPRISE_AUTH_COOKIE } from "../enterprise/auth/cookie.js";
+import { hashEnterprisePassword } from "../enterprise/auth/password.js";
+import { listDevicePairing } from "../infra/device-pairing.js";
 import {
   connectReq,
   CONTROL_UI_CLIENT,
@@ -199,6 +204,75 @@ export function registerAuthModesSuite(): void {
       expect(res.ok).toBe(true);
       ws.close();
     });
+  });
+
+  describe("accounts auth", () => {
+    let server: Awaited<ReturnType<typeof startTestGatewayServer>>;
+    let port: number;
+    const cookies = new Map<"administrator" | "employee", string>();
+
+    beforeAll(async () => {
+      testState.gatewayAuth = { mode: "accounts" };
+      const { replaceConfigFile } = await import("../config/config.js");
+      await replaceConfigFile({
+        nextConfig: {
+          enterprise: { enabled: true },
+          gateway: { auth: { mode: "accounts" } },
+        },
+        afterWrite: { mode: "auto" },
+      });
+      for (const role of ["administrator", "employee"] as const) {
+        const username = `gateway.${role}`;
+        createEnterpriseAccount({
+          username,
+          displayName: `Gateway ${role}`,
+          passwordHash: await hashEnterprisePassword("enterprise-password"),
+          role,
+          mustChangePassword: false,
+        });
+        const login = await loginEnterpriseAccount(username, "enterprise-password");
+        cookies.set(role, `${ENTERPRISE_AUTH_COOKIE}=${login.token}`);
+      }
+      port = await getGatewayTestPort();
+      server = await startTestGatewayServer(port);
+    });
+
+    beforeEach(() => {
+      testState.gatewayAuth = { mode: "accounts" };
+    });
+
+    afterAll(async () => {
+      await server.close();
+    });
+
+    test.each(["administrator", "employee"] as const)(
+      "connects the %s enterprise browser without device pairing",
+      async (role) => {
+        const ws = await openWs(port, {
+          origin: originForPort(port),
+          cookie: cookies.get(role)!,
+        });
+        const res = await connectReq(ws, {
+          skipDefaultAuth: true,
+          client: { ...CONTROL_UI_CLIENT },
+          scopes: [
+            "operator.admin",
+            "operator.read",
+            "operator.write",
+            "operator.approvals",
+            "operator.questions",
+            "operator.pairing",
+          ],
+        });
+
+        expect(res.ok, JSON.stringify(res)).toBe(true);
+        expect(
+          (res.payload?.auth as { deviceToken?: string } | undefined)?.deviceToken,
+        ).toBeUndefined();
+        expect(await listDevicePairing()).toMatchObject({ pending: [], paired: [] });
+        ws.close();
+      },
+    );
   });
 
   describe("startup auth validation", () => {

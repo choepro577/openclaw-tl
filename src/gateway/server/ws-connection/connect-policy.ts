@@ -3,7 +3,7 @@ import type { ConnectParams } from "../../../../packages/gateway-protocol/src/in
 import type { GatewayRole } from "../../role-policy.js";
 import { roleCanSkipDeviceIdentity } from "../../role-policy.js";
 
-export type ControlUiPairingKind = "tailscale-device" | "auth-none" | null;
+export type ControlUiPairingKind = "tailscale-device" | "auth-none" | "enterprise-account" | null;
 
 export function shouldSkipControlUiPairing(params: {
   isControlUi: boolean;
@@ -19,6 +19,14 @@ export function shouldSkipControlUiPairing(params: {
     params.device
   ) {
     return "tailscale-device";
+  }
+  if (
+    params.isControlUi &&
+    params.role === "operator" &&
+    params.authMode === "accounts" &&
+    params.authMethod === "accounts"
+  ) {
+    return "enterprise-account";
   }
   // When auth is completely disabled (mode=none), there is no shared secret
   // or token to gate pairing. Requiring pairing in this configuration adds
