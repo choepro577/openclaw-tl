@@ -13,16 +13,30 @@ function section(title: string, value: string): string[] {
   return value.trim() ? [`### ${title}`, value.trim()] : [];
 }
 
-function accountIdentityContent(username: string): string[] {
+export function buildEnterpriseAccountBootstrap(
+  config: OpenClawConfig | undefined,
+  workspaceDir: string,
+): WorkspaceBootstrapFile[] {
+  const user = readGatewayRequestRuntimeMetadata(config)?.enterpriseUser;
+  if (!user) {
+    return [];
+  }
   return [
-    "## Authenticated Enterprise account",
-    `Enterprise username: ${username}`,
-    "This server-provided username is the current user's lookup identity. A skill may map it to a domain identifier such as an HRM staff code, but it is not authorization and must not be replaced with another user's identity.",
-    "",
+    {
+      name: "USER.md",
+      path: path.join(workspaceDir, ".openclaw-enterprise-account.md"),
+      missing: false,
+      content: [
+        "## Authenticated Enterprise account",
+        `Enterprise username: ${user.username}`,
+        "This server-provided username is the current user's lookup identity. A skill may map it to a domain identifier such as an HRM staff code, but it is not authorization and must not be replaced with another user's identity.",
+        "This is runtime context, not a file on disk. Use it directly; USER.md may contain only user-editable preferences and does not override this identity.",
+      ].join("\n"),
+    },
   ];
 }
 
-function personalizationContent(accountId: string, username: string, displayName: string): string {
+function personalizationContent(accountId: string, displayName: string): string {
   const profile = readPersonalAgentProfile(accountId, displayName);
   const knowledge = listPersonalAgentKnowledge(accountId);
   const profileLines = [
@@ -30,7 +44,6 @@ function personalizationContent(accountId: string, username: string, displayName
     "",
     "These account-owned preferences apply only to this Personal Agent. Organization policy, system instructions, safety rules, and administrator-managed capabilities always take precedence.",
     "",
-    ...accountIdentityContent(username),
     `Preferred response tone: ${profile.tone}`,
     `Preferred response length: ${profile.responseLength}`,
     `Preferred language: ${profile.language}`,
@@ -137,12 +150,7 @@ export function buildEnterpriseDelegationTurnPrompt(params: {
   ].join("\n");
 }
 
-function relationshipContent(
-  accountId: string,
-  agentId: string,
-  username: string,
-  displayName: string,
-): string {
+function relationshipContent(accountId: string, agentId: string, displayName: string): string {
   const profile = readSharedAgentRelationship(accountId, agentId, displayName);
   return [
     "# Enterprise shared Agent relationship",
@@ -150,7 +158,6 @@ function relationshipContent(
     "This relationship profile belongs only to the authenticated account using this shared Agent. It changes how you address each other, not the Agent's canonical identity, capabilities, access policy, or routing.",
     "Memory and workspace context in this run are private to this account and this Agent. Never infer or disclose another account's relationship or memory.",
     "",
-    ...accountIdentityContent(username),
     ...section("Name this user uses for the Agent", profile.agentAlias),
     ...section("How the Agent refers to itself", profile.agentSelfReference),
     ...section("How to address the user", profile.userAddress),
@@ -181,17 +188,8 @@ export function appendEnterpriseUserAgentBootstrap(params: {
           : ".openclaw-enterprise-relationship.md",
       ),
       content: personal
-        ? personalizationContent(
-            enterpriseUser.accountId,
-            enterpriseUser.username,
-            enterpriseUser.displayName,
-          )
-        : relationshipContent(
-            enterpriseUser.accountId,
-            agentId,
-            enterpriseUser.username,
-            enterpriseUser.displayName,
-          ),
+        ? personalizationContent(enterpriseUser.accountId, enterpriseUser.displayName)
+        : relationshipContent(enterpriseUser.accountId, agentId, enterpriseUser.displayName),
       missing: false,
     },
   ];

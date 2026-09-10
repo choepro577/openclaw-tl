@@ -453,7 +453,9 @@ function normalizeAcceptedSessionSpawns(result: unknown): Array<{
   if (details.status === "accepted") {
     const runId = normalizeOptionalString(details.runId);
     const childSessionKey = normalizeOptionalString(details.childSessionKey);
-    return runId && childSessionKey ? [{ runId, childSessionKey }] : [];
+    if (runId && childSessionKey) {
+      return [{ runId, childSessionKey }];
+    }
   }
   const rawSpawns =
     details.acceptedSessionSpawns ?? asOptionalRecord(details.telemetry)?.acceptedSessionSpawns;

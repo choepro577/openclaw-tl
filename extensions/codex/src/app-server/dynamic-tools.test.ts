@@ -1026,7 +1026,7 @@ describe("createCodexDynamicToolBridge", () => {
     const bridge = createBridgeWithToolResult(
       "enterprise_delegate",
       textToolResult("Delegation started.", {
-        outcome: "delegated",
+        status: "accepted",
         acceptedSessionSpawns: [
           { runId: "run-contract", childSessionKey: "agent:contract:subagent:one" },
           { runId: "run-finance", childSessionKey: "agent:finance:subagent:two" },

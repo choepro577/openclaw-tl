@@ -8,6 +8,7 @@ import {
   upsertSessionEntryCore,
   type SessionTranscriptRuntimeTarget,
 } from "../config/sessions/session-accessor.js";
+import { markGatewayRequestScopedRuntimeConfig } from "../gateway/request-runtime-config.js";
 import {
   clearInternalHooks,
   registerInternalHook,
@@ -652,6 +653,53 @@ describe("resolveBootstrapFilesForRun", () => {
 describe("resolveBootstrapContextForRun", () => {
   beforeEach(() => clearInternalHooks());
   afterEach(() => clearInternalHooks());
+
+  it.each(["agent:hrm:subagent:identity", "agent:hrm:main", "agent:hrm:cron:daily:run:identity"])(
+    "refreshes authenticated lookup identity without leaking cached accounts in %s",
+    async (sessionKey) => {
+      memoryRuntimeMocks.classifyWorkspacePaths.mockResolvedValue({ status: "unavailable" });
+      const workspaceDir = await makeTempWorkspace("openclaw-bootstrap-identity-");
+      await fs.writeFile(path.join(workspaceDir, "USER.md"), "private workspace profile", "utf8");
+      await fs.writeFile(path.join(workspaceDir, "MEMORY.md"), "private workspace memory", "utf8");
+      for (const username of ["employee.first", "employee.second", undefined]) {
+        const config = markGatewayRequestScopedRuntimeConfig(
+          {},
+          username
+            ? {
+                enterpriseUser: {
+                  accountId: "identity-account",
+                  username,
+                  displayName: "Employee",
+                  personalAgentId: "personal",
+                  personalAgentTemplateId: "main",
+                },
+              }
+            : undefined,
+        );
+        const { contextFiles } = await resolveBootstrapContextForRun({
+          workspaceDir,
+          sessionKey,
+          agentId: "hrm",
+          config,
+        });
+        const content = contextFiles.map((file) => file.content).join("\n");
+        if (username) {
+          expect(content).toContain(`Enterprise username: ${username}`);
+        } else {
+          expect(content).not.toContain("Enterprise username:");
+        }
+        if (username !== "employee.first") {
+          expect(content).not.toContain("employee.first");
+        }
+        if (sessionKey.includes(":subagent:")) {
+          expect(content).not.toContain("private workspace profile");
+        }
+        if (!sessionKey.endsWith(":main")) {
+          expect(content).not.toContain("private workspace memory");
+        }
+      }
+    },
+  );
 
   it("returns context files for hook-adjusted bootstrap files", async () => {
     registerExtraBootstrapFileHook();

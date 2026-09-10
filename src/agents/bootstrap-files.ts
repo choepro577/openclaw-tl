@@ -8,6 +8,7 @@ import type { ChatType } from "../channels/chat-type.js";
 import { readRecentSessionTranscriptActiveEvents } from "../config/sessions/session-accessor.js";
 import type { AgentContextInjection } from "../config/types.agent-defaults.js";
 import type { OpenClawConfig } from "../config/types.openclaw.js";
+import { buildEnterpriseAccountBootstrap } from "../enterprise/user/personal-agent-bootstrap.js";
 import { isMemoryOriginEligibleForAutomaticInjection } from "../memory-host-sdk/host/types.js";
 import { classifyActiveMemoryWorkspacePaths } from "../plugins/memory-runtime.js";
 import { resolveUserPath } from "../utils.js";
@@ -368,7 +369,12 @@ export async function resolveBootstrapFilesForRun(params: {
     workspaceSetupCompleted,
     params.workspaceDir,
   );
-  return sanitizeBootstrapFiles(filteredUpdated, params.workspaceDir, params.warn);
+  // Authenticated lookup identity is request-owned, not private workspace memory.
+  // Keep it outside subagent/hook filtering and ahead of the bounded file budget.
+  return [
+    ...buildEnterpriseAccountBootstrap(params.config, params.workspaceDir),
+    ...sanitizeBootstrapFiles(filteredUpdated, params.workspaceDir, params.warn),
+  ];
 }
 
 /** Resolves both raw bootstrap metadata and bounded context files for a run. */

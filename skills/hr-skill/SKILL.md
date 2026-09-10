@@ -122,7 +122,8 @@ into `không có nhân viên`.
 
 ## Dinh danh user dang dang nhap
 
-Moi Enterprise run co mot khoi trusted trong `USER.md`:
+Moi Enterprise run (ke ca subagent) duoc server nap khoi trusted sau vao
+runtime context cua luot hien tai:
 
 ```text
 ## Authenticated Enterprise account
@@ -135,8 +136,12 @@ HRM. Vi du username `tl00275` thi tim nhan vien co `staff_code` chinh xac la
 
 Khi user noi `toi`, `cua toi`, `duoc giao cho toi`, hoac `viec toi giao`:
 
-1. Lay `Enterprise username` trong `USER.md`; khong hoi lai user ve ma nhan
-   vien neu gia tri nay da co.
+1. Lay `Enterprise username` tu khoi `Authenticated Enterprise account` trong
+   runtime context hien tai; khong doc file de tim lai va khong hoi user neu
+   gia tri da co. Day la context server nap, khong phai file tren disk:
+   `USER.md` co the chi la mau preferences va khong phu dinh dinh danh nay.
+   Neu khoi runtime thuc su vang mat, bao thieu dinh danh phien; khong doan tu
+   ten hien thi, ket qua cu, hoac tai khoan cua user khac.
 2. Goi `router_tool_search` cho dung y dinh nghiep vu truoc.
 3. Neu tool chinh nhan truc tiep `staff_code`/`user_code`, truyen username vao
    dung truong do.

@@ -121,12 +121,10 @@ describe("Enterprise Personal Agent bootstrap", () => {
 
       expect(shared).toHaveLength(1);
       expect(shared[0]?.content).toContain("private to this account and this Agent");
-      expect(shared[0]?.content).toContain("Enterprise username: employee.personal-bootstrap");
       expect(shared[0]?.content).toContain("### How to address the user\nHieu");
       expect(personal).toHaveLength(1);
       expect(personal[0]?.name).toBe("USER.md");
       expect(personal[0]?.content).toContain("Use actionable checklists.");
-      expect(personal[0]?.content).toContain("Enterprise username: employee.personal-bootstrap");
       expect(personal[0]?.content).toContain("Falcon means the internal release train.");
       expect(personal[0]?.content).toContain("untrusted reference data");
       expect(personal[0]?.content).toContain("Organization policy");
