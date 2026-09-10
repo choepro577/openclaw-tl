@@ -1415,6 +1415,30 @@ describe("handleToolExecutionEnd sessions_spawn terminal success tracking", () =
       { runId: "run-finance", childSessionKey: "agent:finance:subagent:two" },
     ]);
   });
+
+  it("records enterprise_delegate children surfaced by Code Mode exec", async () => {
+    const { ctx } = createTestContext();
+
+    await endTool(ctx, {
+      toolName: "exec",
+      toolCallId: "tool-code-mode-delegate",
+      isError: false,
+      result: {
+        details: {
+          status: "completed",
+          telemetry: {
+            acceptedSessionSpawns: [
+              { runId: "run-hrm", childSessionKey: "agent:hrm:subagent:child" },
+            ],
+          },
+        },
+      },
+    });
+
+    expect(ctx.state.acceptedSessionSpawns).toEqual([
+      { runId: "run-hrm", childSessionKey: "agent:hrm:subagent:child" },
+    ]);
+  });
 });
 
 describe("handleToolExecutionEnd mutating failure recovery", () => {

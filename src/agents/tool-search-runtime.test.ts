@@ -260,6 +260,25 @@ describe("Tool Search flattened call arguments", () => {
   });
 });
 
+describe("Tool Search accepted session spawn telemetry", () => {
+  it("surfaces enterprise_delegate children called inside Code Mode", async () => {
+    const delegate = fakeTool("enterprise_delegate");
+    delegate.execute = vi.fn(async () =>
+      jsonResult({
+        outcome: "delegated",
+        acceptedSessionSpawns: [{ runId: "run-hrm", childSessionKey: "agent:hrm:subagent:child" }],
+      }),
+    );
+    const { runtime } = createRuntime([delegate]);
+
+    await runtime.call("enterprise_delegate", {});
+
+    expect(runtime.telemetry().acceptedSessionSpawns).toEqual([
+      { runId: "run-hrm", childSessionKey: "agent:hrm:subagent:child" },
+    ]);
+  });
+});
+
 describe("Tool Search dispatcher argument preparation", () => {
   it.each([
     {

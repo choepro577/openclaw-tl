@@ -455,12 +455,14 @@ function normalizeAcceptedSessionSpawns(result: unknown): Array<{
     const childSessionKey = normalizeOptionalString(details.childSessionKey);
     return runId && childSessionKey ? [{ runId, childSessionKey }] : [];
   }
-  if (!Array.isArray(details.acceptedSessionSpawns)) {
+  const rawSpawns =
+    details.acceptedSessionSpawns ?? asOptionalRecord(details.telemetry)?.acceptedSessionSpawns;
+  if (!Array.isArray(rawSpawns)) {
     return [];
   }
   const seen = new Set<string>();
   const accepted: Array<{ runId: string; childSessionKey: string }> = [];
-  for (const rawSpawn of details.acceptedSessionSpawns.slice(0, 3)) {
+  for (const rawSpawn of rawSpawns.slice(0, 3)) {
     const spawn = asOptionalRecord(rawSpawn);
     const runId = normalizeOptionalString(spawn?.runId);
     const childSessionKey = normalizeOptionalString(spawn?.childSessionKey);
@@ -775,7 +777,10 @@ export function createCodexDynamicToolBridge(params: {
         const resultIsError = rawIsError || isToolResultError(result);
         // A successful spawn is durable before presentation middleware can rewrite details.
         const acceptedSessionSpawns =
-          (toolName === "sessions_spawn" || toolName === "enterprise_delegate") && !rawIsError
+          (toolName === "sessions_spawn" ||
+            toolName === "enterprise_delegate" ||
+            toolName === "exec") &&
+          !rawIsError
             ? normalizeAcceptedSessionSpawns(telemetryRawResult)
             : [];
         if (acceptedSessionSpawns.length > 0) {

@@ -10,6 +10,10 @@ import {
 } from "../security/external-content.js";
 import { levenshteinDistance } from "../shared/levenshtein-distance.js";
 import {
+  normalizeAcceptedSessionSpawnResults,
+  type AcceptedSessionSpawn,
+} from "./accepted-session-spawn.js";
+import {
   getBeforeToolCallFailureDisposition,
   isPreExecutionBlockedToolResult,
   isToolWrappedWithBeforeToolCallHook,
@@ -20,6 +24,7 @@ import { getChannelAgentToolMeta } from "./channel-tool-metadata.js";
 import type { AgentToolResult } from "./runtime/index.js";
 import { isAgentToolReplaySafe } from "./tool-replay-safety.js";
 import {
+  isToolResultError,
   isTrustedToolExecutionPreflightError,
   protectNetworkToolExecutionError,
 } from "./tool-result-error.js";
@@ -455,6 +460,7 @@ function sanitizeToolCallIdPart(value: string): string {
 
 export class ToolSearchRuntime {
   private callSequence = 0;
+  private readonly acceptedSessionSpawns: AcceptedSessionSpawn[] = [];
   private readonly terminalTargetBatchByParent = new Map<string, boolean>();
   private readonly networkInvocations = new Map<string, { active: number; observed: boolean }>();
   private readonly searchIndexes = new WeakMap<ToolSearchCatalogSession, ToolSearchIndexCache>();
@@ -707,6 +713,13 @@ export class ToolSearchRuntime {
         )
       : await runExecution();
     const acceptedResult = await acceptResultBeforeProjection(result);
+    if (
+      entry.source === "openclaw" &&
+      (entry.name === "sessions_spawn" || entry.name === "enterprise_delegate") &&
+      !isToolResultError(acceptedResult)
+    ) {
+      this.acceptedSessionSpawns.push(...normalizeAcceptedSessionSpawnResults(acceptedResult));
+    }
     const parentToolCallId = options?.parentToolCallId;
     if (parentToolCallId) {
       this.terminalTargetBatchByParent.set(
@@ -719,7 +732,10 @@ export class ToolSearchRuntime {
   };
 
   telemetry() {
-    return getTelemetry(resolveCatalog(this.ctx));
+    return {
+      ...getTelemetry(resolveCatalog(this.ctx)),
+      acceptedSessionSpawns: this.acceptedSessionSpawns.slice(),
+    };
   }
 }
 

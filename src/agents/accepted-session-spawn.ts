@@ -29,7 +29,8 @@ export function normalizeAcceptedSessionSpawnResults(result: unknown): AcceptedS
     return [single];
   }
   const details = asOptionalRecord(asOptionalRecord(result)?.details);
-  const rawSpawns = details?.acceptedSessionSpawns;
+  const rawSpawns =
+    details?.acceptedSessionSpawns ?? asOptionalRecord(details?.telemetry)?.acceptedSessionSpawns;
   if (!Array.isArray(rawSpawns)) {
     return [];
   }

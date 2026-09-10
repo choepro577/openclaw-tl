@@ -200,7 +200,8 @@ export async function handleToolExecutionEnd(
     ...(asyncStarted ? { asyncStarted: true, ...asyncTaskIds } : {}),
   });
   const acceptedSessionSpawns =
-    (toolName === "sessions_spawn" || toolName === "enterprise_delegate") && !isToolError
+    (toolName === "sessions_spawn" || toolName === "enterprise_delegate" || toolName === "exec") &&
+    !isToolError
       ? normalizeAcceptedSessionSpawnResults(sanitizedResult)
       : [];
   if (acceptedSessionSpawns.length > 0) {

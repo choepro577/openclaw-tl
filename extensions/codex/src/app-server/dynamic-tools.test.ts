@@ -1050,6 +1050,33 @@ describe("createCodexDynamicToolBridge", () => {
     ]);
   });
 
+  it("tracks enterprise_delegate children surfaced by Code Mode exec", async () => {
+    const bridge = createBridgeWithToolResult(
+      "exec",
+      textToolResult("Script completed", {
+        status: "completed",
+        telemetry: {
+          acceptedSessionSpawns: [
+            { runId: "run-hrm", childSessionKey: "agent:hrm:subagent:child" },
+          ],
+        },
+      }),
+    );
+
+    await bridge.handleToolCall({
+      threadId: "thread-1",
+      turnId: "turn-1",
+      callId: "call-code-mode-delegate",
+      namespace: null,
+      tool: "exec",
+      arguments: { code: "await enterprise_delegate({});" },
+    });
+
+    expect(bridge.telemetry.acceptedSessionSpawns).toEqual([
+      { runId: "run-hrm", childSessionKey: "agent:hrm:subagent:child" },
+    ]);
+  });
+
   it("retains all sanitized details for OpenClaw transcript projection", async () => {
     const mcpAppPreview = {
       kind: "canvas",
