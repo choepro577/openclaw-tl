@@ -375,6 +375,7 @@ export async function simulateEnterpriseDelegation(params: {
   const scoped = markGatewayRequestScopedRuntimeConfig(projected, {
     enterpriseUser: {
       accountId: account.id,
+      username: account.username,
       displayName: account.displayName,
       personalAgentId,
       personalAgentTemplateId: resolveEnterprisePersonalAgentTemplateId(params.config, account),

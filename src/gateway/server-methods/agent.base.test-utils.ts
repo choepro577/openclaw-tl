@@ -83,6 +83,7 @@ describe("gateway agent handler", () => {
       {
         enterpriseUser: {
           accountId: "account-1",
+          username: "enterprise-user",
           displayName: "Enterprise user",
           personalAgentId: "main",
           personalAgentTemplateId: "template-main",

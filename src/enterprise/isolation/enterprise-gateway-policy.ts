@@ -766,6 +766,7 @@ export function prepareEnterpriseGatewayRequest(params: {
                 },
                 enterpriseUser: {
                   accountId: account.id,
+                  username: account.username,
                   displayName: account.displayName,
                   personalAgentId,
                   personalAgentTemplateId: resolveEnterprisePersonalAgentTemplateId(

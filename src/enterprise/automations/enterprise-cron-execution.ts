@@ -49,6 +49,7 @@ export function resolveEnterpriseCronExecution(params: {
     {
       enterpriseUser: {
         accountId: account.id,
+        username: account.username,
         displayName: account.displayName,
         personalAgentId: resolveEnterprisePersonalAgentId(params.runtimeConfig, account),
         personalAgentTemplateId: resolveEnterprisePersonalAgentTemplateId(

@@ -86,6 +86,7 @@ describe("Enterprise cron execution policy", () => {
       expect(readGatewayRequestRuntimeMetadata(execution.cfg)).toEqual({
         enterpriseUser: {
           accountId: account.id,
+          username: account.username,
           displayName: "Administrator Automation",
           personalAgentId,
           personalAgentTemplateId: "main",

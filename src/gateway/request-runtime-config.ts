@@ -61,6 +61,7 @@ export type GatewayRequestRuntimeMetadata = {
   ) => readonly { pluginName: string; marketplaceName: string; capabilityDigest?: string | null }[];
   enterpriseUser?: {
     accountId: string;
+    username: string;
     displayName: string;
     personalAgentId: string;
     personalAgentTemplateId: string;

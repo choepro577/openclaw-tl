@@ -1436,6 +1436,7 @@ describe("chat directive tag stripping for non-streaming final payloads", () => 
       const metadata: GatewayRequestRuntimeMetadata = {
         enterpriseUser: {
           accountId: "account-a",
+          username: "employee-a",
           displayName: "Employee",
           personalAgentId: "main",
           personalAgentTemplateId: "personal",

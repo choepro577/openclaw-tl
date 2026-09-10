@@ -12,6 +12,7 @@ describe("cron request-scoped config", () => {
     const metadata = {
       enterpriseUser: {
         accountId: "account-a",
+        username: "employee-a",
         displayName: "Account A",
         personalAgentId: "enterprise-personal-a",
         personalAgentTemplateId: "personal",

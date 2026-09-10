@@ -120,53 +120,81 @@ what was verified. For example:
 Never present scoped rows as whole-system data or turn an unavailable HRM call
 into `không có nhân viên`.
 
-## Trigger: Danh sach task giao viec (hom qua / theo ngay)
+## Dinh danh user dang dang nhap
 
-Khi user hoi cac cau tu nhien nhu:
-
-- "Gui Danh sach cac task tren giao viec hom qua cho toi"
-- "Hom qua tren giao viec co nhung task gi cua toi"
-- "Tong hop task giao viec cua toi hom qua"
-
-Thi mac dinh vao `ASSIGNMENT_TASK_DIGEST_MODE` (khong can user chon loai task truoc).
-
-### ASSIGNMENT_TASK_DIGEST_MODE
-
-1. Suy luan moc thoi gian loc:
-   - "hom qua" = `from` = 00:00:00 cua ngay hom qua (theo mui gio he thong).
-   - Neu user noi ngay cu the, dat `from` = 00:00:00 cua ngay do.
-   - **Chi truyen `from`, khong truyen `to`.** Task giao viec co the keo dai nhieu ngay, khong gioi han trong mot ngay; dung `to` se bo sot task con dang lam hoac deadline sau ngay loc.
-   - Ap dung quy tac nay cho moi tool tim task trong `ASSIGNMENT_TASK_DIGEST_MODE` (ca 4 nhom pham vi).
-
-2. Voi moi nhom pham vi ben duoi, **bat buoc** goi `router_tool_search` rieng (khong doan ten tool), chon tool tu `results`, chay prerequisite (neu co), roi goi tool chinh:
-   - **Task tu tao**: query goi y `"danh sach task toi tu tao tren giao viec"`.
-   - **Duoc giao lam**: query goi y `"danh sach task duoc giao cho toi tren giao viec"`.
-   - **Quan ly**: query goi y `"danh sach task toi quan ly vai tro approver tren giao viec"`.
-   - **Duoc xem**: query goi y `"danh sach task toi duoc xem vai tro viewer tren giao viec"`.
-
-3. Neu tool can `user_id` ma chua co, uu tien lay tu prerequisite do router de xuat (vi du `employee_get_info`); khong tu doan ID.
-
-4. Tong hop ket qua thanh **mot danh sach de doc**, chia 4 nhom co tieu de ro rang:
+Moi Enterprise run co mot khoi trusted trong `USER.md`:
 
 ```text
-## Task tu tao (hom qua)
-- ...
-
-## Duoc giao lam (hom qua)
-- ...
-
-## Quan ly (hom qua)
-- ...
-
-## Duoc xem (hom qua)
-- ...
+## Authenticated Enterprise account
+Enterprise username: <username>
 ```
 
-5. Moi dong task uu tien hien: ten task, deadline (`from`/`to` neu co), trang thai/loai neu API tra ve. Neu nhom rong, ghi ro `Khong co task`.
+Voi tai khoan nhan vien, `Enterprise username` la khoa tra cuu `staff_code` cua
+HRM. Vi du username `tl00275` thi tim nhan vien co `staff_code` chinh xac la
+`tl00275`. Day la dinh danh tra cuu, khong phai quyen truy cap.
 
-6. Neu mot nhom con nhieu ban ghi (`pagination.has_more` hoac tuong duong), lap trang tiep theo cho dung nhom do truoc khi chuyen sang nhom khac.
+Khi user noi `toi`, `cua toi`, `duoc giao cho toi`, hoac `viec toi giao`:
 
-7. Khong hoi lai user muon xem nhom nao; chi hoi khi thieu truong `required` ma khong the tu dien.
+1. Lay `Enterprise username` trong `USER.md`; khong hoi lai user ve ma nhan
+   vien neu gia tri nay da co.
+2. Goi `router_tool_search` cho dung y dinh nghiep vu truoc.
+3. Neu tool chinh nhan truc tiep `staff_code`/`user_code`, truyen username vao
+   dung truong do.
+4. Neu tool chinh can `user_id` so va router tra prerequisite tra cuu nhan vien
+   (thuong la `get_staff_list`), route prerequisite do, tim bang
+   `search: <Enterprise username>`, roi so sanh `staff_code` sau khi trim va
+   lowercase bang chinh xac username. Chi khi co dung mot match moi dung
+   `staff_id` cua match lam `user_id`.
+5. Neu khong co match, co nhieu match, hoac match khong co `staff_id`, dung lai
+   va bao loi dinh danh. Khong chon theo ten gan dung.
+
+Khong dung Enterprise account UUID, `profileId`, display name, hoac username
+nguyen ban lam `user_id` so. Khong dung `employee_get_info` de thay buoc resolve
+tren tru khi router chon tool do va current run thuc su co employee token ma
+schema yeu cau.
+
+## Trigger: Task giao viec cua user hien tai
+
+Khi user hoi cac cau nhu:
+
+- "Cong viec tren giao viec cua toi"
+- "Hom qua toi duoc giao nhung task gi"
+- "Tong hop task giao viec cua toi hom qua"
+
+thi mac dinh tra cuu task **duoc giao cho user hien tai**. Khong tu mo rong
+thanh bon nhom neu user khong yeu cau.
+
+### CURRENT_USER_ASSIGNMENT_MODE
+
+1. Goi `router_tool_search` voi query phan anh dung scope:
+   - `task/công việc của tôi` hoac `duoc giao cho toi`: task user duoc giao.
+   - `viec toi giao - approver`: task theo vai tro approver.
+   - `viec toi giao - viewer`: task theo vai tro viewer.
+   - `task toi tu tao`: chi dung neu router tra mot tool co semantics loc theo
+     creator/current user. Neu khong co, bao scope nay chua duoc HRM MCP ho tro;
+     khong ghi `Khong co task`.
+2. Resolve user mot lan theo muc `Dinh danh user dang dang nhap`, roi tai su dung
+   cung `user_id` cho moi trang va moi tool co schema can no.
+3. Chi gui tham so co trong `input_schema` cua tool duoc router tra ve. Khong
+   bien `role_user_id` thanh ID cua current user neu schema mo ta do la nguoi
+   nam vai tro approver/viewer trong task.
+4. Doc semantics `from`/`to` trong schema duoc router tra ve. Neu user hoi task
+   `tu hom qua` hoac task dang quan ly `hom qua`, truyen `from` la ngay hom qua
+   va bo `to` khi schema cho phep, de giu cac task co deadline keo dai ve sau.
+   Chi dat `from = to` cung mot ngay khi user muon deadline dung ngay do. Neu
+   schema bat buoc cap `from`/`to`, truyen ca hai; khong gui mot cap tham so ma
+   schema tu choi. Neu tool khong ho tro loc ngay, neu ro gioi han thay vi gia
+   vo da loc.
+5. Dung `per_page`/`limit` lon nhat schema cho phep va lay het trang. Reuse ID
+   da resolve; khong tra cuu lai nhan vien moi trang.
+6. Moi dong task uu tien hien ten, deadline (`from`/`to`), trang thai/loai neu
+   API tra ve. Mot scope chi duoc ghi `Khong co task` sau khi call thanh cong va
+   pagination cua scope do da hoan tat.
+7. Neu user yeu cau nhieu scope, goi router rieng cho tung scope va chia ket qua
+   theo tieu de. Khong hoi user chon nhom nao khi y dinh da ro.
+
+Neu `USER.md` khong co `Enterprise username`, hoi user ma nhan vien hoac bao
+current session chua duoc gan dinh danh; khong suy ra tu ten hien thi.
 
 ## Mandatory Rules
 
@@ -212,7 +240,8 @@ headers, or URLs containing credentials.
 
 ## Execution Loop (Strict)
 
-1. Neu request thuoc `ASSIGNMENT_TASK_DIGEST_MODE`, chuyen sang luong tong hop 4 nhom task (tu tao / duoc giao / quan ly / duoc xem) theo muc "Trigger: Danh sach task giao viec".
+1. Neu request thuoc `CURRENT_USER_ASSIGNMENT_MODE`, resolve current user theo
+   `Enterprise username` va chi tra cuu cac scope user thuc su yeu cau.
 2. Chuyen yeu cau user thanh query routing.
 3. Goi `router_tool_search`.
 4. Doc `results` va `prerequisites`.
