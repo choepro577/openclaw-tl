@@ -41,7 +41,7 @@ function boundedSubagentActivity(value: unknown): string | undefined {
   return normalized ? truncateUtf16Safe(normalized, SUBAGENT_ACTIVITY_MAX_CHARS) : undefined;
 }
 
-function taskToolCards(taskId: string, messages: readonly unknown[]): ToolCard[] {
+export function taskToolCards(taskId: string, messages: readonly unknown[]): ToolCard[] {
   const items: ChatItem[] = messages.map((message, index) => ({
     kind: "message",
     key: `${taskId}:tool:${index}`,

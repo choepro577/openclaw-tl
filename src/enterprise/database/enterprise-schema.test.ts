@@ -1,14 +1,144 @@
+import { randomUUID } from "node:crypto";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import type { DatabaseSync } from "node:sqlite";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   closeOpenClawStateDatabaseForTest,
   openOpenClawStateDatabase,
 } from "../../state/openclaw-state-db.js";
+import { createEnterpriseAccount } from "../accounts/account-store.js";
 import { ensureEnterpriseSchema } from "./enterprise-schema.js";
 
 const directories: string[] = [];
+
+function replaceWithPreScopeExtensionSchema(database: DatabaseSync): void {
+  // This is the schema shipped before shared-agent ownership. It deliberately
+  // keeps the old NOT NULL account/request links and RESTRICT parent FK so the
+  // migration test exercises the real dependency boundary.
+  database.exec(`
+    PRAGMA foreign_keys = OFF;
+    DROP TABLE IF EXISTS enterprise_account_plugin_grants;
+    DROP TABLE IF EXISTS enterprise_plugin_requests;
+    DROP TABLE IF EXISTS enterprise_codex_plugin_grants;
+    DROP TABLE IF EXISTS enterprise_codex_plugin_requests;
+
+    CREATE TABLE enterprise_plugin_requests (
+      id TEXT NOT NULL PRIMARY KEY,
+      requester_account_id TEXT NOT NULL,
+      package_name TEXT NOT NULL,
+      package_family TEXT NOT NULL CHECK (package_family IN ('code_plugin', 'bundle_plugin')),
+      exact_version TEXT NOT NULL,
+      integrity TEXT NOT NULL,
+      request_kind TEXT NOT NULL CHECK (request_kind IN ('install', 'access')),
+      trust_snapshot_json TEXT NOT NULL,
+      capability_snapshot_json TEXT NOT NULL,
+      capability_digest TEXT NOT NULL,
+      state TEXT NOT NULL CHECK (state IN ('pending', 'approving', 'available', 'rejected', 'cancelled', 'install_failed')),
+      installed_plugin_id TEXT,
+      reviewer_account_id TEXT,
+      decision_reason TEXT,
+      safe_error_code TEXT,
+      revision INTEGER NOT NULL DEFAULT 1,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL,
+      decided_at INTEGER,
+      FOREIGN KEY (requester_account_id) REFERENCES enterprise_accounts(id) ON DELETE CASCADE,
+      FOREIGN KEY (reviewer_account_id) REFERENCES enterprise_accounts(id) ON DELETE SET NULL
+    ) STRICT;
+    CREATE INDEX idx_enterprise_plugin_requests_account
+      ON enterprise_plugin_requests(requester_account_id, state, updated_at DESC);
+    CREATE INDEX idx_enterprise_plugin_requests_admin
+      ON enterprise_plugin_requests(state, created_at ASC);
+    CREATE UNIQUE INDEX idx_enterprise_plugin_requests_open
+      ON enterprise_plugin_requests(requester_account_id, package_name, exact_version)
+      WHERE state IN ('pending', 'approving');
+
+    CREATE TABLE enterprise_account_plugin_grants (
+      id TEXT NOT NULL PRIMARY KEY,
+      account_id TEXT NOT NULL,
+      plugin_id TEXT NOT NULL,
+      exact_version TEXT NOT NULL,
+      integrity TEXT NOT NULL,
+      capability_digest TEXT NOT NULL,
+      approved_tools_json TEXT NOT NULL,
+      source_request_id TEXT NOT NULL,
+      state TEXT NOT NULL CHECK (state IN ('active', 'suspended_version_mismatch', 'unavailable', 'orphaned', 'revoked')),
+      revision INTEGER NOT NULL DEFAULT 1,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL,
+      FOREIGN KEY (account_id) REFERENCES enterprise_accounts(id) ON DELETE CASCADE,
+      FOREIGN KEY (source_request_id) REFERENCES enterprise_plugin_requests(id) ON DELETE RESTRICT,
+      UNIQUE (account_id, plugin_id)
+    ) STRICT;
+    CREATE INDEX idx_enterprise_account_plugin_grants_active
+      ON enterprise_account_plugin_grants(account_id, state, updated_at DESC);
+
+    CREATE TABLE enterprise_codex_plugin_requests (
+      id TEXT NOT NULL PRIMARY KEY,
+      requester_account_id TEXT NOT NULL,
+      agent_key TEXT NOT NULL,
+      runtime_agent_id TEXT NOT NULL,
+      plugin_name TEXT NOT NULL,
+      marketplace_name TEXT NOT NULL,
+      remote_plugin_id TEXT,
+      request_kind TEXT NOT NULL CHECK (request_kind IN ('install', 'access')),
+      catalog_snapshot_json TEXT NOT NULL,
+      capability_snapshot_json TEXT NOT NULL,
+      capability_digest TEXT NOT NULL,
+      state TEXT NOT NULL CHECK (state IN ('pending', 'approving', 'available', 'rejected', 'cancelled', 'install_failed')),
+      installed_plugin_id TEXT,
+      auth_required INTEGER NOT NULL DEFAULT 0 CHECK (auth_required IN (0, 1)),
+      apps_needing_auth_json TEXT NOT NULL DEFAULT '[]',
+      connect_urls_json TEXT NOT NULL DEFAULT '[]',
+      reviewer_account_id TEXT,
+      decision_reason TEXT,
+      safe_error_code TEXT,
+      revision INTEGER NOT NULL DEFAULT 1,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL,
+      decided_at INTEGER,
+      FOREIGN KEY (requester_account_id) REFERENCES enterprise_accounts(id) ON DELETE CASCADE,
+      FOREIGN KEY (reviewer_account_id) REFERENCES enterprise_accounts(id) ON DELETE SET NULL
+    ) STRICT;
+    CREATE INDEX idx_enterprise_codex_plugin_requests_account
+      ON enterprise_codex_plugin_requests(requester_account_id, runtime_agent_id, state, updated_at DESC);
+    CREATE INDEX idx_enterprise_codex_plugin_requests_admin
+      ON enterprise_codex_plugin_requests(state, created_at ASC);
+    CREATE UNIQUE INDEX idx_enterprise_codex_plugin_requests_open
+      ON enterprise_codex_plugin_requests(requester_account_id, runtime_agent_id, plugin_name, marketplace_name)
+      WHERE state IN ('pending', 'approving');
+
+    CREATE TABLE enterprise_codex_plugin_grants (
+      id TEXT NOT NULL PRIMARY KEY,
+      account_id TEXT NOT NULL,
+      agent_key TEXT NOT NULL,
+      runtime_agent_id TEXT NOT NULL,
+      plugin_name TEXT NOT NULL,
+      marketplace_name TEXT NOT NULL,
+      remote_plugin_id TEXT,
+      installed_plugin_id TEXT,
+      capability_snapshot_json TEXT NOT NULL,
+      capability_digest TEXT NOT NULL,
+      source_request_id TEXT NOT NULL,
+      auth_required INTEGER NOT NULL DEFAULT 0 CHECK (auth_required IN (0, 1)),
+      apps_needing_auth_json TEXT NOT NULL DEFAULT '[]',
+      connect_urls_json TEXT NOT NULL DEFAULT '[]',
+      ready INTEGER NOT NULL DEFAULT 0 CHECK (ready IN (0, 1)),
+      state TEXT NOT NULL CHECK (state IN ('active', 'disabled', 'unavailable', 'revoked')),
+      revision INTEGER NOT NULL DEFAULT 1,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL,
+      FOREIGN KEY (account_id) REFERENCES enterprise_accounts(id) ON DELETE CASCADE,
+      FOREIGN KEY (source_request_id) REFERENCES enterprise_codex_plugin_requests(id) ON DELETE RESTRICT,
+      UNIQUE (account_id, runtime_agent_id, plugin_name, marketplace_name)
+    ) STRICT;
+    CREATE INDEX idx_enterprise_codex_plugin_grants_active
+      ON enterprise_codex_plugin_grants(account_id, runtime_agent_id, state, updated_at DESC);
+    PRAGMA foreign_keys = ON;
+  `);
+}
 
 afterEach(() => {
   closeOpenClawStateDatabaseForTest();
@@ -178,5 +308,237 @@ describe("Enterprise Knowledge additive schema", () => {
         .prepare("SELECT build_revision FROM enterprise_knowledge_zones WHERE id = ?")
         .get("zone-legacy"),
     ).toEqual({ build_revision: 4 });
+  });
+
+  it("rebuilds a legacy native grant index shape without collapsing private and shared rows", () => {
+    const directory = mkdtempSync(join(tmpdir(), "openclaw-extension-grant-schema-"));
+    directories.push(directory);
+    const options = { path: join(directory, "state.sqlite") };
+    ensureEnterpriseSchema(options);
+    const account = createEnterpriseAccount(
+      {
+        username: "grant-schema-owner",
+        displayName: "Grant Schema Owner",
+        passwordHash: "test-only",
+        role: "employee",
+        mustChangePassword: false,
+      },
+      options,
+    );
+    const database = openOpenClawStateDatabase(options).db;
+    const insert = database.prepare(
+      `INSERT INTO enterprise_account_plugin_grants
+       (id, account_id, scope, agent_key, runtime_agent_id, plugin_id, exact_version, integrity,
+        capability_digest, approved_tools_json, state, revision, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    );
+    insert.run(
+      randomUUID(),
+      account.id,
+      "account",
+      null,
+      null,
+      "same-plugin",
+      "1.0.0",
+      "sha256:private",
+      "private-digest",
+      '["private.search"]',
+      "active",
+      1,
+      1,
+      1,
+    );
+    insert.run(
+      randomUUID(),
+      account.id,
+      "shared_agent",
+      "shared:support",
+      "support",
+      "same-plugin",
+      "1.0.0",
+      "sha256:shared",
+      "shared-digest",
+      '["shared.search"]',
+      "active",
+      1,
+      2,
+      2,
+    );
+    database.exec(
+      "DROP INDEX idx_enterprise_account_plugin_grants_account_unique; DROP INDEX idx_enterprise_account_plugin_grants_shared_unique;",
+    );
+    closeOpenClawStateDatabaseForTest();
+
+    expect(() => ensureEnterpriseSchema(options)).not.toThrow();
+    const migrated = openOpenClawStateDatabase(options).db;
+    expect(
+      migrated
+        .prepare(
+          `SELECT scope, account_id, runtime_agent_id, plugin_id
+           FROM enterprise_account_plugin_grants ORDER BY scope`,
+        )
+        .all(),
+    ).toEqual([
+      {
+        scope: "account",
+        account_id: account.id,
+        runtime_agent_id: null,
+        plugin_id: "same-plugin",
+      },
+      {
+        scope: "shared_agent",
+        account_id: account.id,
+        runtime_agent_id: "support",
+        plugin_id: "same-plugin",
+      },
+    ]);
+  });
+
+  it("migrates pre-scope request and grant tables without losing approval links", () => {
+    const directory = mkdtempSync(join(tmpdir(), "openclaw-extension-legacy-schema-"));
+    directories.push(directory);
+    const options = { path: join(directory, "state.sqlite") };
+    ensureEnterpriseSchema(options);
+    const account = createEnterpriseAccount(
+      {
+        username: "legacy-extension-owner",
+        displayName: "Legacy Extension Owner",
+        passwordHash: "test-only",
+        role: "employee",
+        mustChangePassword: false,
+      },
+      options,
+    );
+    const database = openOpenClawStateDatabase(options).db;
+    replaceWithPreScopeExtensionSchema(database);
+    database
+      .prepare(
+        `INSERT INTO enterprise_plugin_requests
+         (id, requester_account_id, package_name, package_family, exact_version, integrity,
+          request_kind, trust_snapshot_json, capability_snapshot_json, capability_digest, state,
+          installed_plugin_id, revision, created_at, updated_at, decided_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        "legacy-native-request",
+        account.id,
+        "@acme/legacy-native",
+        "code_plugin",
+        "1.0.0",
+        "sha256:legacy-native",
+        "install",
+        "{}",
+        '{"tools":["legacy.search"]}',
+        "legacy-native-digest",
+        "available",
+        "legacy-native-plugin",
+        2,
+        1,
+        2,
+        2,
+      );
+    database
+      .prepare(
+        `INSERT INTO enterprise_account_plugin_grants
+         (id, account_id, plugin_id, exact_version, integrity, capability_digest,
+          approved_tools_json, source_request_id, state, revision, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        "legacy-native-grant",
+        account.id,
+        "legacy-native-plugin",
+        "1.0.0",
+        "sha256:legacy-native",
+        "legacy-native-digest",
+        '["legacy.search"]',
+        "legacy-native-request",
+        "active",
+        1,
+        2,
+        2,
+      );
+    database
+      .prepare(
+        `INSERT INTO enterprise_codex_plugin_requests
+         (id, requester_account_id, agent_key, runtime_agent_id, plugin_name, marketplace_name,
+          remote_plugin_id, request_kind, catalog_snapshot_json, capability_snapshot_json,
+          capability_digest, state, installed_plugin_id, revision, created_at, updated_at, decided_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        "legacy-codex-request",
+        account.id,
+        "shared:support",
+        "support",
+        "legacy-codex",
+        "openai-curated",
+        "legacy-codex",
+        "install",
+        '{"id":"legacy-codex"}',
+        '{"version":1}',
+        "legacy-codex-digest",
+        "available",
+        "legacy-codex",
+        2,
+        1,
+        2,
+        2,
+      );
+    database
+      .prepare(
+        `INSERT INTO enterprise_codex_plugin_grants
+         (id, account_id, agent_key, runtime_agent_id, plugin_name, marketplace_name,
+          remote_plugin_id, installed_plugin_id, capability_snapshot_json, capability_digest,
+          source_request_id, ready, state, revision, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        "legacy-codex-grant",
+        account.id,
+        "shared:support",
+        "support",
+        "legacy-codex",
+        "openai-curated",
+        "legacy-codex",
+        "legacy-codex",
+        '{"version":1}',
+        "legacy-codex-digest",
+        "legacy-codex-request",
+        1,
+        "active",
+        1,
+        2,
+        2,
+      );
+    closeOpenClawStateDatabaseForTest();
+
+    expect(() => ensureEnterpriseSchema(options)).not.toThrow();
+    const migrated = openOpenClawStateDatabase(options).db;
+    expect(
+      migrated
+        .prepare("SELECT id, source_request_id FROM enterprise_account_plugin_grants WHERE id = ?")
+        .get("legacy-native-grant"),
+    ).toEqual({ id: "legacy-native-grant", source_request_id: "legacy-native-request" });
+    expect(
+      migrated
+        .prepare("SELECT id, source_request_id FROM enterprise_codex_plugin_grants WHERE id = ?")
+        .get("legacy-codex-grant"),
+    ).toEqual({ id: "legacy-codex-grant", source_request_id: "legacy-codex-request" });
+    expect(migrated.prepare("PRAGMA foreign_key_check").all()).toEqual([]);
+    expect(
+      migrated
+        .prepare(
+          "SELECT name FROM pragma_table_info('enterprise_plugin_requests') WHERE name = 'scope'",
+        )
+        .all(),
+    ).toEqual([{ name: "scope" }]);
+    expect(
+      migrated
+        .prepare(
+          "SELECT name FROM pragma_table_info('enterprise_codex_plugin_grants') WHERE name = 'scope'",
+        )
+        .all(),
+    ).toEqual([{ name: "scope" }]);
   });
 });

@@ -26,6 +26,7 @@ export function buildSubagentExecutionSessionSpawnContext(params: {
   sandbox: "inherit" | "require";
   inheritedToolAllowlist?: string[];
   inheritedToolDenylist?: string[];
+  approvalReviewerDeviceId?: string;
 }): AgentRuntimeSessionSpawnContext | undefined {
   if (!params.enabled) {
     return undefined;
@@ -34,6 +35,9 @@ export function buildSubagentExecutionSessionSpawnContext(params: {
   const deny = params.inheritedToolDenylist ?? [];
   return withAgentRuntimeExecutionLineage(
     {
+      ...(params.approvalReviewerDeviceId
+        ? { approvalReviewerDeviceId: params.approvalReviewerDeviceId }
+        : {}),
       inheritedToolPolicy: { version: 1, allow, deny },
     },
     {

@@ -11,6 +11,7 @@ import {
 } from "../../state/openclaw-state-db.js";
 import { ensureEnterpriseSchema } from "../database/enterprise-schema.js";
 import type { AgentKey } from "../user/user-api-contracts.js";
+import { jsonObject } from "./codex-plugin-active-grants.js";
 import type {
   EnterpriseCodexPluginAuthApp,
   EnterpriseCodexPluginGrant,
@@ -19,6 +20,22 @@ import type {
   EnterpriseCodexPluginRequestKind,
   EnterpriseCodexPluginRequestState,
 } from "./codex-plugin-types.js";
+import {
+  normalizeEnterpriseExtensionGrantTarget,
+  type EnterpriseExtensionGrantScope,
+} from "./extension-types.js";
+
+export {
+  CODEX_CONNECTOR_IDENTITY_REQUIRED,
+  EnterpriseCodexConnectorIdentityRequiredError,
+  classifyEnterpriseCodexPluginCapabilitySnapshot,
+  listActiveEnterpriseCodexPluginGrants,
+  listActiveEnterpriseSharedCodexPluginGrantFingerprints,
+} from "./codex-plugin-active-grants.js";
+export type {
+  EnterpriseActiveCodexPluginGrantFingerprint,
+  EnterpriseCodexCapabilitySurface,
+} from "./codex-plugin-active-grants.js";
 
 type Row = Record<string, unknown>;
 
@@ -29,7 +46,8 @@ type Row = Record<string, unknown>;
  */
 type CodexPluginRequestTable = {
   id: string;
-  requester_account_id: string;
+  requester_account_id: string | null;
+  scope: string;
   agent_key: string;
   runtime_agent_id: string;
   plugin_name: string;
@@ -55,7 +73,8 @@ type CodexPluginRequestTable = {
 
 type CodexPluginGrantTable = {
   id: string;
-  account_id: string;
+  account_id: string | null;
+  scope: string;
   agent_key: string;
   runtime_agent_id: string;
   plugin_name: string;
@@ -64,7 +83,8 @@ type CodexPluginGrantTable = {
   installed_plugin_id: string | null;
   capability_snapshot_json: string;
   capability_digest: string;
-  source_request_id: string;
+  source_request_id: string | null;
+  approved_by_account_id: string | null;
   auth_required: number;
   apps_needing_auth_json: string;
   connect_urls_json: string;
@@ -80,7 +100,7 @@ type EnterpriseAccountTable = {
   enabled: number;
 };
 
-type CodexPluginDatabase = {
+export type CodexPluginDatabase = {
   enterprise_codex_plugin_requests: CodexPluginRequestTable;
   enterprise_codex_plugin_grants: CodexPluginGrantTable;
   enterprise_accounts: EnterpriseAccountTable;
@@ -105,17 +125,6 @@ function integer(row: Row, key: string): number {
     throw new Error("CODEX_PLUGIN_ROW_INVALID:" + key);
   }
   return value;
-}
-
-function jsonObject(row: Row, key: string): Record<string, unknown> {
-  try {
-    const value = JSON.parse(text(row, key)) as unknown;
-    return value && typeof value === "object" && !Array.isArray(value)
-      ? (value as Record<string, unknown>)
-      : {};
-  } catch {
-    return {};
-  }
 }
 
 function jsonArray(row: Row, key: string): unknown[] {
@@ -167,9 +176,15 @@ function authState(
 }
 
 function toCodexRequest(row: Row): EnterpriseCodexPluginRequest {
+  const target = normalizeEnterpriseExtensionGrantTarget({
+    scope: (nullableText(row, "scope") ?? "account") as EnterpriseExtensionGrantScope,
+    agentKey: text(row, "agent_key") as AgentKey,
+    runtimeAgentId: text(row, "runtime_agent_id"),
+  });
   return {
     id: text(row, "id"),
-    requesterAccountId: text(row, "requester_account_id"),
+    requesterAccountId: nullableText(row, "requester_account_id"),
+    scope: target.scope,
     agentKey: text(row, "agent_key") as AgentKey,
     runtimeAgentId: text(row, "runtime_agent_id"),
     pluginName: text(row, "plugin_name"),
@@ -195,9 +210,15 @@ function toCodexRequest(row: Row): EnterpriseCodexPluginRequest {
 }
 
 function toCodexGrant(row: Row): EnterpriseCodexPluginGrant {
+  const target = normalizeEnterpriseExtensionGrantTarget({
+    scope: (nullableText(row, "scope") ?? "account") as EnterpriseExtensionGrantScope,
+    agentKey: text(row, "agent_key") as AgentKey,
+    runtimeAgentId: text(row, "runtime_agent_id"),
+  });
   return {
     id: text(row, "id"),
-    accountId: text(row, "account_id"),
+    accountId: nullableText(row, "account_id"),
+    scope: target.scope,
     agentKey: text(row, "agent_key") as AgentKey,
     runtimeAgentId: text(row, "runtime_agent_id"),
     pluginName: text(row, "plugin_name"),
@@ -206,7 +227,8 @@ function toCodexGrant(row: Row): EnterpriseCodexPluginGrant {
     installedPluginId: nullableText(row, "installed_plugin_id"),
     capabilitySnapshot: jsonObject(row, "capability_snapshot_json"),
     capabilityDigest: text(row, "capability_digest"),
-    sourceRequestId: text(row, "source_request_id"),
+    sourceRequestId: nullableText(row, "source_request_id"),
+    approvedByAccountId: nullableText(row, "approved_by_account_id"),
     state: text(row, "state") as EnterpriseCodexPluginGrantState,
     revision: integer(row, "revision"),
     createdAt: integer(row, "created_at"),
@@ -249,20 +271,32 @@ export function createEnterpriseCodexPluginRequest(
     | "authRequired"
     | "appsNeedingAuth"
     | "connectUrls"
-  > &
-    Partial<Pick<EnterpriseCodexPluginRequest, "authRequired" | "appsNeedingAuth" | "connectUrls">>,
+    | "scope"
+    | "requesterAccountId"
+  > & { requesterAccountId: string } & Partial<
+      Pick<
+        EnterpriseCodexPluginRequest,
+        "authRequired" | "appsNeedingAuth" | "connectUrls" | "scope"
+      >
+    >,
   options: OpenClawStateDatabaseOptions = {},
 ): EnterpriseCodexPluginRequest {
   ensureEnterpriseSchema(options);
   return runOpenClawStateWriteTransaction(
     ({ db }) => {
       const query = getNodeSqliteKysely<CodexPluginDatabase>(db);
+      const target = normalizeEnterpriseExtensionGrantTarget({
+        scope: input.scope,
+        agentKey: input.agentKey,
+        runtimeAgentId: input.runtimeAgentId,
+      });
       const existing = executeSqliteQueryTakeFirstSync(
         db,
         query
           .selectFrom("enterprise_codex_plugin_requests")
           .selectAll()
           .where("requester_account_id", "=", input.requesterAccountId)
+          .where("scope", "=", target.scope)
           .where("runtime_agent_id", "=", input.runtimeAgentId)
           .where("plugin_name", "=", input.pluginName)
           .where("marketplace_name", "=", input.marketplaceName)
@@ -284,6 +318,7 @@ export function createEnterpriseCodexPluginRequest(
           .values({
             id,
             requester_account_id: input.requesterAccountId,
+            scope: target.scope,
             agent_key: input.agentKey,
             runtime_agent_id: input.runtimeAgentId,
             plugin_name: input.pluginName,
@@ -374,6 +409,7 @@ export function transitionEnterpriseCodexPluginRequest(
     decisionReason?: string | null;
     installedPluginId?: string | null;
     safeErrorCode?: string | null;
+    scope?: EnterpriseCodexPluginRequest["scope"];
     authRequired?: boolean;
     appsNeedingAuth?: EnterpriseCodexPluginAuthApp[];
     connectUrls?: string[];
@@ -397,12 +433,18 @@ export function transitionEnterpriseCodexPluginRequest(
       }
       const decided =
         input.to === "rejected" || input.to === "available" ? Date.now() : current.decidedAt;
+      const target = normalizeEnterpriseExtensionGrantTarget({
+        scope: input.scope ?? current.scope,
+        agentKey: current.agentKey,
+        runtimeAgentId: current.runtimeAgentId,
+      });
       const updated = executeSqliteQueryTakeFirstSync(
         db,
         query
           .updateTable("enterprise_codex_plugin_requests")
           .set({
             state: input.to,
+            scope: target.scope,
             reviewer_account_id: input.reviewerAccountId ?? current.reviewerAccountId,
             decision_reason: input.decisionReason ?? current.decisionReason,
             installed_plugin_id: input.installedPluginId ?? current.installedPluginId,
@@ -442,6 +484,7 @@ export function transitionEnterpriseCodexPluginRequest(
 export function upsertEnterpriseCodexPluginGrant(
   input: {
     accountId: string;
+    scope?: EnterpriseExtensionGrantScope;
     agentKey: AgentKey;
     runtimeAgentId: string;
     pluginName: string;
@@ -451,6 +494,7 @@ export function upsertEnterpriseCodexPluginGrant(
     capabilitySnapshot: Record<string, unknown>;
     capabilityDigest: string;
     sourceRequestId: string;
+    approvedByAccountId?: string | null;
     state: EnterpriseCodexPluginGrantState;
     authRequired?: boolean;
     appsNeedingAuth?: EnterpriseCodexPluginAuthApp[];
@@ -460,6 +504,11 @@ export function upsertEnterpriseCodexPluginGrant(
   options: OpenClawStateDatabaseOptions = {},
 ): EnterpriseCodexPluginGrant {
   ensureEnterpriseSchema(options);
+  const target = normalizeEnterpriseExtensionGrantTarget({
+    scope: input.scope,
+    agentKey: input.agentKey,
+    runtimeAgentId: input.runtimeAgentId,
+  });
   return runOpenClawStateWriteTransaction(
     ({ db }) => {
       const query = getNodeSqliteKysely<CodexPluginDatabase>(db);
@@ -468,21 +517,26 @@ export function upsertEnterpriseCodexPluginGrant(
         query
           .selectFrom("enterprise_codex_plugin_grants")
           .selectAll()
-          .where("account_id", "=", input.accountId)
+          .where("scope", "=", target.scope)
           .where("runtime_agent_id", "=", input.runtimeAgentId)
           .where("plugin_name", "=", input.pluginName)
-          .where("marketplace_name", "=", input.marketplaceName),
+          .where("marketplace_name", "=", input.marketplaceName)
+          .$if(target.scope === "account", (builder) =>
+            builder.where("account_id", "=", input.accountId),
+          ),
       );
       const now = Date.now();
       const appsNeedingAuthJson = JSON.stringify(input.appsNeedingAuth ?? []);
       const connectUrlsJson = JSON.stringify(input.connectUrls ?? []);
       const common = {
+        scope: target.scope,
         agent_key: input.agentKey,
         remote_plugin_id: input.remotePluginId ?? null,
         installed_plugin_id: input.installedPluginId ?? null,
         capability_snapshot_json: JSON.stringify(input.capabilitySnapshot),
         capability_digest: input.capabilityDigest,
         source_request_id: input.sourceRequestId,
+        approved_by_account_id: input.approvedByAccountId ?? null,
         state: input.state,
         auth_required: input.authRequired ? 1 : 0,
         apps_needing_auth_json: appsNeedingAuthJson,
@@ -497,10 +551,9 @@ export function upsertEnterpriseCodexPluginGrant(
             .updateTable("enterprise_codex_plugin_grants")
             .set({
               ...common,
-              revision: Number(existing.revision) + 1,
+              revision: existing.revision + 1,
             })
             .where("id", "=", existing.id)
-            .where("account_id", "=", input.accountId)
             .returningAll(),
         );
         if (!updated) {
@@ -517,6 +570,7 @@ export function upsertEnterpriseCodexPluginGrant(
           .values({
             id,
             account_id: input.accountId,
+            scope: target.scope,
             agent_key: input.agentKey,
             runtime_agent_id: input.runtimeAgentId,
             plugin_name: input.pluginName,
@@ -576,6 +630,25 @@ export function getEnterpriseCodexPluginGrant(
   const row = executeSqliteQueryTakeFirstSync(
     db,
     query.selectFrom("enterprise_codex_plugin_grants").selectAll().where("id", "=", id),
+  );
+  return row ? toCodexGrant(row as Row) : undefined;
+}
+
+export function getEnterpriseCodexPluginGrantBySourceRequestId(
+  sourceRequestId: string,
+  options: OpenClawStateDatabaseOptions = {},
+): EnterpriseCodexPluginGrant | undefined {
+  ensureEnterpriseSchema(options);
+  const { db } = openOpenClawStateDatabase(options);
+  const query = getNodeSqliteKysely<CodexPluginDatabase>(db);
+  const row = executeSqliteQueryTakeFirstSync(
+    db,
+    query
+      .selectFrom("enterprise_codex_plugin_grants")
+      .selectAll()
+      .where("source_request_id", "=", sourceRequestId)
+      .orderBy("updated_at", "desc")
+      .orderBy("id", "asc"),
   );
   return row ? toCodexGrant(row as Row) : undefined;
 }
@@ -666,70 +739,4 @@ export function refreshEnterpriseCodexPluginGrantAuth(
     options,
     { operationLabel: "enterprise.codex-plugin.grant.auth-refresh" },
   );
-}
-
-/**
- * Projection consumed by the native Codex harness. A grant is effective only
- * when its exact account-agent request is available and the grant is active.
- */
-export function listActiveEnterpriseCodexPluginGrants(
-  accountId: string,
-  runtimeAgentId: string,
-  options: OpenClawStateDatabaseOptions = {},
-): readonly {
-  pluginName: string;
-  marketplaceName: string;
-  capabilityDigest: string;
-}[] {
-  ensureEnterpriseSchema(options);
-  const { db } = openOpenClawStateDatabase(options);
-  const query = getNodeSqliteKysely<CodexPluginDatabase>(db);
-  const rows = executeSqliteQuerySync(
-    db,
-    query
-      .selectFrom("enterprise_codex_plugin_grants as g")
-      .innerJoin("enterprise_codex_plugin_requests as r", "r.id", "g.source_request_id")
-      .innerJoin("enterprise_accounts as a", "a.id", "g.account_id")
-      .select([
-        "g.plugin_name as plugin_name",
-        "g.marketplace_name as marketplace_name",
-        "g.capability_digest as capability_digest",
-      ])
-      .where("g.account_id", "=", accountId)
-      .where("g.runtime_agent_id", "=", runtimeAgentId)
-      .where("a.enabled", "=", 1)
-      .where("g.state", "=", "active")
-      .where("r.state", "=", "available")
-      .where("g.installed_plugin_id", "is not", null)
-      .whereRef("r.requester_account_id", "=", "g.account_id")
-      .whereRef("r.runtime_agent_id", "=", "g.runtime_agent_id")
-      .whereRef("r.plugin_name", "=", "g.plugin_name")
-      .whereRef("r.marketplace_name", "=", "g.marketplace_name")
-      .whereRef("r.capability_digest", "=", "g.capability_digest")
-      .whereRef("r.installed_plugin_id", "=", "g.installed_plugin_id")
-      .orderBy("g.marketplace_name", "asc")
-      .orderBy("g.plugin_name", "asc"),
-  ).rows as Array<{
-    plugin_name: string;
-    marketplace_name: string;
-    capability_digest: string;
-  }>;
-  const seen = new Set<string>();
-  const result: Array<{
-    pluginName: string;
-    marketplaceName: string;
-    capabilityDigest: string;
-  }> = [];
-  for (const row of rows) {
-    const pluginName = row.plugin_name;
-    const marketplaceName = row.marketplace_name;
-    const capabilityDigest = row.capability_digest;
-    const key = pluginName + "\0" + marketplaceName;
-    if (!pluginName || !marketplaceName || !capabilityDigest || seen.has(key)) {
-      continue;
-    }
-    seen.add(key);
-    result.push({ pluginName, marketplaceName, capabilityDigest });
-  }
-  return result;
 }

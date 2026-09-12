@@ -1,3 +1,4 @@
+import { isRecord } from "@openclaw/normalization-core/record-coerce";
 import { normalizeLowercaseStringOrEmpty } from "@openclaw/normalization-core/string-coerce";
 // Control UI module implements tool display behavior.
 import SHARED_TOOL_DISPLAY_JSON from "../../../../apps/shared/OpenClawKit/Sources/OpenClawKit/Resources/tool-display.json" with { type: "json" };
@@ -75,6 +76,19 @@ function convertSpec(spec?: SharedToolDisplaySpec): ToolDisplaySpec {
   };
 }
 
+function skillScriptLabel(args: unknown): string | undefined {
+  if (!isRecord(args) || typeof args.skill !== "string") {
+    return undefined;
+  }
+  const name = args.skill
+    .replace(/-skill$/u, "")
+    .split(/[-_]/u)
+    .filter(Boolean)
+    .map((part) => `${part.slice(0, 1).toUpperCase()}${part.slice(1)}`)
+    .join(" ");
+  return name ? `Skill Script · ${name}` : undefined;
+}
+
 const SHARED_TOOL_DISPLAY_CONFIG = SHARED_TOOL_DISPLAY_JSON as SharedToolDisplayConfig;
 const FALLBACK = convertSpec(SHARED_TOOL_DISPLAY_CONFIG.fallback ?? { emoji: "🧩" });
 const TOOL_MAP: Record<string, ToolDisplaySpec> = Object.fromEntries(
@@ -116,7 +130,8 @@ export function resolveToolDisplay(params: {
   const spec = TOOL_MAP[key];
   const icon = spec?.icon ?? FALLBACK.icon ?? "puzzle";
   const title = spec?.title ?? defaultTitle(name);
-  const label = spec?.label ?? title;
+  const label =
+    key === "skill_script" ? (skillScriptLabel(params.args) ?? title) : (spec?.label ?? title);
   const toolDisplayParts = resolveToolVerbAndDetailForArgs({
     toolKey: key,
     args: params.args,

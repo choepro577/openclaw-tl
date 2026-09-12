@@ -16,6 +16,9 @@ cat >"$fake_bin/curl" <<'EOF'
 set -euo pipefail
 
 printf '%s\n' "$*" >"${HR_TEST_CURL_ARGS_FILE:?}"
+if [[ " $* " == *" --data-binary @- "* ]]; then
+  cat >"${HR_TEST_CURL_STDIN_FILE:?}"
+fi
 output_file=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -46,6 +49,7 @@ chmod +x "$fake_bin/curl"
 
 export PATH="$fake_bin:$PATH"
 export HR_TEST_CURL_ARGS_FILE="$tmp_dir/curl-args"
+export HR_TEST_CURL_STDIN_FILE="$tmp_dir/curl-stdin"
 export HR_MCP_BASE_URL="http://hrm.example.test"
 
 fail() {
@@ -77,9 +81,10 @@ export HR_TEST_CURL_STATUS=0
 export HR_TEST_HTTP_STATUS=200
 export HR_TEST_BODY='{"success":true,"result":{"data":[]}}'
 assert_success '{"success":true,"result":{"data":[]}}' \
-  "$script_dir/hr_call.sh" router_tool_search --args-json '{}'
+  bash -c 'printf %s '\''{"arguments":{"query":"staff"}}'\'' | "$1" router_tool_search --payload-stdin' _ "$script_dir/hr_call.sh"
 grep -q -- '--connect-timeout 5 --max-time 30' "$HR_TEST_CURL_ARGS_FILE" || fail "call timeout flags missing"
 grep -q -- 'http://hrm.example.test/tools/router_tool_search/execute' "$HR_TEST_CURL_ARGS_FILE" || fail "call endpoint missing"
+[[ "$(<"$HR_TEST_CURL_STDIN_FILE")" == '{"arguments":{"query":"staff"}}' ]] || fail "stdin payload was not forwarded"
 
 export HR_TEST_CURL_STATUS=28
 assert_failure CONNECT_TIMEOUT \

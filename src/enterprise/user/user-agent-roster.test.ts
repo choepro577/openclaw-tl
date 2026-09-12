@@ -8,6 +8,7 @@ const state = vi.hoisted(() => ({
   resolveAgentWorkspaceDir: vi.fn(),
   buildWorkspaceSkillStatus: vi.fn(),
   resolveEnterpriseResourceAccess: vi.fn(),
+  resolveEnterpriseSharedAgentCapabilities: vi.fn(),
 }));
 
 vi.mock("../../agents/agent-scope.js", () => ({
@@ -19,6 +20,9 @@ vi.mock("../../skills/discovery/status.js", () => ({
 }));
 vi.mock("../entitlements/entitlement-store.js", () => ({
   resolveEnterpriseResourceAccess: state.resolveEnterpriseResourceAccess,
+}));
+vi.mock("../isolation/enterprise-agent-capabilities.js", () => ({
+  resolveEnterpriseSharedAgentCapabilities: state.resolveEnterpriseSharedAgentCapabilities,
 }));
 
 const account: EnterpriseAccount = {
@@ -124,35 +128,45 @@ describe("Enterprise user agent roster capability labels", () => {
     state.listAgentEntries.mockReturnValue([{ id: "specialist" }]);
     state.resolveAgentWorkspaceDir.mockReturnValue("/fixture/workspace");
     state.buildWorkspaceSkillStatus.mockReturnValue({ skills: skillFixtures });
-    state.resolveEnterpriseResourceAccess.mockImplementation(
-      (_account: EnterpriseAccount, _resourceType: string, resourceKey: string) => ({
-        allowed: !resourceKey.endsWith(encodeURIComponent("denied")),
-        reason: "fixture",
-      }),
-    );
+    state.resolveEnterpriseSharedAgentCapabilities.mockReturnValue({
+      allowed: true,
+      scope: "shared",
+      accountId: account.id,
+      agentId: "specialist",
+      revision: "fixture-revision",
+      config,
+      skillsSnapshot: {
+        prompt: "",
+        skills: [{ name: "Ready" }, { name: "Project ready" }],
+      },
+    });
 
     const labels = listEnterpriseUserCapabilityLabels(config, account, "specialist");
 
     expect(labels).toEqual(["Ready", "Project ready"]);
-    expect(state.buildWorkspaceSkillStatus).toHaveBeenCalledWith("/fixture/workspace", {
+    expect(state.resolveEnterpriseSharedAgentCapabilities).toHaveBeenCalledWith({
       config,
+      account,
       agentId: "specialist",
     });
-    expect(state.resolveEnterpriseResourceAccess).toHaveBeenCalledWith(
-      account,
-      "skill",
-      "skill:agent:specialist:openclaw-workspace:denied",
-      {},
-      config,
-    );
   });
 
   it("does not scan an unconfigured personal runtime workspace", () => {
     state.listAgentEntries.mockReturnValue([{ id: "specialist" }]);
+    state.resolveEnterpriseSharedAgentCapabilities.mockReturnValue({
+      allowed: false,
+      accountId: account.id,
+      agentId: "enterprise-personal-account-1",
+      reason: "agent_not_configured",
+    });
 
     expect(
       listEnterpriseUserCapabilityLabels(config, account, "enterprise-personal-account-1"),
     ).toEqual([]);
-    expect(state.buildWorkspaceSkillStatus).not.toHaveBeenCalled();
+    expect(state.resolveEnterpriseSharedAgentCapabilities).toHaveBeenCalledWith({
+      config,
+      account,
+      agentId: "enterprise-personal-account-1",
+    });
   });
 });

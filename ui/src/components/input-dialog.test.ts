@@ -79,6 +79,27 @@ describe("showInputDialog", () => {
     expect(document.body.querySelector("openclaw-modal-dialog")).toBeNull();
   });
 
+  it("masks sensitive values until the user explicitly reveals them", async () => {
+    const result = showInputDialog({
+      title: "Sign in to PO",
+      label: "PO password",
+      sensitive: true,
+      requireValue: true,
+      revealLabel: "Show password",
+      hideLabel: "Hide password",
+    });
+    await getRenderedModalDialog(document.body);
+
+    expect(dialogInput().type).toBe("password");
+    await type(" secret with spaces ");
+    document.body.querySelector<HTMLButtonElement>('[aria-label="Show password"]')?.click();
+    expect(dialogInput().type).toBe("text");
+    expect(dialogInput().value).toBe(" secret with spaces ");
+
+    findButton("Save").click();
+    await expect(result).resolves.toBe(" secret with spaces ");
+  });
+
   it("keeps an exact copy source out of the input value while exposing a copy affordance", async () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
     vi.stubGlobal("navigator", { clipboard: { writeText } });

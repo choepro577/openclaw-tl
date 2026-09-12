@@ -18,6 +18,7 @@ import {
   resolveUiGlobalAliasAgentId,
   resolveUiSelectedGlobalAgentId,
 } from "../../lib/sessions/session-key.ts";
+import type { EnterpriseSkillAuthRequest } from "../enterprise-user/components/skill-auth-control.ts";
 import { handleChatGatewayEvent, type ChatEventPayload } from "./chat-gateway.ts";
 import {
   chatScopedEventSessionMatches,
@@ -536,6 +537,40 @@ export function handlePageGatewayEvent(
   event: GatewayEventFrame,
   isPresented: ChatPanePresentation = () => true,
 ) {
+  if (event.event === "enterprise.skill-auth.required") {
+    const payload = asNullableRecord(event.payload);
+    const fields: EnterpriseSkillAuthRequest["fields"] = Array.isArray(payload?.fields)
+      ? payload.fields.flatMap((value) => {
+          const field = asNullableRecord(value);
+          return typeof field?.id === "string" &&
+            typeof field.label === "string" &&
+            (field.type === "text" || field.type === "password")
+            ? [{ id: field.id, label: field.label, type: field.type }]
+            : [];
+        })
+      : [];
+    if (
+      typeof payload?.requestId === "string" &&
+      typeof payload.parentSessionKey === "string" &&
+      typeof payload.agentId === "string" &&
+      typeof payload.skillKey === "string" &&
+      typeof payload.expiresAt === "string" &&
+      fields.length > 0 &&
+      areUiSessionKeysEquivalent(state.sessionKey, payload.parentSessionKey)
+    ) {
+      state.pendingSkillAuthRequest = {
+        requestId: payload.requestId,
+        parentSessionKey: payload.parentSessionKey,
+        ...(typeof payload.taskId === "string" ? { taskId: payload.taskId } : {}),
+        agentId: payload.agentId,
+        skillKey: payload.skillKey,
+        fields,
+        expiresAt: payload.expiresAt,
+      };
+      requestChatPageUpdate(state);
+    }
+    return;
+  }
   if (event.event === "chat") {
     const payload = event.payload as ChatEventPayload | undefined;
     if (

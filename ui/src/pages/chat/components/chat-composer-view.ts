@@ -11,6 +11,7 @@ import {
   sessionToolOverrideNames,
 } from "../../../lib/sessions/tool-overrides.ts";
 import { detectTextDirection } from "../../../lib/text-direction.ts";
+import { renderSkillAuthControl } from "../../enterprise-user/components/skill-auth-control.ts";
 import type { ComposerDictationController } from "../composer-dictation.ts";
 import {
   handleChatAttachmentPaste,
@@ -157,6 +158,11 @@ export function renderChatComposerView(context: ChatComposerViewContext) {
     t("chat.composer.menu.webSearch"),
   ).join(", ");
   const disabledReasonId = paneDomId(props.paneId, "disabled-reason");
+  const skillAuthControl = renderSkillAuthControl(
+    props.skillAuthRequest,
+    requestUpdate,
+    props.onSkillAuthenticated,
+  );
 
   return html`
     ${renderChatQueue({
@@ -445,9 +451,12 @@ export function renderChatComposerView(context: ChatComposerViewContext) {
             </div>
 
             <div class="agent-chat__composer-footer">
-              ${props.permissionPicker
+              ${props.permissionPicker || skillAuthControl !== nothing
                 ? html`<div class="agent-chat__composer-meta">
-                    ${renderChatPermissionPicker(props.permissionPicker)}
+                    ${props.permissionPicker
+                      ? renderChatPermissionPicker(props.permissionPicker)
+                      : nothing}
+                    ${skillAuthControl}
                   </div>`
                 : nothing}
               ${composerControls !== nothing

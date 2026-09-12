@@ -201,6 +201,7 @@ export function createPageState(
     knownAgentRunIds: new Set(),
     waitingApprovalStatuses: new Map(),
     waitingApprovalResolvedIds: new Set(),
+    pendingSkillAuthRequest: undefined,
     chatAvatarUrl: null,
     chatAvatarSource: null,
     chatAvatarStatus: null,

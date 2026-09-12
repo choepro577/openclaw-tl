@@ -539,6 +539,46 @@ export async function buildDynamicTools(input: DynamicToolBuildParams) {
   const exposedTools = webSearchPlan.suppressManagedWebSearch
     ? normalizedTools.filter((tool) => tool.name !== "web_search")
     : normalizedTools;
+  if (
+    readableAllTools.some((tool) => tool.name === "skill_script") ||
+    readableAllToolProjection.diagnostics.some(
+      (diagnostic) => diagnostic.toolName === "skill_script",
+    )
+  ) {
+    const required = [
+      "skill_script",
+      ...(input.nativeToolSurfaceEnabled === false ? ["read"] : []),
+    ];
+    for (const [boundary, tools] of [
+      ["schema-normalization", readableAllTools],
+      ["codex-profile", codexFilteredTools],
+      ["runtime-allowlist", filteredTools],
+      ["final-catalog", exposedTools],
+    ] as const) {
+      const names = tools.map((tool) => tool.name).toSorted();
+      embeddedAgentLog.info("codex shared skill catalog", {
+        runId: params.runId,
+        sessionId: params.sessionId,
+        revision: params.skillsSnapshot?.capabilityRevision,
+        boundary,
+        toolCount: names.length,
+        tools: names,
+      });
+      const missing = required.filter((name) => !names.includes(name));
+      if (missing.length) {
+        throw Object.assign(
+          new Error(
+            `ENTERPRISE_RUNTIME_CAPABILITY_MISSING: codex:${boundary}: ${missing.join(", ")}`,
+          ),
+          {
+            code: "ENTERPRISE_RUNTIME_CAPABILITY_MISSING",
+            boundary: `codex:${boundary}`,
+            missing,
+          },
+        );
+      }
+    }
+  }
   if (preNormalizationDiagnostics.length > 0) {
     embeddedAgentLog.warn(
       `codex app-server quarantined ${preNormalizationDiagnostics.length} unsupported runtime tool schema${preNormalizationDiagnostics.length === 1 ? "" : "s"} before dynamic tool registration`,

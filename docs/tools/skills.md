@@ -415,6 +415,78 @@ metadata:
   `metadata.openclaw`.
 </Note>
 
+### Enterprise script runtime
+
+An administrator-published Enterprise Skill can expose fixed scripts or named
+operations without adding a product-specific tool. Granting a shared Agent gives
+both direct sessions and delegated child runs access to that Agent's published
+Skills and the internal `skill_script` tool. These capabilities stay scoped to
+the shared Agent. Administrators never grant the runner or each Skill again to
+the user. Existing sessions refresh on the next turn; every script call checks
+current assignment and capability revision, including after authentication or
+approval waits. Revoked or changed capabilities cannot execute stale callbacks.
+
+```json5
+{
+  openclaw: {
+    scriptRuntime: {
+      entrypoints: {
+        health: {
+          path: "scripts/health.sh",
+          kind: "fixed",
+          risk: "read",
+          timeoutMs: 30000,
+        },
+        call: {
+          path: "scripts/call.sh",
+          kind: "operation",
+          routerOperation: "router_tool_search",
+          routerBypassOperations: ["router_index_status"],
+          authExemptOperations: ["router_tool_search", "router_index_status"],
+          readOperations: ["get_record"],
+          writeOperations: ["create_record"],
+          unknownRisk: "approval",
+          timeoutMs: 30000,
+        },
+      },
+    },
+  },
+}
+```
+
+The model calls only the declared interface:
+
+```json
+{
+  "skill": "example-skill",
+  "entrypoint": "call",
+  "operation": "get_record",
+  "arguments": { "id": "R-001" }
+}
+```
+
+OpenClaw starts the declared executable with `shell: false`. Operation
+entrypoints receive the operation as one argv value, and every script receives
+`{"arguments": {...}}` through stdin. Tool input cannot select a path, command,
+environment variable, password, or token. Entrypoints must be executable regular
+files (not symlinks) whose real path remains under the Skill's `scripts/`
+directory. Read operations run directly; write and unclassified operations use
+the existing one-shot Enterprise approval.
+
+For login-token authentication, add an `auth` block with `loginEntrypoint`,
+`loginOperation`, metadata-defined `fields`, `tokenPaths`, `injectArgument`, and
+`ttlSeconds`. The User portal uses these generic endpoints:
+
+- `GET /api/enterprise/user/v2/skill-auth?sessionKey=...&skillKey=...`
+- `POST /api/enterprise/user/v2/skill-auth` with `{ sessionKey, skillKey, fields }`
+- `DELETE /api/enterprise/user/v2/skill-auth` with `{ sessionKey, skillKey }`
+
+Responses expose only connection state and expiry. The Gateway sends login
+fields to the login script through stdin, stores only the returned token
+encrypted with AES-256-GCM, and injects that token into later script stdin. Set a
+32-byte base64 `OPENCLAW_ENTERPRISE_SKILL_TOKEN_KEY` outside the database;
+missing or invalid key material fails closed.
+
 ### Installer specs
 
 Installer specs tell the macOS Skills UI how to install a dependency:

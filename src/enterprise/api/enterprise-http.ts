@@ -1,4 +1,5 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
+import { isRecord } from "@openclaw/normalization-core/record-coerce";
 import {
   ClawHubTrustErrorCodes,
   ErrorCodes,
@@ -6,9 +7,12 @@ import {
   validateCronAddParams,
   validateCronUpdateParams,
 } from "../../../packages/gateway-protocol/src/index.js";
+import { listAgentEntries } from "../../agents/agent-scope.js";
 import type { OpenClawConfig } from "../../config/types.openclaw.js";
 import type { CronJobCreate, CronJobPatch } from "../../cron/types.js";
 import type { GatewayRequestContext } from "../../gateway/server-methods/types.js";
+import { resolveAgentIdFromSessionKey } from "../../routing/session-key.js";
+import type { SkillSnapshot } from "../../skills/types.js";
 import { getUserProfileDisplay, setAvatar } from "../../state/user-profiles.js";
 import {
   countEnterpriseAdministrators,
@@ -99,7 +103,7 @@ import {
   enterpriseDelegationModeCanOverride,
   listEnterpriseDelegationCandidates,
 } from "../delegation/delegation-candidates.js";
-import { invalidateEnterpriseDelegationMutationApprovals } from "../delegation/delegation-mutation-guard.js";
+import { validateEnterpriseDelegationChildAuthority } from "../delegation/delegation-mutation-guard.js";
 import { invalidateEnterpriseDelegationRouterRuntimeState } from "../delegation/delegation-router.js";
 import {
   listEnterpriseDelegationEvents,
@@ -129,6 +133,8 @@ import {
   EnterpriseGatewayMethodError,
   invokeEnterpriseGatewayHandler,
 } from "../gateway/invoke-handler.js";
+import { resolveEnterpriseSharedAgentCapabilities } from "../isolation/enterprise-agent-capabilities.js";
+import { projectEnterpriseRuntimeConfig } from "../isolation/enterprise-gateway-policy.js";
 import { handleEnterpriseKnowledgeHttpRequest } from "../knowledge/enterprise-knowledge-http.js";
 import {
   EnterpriseAdminModelGatewayError,
@@ -138,6 +144,21 @@ import {
   readEnterpriseAdminModelContext,
 } from "../models/admin-model-service.js";
 import { resolveEnterprisePersonalAgentId } from "../personal-agent/personal-agent-config.js";
+import {
+  cancelEnterpriseSkillAuthRequest,
+  claimEnterpriseSkillAuthRequest,
+  readEnterpriseSkillAuthRequest,
+  releaseEnterpriseSkillAuthRequest,
+  resolveEnterpriseSkillAuthRequest,
+} from "../skill-runtime/skill-auth-request.js";
+import {
+  clearEnterpriseSkillToken,
+  clearEnterpriseSkillTokensForAccount,
+  enterpriseSkillAuthStatus,
+  EnterpriseSkillScriptError,
+  loginEnterpriseSkill,
+  pruneRevokedEnterpriseSkillTokens,
+} from "../skill-runtime/skill-script-runtime.js";
 import {
   clearPersonalAgentKnowledge,
   createPersonalAgentKnowledge,
@@ -185,6 +206,7 @@ import {
 } from "../user/user-conversation-project-store.js";
 import {
   openEnterpriseUserConversation,
+  resolveEnterpriseUserConversationAgentKey,
   requireEnterpriseUserConversation,
 } from "../user/user-conversation-service.js";
 import { resolveEnterpriseUserRuntimeAgentId } from "../user/user-gateway-client.js";
@@ -208,6 +230,7 @@ const DELEGATION_MODEL_WINDOW_MS = 60_000;
 const DELEGATION_MODEL_MAX_REQUESTS = 10;
 
 const loginFailures = new Map<string, { count: number; windowStartedAt: number }>();
+const skillAuthFailures = new Map<string, { count: number; windowStartedAt: number }>();
 const delegationModelRequests = new Map<string, { count: number; windowStartedAt: number }>();
 
 type JsonRecord = Record<string, unknown>;
@@ -481,6 +504,31 @@ function recordLoginFailure(key: string): void {
     if (oldest) {
       loginFailures.delete(oldest);
     }
+  }
+}
+
+function skillAuthFailureState(key: string): { count: number; windowStartedAt: number } {
+  const current = skillAuthFailures.get(key);
+  if (!current || Date.now() - current.windowStartedAt >= LOGIN_WINDOW_MS) {
+    return { count: 0, windowStartedAt: Date.now() };
+  }
+  return current;
+}
+
+function recordSkillAuthFailure(key: string): void {
+  const current = skillAuthFailureState(key);
+  skillAuthFailures.set(key, { ...current, count: current.count + 1 });
+  if (skillAuthFailures.size > 5_000) {
+    const oldest = skillAuthFailures.keys().next().value;
+    if (oldest) {
+      skillAuthFailures.delete(oldest);
+    }
+  }
+}
+
+function assertSkillAuthAllowed(key: string): void {
+  if (skillAuthFailureState(key).count >= LOGIN_MAX_FAILURES) {
+    throw new EnterpriseSkillScriptError("SKILL_AUTH_RATE_LIMITED", 429);
   }
 }
 
@@ -774,6 +822,90 @@ function catalogItemIsEffectivelyAllowed(item: { effectiveAccess?: unknown }): b
     typeof item.effectiveAccess === "object" &&
     (item.effectiveAccess as { effectiveAllowed?: unknown }).effectiveAllowed === true
   );
+}
+
+function listEnterpriseSkillAuthTargets(config: OpenClawConfig, account: EnterpriseAccount) {
+  const projected = projectEnterpriseRuntimeConfig(config, account, { userAudience: true });
+  const targets: Array<{
+    agentId: string;
+    skillKey: string;
+    snapshot: SkillSnapshot;
+  }> = [];
+  for (const agent of listAgentEntries(projected)) {
+    const capability = resolveEnterpriseSharedAgentCapabilities({
+      config: projected,
+      account,
+      agentId: agent.id,
+    });
+    if (!capability.allowed) {
+      continue;
+    }
+    for (const skill of capability.skillsSnapshot.skills) {
+      const skillKey = skill.skillKey ?? skill.name;
+      if (skill.source && skill.scriptRuntime?.auth) {
+        targets.push({
+          agentId: agent.id,
+          skillKey,
+          snapshot: capability.skillsSnapshot,
+        });
+      }
+    }
+  }
+  return { projected, targets };
+}
+
+function pruneEnterpriseSkillTokensForCurrentAccess(
+  config: OpenClawConfig,
+  accountId: string,
+): void {
+  const account = getEnterpriseAccountById(accountId);
+  if (!account?.enabled) {
+    clearEnterpriseSkillTokensForAccount(accountId);
+    return;
+  }
+  const { targets } = listEnterpriseSkillAuthTargets(config, account);
+  pruneRevokedEnterpriseSkillTokens(accountId, new Set(targets.map((target) => target.skillKey)));
+}
+
+async function resolveEnterpriseSkillAuthTarget(params: {
+  config: OpenClawConfig;
+  context: GatewayRequestContext;
+  account: EnterpriseAccount;
+  sessionId: string;
+  sessionKey: string;
+  skillKey: string;
+  agentId?: string;
+}) {
+  await requireEnterpriseUserConversation({
+    context: params.context,
+    account: params.account,
+    sessionId: params.sessionId,
+    sessionKey: params.sessionKey,
+  });
+  const { projected, targets } = listEnterpriseSkillAuthTargets(params.config, params.account);
+  const currentAgentId = resolveAgentIdFromSessionKey(
+    params.sessionKey,
+    resolveEnterprisePersonalAgentId(projected, params.account),
+  );
+  const target = targets
+    .filter(
+      (candidate) =>
+        candidate.skillKey === params.skillKey &&
+        (!params.agentId || candidate.agentId === params.agentId),
+    )
+    .toSorted((left, right) => {
+      if (left.agentId === currentAgentId) {
+        return -1;
+      }
+      if (right.agentId === currentAgentId) {
+        return 1;
+      }
+      return left.agentId.localeCompare(right.agentId);
+    })[0];
+  if (!target) {
+    throw new EnterpriseSkillScriptError("SKILL_NOT_GRANTED", 403);
+  }
+  return { projected, agentId: target.agentId, snapshot: target.snapshot };
 }
 
 /** Claims only Enterprise API paths while the feature flag is enabled. */
@@ -1181,6 +1313,200 @@ export async function handleEnterpriseHttpRequest(
       return principal
         ? sendJson(res, 200, buildEnterpriseUserBootstrapV2(config, principal.account))
         : true;
+    }
+
+    if (pathname === "/api/enterprise/user/v2/conversations/owner" && req.method === "GET") {
+      const principal = requireUser(req, res);
+      if (!principal) {
+        return true;
+      }
+      const sessionKey = searchParams.get("sessionKey")?.trim();
+      if (!sessionKey || sessionKey.length > 512) {
+        throw new Error("FIELD_INVALID:conversation");
+      }
+      const context = hooks.getGatewayContext?.();
+      if (!context) {
+        return sendError(res, 503, "RUNTIME_UNAVAILABLE", "Gateway runtime chưa sẵn sàng.");
+      }
+      const agentKey = await resolveEnterpriseUserConversationAgentKey({
+        config,
+        context,
+        account: principal.account,
+        sessionId: principal.sessionId,
+        sessionKey,
+      });
+      return sendJson(res, 200, { agentKey });
+    }
+
+    if (pathname === "/api/enterprise/user/v2/skill-auth") {
+      const principal = requireUser(req, res);
+      if (!principal) {
+        return true;
+      }
+      const context = hooks.getGatewayContext?.();
+      if (!context) {
+        return sendError(res, 503, "RUNTIME_UNAVAILABLE", "Gateway runtime chưa sẵn sàng.");
+      }
+      const body = req.method === "GET" ? undefined : await readJson(req);
+      const allowedBodyKeys =
+        req.method === "POST"
+          ? ["sessionKey", "skillKey", "fields", "requestId"]
+          : ["sessionKey", "skillKey", "requestId"];
+      if (body && Object.keys(body).some((key) => !allowedBodyKeys.includes(key))) {
+        throw new EnterpriseSkillScriptError("SKILL_AUTH_FIELDS_INVALID", 400);
+      }
+      const sessionKey =
+        req.method === "GET"
+          ? searchParams.get("sessionKey")?.trim()
+          : typeof body?.sessionKey === "string"
+            ? body.sessionKey.trim()
+            : undefined;
+      const skillKey =
+        req.method === "GET"
+          ? searchParams.get("skillKey")?.trim()
+          : typeof body?.skillKey === "string"
+            ? body.skillKey.trim()
+            : undefined;
+      const pendingRequestId =
+        req.method !== "GET" && typeof body?.requestId === "string"
+          ? body.requestId.trim()
+          : undefined;
+      if (!sessionKey || !skillKey || sessionKey.length > 512 || skillKey.length > 128) {
+        throw new EnterpriseSkillScriptError("SKILL_AUTH_FIELDS_INVALID", 400);
+      }
+      if (pendingRequestId && pendingRequestId.length > 128) {
+        throw new EnterpriseSkillScriptError("SKILL_AUTH_FIELDS_INVALID", 400);
+      }
+      const pendingRequest = pendingRequestId
+        ? readEnterpriseSkillAuthRequest(pendingRequestId)
+        : undefined;
+      if (pendingRequestId && !pendingRequest) {
+        throw new EnterpriseSkillScriptError("SKILL_AUTH_REQUEST_NOT_FOUND", 404);
+      }
+      const target = await resolveEnterpriseSkillAuthTarget({
+        config,
+        context,
+        account: principal.account,
+        sessionId: principal.sessionId,
+        sessionKey,
+        skillKey,
+        ...(pendingRequest ? { agentId: pendingRequest.agentId } : {}),
+      });
+      if (req.method === "GET") {
+        return sendJson(res, 200, enterpriseSkillAuthStatus(principal.account.id, skillKey));
+      }
+      if (!requirePortalCsrf(req, res, principal, "user")) {
+        return true;
+      }
+      if (req.method === "DELETE") {
+        if (
+          pendingRequestId &&
+          !cancelEnterpriseSkillAuthRequest({
+            requestId: pendingRequestId,
+            accountId: principal.account.id,
+            parentSessionKey: sessionKey,
+            skillKey,
+          })
+        ) {
+          throw new EnterpriseSkillScriptError("SKILL_AUTH_REQUEST_INVALID", 409);
+        }
+        clearEnterpriseSkillToken(principal.account.id, skillKey);
+        return sendJson(res, 200, { connected: false });
+      }
+      if (req.method === "POST") {
+        if (!isRecord(body?.fields)) {
+          throw new EnterpriseSkillScriptError("SKILL_AUTH_FIELDS_INVALID", 400);
+        }
+        const fields = Object.fromEntries(
+          Object.entries(body.fields).map(([key, value]) => [
+            key,
+            typeof value === "string" ? value : "",
+          ]),
+        );
+        const rateLimitKey = `${principal.account.id}\0${skillKey}`;
+        assertSkillAuthAllowed(rateLimitKey);
+        const claim = pendingRequestId
+          ? claimEnterpriseSkillAuthRequest({
+              requestId: pendingRequestId,
+              accountId: principal.account.id,
+              parentSessionKey: sessionKey,
+              skillKey,
+            })
+          : undefined;
+        if (claim && !claim.ok) {
+          throw new EnterpriseSkillScriptError(claim.code, 409);
+        }
+        if (claim?.ok) {
+          if (claim.request.delegatedChild) {
+            const authority = validateEnterpriseDelegationChildAuthority({
+              config,
+              childSessionKey: claim.request.childSessionKey,
+              childRunId: claim.request.childRunId,
+              childAgentId: claim.request.agentId,
+            });
+            if (!authority.ok) {
+              cancelEnterpriseSkillAuthRequest({
+                requestId: pendingRequestId!,
+                accountId: principal.account.id,
+                parentSessionKey: sessionKey,
+                skillKey,
+              });
+              throw new EnterpriseSkillScriptError(authority.reason, 403);
+            }
+          } else {
+            const capability = resolveEnterpriseSharedAgentCapabilities({
+              config: target.projected,
+              account: principal.account,
+              agentId: claim.request.agentId,
+            });
+            const skillGranted =
+              capability.allowed &&
+              capability.skillsSnapshot.skills.some(
+                (entry) => (entry.skillKey ?? entry.name) === claim.request.skillKey,
+              );
+            if (!skillGranted) {
+              cancelEnterpriseSkillAuthRequest({
+                requestId: pendingRequestId!,
+                accountId: principal.account.id,
+                parentSessionKey: sessionKey,
+                skillKey,
+              });
+              throw new EnterpriseSkillScriptError(
+                capability.allowed ? "SKILL_NOT_GRANTED" : "SHARED_AGENT_NOT_GRANTED",
+                403,
+              );
+            }
+          }
+        }
+        try {
+          const result = await loginEnterpriseSkill({
+            config: target.projected,
+            snapshot: target.snapshot,
+            accountId: principal.account.id,
+            sessionId: principal.sessionId,
+            agentId: target.agentId,
+            skillKey,
+            fields,
+          });
+          skillAuthFailures.delete(rateLimitKey);
+          if (pendingRequestId) {
+            resolveEnterpriseSkillAuthRequest(pendingRequestId);
+          }
+          return sendJson(res, 200, result);
+        } catch (error) {
+          if (pendingRequestId) {
+            releaseEnterpriseSkillAuthRequest(pendingRequestId);
+          }
+          if (
+            error instanceof EnterpriseSkillScriptError &&
+            ["SKILL_AUTH_INVALID", "AUTH_REQUIRED"].includes(error.code)
+          ) {
+            recordSkillAuthFailure(rateLimitKey);
+          }
+          throw error;
+        }
+      }
+      return sendError(res, 405, "METHOD_NOT_ALLOWED", "Thao tác không được hỗ trợ.");
     }
 
     const userRelationshipKey = userSharedRelationshipPath(pathname);
@@ -2009,6 +2335,9 @@ export async function handleEnterpriseHttpRequest(
       if (account.enabled !== before.enabled || account.role !== before.role) {
         hooks.disconnectClientsForProfile?.(account.profileId);
       }
+      if (!account.enabled) {
+        clearEnterpriseSkillTokensForAccount(account.id);
+      }
       return sendJson(res, 200, { account });
     }
 
@@ -2201,7 +2530,6 @@ export async function handleEnterpriseHttpRequest(
       );
       if (previousPolicy.rollout !== "off" && policy.rollout === "off") {
         invalidateEnterpriseDelegationRouterRuntimeState();
-        invalidateEnterpriseDelegationMutationApprovals();
       }
       return sendJson(res, 200, { policy });
     }
@@ -3141,6 +3469,9 @@ export async function handleEnterpriseHttpRequest(
             },
           ),
       );
+      for (const accountId of new Set(parsed.changes.map((change) => change.accountId))) {
+        pruneEnterpriseSkillTokensForCurrentAccess(config, accountId);
+      }
       return sendJson(res, 200, result);
     }
 
@@ -3345,6 +3676,9 @@ export async function handleEnterpriseHttpRequest(
       if (account.enabled !== current.enabled || account.role !== current.role) {
         hooks.disconnectClientsForProfile?.(account.profileId);
       }
+      if (!account.enabled) {
+        clearEnterpriseSkillTokensForAccount(account.id);
+      }
       return sendJson(res, 200, { account });
     }
 
@@ -3374,6 +3708,7 @@ export async function handleEnterpriseHttpRequest(
         accountRoute.accountId,
         parseEntitlements(body),
       );
+      pruneEnterpriseSkillTokensForCurrentAccess(config, accountRoute.accountId);
       return sendJson(res, 200, { entitlements });
     }
 
@@ -3390,6 +3725,23 @@ export async function handleEnterpriseHttpRequest(
     return sendError(res, 404, "NOT_FOUND", "Không tìm thấy Enterprise API.");
   } catch (error) {
     const message = error instanceof Error ? error.message : "UNKNOWN_ERROR";
+    if (error instanceof EnterpriseSkillScriptError) {
+      const descriptions: Record<string, string> = {
+        SKILL_AUTH_INVALID: "Thông tin đăng nhập skill không hợp lệ.",
+        SKILL_AUTH_RATE_LIMITED: "Nhập sai quá nhiều lần. Hãy thử lại sau 15 phút.",
+        SKILL_TOKEN_KEY_UNAVAILABLE: "Gateway chưa cấu hình khóa mã hóa token skill.",
+        SKILL_NOT_GRANTED: "Bạn chưa được cấp quyền sử dụng skill này.",
+        CONNECT_TIMEOUT: "Dịch vụ của skill kết nối quá thời gian.",
+        UNREACHABLE: "Không thể kết nối dịch vụ của skill.",
+        HTTP_ERROR: "Dịch vụ của skill từ chối yêu cầu đăng nhập.",
+      };
+      return sendError(
+        res,
+        error.status,
+        error.code,
+        descriptions[error.code] ?? "Không thể kết nối tài khoản cho skill.",
+      );
+    }
     if (
       message.startsWith("AGENT_ACCESS_REQUEST_REVISION_CONFLICT:") ||
       message.startsWith("AGENT_ACCESS_REQUEST_STATE_CONFLICT:")

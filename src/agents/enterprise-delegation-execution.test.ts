@@ -15,8 +15,10 @@ const mocks = vi.hoisted(() => ({
   spawn: vi.fn(),
   validateDispatch: vi.fn(),
   registerAuthority: vi.fn(),
+  confirmAuthority: vi.fn(),
   revokeAuthority: vi.fn(),
   registerTerminal: vi.fn(),
+  rebindTerminal: vi.fn(),
   discardTerminal: vi.fn(),
 }));
 vi.mock("../enterprise/delegation/delegation-router.js", () => ({
@@ -25,10 +27,12 @@ vi.mock("../enterprise/delegation/delegation-router.js", () => ({
 }));
 vi.mock("../enterprise/delegation/delegation-mutation-guard.js", () => ({
   registerEnterpriseDelegationChildAuthority: mocks.registerAuthority,
+  confirmEnterpriseDelegationChildRun: mocks.confirmAuthority,
   revokeEnterpriseDelegationChildAuthority: mocks.revokeAuthority,
 }));
 vi.mock("./subagents/subagent-terminal-callbacks.js", () => ({
   registerSubagentTerminalCallback: mocks.registerTerminal,
+  rebindSubagentTerminalCallback: mocks.rebindTerminal,
   discardSubagentTerminalCallback: mocks.discardTerminal,
 }));
 vi.mock("./subagents/spawn/subagent-spawn.js", () => ({ spawnSubagentDirect: mocks.spawn }));
@@ -73,6 +77,7 @@ function options() {
     agentId: "personal",
     runSessionKey: "parent-session",
     runId: "parent-run",
+    approvalReviewerDeviceId: "reviewer-device",
     workspaceDir: "/workspace/personal",
     inheritedToolDenylist: ["gateway"],
   };
@@ -177,11 +182,26 @@ describe("canonical Enterprise delegation execution", () => {
   });
 
   it("spawns only the approved assignment with isolated sandboxed trusted-launch settings", async () => {
-    mocks.spawn.mockResolvedValue({
-      status: "accepted",
-      childSessionKey: "child-session",
-      runId: "child-run",
-    });
+    mocks.spawn.mockImplementation(
+      async (_params: SpawnSubagentParams, context: SpawnSubagentContext) => {
+        context.onBeforeChildDispatch?.({
+          childSessionKey: "child-session",
+          anticipatedRunId: "child-run",
+          targetAgentId: "contracts",
+        });
+        context.onChildRunIdResolved?.({
+          childSessionKey: "child-session",
+          anticipatedRunId: "child-run",
+          actualRunId: "gateway-child-run",
+          targetAgentId: "contracts",
+        });
+        return {
+          status: "accepted",
+          childSessionKey: "child-session",
+          runId: "gateway-child-run",
+        } as const;
+      },
+    );
     const approved = decision();
     const executionOptions = options();
     const result = await executeEnterpriseDelegationAssignments({
@@ -209,7 +229,6 @@ describe("canonical Enterprise delegation execution", () => {
         requesterAgentIdOverride: "personal",
         workspaceDir: "/workspace/personal",
         inheritedToolDenylist: expect.arrayContaining([
-          "gateway",
           "enterprise_delegate",
           "sessions_spawn",
           "sessions_yield",
@@ -217,14 +236,40 @@ describe("canonical Enterprise delegation execution", () => {
         ]),
       }),
     );
+    expect(mocks.spawn.mock.calls[0]?.[1]).not.toHaveProperty("inheritedToolAllowlist");
+    expect(mocks.spawn.mock.calls[0]?.[1].inheritedToolDenylist).not.toContain("gateway");
+    expect(mocks.registerAuthority).toHaveBeenCalledWith(
+      expect.objectContaining({
+        provisionalRunId: true,
+      }),
+    );
+    expect(mocks.spawn.mock.calls[0]?.[1]).toHaveProperty(
+      "approvalReviewerDeviceId",
+      "reviewer-device",
+    );
+    expect(mocks.confirmAuthority).toHaveBeenCalledExactlyOnceWith({
+      childSessionKey: "child-session",
+      anticipatedRunId: "child-run",
+      actualRunId: "gateway-child-run",
+    });
+    expect(mocks.registerTerminal).toHaveBeenCalledWith(
+      expect.objectContaining({ runId: "child-run", childSessionKey: "child-session" }),
+    );
+    expect(mocks.rebindTerminal).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({
+        fromRunId: "child-run",
+        toRunId: "gateway-child-run",
+        childSessionKey: "child-session",
+      }),
+    );
     expect(result).toMatchObject({
       reasonCode: "delegate_started",
-      acceptedSessionSpawns: [{ runId: "child-run", childSessionKey: "child-session" }],
+      acceptedSessionSpawns: [{ runId: "gateway-child-run", childSessionKey: "child-session" }],
       assignments: [
         {
           assignmentId: "assignment-contract",
           agentId: "contracts",
-          runId: "child-run",
+          runId: "gateway-child-run",
           status: "accepted",
         },
       ],
@@ -232,7 +277,7 @@ describe("canonical Enterprise delegation execution", () => {
     expect(mocks.recordSpawn).toHaveBeenCalledWith(
       expect.objectContaining({
         decision: approved,
-        childRunIds: ["child-run"],
+        childRunIds: ["gateway-child-run"],
         outcome: "delegated",
         reasonCode: "delegate_started",
       }),
@@ -338,6 +383,10 @@ describe("canonical Enterprise delegation execution", () => {
           try {
             context.onBeforeChildDispatch?.(child);
             dispatch();
+            context.onChildRunIdResolved?.({
+              ...child,
+              actualRunId: child.anticipatedRunId,
+            });
             return {
               status: "accepted",
               childSessionKey: child.childSessionKey,

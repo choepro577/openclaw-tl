@@ -1,5 +1,8 @@
 import path from "node:path";
-import { readGatewayRequestRuntimeMetadata } from "../../gateway/request-runtime-config.js";
+import {
+  inheritGatewayRequestScopedRuntimeConfig,
+  readGatewayRequestRuntimeMetadata,
+} from "../../gateway/request-runtime-config.js";
 import { getActiveDiagnosticTraceContext } from "../../infra/diagnostic-trace-context.js";
 import { prepareSystemRunMutableFileApproval } from "../../infra/system-run-approval-binding.js";
 import { buildAgentHookContextChannelFields } from "../../plugins/hook-agent-context.js";
@@ -16,7 +19,9 @@ import {
   runBeforeToolCallHook,
 } from "../agent-tools.before-tool-call.js";
 import { createOpenClawCodingTools } from "../agent-tools.js";
+import { log } from "../embedded-agent-runner/logger.js";
 import type { EmbeddedRunAttemptParams } from "../embedded-agent-runner/run/types.js";
+import { assertEnterpriseToolSurface } from "../enterprise-tool-surface.js";
 import { prepareGitHubToolEnvironment } from "../github-tool-identity.js";
 import {
   attachInternalToolExecutionPreparer,
@@ -160,7 +165,24 @@ export function createAgentHarnessHostCapabilities(params: {
   pluginId: string;
 }): { capabilities: AgentHarnessHostCapabilities; close: () => void } {
   const attempt = params.attempt;
-  const nativePluginGrants = readGatewayRequestRuntimeMetadata(attempt.config)?.nativePluginGrants;
+  const enterpriseMetadata = readGatewayRequestRuntimeMetadata(attempt.config);
+  const nativePluginGrants = enterpriseMetadata?.nativePluginGrants;
+  const resolveEnterpriseCapability = enterpriseMetadata?.enterpriseCapabilities;
+  const initialEnterpriseCapability = attempt.agentId
+    ? resolveEnterpriseCapability?.resolve(attempt.agentId)
+    : undefined;
+  const assertEnterpriseCapability = () => {
+    if (!initialEnterpriseCapability?.allowed || !attempt.agentId) {
+      return;
+    }
+    const current = resolveEnterpriseCapability?.resolve(attempt.agentId);
+    if (!current?.allowed || current.revision !== initialEnterpriseCapability.revision) {
+      throw Object.assign(new Error("ENTERPRISE_CAPABILITY_CHANGED"), {
+        code: "ENTERPRISE_CAPABILITY_CHANGED",
+        revision: initialEnterpriseCapability.revision,
+      });
+    }
+  };
   const operationalRunInstance = attempt.admittedRunContext.operationalRunInstance;
   const delegatedAuthority = getAdmittedRunDelegatedAuthority(attempt.admittedRunContext);
   if (!delegatedAuthority) {
@@ -178,6 +200,7 @@ export function createAgentHarnessHostCapabilities(params: {
     ) {
       throw new Error("agent harness host capability is no longer active");
     }
+    assertEnterpriseCapability();
   };
   const callerIdentity = createBoundCallerIdentity(attempt, assertActive);
   const requester = {
@@ -191,7 +214,9 @@ export function createAgentHarnessHostCapabilities(params: {
       ? { roleIds: Object.freeze([...attempt.memberRoleIds]) }
       : {}),
   };
-  const config = attempt.config ? cloneSnapshot(attempt.config) : undefined;
+  const config = attempt.config
+    ? inheritGatewayRequestScopedRuntimeConfig(attempt.config, cloneSnapshot(attempt.config))
+    : undefined;
   const skillsSnapshot = attempt.skillsSnapshot ? cloneSnapshot(attempt.skillsSnapshot) : undefined;
   const preparedRunEnvironment = prepareGitHubToolEnvironment({
     config: config ?? {},
@@ -283,6 +308,7 @@ export function createAgentHarnessHostCapabilities(params: {
         throw new Error("agent harness retained host policy is no longer active");
       }
       recovery.assertActive();
+      assertEnterpriseCapability();
     };
     return Object.freeze({
       assertActive: assertRecoveryActive,
@@ -359,10 +385,39 @@ export function createAgentHarnessHostCapabilities(params: {
     bindToolSurface,
     createToolSurface: (options, bindingOptions) => {
       assertActive();
-      return bindToolSurface(
-        createOpenClawCodingTools({ ...options, operationalRunInstance }),
+      const tools = bindToolSurface(
+        createOpenClawCodingTools({
+          ...options,
+          operationalRunInstance,
+          onToolSurfaceFilter: (event) => {
+            options.onToolSurfaceFilter?.(event);
+            if (initialEnterpriseCapability?.allowed) {
+              log.debug("enterprise shared tool filter", {
+                runId: attempt.runId,
+                sessionId: attempt.sessionId,
+                revision: initialEnterpriseCapability.revision,
+                harness: params.pluginId,
+                ...event,
+              });
+            }
+          },
+        }),
         bindingOptions,
       );
+      if (
+        !attempt.disableTools &&
+        !attempt.forceRestartSafeTools &&
+        !attempt.forceCodeModeReconciliationTools
+      ) {
+        assertEnterpriseToolSurface({
+          config: attempt.config,
+          agentId: attempt.agentId,
+          tools,
+          boundary: `${params.pluginId}:host-tool-bind`,
+          nativeSkillReader: options.toolConstructionPlan?.includeBaseCodingTools === false,
+        });
+      }
+      return tools;
     },
     prepareMutableFileApproval: async (request) => {
       assertActive();

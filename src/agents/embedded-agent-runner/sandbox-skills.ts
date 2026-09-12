@@ -61,7 +61,7 @@ export function resolveHarnessSkillSnapshot(params: {
     skillsWorkspaceDir: inputs.skillsWorkspaceDir,
     skillsPromptWorkspaceDir: inputs.skillsPromptWorkspaceDir,
   });
-  return buildSkillSnapshot(inputs.skillsPromptWorkspaceDir, {
+  const snapshot = buildSkillSnapshot(inputs.skillsPromptWorkspaceDir, {
     entries,
     config: params.config,
     agentId: params.agentId,
@@ -71,6 +71,26 @@ export function resolveHarnessSkillSnapshot(params: {
     snapshotVersion: params.skillsSnapshot?.version,
     preserveEntryOrder,
   });
+  if (!params.skillsSnapshot) {
+    return snapshot;
+  }
+  const hostSkills = new Map(
+    params.skillsSnapshot.skills.map((skill) => [skill.skillKey ?? skill.name, skill]),
+  );
+  return {
+    ...snapshot,
+    capabilityRevision: params.skillsSnapshot.capabilityRevision,
+    skills: snapshot.skills.map((skill) => {
+      const hostSkill = hostSkills.get(skill.skillKey ?? skill.name);
+      return hostSkill?.scriptRuntime
+        ? Object.assign({}, skill, {
+            source: hostSkill.source,
+            baseDir: hostSkill.baseDir,
+            scriptRuntime: hostSkill.scriptRuntime,
+          })
+        : skill;
+    }),
+  };
 }
 
 function containerJoin(root: string, ...parts: string[]): string {

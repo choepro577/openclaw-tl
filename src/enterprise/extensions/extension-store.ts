@@ -14,6 +14,7 @@ import type {
   EnterpriseUserSkillInstall,
   EnterpriseUserSkillInstallState,
 } from "./extension-types.js";
+import { normalizeEnterpriseExtensionGrantTarget } from "./extension-types.js";
 
 type Row = Record<string, unknown>;
 
@@ -77,9 +78,15 @@ function toSkillInstall(row: Row): EnterpriseUserSkillInstall {
 }
 
 function toPluginRequest(row: Row): EnterprisePluginRequest {
+  const target = normalizeEnterpriseExtensionGrantTarget({
+    scope: (nullableText(row, "scope") ?? "account") as EnterprisePluginRequest["scope"],
+    agentKey: nullableText(row, "agent_key") as AgentKey | null,
+    runtimeAgentId: nullableText(row, "runtime_agent_id"),
+  });
   return {
     id: text(row, "id"),
-    requesterAccountId: text(row, "requester_account_id"),
+    requesterAccountId: nullableText(row, "requester_account_id"),
+    ...target,
     packageName: text(row, "package_name"),
     packageFamily: text(row, "package_family") as EnterprisePluginRequest["packageFamily"],
     exactVersion: text(row, "exact_version"),
@@ -101,15 +108,22 @@ function toPluginRequest(row: Row): EnterprisePluginRequest {
 }
 
 function toPluginGrant(row: Row): EnterpriseAccountPluginGrant {
+  const target = normalizeEnterpriseExtensionGrantTarget({
+    scope: (nullableText(row, "scope") ?? "account") as EnterpriseAccountPluginGrant["scope"],
+    agentKey: nullableText(row, "agent_key") as AgentKey | null,
+    runtimeAgentId: nullableText(row, "runtime_agent_id"),
+  });
   return {
     id: text(row, "id"),
     accountId: text(row, "account_id"),
+    ...target,
     pluginId: text(row, "plugin_id"),
     exactVersion: text(row, "exact_version"),
     integrity: text(row, "integrity"),
     capabilityDigest: text(row, "capability_digest"),
     approvedTools: stringArray(row, "approved_tools_json"),
     sourceRequestId: text(row, "source_request_id"),
+    approvedByAccountId: nullableText(row, "approved_by_account_id"),
     state: text(row, "state") as EnterprisePluginGrantState,
     revision: integer(row, "revision"),
     createdAt: integer(row, "created_at"),
@@ -257,23 +271,34 @@ export function createEnterprisePluginRequest(
     | "createdAt"
     | "updatedAt"
     | "decidedAt"
-  >,
+    | "requesterAccountId"
+    | "scope"
+    | "agentKey"
+    | "runtimeAgentId"
+  > & { requesterAccountId: string } & Partial<
+      Pick<EnterprisePluginRequest, "scope" | "agentKey" | "runtimeAgentId">
+    >,
   options: OpenClawStateDatabaseOptions = {},
 ): EnterprisePluginRequest {
   ensureEnterpriseSchema(options);
+  const target = normalizeEnterpriseExtensionGrantTarget(input);
   const id = generateSecureUuid();
   const now = Date.now();
   openOpenClawStateDatabase(options)
     .db.prepare(
       `INSERT INTO enterprise_plugin_requests
-       (id, requester_account_id, package_name, package_family, exact_version, integrity,
+       (id, requester_account_id, scope, agent_key, runtime_agent_id,
+        package_name, package_family, exact_version, integrity,
         request_kind, trust_snapshot_json, capability_snapshot_json, capability_digest, state,
         revision, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', 1, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', 1, ?, ?)`,
     )
     .run(
       id,
       input.requesterAccountId,
+      target.scope,
+      target.agentKey,
+      target.runtimeAgentId,
       input.packageName,
       input.packageFamily,
       input.exactVersion,
@@ -334,6 +359,9 @@ export function transitionEnterprisePluginRequest(
     decisionReason?: string | null;
     installedPluginId?: string | null;
     safeErrorCode?: string | null;
+    scope?: EnterprisePluginRequest["scope"];
+    agentKey?: AgentKey | null;
+    runtimeAgentId?: string | null;
   },
   options: OpenClawStateDatabaseOptions = {},
 ): EnterprisePluginRequest {
@@ -345,16 +373,25 @@ export function transitionEnterprisePluginRequest(
   if (current.revision !== input.baseRevision || !input.from.includes(current.state)) {
     throw new Error(`EXTENSION_REVISION_CONFLICT:${current.revision}`);
   }
+  const target = normalizeEnterpriseExtensionGrantTarget({
+    scope: input.scope ?? current.scope,
+    agentKey: input.agentKey ?? current.agentKey,
+    runtimeAgentId: input.runtimeAgentId ?? current.runtimeAgentId,
+  });
   const now = Date.now();
   const decided = input.to === "rejected" || input.to === "available" ? now : current.decidedAt;
   const result = openOpenClawStateDatabase(options)
     .db.prepare(
-      `UPDATE enterprise_plugin_requests SET state = ?, reviewer_account_id = ?,
+      `UPDATE enterprise_plugin_requests SET state = ?, scope = ?, agent_key = ?, runtime_agent_id = ?,
+       reviewer_account_id = ?,
        decision_reason = ?, installed_plugin_id = ?, safe_error_code = ?, revision = revision + 1,
        updated_at = ?, decided_at = ? WHERE id = ? AND revision = ? AND state = ?`,
     )
     .run(
       input.to,
+      target.scope,
+      target.agentKey,
+      target.runtimeAgentId,
       input.reviewerAccountId ?? current.reviewerAccountId,
       input.decisionReason ?? current.decisionReason,
       input.installedPluginId ?? current.installedPluginId,
@@ -372,47 +409,114 @@ export function transitionEnterprisePluginRequest(
 }
 
 export function upsertEnterprisePluginGrant(
-  input: Omit<EnterpriseAccountPluginGrant, "id" | "revision" | "createdAt" | "updatedAt">,
+  input: Omit<
+    EnterpriseAccountPluginGrant,
+    | "id"
+    | "revision"
+    | "createdAt"
+    | "updatedAt"
+    | "scope"
+    | "agentKey"
+    | "runtimeAgentId"
+    | "approvedByAccountId"
+  > &
+    Partial<
+      Pick<
+        EnterpriseAccountPluginGrant,
+        "scope" | "agentKey" | "runtimeAgentId" | "approvedByAccountId"
+      >
+    >,
   options: OpenClawStateDatabaseOptions = {},
 ): EnterpriseAccountPluginGrant {
   ensureEnterpriseSchema(options);
-  const existing = listEnterpriseAccountPluginGrants(input.accountId, options).find(
-    (grant) => grant.pluginId === input.pluginId,
+  const target = normalizeEnterpriseExtensionGrantTarget(input);
+  return runOpenClawStateWriteTransaction(
+    ({ db }) => {
+      const existing = db
+        .prepare(
+          `SELECT * FROM enterprise_account_plugin_grants
+           WHERE scope = ? AND plugin_id = ?
+             AND ${target.scope === "account" ? "account_id = ?" : "runtime_agent_id = ?"}
+           ORDER BY updated_at DESC, id ASC LIMIT 1`,
+        )
+        .get(
+          target.scope,
+          input.pluginId,
+          target.scope === "account" ? input.accountId : target.runtimeAgentId,
+        ) as Row | undefined; // sqlite-allow-raw -- Scope-aware grant owner lookup.
+      const now = Date.now();
+      const approvedTools = JSON.stringify([...new Set(input.approvedTools)].toSorted());
+      if (existing) {
+        const result = db
+          .prepare(
+            `UPDATE enterprise_account_plugin_grants SET
+               account_id = ?, scope = ?, agent_key = ?, runtime_agent_id = ?,
+               exact_version = ?, integrity = ?, capability_digest = ?, approved_tools_json = ?,
+               source_request_id = ?, approved_by_account_id = ?, state = ?,
+               revision = revision + 1, updated_at = ?
+             WHERE id = ?`,
+          )
+          .run(
+            input.accountId,
+            target.scope,
+            target.agentKey,
+            target.runtimeAgentId,
+            input.exactVersion,
+            input.integrity,
+            input.capabilityDigest,
+            approvedTools,
+            input.sourceRequestId,
+            input.approvedByAccountId ?? null,
+            input.state,
+            now,
+            String(existing.id),
+          );
+        if (result.changes !== 1) {
+          throw new Error("EXTENSION_REVISION_CONFLICT");
+        }
+        const updated = db
+          .prepare("SELECT * FROM enterprise_account_plugin_grants WHERE id = ?")
+          .get(String(existing.id)) as Row | undefined;
+        if (!updated) {
+          throw new Error("EXTENSION_GRANT_NOT_FOUND");
+        }
+        return toPluginGrant(updated);
+      }
+      const id = generateSecureUuid();
+      db.prepare(
+        `INSERT INTO enterprise_account_plugin_grants
+         (id, account_id, scope, agent_key, runtime_agent_id, plugin_id, exact_version, integrity,
+          capability_digest, approved_tools_json, source_request_id, approved_by_account_id,
+          state, revision, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`,
+      ).run(
+        id,
+        input.accountId,
+        target.scope,
+        target.agentKey,
+        target.runtimeAgentId,
+        input.pluginId,
+        input.exactVersion,
+        input.integrity,
+        input.capabilityDigest,
+        approvedTools,
+        input.sourceRequestId,
+        input.approvedByAccountId ?? null,
+        input.state,
+        now,
+        now,
+      ); // sqlite-allow-raw -- Scope-aware account/agent grant snapshot upsert.
+      const inserted = db
+        .prepare("SELECT * FROM enterprise_account_plugin_grants WHERE id = ?")
+        .get(id) as Row | undefined;
+      if (!inserted) {
+        throw new Error("EXTENSION_GRANT_CREATE_FAILED");
+      }
+      return toPluginGrant(inserted);
+    },
+    options,
+    { operationLabel: "enterprise.extension.plugin.grant.upsert" },
   );
-  const id = existing?.id ?? generateSecureUuid();
-  const now = Date.now();
-  openOpenClawStateDatabase(options)
-    .db.prepare(
-      `INSERT INTO enterprise_account_plugin_grants
-       (id, account_id, plugin_id, exact_version, integrity, capability_digest,
-        approved_tools_json, source_request_id, state, revision, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
-       ON CONFLICT(account_id, plugin_id) DO UPDATE SET
-         exact_version = excluded.exact_version,
-         integrity = excluded.integrity,
-         capability_digest = excluded.capability_digest,
-         approved_tools_json = excluded.approved_tools_json,
-         source_request_id = excluded.source_request_id,
-         state = excluded.state,
-         revision = enterprise_account_plugin_grants.revision + 1,
-         updated_at = excluded.updated_at`,
-    )
-    .run(
-      id,
-      input.accountId,
-      input.pluginId,
-      input.exactVersion,
-      input.integrity,
-      input.capabilityDigest,
-      JSON.stringify([...new Set(input.approvedTools)].toSorted()),
-      input.sourceRequestId,
-      input.state,
-      now,
-      now,
-    ); // sqlite-allow-raw -- Account grant snapshot upsert, separate from account policy.
-  return listEnterpriseAccountPluginGrants(input.accountId, options).find(
-    (grant) => grant.pluginId === input.pluginId,
-  )!;
 }
 
 export function listEnterpriseAccountPluginGrants(
@@ -427,6 +531,31 @@ export function listEnterpriseAccountPluginGrants(
       )
       .all(accountId) as Row[]
   ).map(toPluginGrant); // sqlite-allow-raw -- Account-scoped grant compiler input.
+}
+
+/**
+ * Returns the native grants that may participate in one runtime projection.
+ * Account grants are private to the current account. Shared-agent grants are
+ * selected solely by the canonical runtime agent id; the owner account is
+ * retained for audit and does not become a runtime access boundary.
+ */
+export function listEnterpriseEffectivePluginGrants(
+  accountId: string,
+  runtimeAgentId: string,
+  projection: { sharedAgentAllowed?: boolean } = {},
+  databaseOptions: OpenClawStateDatabaseOptions = {},
+): EnterpriseAccountPluginGrant[] {
+  ensureEnterpriseSchema(databaseOptions);
+  return (
+    openOpenClawStateDatabase(databaseOptions)
+      .db.prepare(
+        `SELECT * FROM enterprise_account_plugin_grants
+         WHERE (scope = 'account' AND account_id = ?)
+            OR (? = 1 AND scope = 'shared_agent' AND runtime_agent_id = ?)
+         ORDER BY updated_at DESC, id ASC`,
+      )
+      .all(accountId, projection.sharedAgentAllowed === true ? 1 : 0, runtimeAgentId) as Row[]
+  ).map(toPluginGrant); // sqlite-allow-raw -- Explicit account/shared-agent runtime projection.
 }
 
 export function getEnterprisePluginGrant(
@@ -456,7 +585,7 @@ export function listEnterprisePluginGrantsForPlugin(
 
 export function transitionEnterprisePluginGrant(
   input: {
-    accountId: string;
+    accountId: string | null;
     id: string;
     baseRevision: number;
     state: EnterprisePluginGrantState;
@@ -467,13 +596,12 @@ export function transitionEnterprisePluginGrant(
   const result = openOpenClawStateDatabase(options)
     .db.prepare(
       `UPDATE enterprise_account_plugin_grants SET state = ?, revision = revision + 1,
-       updated_at = ? WHERE id = ? AND account_id = ? AND revision = ?`,
+       updated_at = ? WHERE id = ? AND revision = ?
+       AND (account_id = ? OR (account_id IS NULL AND ? IS NULL))`,
     )
-    .run(input.state, Date.now(), input.id, input.accountId, input.baseRevision); // sqlite-allow-raw -- Account-owned CAS grant transition.
+    .run(input.state, Date.now(), input.id, input.baseRevision, input.accountId, input.accountId); // sqlite-allow-raw -- Account/agent-owned CAS grant transition.
   if (result.changes !== 1) {
     throw new Error("EXTENSION_REVISION_CONFLICT");
   }
-  return listEnterpriseAccountPluginGrants(input.accountId, options).find(
-    (grant) => grant.id === input.id,
-  )!;
+  return getEnterprisePluginGrant(input.id, options)!;
 }

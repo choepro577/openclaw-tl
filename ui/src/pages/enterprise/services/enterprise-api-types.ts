@@ -267,7 +267,10 @@ export type EnterpriseAdminModelContext = {
 
 export type EnterprisePluginRequest = {
   id: string;
-  requesterAccountId: string;
+  requesterAccountId: string | null;
+  scope: "account" | "shared_agent";
+  agentKey: string | null;
+  runtimeAgentId: string | null;
   packageName: string;
   packageFamily: "code_plugin" | "bundle_plugin";
   exactVersion: string;
@@ -289,7 +292,10 @@ export type EnterprisePluginRequest = {
 
 export type EnterprisePluginGrant = {
   id: string;
-  accountId: string;
+  accountId: string | null;
+  scope: "account" | "shared_agent";
+  agentKey: string | null;
+  runtimeAgentId: string | null;
   pluginId: string;
   exactVersion: string;
   integrity: string;
@@ -329,7 +335,8 @@ export type EnterpriseCodexPluginRequest = {
   pluginName: string;
   marketplaceName: string;
   remotePluginId?: string | null;
-  requesterAccountId: string;
+  requesterAccountId: string | null;
+  scope: "account" | "shared_agent";
   agentKey: string;
   runtimeAgentId?: string;
   requestKind: "install" | "access";
@@ -356,13 +363,14 @@ export type EnterpriseCodexPluginGrant = {
   pluginName: string;
   marketplaceName: string;
   remotePluginId?: string | null;
-  accountId?: string;
+  accountId?: string | null;
+  scope: "account" | "shared_agent";
   agentKey: string;
   runtimeAgentId?: string;
   installedPluginId: string | null;
   capabilitySnapshot?: Record<string, unknown>;
   capabilityDigest?: string;
-  sourceRequestId?: string;
+  sourceRequestId?: string | null;
   state: "active" | "disabled" | "unavailable" | "revoked";
   authRequired?: boolean;
   appsNeedingAuth?: Array<{ id: string; name: string; installUrl?: string | null }>;

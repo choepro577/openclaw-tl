@@ -20,8 +20,20 @@ export function compileEnterpriseToolPolicy(
   _config: OpenClawConfig,
   account: EnterpriseAccount,
   storedPolicy: EnterpriseAccountToolPolicy = readEnterpriseAccountToolPolicy(account.id),
+  runtimeScope: {
+    runtimeAgentId?: string;
+    sharedAgentAllowed?: boolean;
+    sharedAgentOnly?: boolean;
+  } = {},
 ): AgentToolsConfig {
-  const pluginGrantTools = listActiveEnterprisePluginGrantTools(account.id);
+  const pluginGrantTools = listActiveEnterprisePluginGrantTools(
+    account.id,
+    runtimeScope.runtimeAgentId,
+    {
+      sharedAgentAllowed: runtimeScope.sharedAgentAllowed,
+      sharedAgentOnly: runtimeScope.sharedAgentOnly,
+    },
+  );
   const entitlements = listEnterpriseEntitlements(account.id).filter(
     (item) => item.resourceType === "tool" && item.resourceState === "active",
   );

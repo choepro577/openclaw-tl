@@ -366,6 +366,7 @@ export function withEnterpriseDelegationTools<T>(
           agentId,
           runSessionKey: sessionKey,
           runId: params.runId,
+          approvalReviewerDeviceId: params.approvalReviewerDeviceId,
           requesterUserTurnIdempotencyKey: request.idempotencyKey,
           requesterUserTurnSessionId: params.sessionId,
           workspaceDir: params.workspaceDir,
@@ -376,7 +377,6 @@ export function withEnterpriseDelegationTools<T>(
           currentMessagingTarget: params.currentMessagingTarget,
           currentChannelId: params.currentChannelId,
           currentMessageId: params.currentMessageId,
-          inheritedToolAllowlist: params.toolsAllow,
         },
       });
       transferred = true;

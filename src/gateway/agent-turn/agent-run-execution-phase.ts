@@ -375,6 +375,9 @@ export function startAgentRunExecution(params: {
               swarmOutputSchema: params.request.swarmOutputSchema,
               forceRestartSafeTools: params.request.forceRestartSafeTools,
               forceCodeModeTools: params.request.forceCodeModeTools,
+              approvalReviewerDeviceId:
+                params.client?.internal?.agentRuntimeIdentity?.sessionSpawnContext
+                  ?.approvalReviewerDeviceId,
               ...(executionIdentityAdmission ? { executionIdentityAdmission } : {}),
               operationalRunInstance: prepared.operationalRunInstance,
               onAdmittedRunContext: (admittedRunContext) => {

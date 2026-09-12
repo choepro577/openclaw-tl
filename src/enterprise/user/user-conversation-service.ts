@@ -5,13 +5,16 @@ import { sessionReadHandlers } from "../../gateway/server-methods/sessions-read.
 import type { GatewayRequestContext } from "../../gateway/server-methods/types.js";
 import { readSessionMessageCountAsync } from "../../gateway/session-transcript-readers.js";
 import type { SessionsListResult } from "../../gateway/session-utils.types.js";
+import { resolveAgentIdFromSessionKey } from "../../routing/session-key.js";
 import type { EnterpriseAccount } from "../accounts/account-types.js";
 import { invokeEnterpriseGatewayHandler } from "../gateway/invoke-handler.js";
 import { prepareEnterpriseGatewayRequest } from "../isolation/enterprise-gateway-policy.js";
+import { resolveEnterprisePersonalAgentId } from "../personal-agent/personal-agent-config.js";
 import type { AgentKey } from "./user-api-contracts.js";
 import {
   createEnterpriseUserGatewayClient,
   resolveEnterpriseUserRuntimeAgentId,
+  resolveEnterpriseUserAgentKey,
 } from "./user-gateway-client.js";
 
 type EnterpriseConversationReuseCandidate = {
@@ -71,6 +74,31 @@ export async function requireEnterpriseUserConversation(input: {
   if (described.session?.key !== input.sessionKey) {
     throw new Error("CONVERSATION_NOT_FOUND");
   }
+}
+
+/**
+ * Resolves the public portal Agent key for an existing conversation after the
+ * account-scoped session ownership check. Runtime Agent ids never cross the
+ * user API boundary; the mapping is kept on the server so Personal and Shared
+ * deep links use the same current entitlement decision.
+ */
+export async function resolveEnterpriseUserConversationAgentKey(input: {
+  config: OpenClawConfig;
+  context: GatewayRequestContext;
+  account: EnterpriseAccount;
+  sessionId: string;
+  sessionKey: string;
+}): Promise<AgentKey> {
+  await requireEnterpriseUserConversation(input);
+  const runtimeAgentId = resolveAgentIdFromSessionKey(
+    input.sessionKey,
+    resolveEnterprisePersonalAgentId(input.config, input.account),
+  );
+  const agentKey = resolveEnterpriseUserAgentKey(input.config, input.account, runtimeAgentId);
+  if (!agentKey) {
+    throw new Error("AGENT_NOT_FOUND");
+  }
+  return agentKey;
 }
 
 export async function openEnterpriseUserConversation(input: {

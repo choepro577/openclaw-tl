@@ -16,6 +16,8 @@ type SensitiveInputProps = {
   autocomplete?: string;
   required?: boolean;
   disabled?: boolean;
+  autofocus?: boolean;
+  ariaInvalid?: "true" | "false";
   onInput: (value: string) => void;
   onToggle: () => void;
 };
@@ -43,6 +45,8 @@ export function renderSensitiveInput(props: SensitiveInputProps): TemplateResult
         .value=${props.value}
         ?required=${props.required}
         ?disabled=${props.disabled}
+        ?autofocus=${props.autofocus}
+        aria-invalid=${props.ariaInvalid ?? nothing}
         data-sensitive-value
         @input=${handleInput}
       />

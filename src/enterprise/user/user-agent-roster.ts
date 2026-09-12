@@ -1,11 +1,10 @@
 import { createHash } from "node:crypto";
-import { listAgentEntries, resolveAgentWorkspaceDir } from "../../agents/agent-scope.js";
+import { listAgentEntries } from "../../agents/agent-scope.js";
 import type { OpenClawConfig } from "../../config/types.openclaw.js";
-import { buildWorkspaceSkillStatus } from "../../skills/discovery/status.js";
 import { isReservedSystemAgentId } from "../../system-agent/agent-id.js";
 import type { EnterpriseAccount } from "../accounts/account-types.js";
-import { resolveEnterpriseResourceAccess } from "../entitlements/entitlement-store.js";
-import { agentSkillResourceKey, sharedAgentResourceKey } from "../entitlements/resource-keys.js";
+import { sharedAgentResourceKey } from "../entitlements/resource-keys.js";
+import { resolveEnterpriseSharedAgentCapabilities } from "../isolation/enterprise-agent-capabilities.js";
 import { resolveEnterprisePersonalAgentId } from "../personal-agent/personal-agent-config.js";
 
 export type EnterpriseUserSharedAgent = {
@@ -50,37 +49,17 @@ export function resolveEnterpriseUserPersonalRuntime(
   };
 }
 
-/** Reads only ready workspace capabilities while evaluating the current account policy. */
+/** Reads the current Shared Agent snapshot; a separate skill grant is not required. */
 export function listEnterpriseUserCapabilityLabels(
   config: OpenClawConfig,
   account: EnterpriseAccount,
   agentId: string,
 ): string[] {
-  if (!listAgentEntries(config).some((entry) => entry.id === agentId)) {
+  const capabilities = resolveEnterpriseSharedAgentCapabilities({ config, account, agentId });
+  if (!capabilities.allowed) {
     return [];
   }
-  const { skills } = buildWorkspaceSkillStatus(resolveAgentWorkspaceDir(config, agentId), {
-    config,
-    agentId,
-  });
-  return skills
-    .filter((skill) => {
-      if (
-        skill.disabled ||
-        !skill.eligible ||
-        skill.platformIncompatible ||
-        (skill.source !== "openclaw-workspace" && skill.source !== "agents-skills-project")
-      ) {
-        return false;
-      }
-      return resolveEnterpriseResourceAccess(
-        account,
-        "skill",
-        agentSkillResourceKey(agentId, skill.source, skill.skillKey),
-        {},
-        config,
-      ).allowed;
-    })
+  return capabilities.skillsSnapshot.skills
     .map((skill) => skill.name)
     .filter((label, index, labels) => labels.indexOf(label) === index)
     .slice(0, 6);

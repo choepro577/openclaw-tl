@@ -50,10 +50,12 @@ import type {
   EnterpriseAccountPluginGrant,
   EnterpriseExtensionCatalogItem,
   EnterpriseExtensionKind,
+  EnterpriseExtensionGrantScope,
   EnterpriseExtensionTrust,
   EnterprisePluginRequest,
   EnterpriseUserSkillInstall,
 } from "./extension-types.js";
+import { normalizeEnterpriseExtensionGrantTarget } from "./extension-types.js";
 
 const REVIEW_TOKEN_TTL_MS = 10 * 60 * 1_000;
 const reviewTokens = new Map<string, EnterpriseExtensionReview>();
@@ -69,7 +71,9 @@ type EnterpriseExtensionReview = {
   trust: EnterpriseExtensionTrust;
   capabilitySnapshot: Record<string, unknown>;
   capabilityDigest: string;
+  scope: EnterpriseExtensionGrantScope;
   agentKey?: AgentKey;
+  runtimeAgentId?: string | null;
   skillName?: string;
   requirements: string[];
   expiresAt: number;
@@ -493,6 +497,7 @@ export async function reviewEnterpriseExtension(input: {
   config: OpenClawConfig;
   account: EnterpriseAccount;
   agentKey?: AgentKey;
+  scope?: EnterpriseExtensionGrantScope;
   kind: EnterpriseExtensionKind;
   catalogKey: string;
   version?: string;
@@ -556,6 +561,7 @@ export async function reviewEnterpriseExtension(input: {
       trust,
       capabilitySnapshot,
       capabilityDigest,
+      scope: "account",
       agentKey: input.agentKey,
       skillName: staged.skillName,
       requirements: staged.requirements,
@@ -602,6 +608,23 @@ export async function reviewEnterpriseExtension(input: {
     compatibility: version.version?.compatibility ?? {},
   };
   const capabilityDigest = sha256Hex(stableStringify(capabilitySnapshot));
+  let runtimeAgentId: string | null = null;
+  if (input.agentKey) {
+    try {
+      runtimeAgentId = resolveEnterpriseUserRuntimeAgentId(
+        input.config,
+        input.account,
+        input.agentKey,
+      );
+    } catch {
+      throw new EnterpriseExtensionError("AGENT_NOT_FOUND", 404);
+    }
+  }
+  const target = normalizeEnterpriseExtensionGrantTarget({
+    scope: input.scope,
+    agentKey: input.agentKey,
+    runtimeAgentId,
+  });
   const token = issueReviewToken({
     accountId: input.account.id,
     kind: family === "code-plugin" ? "code_plugin" : "bundle_plugin",
@@ -611,6 +634,9 @@ export async function reviewEnterpriseExtension(input: {
     trust,
     capabilitySnapshot,
     capabilityDigest,
+    scope: target.scope,
+    ...(target.agentKey ? { agentKey: target.agentKey } : {}),
+    runtimeAgentId: target.runtimeAgentId,
     requirements: [],
   });
   return {
@@ -1011,6 +1037,9 @@ export async function requestEnterpriseNativePlugin(input: {
   }
   return createEnterprisePluginRequest({
     requesterAccountId: input.account.id,
+    scope: review.scope,
+    agentKey: review.agentKey ?? null,
+    runtimeAgentId: review.runtimeAgentId ?? null,
     packageName: review.catalogKey,
     packageFamily: review.kind,
     exactVersion: review.exactVersion,

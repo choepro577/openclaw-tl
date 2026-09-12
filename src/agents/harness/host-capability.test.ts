@@ -4,7 +4,11 @@ import path from "node:path";
 import { Type } from "typebox";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createDeferred } from "../../../test/helpers/promise.js";
-import { markGatewayRequestScopedRuntimeConfig } from "../../gateway/request-runtime-config.js";
+import { isEnterpriseSharedAgentSession } from "../../enterprise/delegation/delegation-mutation-guard.js";
+import {
+  markGatewayRequestScopedRuntimeConfig,
+  readGatewayRequestRuntimeMetadata,
+} from "../../gateway/request-runtime-config.js";
 import {
   resetAgentRunRegistryForTest,
   rotateAgentRunRegistryLifecycleGeneration,
@@ -48,6 +52,38 @@ const mockCallGatewayTool = vi.mocked(callGatewayTool);
 type HostAttempt = Parameters<typeof createAgentHarnessHostCapabilities>[0]["attempt"];
 
 const admissions: PreparedAgentRunAdmission[] = [];
+
+it("blocks a bound tool after its Shared Agent capability changes", async () => {
+  let revision = "before";
+  const config = markGatewayRequestScopedRuntimeConfig(
+    {},
+    {
+      enterpriseCapabilities: {
+        resolve: () => ({
+          allowed: true,
+          scope: "shared",
+          pluginTools: [],
+          accountId: "user",
+          agentId: "main",
+          skillsSnapshot: { prompt: "", skills: [] },
+          config: {},
+          revision,
+        }),
+      },
+    },
+  );
+  const { attempt } = await admittedAttempt("shared-revoke", { config });
+  const { tool, execute } = testTool();
+  const { host, bound } = bindTool(attempt, tool);
+  try {
+    await bound.execute("allowed", {});
+    revision = "after";
+    await expect(bound.execute("stale", {})).rejects.toThrow("ENTERPRISE_CAPABILITY_CHANGED");
+    expect(execute).toHaveBeenCalledTimes(1);
+  } finally {
+    host.close();
+  }
+});
 
 it("binds native plugin grants to the admitted Agent and rechecks revocation and closure", async () => {
   let enabled = true;
@@ -224,6 +260,43 @@ describe("agent harness host capability", () => {
         }),
       }),
     );
+  });
+
+  it("retains request-scoped Enterprise metadata on the frozen hook snapshot", async () => {
+    const enterpriseMetadata = {
+      enterpriseUser: {
+        accountId: "account-1",
+        username: "employee",
+        displayName: "Employee",
+        personalAgentId: "personal",
+        personalAgentTemplateId: "personal-template",
+      },
+      enterpriseCapabilities: {
+        resolve: () => ({
+          allowed: true as const,
+          scope: "shared" as const,
+          pluginTools: [],
+          accountId: "account-1",
+          agentId: "shared",
+          skillsSnapshot: { prompt: "", skills: [] },
+          config: {},
+          revision: "rev-1",
+        }),
+      },
+    };
+    const config = markGatewayRequestScopedRuntimeConfig({}, enterpriseMetadata);
+    const { attempt } = await admittedAttempt("run-enterprise-snapshot", {
+      config,
+      agentId: "shared",
+    });
+    const host = createAgentHarnessHostCapabilities({ attempt, pluginId: "codex" });
+
+    await host.capabilities.runBeforeToolCall({ toolName: "read", params: {} });
+
+    const hookConfig = mockRunBefore.mock.lastCall?.[0]?.ctx?.config;
+    expect(readGatewayRequestRuntimeMetadata(hookConfig)).toBe(enterpriseMetadata);
+    expect(isEnterpriseSharedAgentSession({ config: hookConfig, agentId: "shared" })).toBe(true);
+    host.close();
   });
 
   it("closes prepared mutable-file approval revalidators with the admitted run", async () => {

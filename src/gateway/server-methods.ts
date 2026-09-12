@@ -585,6 +585,9 @@ export async function runWithGatewayRequestEnvelope<T>(
           context: options.context,
           client,
           isWebchatConnect: options.isWebchatConnect,
+          ...(options.context.resolveGatewayContext
+            ? { resolveGatewayContext: options.context.resolveGatewayContext }
+            : {}),
           ...(pluginRegistry ? { pluginRegistry } : {}),
         },
         fn,

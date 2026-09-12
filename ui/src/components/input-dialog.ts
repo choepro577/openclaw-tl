@@ -4,6 +4,7 @@ import { t } from "../i18n/index.ts";
 import { copyToClipboard } from "../lib/clipboard.ts";
 import { formatUiError } from "../lib/format-error.ts";
 import "./modal-dialog.ts";
+import { renderSensitiveInput } from "./sensitive-input.ts";
 
 type InputDialogOptions = {
   title: string;
@@ -18,7 +19,7 @@ type InputDialogOptions = {
   /**
    * Trims the value and blocks submission while it is empty. Callers that treat
    * an empty entry as meaningful (clearing a custom session label) leave this
-   * off and keep receiving the raw value.
+   * off and keep receiving the raw value. Sensitive values are never trimmed.
    */
   requireValue?: boolean;
   /**
@@ -26,6 +27,10 @@ type InputDialogOptions = {
    * rename that would change nothing cannot be submitted.
    */
   requireChange?: boolean;
+  /** Masks the value and keeps it out of ordinary text-entry surfaces. */
+  sensitive?: boolean;
+  revealLabel?: string;
+  hideLabel?: string;
   /**
    * Runs the operation the dialog was opened for. `null` resolves the dialog; a
    * message keeps it open with the typed value, so a rejected attempt stays
@@ -45,13 +50,15 @@ function presentInputDialog(options: InputDialogOptions): Promise<string | null>
   return new Promise((resolve) => {
     let settled = false;
     let submitting = false;
+    let revealed = false;
     let failure: string | null = null;
     let copyState: "idle" | "copying" | "copied" | "failed" = "idle";
-    const entryValue = (raw: string) => (options.requireValue === true ? raw.trim() : raw);
+    const entryValue = (raw: string) =>
+      options.requireValue === true && options.sensitive !== true ? raw.trim() : raw;
     const submitBlocked = (raw: string) => {
       const value = entryValue(raw);
       return (
-        (options.requireValue === true && value.length === 0) ||
+        (options.requireValue === true && !raw.trim()) ||
         (options.requireChange === true && value === (options.defaultValue ?? ""))
       );
     };
@@ -74,13 +81,15 @@ function presentInputDialog(options: InputDialogOptions): Promise<string | null>
     const handleAbort = () => finish(null);
     const inputElement = () => host.querySelector<HTMLInputElement>('input[name="value"]');
 
-    const handleInput = (event: Event) => {
-      const next = submitBlocked((event.target as HTMLInputElement).value);
+    const handleValueInput = (value: string) => {
+      const next = submitBlocked(value);
       if (next !== blocked) {
         blocked = next;
         paint();
       }
     };
+    const handleInput = (event: Event) =>
+      handleValueInput((event.target as HTMLInputElement).value);
 
     async function handleCopy(): Promise<void> {
       if (options.copyValue === undefined || submitting || copyState === "copying") return;
@@ -162,17 +171,35 @@ function presentInputDialog(options: InputDialogOptions): Promise<string | null>
               </div>
               <label class="field input-dialog__field">
                 <span>${label}</span>
-                <input
-                  name="value"
-                  type="text"
-                  autocomplete="off"
-                  spellcheck="false"
-                  .value=${options.defaultValue ?? ""}
-                  ?disabled=${submitting}
-                  aria-invalid=${failure ? "true" : nothing}
-                  @input=${handleInput}
-                  autofocus
-                />
+                ${options.sensitive
+                  ? renderSensitiveInput({
+                      id: "input-dialog-value",
+                      name: "value",
+                      value: options.defaultValue ?? "",
+                      revealed,
+                      revealLabel: options.revealLabel ?? "Show value",
+                      hideLabel: options.hideLabel ?? "Hide value",
+                      autocomplete: "current-password",
+                      disabled: submitting,
+                      autofocus: true,
+                      ariaInvalid: failure ? "true" : "false",
+                      onInput: handleValueInput,
+                      onToggle: () => {
+                        revealed = !revealed;
+                        paint();
+                      },
+                    })
+                  : html`<input
+                      name="value"
+                      type="text"
+                      autocomplete="off"
+                      spellcheck="false"
+                      .value=${options.defaultValue ?? ""}
+                      ?disabled=${submitting}
+                      aria-invalid=${failure ? "true" : nothing}
+                      @input=${handleInput}
+                      autofocus
+                    />`}
               </label>
               ${options.copyValue !== undefined
                 ? html`<button

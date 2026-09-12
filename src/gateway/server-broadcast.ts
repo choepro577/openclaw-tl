@@ -58,6 +58,7 @@ const EVENT_SCOPE_GUARDS: Record<string, string[]> = {
   "exec.approval.resolved": [APPROVALS_SCOPE],
   "question.requested": [QUESTIONS_SCOPE],
   "question.resolved": [QUESTIONS_SCOPE],
+  "enterprise.skill-auth.required": [READ_SCOPE],
   heartbeat: [],
   "plugin.approval.requested": [APPROVALS_SCOPE],
   "plugin.approval.resolved": [APPROVALS_SCOPE],
@@ -112,6 +113,7 @@ const SESSION_SUBSCRIPTION_EVENTS = new Set([
   "agent",
   "chat",
   "chat.side_result",
+  "enterprise.skill-auth.required",
   "session.observer",
   // Mirrors the raw agent tool event (full args/result snapshots) onto
   // session subscribers; omitting it here would hand scoped clients the

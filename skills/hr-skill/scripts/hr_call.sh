@@ -41,7 +41,7 @@ usage() {
   local code="${1:-2}"
   cat >&2 <<'EOF'
 Usage:
-  hr_call.sh <tool-name> [--args-json JSON | --args-file PATH] [--raw] [--base-url URL]
+  hr_call.sh <tool-name> [--payload-stdin | --args-json JSON | --args-file PATH] [--raw] [--base-url URL]
 
 Examples:
   hr_call.sh router_tool_search --args-json '{"query":"tim nhan su phong Ke toan","top_k":1,"min_score":0.35,"company-id":1}'
@@ -61,9 +61,14 @@ shift || true
 base_url="${HR_MCP_BASE_URL:-${COMNIEU_MCP_BASE_URL:-http://192.168.10.249:10000}}"
 args_json="{}"
 raw_mode=false
+payload_stdin=false
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
+    --payload-stdin)
+      payload_stdin=true
+      shift
+      ;;
     --args-json)
       args_json="${2:-}"
       shift 2
@@ -95,7 +100,9 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-if [[ "$raw_mode" == true ]]; then
+if [[ "$payload_stdin" == true ]]; then
+  payload="$(cat)"
+elif [[ "$raw_mode" == true ]]; then
   payload="$args_json"
 else
   payload="{\"arguments\":$args_json}"
@@ -109,16 +116,16 @@ status_file="$(mktemp "${TMPDIR:-/tmp}/hr-call-status.XXXXXX")" || {
 trap 'rm -f "$response_file" "$status_file"' EXIT
 
 set +e
-curl --silent --show-error \
+printf '%s' "$payload" | curl --silent --show-error \
   --connect-timeout "$HR_CONNECT_TIMEOUT_SECONDS" \
   --max-time "$HR_MAX_TIME_SECONDS" \
   -X POST \
   "${base_url%/}/tools/${tool_name}/execute" \
   -H "Content-Type: application/json" \
-  --data-binary "$payload" \
+  --data-binary @- \
   --output "$response_file" \
   --write-out '%{http_code}' >"$status_file" 2>/dev/null
-curl_status=$?
+curl_status="${PIPESTATUS[1]}"
 set -e
 
 if [[ "$curl_status" -ne 0 ]]; then

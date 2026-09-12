@@ -3,6 +3,7 @@ import { isCoreCanvasHostEnabled } from "../canvas/config.js";
 import { createShowWidgetTool, hasRegisteredShowWidgetKinds } from "../canvas/widget-tool.js";
 import { selectApplicableRuntimeConfig } from "../config/config.js";
 import { resolveControlUiSessionLinkBase } from "../config/control-ui-link-base.js";
+import { readEnterpriseDelegationChildAuthority } from "../enterprise/delegation/delegation-mutation-guard.js";
 import type { EnterpriseKnowledgeAuthority } from "../enterprise/knowledge/authority.js";
 import { readGatewayRequestRuntimeMetadata } from "../gateway/request-runtime-config.js";
 import { isEmbeddedMode } from "../infra/embedded-mode.js";
@@ -50,6 +51,7 @@ import { createDashboardTool } from "./tools/dashboard-tool.js";
 import { createEmbeddedCallGateway } from "./tools/embedded-gateway-stub.js";
 import { createEnterpriseDelegationTools } from "./tools/enterprise-delegation-tools.js";
 import { createEnterpriseKnowledgeTools } from "./tools/enterprise-knowledge-tools.js";
+import { createEnterpriseSkillScriptTools } from "./tools/enterprise-skill-script-tool.js";
 import { createGatewayToolCallerWrapper } from "./tools/gateway-caller-context.js";
 import { createGatewayTool } from "./tools/gateway-tool.js";
 import { createGitHubIdentityStatusTool } from "./tools/github-identity-status-tool.js";
@@ -116,6 +118,7 @@ export function createOpenClawTools(options?: OpenClawToolsOptions): AnyAgentToo
         agentSessionKey: options?.agentSessionKey,
         runSessionKey: options?.runSessionKey,
         runId: options?.runId,
+        approvalReviewerDeviceId: options?.approvalReviewerDeviceId,
         agentChannel: options?.agentChannel,
         agentAccountId: options?.agentAccountId,
         agentTo: options?.agentTo,
@@ -124,8 +127,29 @@ export function createOpenClawTools(options?: OpenClawToolsOptions): AnyAgentToo
         currentChannelId: options?.currentChannelId,
         currentMessageId: options?.currentMessageId,
         workspaceDir: options?.spawnWorkspaceDir ?? options?.workspaceDir,
-        inheritedToolAllowlist: options?.inheritedToolAllowlist,
-        inheritedToolDenylist: options?.inheritedToolDenylist,
+      })
+    : [];
+  const enterpriseUser = resolvedConfig
+    ? readGatewayRequestRuntimeMetadata(resolvedConfig)?.enterpriseUser
+    : undefined;
+  const enterpriseChildSessionKey = options?.runSessionKey ?? options?.agentSessionKey;
+  const enterpriseDelegationChild = readEnterpriseDelegationChildAuthority({
+    childSessionKey: enterpriseChildSessionKey,
+    childRunId: options?.runId,
+    childAgentId: sessionAgentId,
+  });
+  const enterpriseSkillScriptAccountId =
+    enterpriseDelegationChild?.accountId ?? enterpriseUser?.accountId;
+  const enterpriseSkillScriptTools = enterpriseSkillScriptAccountId
+    ? createEnterpriseSkillScriptTools({
+        config: resolvedConfig,
+        snapshot: options?.skillsSnapshot,
+        agentId: sessionAgentId,
+        sessionId: enterpriseUser?.sessionId,
+        childSessionKey: enterpriseChildSessionKey,
+        childRunId: options?.runId,
+        accountId: enterpriseSkillScriptAccountId,
+        delegatedChild: Boolean(enterpriseDelegationChild),
       })
     : [];
   const swarmToolGroups = createOpenClawSwarmToolGroups({
@@ -608,6 +632,7 @@ export function createOpenClawTools(options?: OpenClawToolsOptions): AnyAgentToo
       ? createEnterpriseKnowledgeTools(enterpriseKnowledgeAuthority)
       : []),
     ...enterpriseDelegationTools,
+    ...enterpriseSkillScriptTools,
   ];
   options?.recordToolPrepStage?.("openclaw-tools:core-tool-list");
   let allTools = tools;

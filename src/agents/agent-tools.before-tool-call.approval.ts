@@ -4,6 +4,7 @@
  * timeout classification, and owner-provided approval outcomes.
  */
 import { addTimerTimeoutGraceMs } from "@openclaw/normalization-core/number-coercion";
+import { readConnectErrorDetailCode } from "../../packages/gateway-protocol/src/connect-error-details.js";
 import { GatewayClientRequestError } from "../gateway/client.js";
 import { isEmbeddedMode } from "../infra/embedded-mode.js";
 import { getEmbeddedPluginApprovalBroker } from "../infra/embedded-plugin-approval-broker.js";
@@ -177,6 +178,24 @@ function resolveUnavailablePluginApprovalSurfaceReason(ctx?: HookContext): strin
     return `Plugin approval unavailable: the ${initiatingSurface.channelLabel} initiating surface does not support approvals.`;
   }
   return undefined;
+}
+
+function resolvePluginApprovalGatewayTransportFailureReason(params: {
+  error: unknown;
+  phase: "request" | "wait";
+}): string | undefined {
+  if (!(params.error instanceof GatewayClientRequestError)) {
+    return undefined;
+  }
+  const detailCode = readConnectErrorDetailCode(params.error.details);
+  if (!detailCode?.startsWith("AUTH_")) {
+    return undefined;
+  }
+  const phaseDetail =
+    params.phase === "request"
+      ? "before the approval request reached the approval manager"
+      : "while waiting for the approval decision";
+  return `Plugin approval transport authentication failed ${phaseDetail}; the operation was not executed. This is a Gateway session problem, not a business-system login failure.`;
 }
 
 async function requestPluginToolApproval(params: {
@@ -438,8 +457,13 @@ async function requestPluginToolApproval(params: {
     // INVALID_REQUEST means different things before and after registration.
     const invalidRequest =
       err instanceof GatewayClientRequestError && err.gatewayCode === "INVALID_REQUEST";
-    const reason =
-      invalidRequest && gatewayApprovalPhase === "request"
+    const transportFailureReason = resolvePluginApprovalGatewayTransportFailureReason({
+      error: err,
+      phase: gatewayApprovalPhase === "wait" ? "wait" : "request",
+    });
+    const reason = transportFailureReason
+      ? transportFailureReason
+      : invalidRequest && gatewayApprovalPhase === "request"
         ? `Plugin approval request rejected: ${formatErrorMessage(err)}`
         : invalidRequest && gatewayApprovalPhase === "wait"
           ? `Plugin approval no longer available: ${formatErrorMessage(err)}`

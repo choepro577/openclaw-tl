@@ -28,6 +28,25 @@ export function notifySubagentTerminalCallback(params: {
   registered.onTerminal();
 }
 
+export function rebindSubagentTerminalCallback(params: {
+  fromRunId: string;
+  toRunId: string;
+  childSessionKey: string;
+}): void {
+  const registered = terminalCallbacks.get(params.fromRunId);
+  if (!registered || registered.childSessionKey !== params.childSessionKey) {
+    throw new Error("SUBAGENT_TERMINAL_CALLBACK_REBIND_FAILED");
+  }
+  if (params.fromRunId === params.toRunId) {
+    return;
+  }
+  if (terminalCallbacks.has(params.toRunId)) {
+    throw new Error("SUBAGENT_TERMINAL_CALLBACK_REBIND_COLLISION");
+  }
+  terminalCallbacks.delete(params.fromRunId);
+  terminalCallbacks.set(params.toRunId, registered);
+}
+
 export function discardSubagentTerminalCallback(runId: string): void {
   terminalCallbacks.delete(runId);
 }

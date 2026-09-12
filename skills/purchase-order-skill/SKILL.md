@@ -1,89 +1,196 @@
 ---
 name: purchase-order-skill
-description: Tra cuu va thao tac purchase order (PO), purchase request, nha cung cap, hang hoa va chi nhanh qua PO MCP; bat buoc kiem tra USER.md de dang nhap PO khi can, bat buoc goi router_tool_search truoc moi tool, va chi hoi nguoi dung cac truong required cua tool.
-metadata: { "openclaw": { "emoji": "🧾", "requires": { "bins": ["curl"] } } }
+description: Tra cuu va thao tac de nghi mua hang, purchase order (PO), nha cung cap, hang hoa va chi nhanh qua PO service; router-first, dung dang nhap PO bao mat trong chat, va xac nhan truoc moi thao tac ghi.
+metadata:
+  {
+    "openclaw":
+      {
+        "emoji": "🧾",
+        "requires": { "bins": ["curl"] },
+        "scriptRuntime":
+          {
+            "entrypoints":
+              {
+                "health":
+                  {
+                    "path": "scripts/po_health.sh",
+                    "kind": "fixed",
+                    "risk": "read",
+                    "timeoutMs": 30000,
+                  },
+                "call":
+                  {
+                    "path": "scripts/po_call.sh",
+                    "kind": "operation",
+                    "routerOperation": "router_tool_search",
+                    "routerBypassOperations": ["router_index_status"],
+                    "authExemptOperations": ["router_tool_search", "router_index_status"],
+                    "readOperations":
+                      [
+                        "router_tool_search",
+                        "router_index_status",
+                        "employee_get_info",
+                        "search_po_products",
+                        "search_po_suppliers",
+                        "search_po_sites",
+                        "get_po_request_list",
+                        "get_po_draft_list",
+                        "get_po_detail",
+                      ],
+                    "writeOperations":
+                      [
+                        "create_po_draft",
+                        "update_po_draft",
+                        "save_po_product",
+                        "delete_po_product",
+                        "confirm_po",
+                      ],
+                    "unknownRisk": "approval",
+                    "timeoutMs": 30000,
+                  },
+              },
+            "auth":
+              {
+                "mode": "login-token",
+                "loginEntrypoint": "call",
+                "loginOperation": "employee_login",
+                "fields":
+                  [
+                    {
+                      "id": "username",
+                      "label": "Tài khoản PO",
+                      "argument": "userName",
+                      "type": "text",
+                    },
+                    {
+                      "id": "password",
+                      "label": "Mật khẩu",
+                      "argument": "password",
+                      "type": "password",
+                    },
+                  ],
+                "tokenPaths": ["result.data.token", "data.authorization", "authorization"],
+                "injectArgument": "authorization",
+                "ttlSeconds": 28800,
+              },
+          },
+      },
+  }
 ---
 
 # Purchase Order Skill
 
-Use this skill to tra cuu va thao tac nghiep vu mua hang / purchase order qua `po-mcp-server` HTTP.
+Dùng tool nội bộ chung `skill_script` cho mọi thao tác PO. PO service
+là nguồn dữ liệu vận hành duy nhất; không dùng Enterprise Knowledge, câu trả lời
+cũ hoặc dữ liệu nháp lịch sử để thay thế kết quả của yêu cầu hiện tại.
 
-Default connection:
+Skill này chạy khi chọn trực tiếp Shared Agent Mua hàng hoặc khi Personal Agent
+giao việc cho Mua hàng. Quyền dùng Mua hàng cấp toàn bộ skill của agent đó; không
+cần cấp `purchase-order-skill` hoặc `skill_script` riêng. Personal Agent giao việc
+cho Mua hàng để sử dụng năng lực này trong phạm vi Mua hàng.
 
-- Base URL: `http://192.168.10.249:10003`
-- Override with: `PO_MCP_BASE_URL` (hoac `COMNIEU_MCP_BASE_URL`)
-- Health endpoint: `GET /health`
-- User memory: uu tien `USER.md` trong `$CODEX_HOME`, neu khong co thi dung `~/.codex/USER.md`
-- Auth memory section name: `# po authentication`
+Trước lần gọi đầu tiên, giữ một request receipt cố định gồm:
+`action`, `scope`, `sDate` và các bộ lọc user đã nêu. Không tự đổi `create` thành
+`preview/read`, không bỏ ngày, không thu hẹp `toàn bộ chi nhánh`. Chuẩn hóa ngày
+`dd.mm.yyyy` hoặc `dd/mm/yyyy` thành `yyyy-mm-dd`. Khi user nói `tiếp tục`,
+`làm tiếp`, `đã đăng nhập` hoặc `đăng nhập rồi`, lặp lại đúng receipt gần nhất;
+không diễn giải thành một yêu cầu mới.
 
-## Mandatory Rules
+## Dang nhap PO bao mat
 
-1. Truoc khi dung PO tools can auth, phai doc system `USER.md` va kiem tra section `# po authentication`.
-2. Neu `USER.md` da co `userName` va `password`, phai thu `employee_login` de lay `authorization` moi truoc khi goi nghiep vu PO. Neu login fail, xem thong tin cu la sai/het hieu luc, khong duoc ghi nho lai, va phai yeu cau user dang nhap lai bang `userName` va `password`.
-3. Neu `USER.md` chua co thong tin PO, phai yeu cau user cung cap `userName` va `password`, sau do dung `employee_login` de xac thuc truoc. Chi khi `employee_login` thanh cong moi duoc ghi/ghi de thong tin vao `USER.md` duoi section `# po authentication`.
-4. Khong duoc luu credential that bai. Khong duoc coi `authorization` cu la nguon su that lau dai; token phai duoc lay lai tu login thanh cong.
-5. Luon goi `router_tool_search` truoc de tim tool, ke ca khi can tim `employee_login`.
-6. Ngoai `router_tool_search` va `router_index_status`, chi duoc goi cac tool xuat hien trong ket qua `router_tool_search`.
-7. Sau khi chon tool, phai doc ky `input_schema`, dac biet la danh sach `required`.
-8. Chi duoc hoi user cac truong required dang thieu. Khong hoi them field optional neu chua that su can. Khong hoi lai `serectkey`, `application`, `version`.
-9. Khong duoc goi list tool:
-   - Khong `GET /tools`
-   - Khong `GET /tools/{name}`
-   - Khong dung script list tools.
-10. Khong duoc doc/truy cap source code de suy doan tool/schema.
-11. Public PO tools chi can truyen `authorization` trong input. MCP server tu dong chen:
+1. Khong bao gio hoi, nhan, lap lai hoac luu password/token trong chat,
+   transcript, file, command hay tool arguments.
+2. Khong goi `employee_login`. Dang nhap do UI/Gateway thuc hien ngoai
+   transcript bang hop thoai bao mat; nut **PO** canh o chat van dung de mo lai.
+3. Nếu `skill_script` trả `SKILL_AUTH_REQUIRED`, dừng các operation PO còn
+   lại. UI tự mở hộp thoại tài khoản/mật khẩu; đăng nhập thành công sẽ tiếp tục
+   đúng lời gọi đang chờ một lần. Không gọi lại thao tác ghi đã hoàn thành. Nút **PO** cạnh ô chat vẫn mở lại hộp
+   thoại. Không yêu cầu user gửi credential trong chat.
+4. Neu user da dan credential vao chat, khong lap lai gia tri; khuyen nghi doi
+   mat khau do credential da xuat hien trong transcript.
 
-- `serectkey=ad48d1e5be166b1cf084810ccab27ac6`
-- `application=ai`
-- `version=1.0`
-  Exception: `employee_login` co the bo qua `authorization`.
+## Router-first bắt buộc
 
-12. Uu tien tool read-only de kiem tra du lieu truoc. Moi tool ghi du lieu (`create_po_draft`, `update_po_draft`, `save_po_product`, `delete_po_product`, `confirm_po`) deu phai co user confirmation ro rang neu current turn chua xac nhan hanh dong ghi.
-13. Uu tien goi tool truc tiep do router de xuat. Chi dung workflow tools neu user can orchestration nhieu buoc va router thuc su chi ra workflow phu hop.
-14. Neu `router_tool_search` khong du ro, phai refine query roi goi lai `router_tool_search` hoac hoi ro user.
-15. Neu current run khong the thuc su doc skill / chay command / goi tool, phai noi ro la khong truy cap duoc capability nay; khong duoc noi nhu the dang tra cuu.
-16. Khong duoc viet placeholder progress text kieu "Dang truy xuat..." hoac "Toi dang kiem tra..." tru khi da bat dau chay command that trong chinh turn nay.
+1. Tạo query phản ánh nguyên văn action, scope và ngày trong receipt.
+2. Gọi `skill_script` với:
 
-## Allowed Commands
-
-Health check:
-
-```bash
-{baseDir}/scripts/po_health.sh
+```json
+{
+  "skill": "purchase-order-skill",
+  "entrypoint": "call",
+  "operation": "router_tool_search",
+  "arguments": {
+    "query": "tạo bản nháp PO ngày 2026-09-10 cho toàn bộ chi nhánh",
+    "top_k": 3,
+    "min_score": 0.35,
+    "company-id": 1
+  }
+}
 ```
 
-Router health / index diagnostic:
+3. Chỉ chọn tool có trong kết quả router. Đọc `input_schema.required`,
+   `suggested_arguments` và `prerequisites`.
+4. Chỉ hỏi user các trường nghiệp vụ required còn thiếu; không hỏi
+   `authorization`, `password`, `serectkey`, `application` hay `version`.
+5. Gọi lại cùng built-in tool với tên tool router đã trả.
 
-```bash
-{baseDir}/scripts/po_call.sh router_index_status --args-json '{}'
+```json
+{
+  "skill": "purchase-order-skill",
+  "entrypoint": "call",
+  "operation": "get_po_draft_list",
+  "arguments": { "sites": "S1,S2" }
+}
 ```
 
-Tool discovery (bat buoc):
+Gateway tự chèn `authorization`. Không thêm field này vào arguments.
 
-```bash
-{baseDir}/scripts/po_call.sh router_tool_search --args-json '{"query":"lay danh sach de nghi mua hang dang mo cho chi nhanh S1","top_k":3,"min_score":0.35,"company-id":1}'
+6. Nếu router không đủ rõ, refine query và gọi lại `router_tool_search`; không
+   list tool và không đọc source để suy đoán schema.
+7. `router_index_status` chi dung de chan doan khi router gap loi.
+
+## Tạo PO cho toàn bộ chi nhánh
+
+Với yêu cầu như “tạo PO ngày 10.09.2026 cho tất cả chi nhánh”, thực hiện đúng
+chuỗi sau:
+
+1. Router query cho `create_po_draft` với scope toàn bộ và ngày đã chuẩn hóa.
+2. Gọi prerequisite `search_po_sites` nếu router/schema yêu cầu. Thu đủ trang,
+   lấy mọi mã chi nhánh hợp lệ, trim và loại trùng; không dùng tên thay mã.
+3. Gọi `create_po_draft` một lần với payload từ schema, thông thường:
+
+```json
+{
+  "sites": "<toàn bộ mã chi nhánh, phân tách bằng dấu phẩy>",
+  "getFrom": 1,
+  "sDate": "2026-09-10"
+}
 ```
 
-Call tool duoc de xuat boi router:
+Không gọi `get_po_request_list` hoặc `get_po_draft_list` để thay cho bước tạo,
+trừ khi user thật sự yêu cầu xem trước hoặc schema hiện tại bắt buộc. Danh sách
+đề nghị rỗng không chứng minh rằng không thể tạo; PO nháp cũ không phải kết quả
+của lần tạo hiện tại.
 
-```bash
-{baseDir}/scripts/po_call.sh <tool_name_from_search> --args-json '{"authorization":"...","...":"..."}'
-```
+## An toàn thao tác ghi
 
-## Execution Loop (Strict)
+Trước các tool ghi như
+`create_po_draft`, `update_po_draft`, `save_po_product`,
+`delete_po_product`, `confirm_po`, phai tom tat PO/chi nhanh/nha cung cap/san
+phẩm và xin xác nhận rõ ràng nếu user chưa yêu cầu ghi trong current turn. Nếu
+current turn đã nói rõ “tạo”, chuẩn bị payload và gọi tool; mutation guard vẫn
+hiển thị bước phê duyệt một lần trước khi ghi.
 
-1. Xac dinh request la read-only hay write. Neu la write, dat diem dung de xin confirmation.
-2. Doc system `USER.md` va kiem tra section `# po authentication`.
-3. Neu request can auth va chua co credential hop le, yeu cau user chi cung cap `userName` va `password`, sau do goi `router_tool_search` de tim `employee_login` va thuc hien dang nhap.
-4. Neu `employee_login` thanh cong, dung token vua nhan cho buoc tiep theo va cap nhat `USER.md`. Neu login that bai, thong bao user credential chua dung va yeu cau dang nhap lai; khong duoc ghi nho credential loi.
-5. Chuyen yeu cau user thanh query routing.
-6. Goi `router_tool_search`.
-7. Doc `results`, `prerequisites`, `input_schema`, va danh sach `required`.
-8. Chi hoi user cac truong required dang thieu; tu dien cac gia tri he thong tu dong chen va bo qua field optional neu khong can.
-9. Chuan bi `authorization` (neu tool can auth) va tham so nghiep vu can thiet.
-10. Chay prerequisite tools truoc (neu co), sau do chay tool chinh.
-11. Neu la write tool, confirm lan cuoi truoc khi execute.
-12. Tong hop ket qua cho user, giu lai cac ma PO / nha cung cap / chi nhanh / next step quan trong.
-13. Neu ket qua khong dat, quay lai buoc 5 voi query cu the hon.
+Sau `create_po_draft`, chỉ báo thành công khi chính call đó trả thành công. Link
+duy nhất được phép gửi là URL nguyên văn trong `result.data` của call đó. Không
+tạo URL từ `Notes`, mã PO, dữ liệu nháp cũ hoặc ghép query string. Nếu không có
+`result.data`, nói rõ service không trả link; không tự dựng link.
 
-Read `references/tool-catalog.md` chi de biet quy tac routing, auth va nhom tool PO thuong gap. Khong duoc dung file nay de thay the `router_tool_search`.
+Neu tool tra loi, giu nguyen ma phan loai de user biet buoc tiep theo:
+
+- `SKILL_AUTH_REQUIRED`: đăng nhập trong hộp thoại tự động; hệ thống tự tiếp tục.
+- `CONNECT_TIMEOUT`/`UNREACHABLE`/`HTTP_ERROR`: dịch vụ PO không kết nối được.
+- `SKILL_ROUTER_REQUIRED`: gọi router trước rồi mới gọi operation nghiệp vụ.
+
+Doc `references/tool-catalog.md` de biet quy tac routing va nhom nghiep vu;
+router output van la source of truth cho tool va schema hien tai.

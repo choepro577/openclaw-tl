@@ -21,6 +21,7 @@ import {
 } from "./codex-plugin-service.js";
 import {
   getEnterpriseCodexPluginGrant,
+  getEnterpriseCodexPluginGrantBySourceRequestId,
   getEnterpriseCodexPluginRequest,
   listEnterpriseAccountCodexPluginGrants,
   listEnterpriseCodexPluginRequests,
@@ -31,6 +32,7 @@ import {
   revisionField,
   stringField,
   validAgentKey,
+  validGrantScope,
 } from "./extension-http-common.js";
 
 const USER_PREFIX = "/api/enterprise/user/v2/extensions/codex";
@@ -111,10 +113,14 @@ export async function handleEnterpriseCodexPluginRoute(params: {
     if (parts.length === 1) {
       const request = getEnterpriseCodexPluginRequest(parts[0]!);
       if (!request) throw new EnterpriseCodexPluginError("CODEX_PLUGIN_REQUEST_NOT_FOUND", 404);
-      const requester = getEnterpriseAccountById(request.requesterAccountId);
-      const grant = listEnterpriseAccountCodexPluginGrants(request.requesterAccountId).find(
-        (candidate) => candidate.sourceRequestId === request.id,
-      );
+      const requester = request.requesterAccountId
+        ? getEnterpriseAccountById(request.requesterAccountId)
+        : undefined;
+      const grant = request.requesterAccountId
+        ? listEnterpriseAccountCodexPluginGrants(request.requesterAccountId).find(
+            (candidate) => candidate.sourceRequestId === request.id,
+          )
+        : getEnterpriseCodexPluginGrantBySourceRequestId(request.id);
       let detail: Record<string, unknown> = { unavailable: true };
       if (requester?.enabled) {
         try {
@@ -148,9 +154,10 @@ export async function handleEnterpriseCodexPluginRoute(params: {
   }
   const body = await readJson(req);
   if (!admin && parts.length === 1 && parts[0] === "requests") {
-    rejectUnknownFields(body, ["agentKey", "pluginId"]);
+    rejectUnknownFields(body, ["agentKey", "pluginId", "scope"]);
     const agentKey = validAgentKey(stringField(body, "agentKey"));
     const pluginId = stringField(body, "pluginId", 256);
+    const grantScope = validGrantScope(body.scope as string | undefined);
     return await idempotentMutation({
       req,
       res,
@@ -161,7 +168,13 @@ export async function handleEnterpriseCodexPluginRoute(params: {
       status: 201,
       execute: async () => ({
         request: presentEnterpriseCodexPluginRequest(
-          await requestEnterpriseCodexPlugin({ config, account, agentKey, pluginId }),
+          await requestEnterpriseCodexPlugin({
+            config,
+            account,
+            agentKey,
+            pluginId,
+            scope: grantScope,
+          }),
         ),
       }),
     });
@@ -256,8 +269,9 @@ export async function handleEnterpriseCodexPluginRoute(params: {
   }
   if (admin && parts.length === 2 && ["approve", "reject"].includes(parts[1]!)) {
     const approve = parts[1] === "approve";
-    rejectUnknownFields(body, approve ? ["baseRevision"] : ["baseRevision", "reason"]);
+    rejectUnknownFields(body, approve ? ["baseRevision", "scope"] : ["baseRevision", "reason"]);
     const baseRevision = revisionField(body);
+    const grantScope = approve ? validGrantScope(body.scope as string | undefined) : undefined;
     const reason = approve ? "" : stringField(body, "reason", 2_000);
     const requestId = parts[0]!;
     return await idempotentMutation({
@@ -287,6 +301,7 @@ export async function handleEnterpriseCodexPluginRoute(params: {
           reviewer: account,
           requestId,
           baseRevision,
+          ...(grantScope ? { scope: grantScope } : {}),
         });
         return {
           ...result,

@@ -24,12 +24,22 @@ This skill is search-first and routing-driven.
 
 Search:
 
-```bash
-{baseDir}/scripts/hr_call.sh router_tool_search --args-json '{"query":"<user_intent>","top_k":5,"min_score":0.35,"company-id":1}'
+```json
+{
+  "skill": "hr-skill",
+  "entrypoint": "call",
+  "operation": "router_tool_search",
+  "arguments": { "query": "<user_intent>", "top_k": 5, "min_score": 0.35, "company-id": 1 }
+}
 ```
 
 Execute selected tool:
 
-```bash
-{baseDir}/scripts/hr_call.sh <tool_name_from_search> --args-json '<arguments_json>'
+```json
+{
+  "skill": "hr-skill",
+  "entrypoint": "call",
+  "operation": "<operation_from_search>",
+  "arguments": {}
+}
 ```

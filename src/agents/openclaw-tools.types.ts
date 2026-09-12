@@ -6,6 +6,7 @@ import type { ChatType } from "../channels/chat-type.js";
 import type { InboundEventKind } from "../channels/inbound-event/kind.js";
 import type { ConversationReadInvocationOrigin } from "../channels/plugins/conversation-read-origin.js";
 import type { OpenClawConfig } from "../config/types.openclaw.js";
+import type { SkillSnapshot } from "../skills/types.js";
 import type { SkillWorkshopRunOptions } from "../skills/workshop/types.js";
 import type { HookContext } from "./agent-tools.before-tool-call.js";
 import type { ConversationRecallContext } from "./conversation-recall.types.js";
@@ -46,6 +47,8 @@ export type OpenClawToolsOptions = {
   fsPolicy?: ToolFsPolicy;
   sandboxed?: boolean;
   config?: OpenClawConfig;
+  /** Current resolved skills, including declared Enterprise script runtimes. */
+  skillsSnapshot?: SkillSnapshot;
   webFetchHostnameAllowlistRef?: { value?: string[] };
   webSearchEnabled?: boolean;
   /** Capabilities declared by the gateway client that originated this run. */
@@ -90,6 +93,8 @@ export type OpenClawToolsOptions = {
   allowMediaInvokeCommands?: boolean;
   /** Trusted sender identity bit for channel action auth. */
   senderIsOwner?: boolean;
+  /** Trusted device allowed to review mutations delegated by this run. */
+  approvalReviewerDeviceId?: string;
   /** Server-owned operation-local origin for conversation-read visibility policy. */
   conversationReadOrigin?: ConversationReadInvocationOrigin;
   /** Restrict cron operations to the active cron job's self-scoped surface. */

@@ -167,6 +167,8 @@ describe("router context admission budget", () => {
 describe("enterprise follow-up source binding", () => {
   it.each([
     ["Thử lại tra cứu HRM", "retry"],
+    ["Tiếp tục", "retry"],
+    ["Đã đăng nhập", "retry"],
     ["Bạn có chắc không?", "recheck"],
     ["Bạn có chắc không, tôi nhớ nhiều hơn", "scope_expansion"],
     ["Tính lại phần còn lại", "summary"],
@@ -215,6 +217,42 @@ describe("enterprise follow-up source binding", () => {
       consentedAgentIds: ["hr"],
     });
   });
+
+  it.each(["Tiếp tục", "Đã đăng nhập"])(
+    "binds %s to the newest exact specialist task",
+    (prompt) => {
+      const result = resolveExactEnterpriseRetry({
+        prompt,
+        policyRevision: 4,
+        candidates: [candidate()],
+        previous: [
+          {
+            eventId: "event-po",
+            childRunId: "child-po",
+            agentId: "hr",
+            assignedTask: "Tạo PO ngày 2026-09-10 cho toàn bộ chi nhánh",
+            status: "error",
+            eventOutcome: "failed",
+            eventReasonCode: "delegate_partial_failure",
+            confirmationState: "approved",
+            policyRevision: 4,
+            profileRevision: "profile-v1",
+            createdAt: 20,
+          },
+        ],
+      });
+
+      expect(result).toMatchObject({
+        kind: "matched",
+        routes: [
+          {
+            agentId: "hr",
+            task: "Tạo PO ngày 2026-09-10 cho toàn bộ chi nhánh",
+          },
+        ],
+      });
+    },
+  );
 
   it("fails closed for scope expansion, policy drift, and ambiguous latest work", () => {
     const base = {

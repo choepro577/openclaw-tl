@@ -135,6 +135,8 @@ export type ChatThreadProps = {
   onModelSetup?: () => void;
   backgroundTasks?: BackgroundTasksProps;
   delegationTasks?: readonly import("../../../lib/tasks/task-summary.ts").TaskSummary[];
+  /** Live child tool messages used by the delegation detail inspector. */
+  delegationTaskToolMessages?: ReadonlyMap<string, unknown[]>;
 };
 
 type TranscriptInteractionProps = Pick<

@@ -163,6 +163,51 @@ function applyModelProviderToolPolicy(
 
 export { resolveToolLoopDetectionConfig } from "./tool-loop-detection-config.js";
 
+/**
+ * Redacted catalog evidence emitted while one runtime tool surface is filtered.
+ *
+ * The evidence intentionally contains tool ids, counts, and the capability
+ * revision only. It never carries schemas, arguments, workspace paths, account
+ * ids, or tool results.
+ */
+export type AgentToolSurfaceFilterDiagnostic = {
+  stage: string;
+  beforeCount: number;
+  afterCount: number;
+  beforeNames: string[];
+  afterNames: string[];
+  capabilityRevision?: string;
+};
+
+const MAX_TOOL_SURFACE_DIAGNOSTIC_NAMES = 64;
+
+function summarizeToolSurfaceNames(tools: readonly AnyAgentTool[]): string[] {
+  const names = [...new Set(tools.map((tool) => tool.name).filter(Boolean))].toSorted();
+  return names.length <= MAX_TOOL_SURFACE_DIAGNOSTIC_NAMES
+    ? names
+    : [
+        ...names.slice(0, MAX_TOOL_SURFACE_DIAGNOSTIC_NAMES),
+        `…${names.length - MAX_TOOL_SURFACE_DIAGNOSTIC_NAMES} more`,
+      ];
+}
+
+function emitToolSurfaceFilterDiagnostic(
+  onFilter: OpenClawCodingToolsOptions["onToolSurfaceFilter"],
+  stage: string,
+  before: readonly AnyAgentTool[],
+  after: readonly AnyAgentTool[],
+  capabilityRevision?: string,
+): void {
+  onFilter?.({
+    stage,
+    beforeCount: before.length,
+    afterCount: after.length,
+    beforeNames: summarizeToolSurfaceNames(before),
+    afterNames: summarizeToolSurfaceNames(after),
+    ...(capabilityRevision ? { capabilityRevision } : {}),
+  });
+}
+
 /** Public options for building one plugin-owned agent tool surface. */
 type OpenClawCodingToolsOptions = {
   agentId?: string;
@@ -357,6 +402,8 @@ type OpenClawCodingToolsOptions = {
   claimYieldCompletion?: () => boolean | Promise<boolean>;
   /** Optional instrumentation callback for tool preparation stage timing. */
   recordToolPrepStage?: (name: string) => void;
+  /** Redacted before/after evidence for each shared tool-policy filter layer. */
+  onToolSurfaceFilter?: (diagnostic: AgentToolSurfaceFilterDiagnostic) => void;
   /** Live observer called after wrapped tool outcomes are recorded. */
   onToolOutcome?: ToolOutcomeObserver;
   /** Reads the sticky untrusted-content flag for the current user turn. */
@@ -803,6 +850,7 @@ function createOpenClawCodingToolsInternal(options?: OpenClawCodingToolsOptions)
               : runtimeRoot,
             sandboxed: Boolean(sandbox),
             config: options?.config,
+            skillsSnapshot: options?.skillsSnapshot,
             webFetchHostnameAllowlistRef: options?.webFetchHostnameAllowlistRef,
             webSearchEnabled: options?.webSearchEnabled,
             clientCaps: options?.clientCaps,
@@ -846,6 +894,7 @@ function createOpenClawCodingToolsInternal(options?: OpenClawCodingToolsOptions)
             requesterAgentIdOverride: agentId,
             requesterSenderId: options?.senderId,
             senderIsOwner: options?.senderIsOwner,
+            approvalReviewerDeviceId: options?.approvalReviewerDeviceId,
             authProfileStore: options?.authProfileStore,
             sessionId: options?.sessionId,
             conversationRecall: options?.conversationRecall,
@@ -898,6 +947,13 @@ function createOpenClawCodingToolsInternal(options?: OpenClawCodingToolsOptions)
     toolsForMemoryFlush,
     options?.toolPolicyMessageProvider ?? options?.messageProvider,
   );
+  emitToolSurfaceFilterDiagnostic(
+    options?.onToolSurfaceFilter,
+    "message-provider-policy",
+    toolsForMemoryFlush,
+    toolsForMessageProvider,
+    options?.skillsSnapshot?.capabilityRevision,
+  );
   options?.recordToolPrepStage?.("message-provider-policy");
   const toolsForModelProvider = applyModelProviderToolPolicy(toolsForMessageProvider, {
     config: options?.config,
@@ -912,6 +968,13 @@ function createOpenClawCodingToolsInternal(options?: OpenClawCodingToolsOptions)
     runtimeToolAllowlist: options?.runtimeToolAllowlist,
     localModelLeanPreserveToolNames,
   });
+  emitToolSurfaceFilterDiagnostic(
+    options?.onToolSurfaceFilter,
+    "model-provider-policy",
+    toolsForMessageProvider,
+    toolsForModelProvider,
+    options?.skillsSnapshot?.capabilityRevision,
+  );
   options?.recordToolPrepStage?.("model-provider-policy");
   // Sender identity is primarily command/action auth, with one Gateway parity exception:
   // explicit non-owner callers never receive owner-only control-plane core tools.
@@ -938,6 +1001,15 @@ function createOpenClawCodingToolsInternal(options?: OpenClawCodingToolsOptions)
       workspaceDir: workspaceRoot,
       toolDenylist: pluginToolDenylist,
     }),
+    onFilter: ({ step, before, after }) => {
+      emitToolSurfaceFilterDiagnostic(
+        options?.onToolSurfaceFilter,
+        `authorization-policy:${step.label}`,
+        before,
+        after,
+        options?.skillsSnapshot?.capabilityRevision,
+      );
+    },
   });
   // Host-bound ring-zero tools carry their own authority checks. Agent policy
   // must not deadlock setup, but the tools still receive schema/hook wrappers.
@@ -956,6 +1028,13 @@ function createOpenClawCodingToolsInternal(options?: OpenClawCodingToolsOptions)
     // Collector output is a run contract, not an operator-configurable capability.
     authorizedTools.push(swarmStructuredOutputTool);
   }
+  emitToolSurfaceFilterDiagnostic(
+    options?.onToolSurfaceFilter,
+    "authorization-policy:final",
+    subagentFiltered,
+    authorizedTools,
+    options?.skillsSnapshot?.capabilityRevision,
+  );
   processToolAvailabilityRef.value = authorizedTools.some((tool) => tool.name === "process");
   if (shouldInheritEffectiveToolAllowlist) {
     // Snapshot exporter only: this copies authorizedTools for descendants and

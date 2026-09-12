@@ -9,6 +9,7 @@ import type { SlashCommandDef } from "../../../lib/chat/commands.ts";
 import type { ControlUiFollowUpMode } from "../../../lib/chat/follow-up-mode.ts";
 import type { ProviderUsageDisplayProps } from "../../../lib/provider-quota-summary.ts";
 import type { SessionToolOverrides } from "../../../lib/sessions/patch.ts";
+import type { EnterpriseSkillAuthRequest } from "../../enterprise-user/components/skill-auth-control.ts";
 import type { ComposerDictationController } from "../composer-dictation.ts";
 import type { ChatInputHistoryKeyInput, ChatInputHistoryKeyResult } from "../input-history.ts";
 import type { RealtimeTalkConversationEntry } from "../realtime-talk-conversation.ts";
@@ -88,6 +89,8 @@ export type ChatComposerProps = ChatAttachmentControlsProps & {
   progressCard?: ProgressCard | null;
   onDismissProgressCard?: (card: ProgressCard) => void;
   gatewayQuestionPrompts?: readonly QuestionPrompt[];
+  skillAuthRequest?: EnterpriseSkillAuthRequest;
+  onSkillAuthenticated?: (request: EnterpriseSkillAuthRequest) => void;
   messages: unknown[];
   stream: string | null;
   queue: ChatQueueItem[];

@@ -19,6 +19,7 @@ import { createEnterpriseAccount } from "../accounts/account-store.js";
 import { writeEnterpriseAccountToolPolicy } from "../accounts/account-tool-policy-store.js";
 import { hashEnterprisePassword } from "../auth/password.js";
 import { createEnterpriseSession, revokeEnterpriseSession } from "../auth/session-store.js";
+import { listEnterpriseDelegationCandidates } from "../delegation/delegation-candidates.js";
 import { writeEnterpriseDelegationPolicy } from "../delegation/delegation-store.js";
 import { replaceEnterpriseEntitlements } from "../entitlements/entitlement-store.js";
 import {
@@ -113,7 +114,9 @@ describe("enterprise gateway policy", () => {
         requestParams: { agentId: runtimeAgentId },
       });
       expect(admission.allowed).toBe(true);
-      if (!admission.allowed) throw new Error("Expected admitted user");
+      if (!admission.allowed) {
+        throw new Error("Expected admitted user");
+      }
       const resolveGrants = readGatewayRequestRuntimeMetadata(
         admission.context.getRuntimeConfig(),
       )!.nativePluginGrants!;
@@ -184,14 +187,12 @@ describe("enterprise gateway policy", () => {
       expect(effectiveToolIds).toEqual(
         ["read", "write", "edit", "apply_patch", "exec", "process"].toSorted(),
       );
-      expect(projected.tools).toMatchObject({
-        allow: ["apply_patch", "edit", "exec", "process", "read", "write"],
-      });
+      expect(projected.tools?.allow).toBeUndefined();
       expect(projectedAgent?.tools).toMatchObject({
         profile: "minimal",
+        allow: ["apply_patch", "edit", "exec", "process", "read", "write"],
         alsoAllow: ["apply_patch", "edit", "exec", "process", "read", "write"],
       });
-      expect(projectedAgent?.tools?.allow).toBeUndefined();
       expect(projected.agents?.defaults?.authInheritance?.agentId).toBe("main");
       expect(config.tools).toBeUndefined();
       expect(resolveAgentConfig(config, "main")?.tools).toEqual({ profile: "minimal" });
@@ -230,7 +231,7 @@ describe("enterprise gateway policy", () => {
         .flatMap((group) => group.tools.map((tool) => tool.id))
         .toSorted();
 
-      expect(projected.tools?.allow).toEqual(["apply_patch", "edit", "read", "write"]);
+      expect(projected.tools?.allow).toEqual(["group:fs"]);
       expect(effectiveToolIds).toEqual(["apply_patch", "edit", "read", "write"]);
     });
   });
@@ -320,8 +321,8 @@ describe("enterprise gateway policy", () => {
         modelApi: null,
       });
 
-      expect(projected.tools?.allow).toEqual([]);
-      expect(projected.tools?.deny).toContain("*");
+      expect(resolveAgentConfig(projected, personalAgentId)?.tools?.allow).toEqual([]);
+      expect(resolveAgentConfig(projected, personalAgentId)?.tools?.deny).toContain("*");
       expect(inventory.groups.flatMap((group) => group.tools)).toEqual([]);
     });
   });
@@ -413,21 +414,13 @@ describe("enterprise gateway policy", () => {
       const personalAgentId = resolveEnterprisePersonalAgentId(config, account);
       expect(listAgentIds(projected)).toEqual([personalAgentId, "research"]);
       expect(resolveAgentConfig(projected, "research")?.workspace).toContain(account.profileId);
-      expect(resolveAgentConfig(projected, "research")?.skills).toEqual(["search"]);
+      expect(resolveAgentConfig(projected, "research")?.skills).toEqual(["private", "search"]);
       expect(resolveAgentConfig(projected, "research")?.sandbox).toMatchObject({
         mode: "all",
         scope: "session",
         workspaceAccess: "rw",
       });
       expect(resolveAgentConfig(projected, "research")?.tools).toMatchObject({
-        alsoAllow: expect.arrayContaining([
-          "read",
-          "write",
-          "edit",
-          "apply_patch",
-          "exec",
-          "process",
-        ]),
         deny: expect.arrayContaining([
           "elevated",
           "gateway",
@@ -440,15 +433,9 @@ describe("enterprise gateway policy", () => {
         elevated: { enabled: false },
         exec: { host: "sandbox", applyPatch: { workspaceOnly: true } },
       });
-      expect(projected.tools?.allow).toEqual([
-        "apply_patch",
-        "edit",
-        "enterprise_specialists_list",
-        "exec",
-        "process",
-        "read",
-        "write",
-      ]);
+      expect(resolveAgentConfig(projected, "research")?.tools?.alsoAllow).toBeUndefined();
+      expect(projected.tools?.allow).toBeUndefined();
+      expect(projected.tools?.alsoAllow).toEqual(["enterprise_specialists_list", "skill_script"]);
 
       const session = createEnterpriseSession(account.id);
       const admission = prepareEnterpriseGatewayRequest({
@@ -489,7 +476,18 @@ describe("enterprise gateway policy", () => {
         agents: {
           entries: {
             main: { workspace: state.workspaceDir, skills: ["hr-skill"] },
-            hrm: { workspace: state.path("hrm"), skills: ["hr-skill"] },
+            hrm: {
+              workspace: state.path("hrm"),
+              skills: ["hr-skill"],
+              delegationTarget: {
+                status: "active",
+                aliases: [],
+                handlingMode: "auto_when_certain",
+                useWhen: ["Tra cứu nhân sự"],
+                avoidWhen: [],
+                requiredInputs: [],
+              },
+            },
           },
         },
       };
@@ -500,6 +498,190 @@ describe("enterprise gateway policy", () => {
       expect(resolveAgentConfig(projected, personalAgentId)?.skills).toEqual([]);
       expect(resolveAgentConfig(projected, "hrm")?.skills).toEqual(["hr-skill"]);
       expect(listAgentIds(projected)).toContain("hrm");
+      expect(resolveAgentConfig(projected, "hrm")?.tools?.alsoAllow).toContain("skill_script");
+    });
+  });
+
+  it("keeps account tool and skill denies on Personal without trimming a granted specialist", async () => {
+    await withOpenClawTestState({ scenario: "minimal", applyEnv: true }, async (state) => {
+      const account = createEnterpriseAccount({
+        username: "employee.shared-boundary",
+        displayName: "Shared Boundary Employee",
+        passwordHash: await hashEnterprisePassword("enterprise-password"),
+        role: "employee",
+        mustChangePassword: false,
+      });
+      replaceEnterpriseEntitlements(account.id, [
+        { resourceType: "agent", resourceId: "agent:shared:hrm", effect: "allow" },
+        {
+          resourceType: "skill",
+          resourceId: "skill:global:openclaw-workspace:hr-skill",
+          effect: "allow",
+        },
+        {
+          resourceType: "skill",
+          resourceId: "skill:global:openclaw-workspace:purchase-order-skill",
+          effect: "deny",
+        },
+      ]);
+      writeEnterpriseAccountToolPolicy(account.id, 0, {
+        profile: "full",
+        alsoAllow: [],
+        deny: ["write"],
+      });
+      const config: OpenClawConfig = {
+        enterprise: { enabled: true, personalAgent: { templateAgentId: "main" } },
+        agents: {
+          entries: {
+            main: {
+              workspace: state.workspaceDir,
+              skills: ["hr-skill", "purchase-order-skill"],
+            },
+            hrm: {
+              workspace: state.path("hrm"),
+              skills: ["hr-skill", "purchase-order-skill"],
+              tools: { allow: ["read", "write"], deny: ["exec"] },
+              delegationTarget: {
+                status: "active",
+                aliases: [],
+                handlingMode: "auto_when_certain",
+                useWhen: ["Tra cứu nhân sự"],
+                avoidWhen: [],
+                requiredInputs: [],
+              },
+            },
+          },
+        },
+      };
+
+      const projected = projectEnterpriseRuntimeConfig(config, account);
+      const personal = resolveAgentConfig(
+        projected,
+        resolveEnterprisePersonalAgentId(config, account),
+      );
+      const shared = resolveAgentConfig(projected, "hrm");
+
+      expect(personal?.skills).toEqual(["hr-skill"]);
+      expect(personal?.tools?.deny).toContain("write");
+      expect(shared?.skills).toEqual(["hr-skill", "purchase-order-skill"]);
+      expect(shared?.tools?.allow).toEqual(["read", "skill_script", "write"]);
+      expect(shared?.tools?.deny).not.toContain("write");
+      expect(shared?.tools?.deny).toEqual(expect.arrayContaining(["exec", "terminal"]));
+      expect(shared?.tools?.alsoAllow).toContain("skill_script");
+    });
+  });
+
+  it("keeps a delegated Shared Agent profile revision stable across the Personal projection", async () => {
+    await withOpenClawTestState({ scenario: "minimal", applyEnv: true }, async (state) => {
+      const account = createEnterpriseAccount({
+        username: "employee.shared-profile-revision",
+        displayName: "Shared Profile Revision Employee",
+        passwordHash: await hashEnterprisePassword("enterprise-password"),
+        role: "employee",
+        mustChangePassword: false,
+        initialEntitlements: [
+          { resourceType: "agent", resourceId: "agent:shared:specialist", effect: "allow" },
+        ],
+      });
+      writeEnterpriseAccountToolPolicy(account.id, 0, {
+        profile: "coding",
+        alsoAllow: [],
+        deny: ["read", "skill_script"],
+      });
+      const config: OpenClawConfig = {
+        enterprise: { enabled: true, personalAgent: { templateAgentId: "main" } },
+        gateway: { auth: { mode: "accounts" } },
+        agents: {
+          entries: {
+            main: { workspace: state.workspaceDir },
+            specialist: {
+              workspace: state.path("specialist"),
+              delegationTarget: {
+                status: "active",
+                aliases: [],
+                handlingMode: "explicit_only",
+                useWhen: ["Tra cứu nghiệp vụ chuyên gia"],
+                avoidWhen: [],
+                requiredInputs: [],
+              },
+            },
+          },
+        },
+      };
+
+      const sourceCandidate = listEnterpriseDelegationCandidates(config, account).find(
+        (candidate) => candidate.agentId === "specialist",
+      );
+      expect(sourceCandidate).toBeDefined();
+      const session = createEnterpriseSession(account.id);
+      const admission = prepareEnterpriseGatewayRequest({
+        client: createEnterpriseUserGatewayClient(account, session.sessionId),
+        context: { getRuntimeConfig: () => config } as GatewayRequestContext,
+        method: "chat.send",
+        requestParams: { agentId: "specialist" },
+      });
+      expect(admission.allowed).toBe(true);
+      if (!admission.allowed || !sourceCandidate) {
+        throw new Error("Expected an admitted Shared Agent request");
+      }
+
+      const projectedCandidate = listEnterpriseDelegationCandidates(
+        admission.context.getRuntimeConfig(),
+        account,
+      ).find((candidate) => candidate.agentId === "specialist");
+      expect(projectedCandidate?.profileRevision).toBe(sourceCandidate.profileRevision);
+      expect(
+        readGatewayRequestRuntimeMetadata(
+          admission.context.getRuntimeConfig(),
+        )?.enterpriseDelegation?.specialists.find((candidate) => candidate.agentId === "specialist")
+          ?.profileRevision,
+      ).toBe(sourceCandidate.profileRevision);
+    });
+  });
+
+  it("preserves a Shared Agent full profile when adding the skill reader", async () => {
+    await withOpenClawTestState({ scenario: "minimal", applyEnv: true }, async (state) => {
+      const sharedWorkspace = state.path("full-profile-shared");
+      const skillDirectory = state.path("full-profile-shared", "skills", "shared-only");
+      mkdirSync(skillDirectory, { recursive: true });
+      writeFileSync(
+        state.path("full-profile-shared", "skills", "shared-only", "SKILL.md"),
+        "---\nname: shared-only\ndescription: Shared-only test skill.\n---\n\n# Shared skill\n",
+      );
+      const account = createEnterpriseAccount({
+        username: "employee.shared-full-profile",
+        displayName: "Shared Full Profile Employee",
+        passwordHash: await hashEnterprisePassword("enterprise-password"),
+        role: "employee",
+        mustChangePassword: false,
+      });
+      replaceEnterpriseEntitlements(account.id, [
+        { resourceType: "agent", resourceId: "agent:shared:specialist", effect: "allow" },
+      ]);
+      const config: OpenClawConfig = {
+        enterprise: { enabled: true, personalAgent: { templateAgentId: "main" } },
+        agents: {
+          entries: {
+            main: { workspace: state.workspaceDir },
+            specialist: {
+              workspace: sharedWorkspace,
+              skills: ["shared-only"],
+              tools: { profile: "full" },
+            },
+          },
+        },
+      };
+
+      const projected = projectEnterpriseRuntimeConfig(config, account);
+      const shared = resolveAgentConfig(projected, "specialist");
+      expect(shared?.tools?.allow).toBeUndefined();
+      expect(shared?.tools?.alsoAllow).toContain("read");
+      const effectiveToolIds = resolveEffectiveToolInventory({
+        cfg: projected,
+        agentId: "specialist",
+        modelApi: null,
+      }).groups.flatMap((group) => group.tools.map((tool) => tool.id));
+      expect(effectiveToolIds).toContain("write");
     });
   });
 
@@ -642,8 +824,13 @@ describe("enterprise gateway policy", () => {
       const unconfiguredUserConfig = projectEnterpriseRuntimeConfig(config, account, {
         userAudience: true,
       });
-      expect(unconfiguredUserConfig.tools?.allow).toEqual([]);
-      expect(unconfiguredUserConfig.tools?.deny).toContain("*");
+      const unconfiguredPersonal = resolveEnterprisePersonalAgentId(config, account);
+      expect(
+        resolveAgentConfig(unconfiguredUserConfig, unconfiguredPersonal)?.tools?.allow,
+      ).toEqual([]);
+      expect(
+        resolveAgentConfig(unconfiguredUserConfig, unconfiguredPersonal)?.tools?.deny,
+      ).toContain("*");
       writeEnterpriseAccountToolPolicy(account.id, 0, {
         profile: "full",
         alsoAllow: ["web_search"],
@@ -666,7 +853,7 @@ describe("enterprise gateway policy", () => {
       expect(admission.allowed).toBe(true);
       if (admission.allowed) {
         const runtimeConfig = admission.context.getRuntimeConfig();
-        expect(listAgentIds(runtimeConfig)).toEqual([personalAgentId, "main", "hieu"]);
+        expect(listAgentIds(runtimeConfig)).toEqual([personalAgentId, "hieu"]);
         const inventory = resolveEffectiveToolInventory({
           cfg: runtimeConfig,
           agentId: personalAgentId,

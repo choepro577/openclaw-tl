@@ -397,6 +397,7 @@ export async function spawnSubagentDirect(
               sandbox: sandboxMode,
               inheritedToolAllowlist: ctx.inheritedToolAllowlist,
               inheritedToolDenylist: ctx.inheritedToolDenylist,
+              approvalReviewerDeviceId: ctx.approvalReviewerDeviceId,
             }),
             parentExecutionIdentityToken: readParentExecutionIdentity(ctx),
           },
@@ -459,6 +460,12 @@ export async function spawnSubagentDirect(
         const launch = await launchChildRun();
         taskRowOwnership = launch.taskRowOwnership;
         acceptedChildRunId = readGatewayRunId(launch.response) ?? childIdem;
+        ctx.onChildRunIdResolved?.({
+          childSessionKey,
+          anticipatedRunId: childIdem,
+          actualRunId: acceptedChildRunId,
+          targetAgentId,
+        });
         recordSessionParticipantBestEffort({
           actor: { type: "agent", id: requesterAgentId },
           agentId: targetAgentId,
@@ -525,6 +532,7 @@ export async function spawnSubagentDirect(
         ctx.onChildDispatchAborted?.({
           childSessionKey,
           anticipatedRunId: childIdem,
+          actualRunId: acceptedChildRunId,
           targetAgentId,
         });
       },

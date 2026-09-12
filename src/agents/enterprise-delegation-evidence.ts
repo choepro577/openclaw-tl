@@ -14,6 +14,7 @@ import { resolveAgentRunSessionTarget } from "./run-session-target.js";
 
 type EvidenceLease = {
   runId: string;
+  provisionalRunId: boolean;
   agentId: string;
   packet: EnterpriseEvidenceTransfer;
   controller: AbortController;
@@ -25,6 +26,15 @@ const leases = resolveGlobalSingleton<Map<string, EvidenceLease>>(
   () => new Map(),
 );
 
+function expireEnterpriseDelegationEvidence(childSessionKey: string): void {
+  const lease = leases.get(childSessionKey);
+  if (!lease) {
+    return;
+  }
+  leases.delete(childSessionKey);
+  lease.dispose();
+}
+
 export function registerEnterpriseDelegationEvidence(input: {
   childSessionKey: string;
   childRunId: string;
@@ -32,6 +42,7 @@ export function registerEnterpriseDelegationEvidence(input: {
   packet: EnterpriseEvidenceTransfer;
   decision: EnterpriseDelegationDecision;
   config: OpenClawConfig;
+  provisionalRunId?: boolean;
 }): void {
   if (leases.has(input.childSessionKey)) {
     throw new Error("EVIDENCE_CHILD_ALREADY_BOUND");
@@ -61,12 +72,13 @@ export function registerEnterpriseDelegationEvidence(input: {
   });
   // Expiry is a one-shot lease deadline, not a child-completion polling loop.
   const timer = setTimeout(
-    () => revokeEnterpriseDelegationEvidence(input.childSessionKey, input.childRunId),
+    () => expireEnterpriseDelegationEvidence(input.childSessionKey),
     Math.max(0, input.decision.createdAt + 5 * 60_000 - Date.now()),
   );
   timer.unref();
   leases.set(input.childSessionKey, {
     runId: input.childRunId,
+    provisionalRunId: input.provisionalRunId === true,
     agentId: input.childAgentId,
     packet: input.packet,
     controller,
@@ -78,6 +90,19 @@ export function registerEnterpriseDelegationEvidence(input: {
       controller.abort(new Error("EVIDENCE_LEASE_CLOSED"));
     },
   });
+}
+
+export function confirmEnterpriseDelegationEvidenceRun(params: {
+  childSessionKey: string;
+  anticipatedRunId: string;
+  actualRunId: string;
+}): void {
+  const lease = leases.get(params.childSessionKey);
+  if (!lease || !lease.provisionalRunId || lease.runId !== params.anticipatedRunId) {
+    throw new Error("EVIDENCE_CHILD_CONFIRMATION_FAILED");
+  }
+  lease.runId = params.actualRunId;
+  lease.provisionalRunId = false;
 }
 
 export function revokeEnterpriseDelegationEvidence(
@@ -117,7 +142,10 @@ export async function withEnterpriseDelegationEvidence(
     }
     return params;
   }
-  if (lease.runId !== params.runId || lease.agentId !== params.agentId) {
+  if (
+    (!lease.provisionalRunId && lease.runId !== params.runId) ||
+    lease.agentId !== params.agentId
+  ) {
     throw new Error("EVIDENCE_CHILD_IDENTITY_MISMATCH");
   }
   const signal = params.abortSignal

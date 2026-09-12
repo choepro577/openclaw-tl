@@ -268,7 +268,12 @@ export async function syncWorkspaceSkills(params: {
             force: true,
             filter: (src) => {
               const name = path.basename(src);
-              return !(name === ".git" || name === "node_modules");
+              const firstRelativePart = path.relative(syncSourceDir, src).split(path.sep)[0];
+              return !(
+                name === ".git" ||
+                name === "node_modules" ||
+                (entry.metadata?.scriptRuntime && firstRelativePart === "scripts")
+              );
             },
           });
         } catch (error) {

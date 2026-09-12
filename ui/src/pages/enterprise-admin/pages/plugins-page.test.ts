@@ -49,6 +49,9 @@ function requestDetail(): EnterprisePluginRequestDetail {
     request: {
       id: "request-qa",
       requesterAccountId: "account-qa",
+      scope: "account",
+      agentKey: null,
+      runtimeAgentId: null,
       packageName: "qa-plugin",
       packageFamily: "bundle_plugin",
       exactVersion: "1.0.0",
@@ -92,6 +95,7 @@ function codexRequest(
     pluginName: "gmail",
     marketplaceName: "openai-curated",
     requesterAccountId: "account-qa",
+    scope: "account",
     agentKey: "personal",
     runtimeAgentId: "agent-runtime-qa",
     requestKind: "install",
@@ -188,7 +192,7 @@ describe("Enterprise admin failed approval recovery", () => {
         expect(page.querySelector(".ea-plugin-review")?.textContent).toContain("Cài đặt thất bại");
         clickButton(page, "Phê duyệt");
         await vi.waitFor(() =>
-          expect(api.approveAdminPluginRequest).toHaveBeenLastCalledWith(failed.request),
+          expect(api.approveAdminPluginRequest).toHaveBeenLastCalledWith(failed.request, "account"),
         );
       }
     },
@@ -235,6 +239,42 @@ describe("Enterprise admin plugin review feedback", () => {
 });
 
 describe("Enterprise admin Codex plugin requests", () => {
+  it("lets an admin approve a shared-Agent request with shared ownership", async () => {
+    const request = codexRequest({
+      agentKey: "shared:research",
+      scope: "account",
+    });
+    const detail = codexDetail(request);
+    api.listAdminPluginRequests.mockResolvedValue([]);
+    api.listAdminCodexPluginRequests.mockResolvedValue([request]);
+    api.loadAdminCodexPluginRequest.mockResolvedValue(detail);
+    api.approveAdminCodexPluginRequest.mockResolvedValue({ request, grant: null });
+    const page = new EnterpriseAdminPluginsPage();
+    document.body.append(page);
+    await vi.waitFor(() =>
+      expect(page.querySelector('tr[data-codex-request-id="codex-request-qa"]')).not.toBeNull(),
+    );
+    page
+      .querySelector<HTMLButtonElement>('tr[data-codex-request-id="codex-request-qa"] button')
+      ?.click();
+    await vi.waitFor(() =>
+      expect(
+        page.querySelector("openclaw-enterprise-admin-dialog .ea-plugin-review"),
+      ).not.toBeNull(),
+    );
+    const scope = page.querySelector<HTMLSelectElement>(
+      "openclaw-enterprise-admin-dialog select.ea-select",
+    );
+    expect(scope?.value).toBe("account");
+    scope!.value = "shared_agent";
+    scope!.dispatchEvent(new Event("change", { bubbles: true }));
+    await page.updateComplete;
+    clickButton(page, "Phê duyệt & cài Codex");
+    await vi.waitFor(() =>
+      expect(api.approveAdminCodexPluginRequest).toHaveBeenCalledWith(request, "shared_agent"),
+    );
+  });
+
   it("shows the runtime authentication result after approving a Codex request", async () => {
     const request = codexRequest();
     const detail = codexDetail(request);
@@ -273,7 +313,7 @@ describe("Enterprise admin Codex plugin requests", () => {
     expect(page.textContent).toContain("Google");
     expect(page.textContent).toContain("https://accounts.google.com");
     expect(page.textContent).toContain("Cần khởi động lại phiên Agent.");
-    expect(api.approveAdminCodexPluginRequest).toHaveBeenCalledWith(request);
+    expect(api.approveAdminCodexPluginRequest).toHaveBeenCalledWith(request, "account");
   });
 });
 

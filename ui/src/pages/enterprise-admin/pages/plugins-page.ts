@@ -104,6 +104,8 @@ type CodexMutationNotice = {
   restartRequired: boolean;
 };
 
+type EnterpriseExtensionGrantScope = "account" | "shared_agent";
+
 export class EnterpriseAdminPluginsPage extends OpenClawLightDomElement {
   @state() private items: EnterprisePluginRequest[] = [];
   @state() private codexItems: EnterpriseCodexPluginRequest[] = [];
@@ -116,6 +118,36 @@ export class EnterpriseAdminPluginsPage extends OpenClawLightDomElement {
   @state() private error = "";
   @state() private rejectionReason = "";
   @state() private codexMutationNotice: CodexMutationNotice | null = null;
+  @state() private approvalScope: EnterpriseExtensionGrantScope = "account";
+
+  private canApproveForSharedAgent(request: { agentKey: string | null | undefined }): boolean {
+    return request.agentKey?.startsWith("shared:") === true;
+  }
+
+  private renderApprovalScope(request: { agentKey: string | null | undefined }) {
+    if (!this.canApproveForSharedAgent(request)) {
+      return html`<p class="ea-muted">${ea("Phạm vi cấp quyền")}: ${ea("Account")}</p>`;
+    }
+    return html`<label class="ea-field">
+      ${ea("Phạm vi cấp quyền")}
+      <select
+        class="ea-select"
+        .value=${this.approvalScope}
+        @change=${(event: Event) => {
+          const value = (event.currentTarget as HTMLSelectElement).value;
+          this.approvalScope = value === "shared_agent" ? "shared_agent" : "account";
+        }}
+      >
+        <option value="account">${ea("Account")}</option>
+        <option value="shared_agent">${ea("Shared Agent")}</option>
+      </select>
+      <span class="ea-field__hint">
+        ${this.approvalScope === "shared_agent"
+          ? ea("Grant thuộc Agent dùng chung và áp dụng cho user được cấp Agent.")
+          : ea("Grant chỉ thuộc account yêu cầu.")}
+      </span>
+    </label>`;
+  }
 
   private codexMutationNoticeText(): string {
     const notice = this.codexMutationNotice;
@@ -170,6 +202,8 @@ export class EnterpriseAdminPluginsPage extends OpenClawLightDomElement {
     this.error = "";
     try {
       this.selected = await loadAdminPluginRequest(request.id);
+      this.approvalScope =
+        this.selected.request.scope === "shared_agent" ? "shared_agent" : "account";
       this.rejectionReason = "";
     } catch (error) {
       this.error = errorMessage(error);
@@ -187,6 +221,8 @@ export class EnterpriseAdminPluginsPage extends OpenClawLightDomElement {
     this.error = "";
     try {
       this.selectedCodex = await loadAdminCodexPluginRequest(request.id);
+      this.approvalScope =
+        this.selectedCodex.request.scope === "shared_agent" ? "shared_agent" : "account";
       this.rejectionReason = "";
       this.codexMutationNotice = null;
     } catch (error) {
@@ -203,7 +239,7 @@ export class EnterpriseAdminPluginsPage extends OpenClawLightDomElement {
     this.busy = true;
     this.error = "";
     try {
-      await approveAdminPluginRequest(this.selected.request);
+      await approveAdminPluginRequest(this.selected.request, this.approvalScope);
       await this.load();
     } catch (error) {
       const failure = errorMessage(error);
@@ -240,7 +276,10 @@ export class EnterpriseAdminPluginsPage extends OpenClawLightDomElement {
     this.error = "";
     this.codexMutationNotice = null;
     try {
-      const result = await approveAdminCodexPluginRequest(this.selectedCodex.request);
+      const result = await approveAdminCodexPluginRequest(
+        this.selectedCodex.request,
+        this.approvalScope,
+      );
       const authApps = codexAuthAppNames(result.appsNeedingAuth);
       this.codexMutationNotice = {
         authRequired: result.authRequired === true,
@@ -375,6 +414,7 @@ export class EnterpriseAdminPluginsPage extends OpenClawLightDomElement {
             <dd>${detail.globalStatus.toolOwnershipMatches ? ea("Có") : ea("Chưa")}</dd>
           </dl>
         </section>
+        ${this.renderApprovalScope(request)}
         <section class="ea-card">
           <h3>${ea("Đối chiếu artifact và kết quả quét")}</h3>
           <p>
@@ -545,6 +585,7 @@ ${JSON.stringify(request.capabilitySnapshot, null, 2)}</pre>
             <dd>${request.installedPluginId ?? "—"}</dd>
           </dl>
         </section>
+        ${this.renderApprovalScope(request)}
         <section class="ea-card">
           <h3>${ea("Capability đã review")}</h3>
           <p>
@@ -671,7 +712,7 @@ ${JSON.stringify(request.capabilitySnapshot, null, 2)}</pre>
                         <strong>${item.packageName}</strong>
                         <div class="ea-muted">${item.packageFamily}</div>
                       </td>
-                      <td>${item.requesterAccountId}</td>
+                      <td>${item.requesterAccountId ?? ea("Không còn tồn tại")}</td>
                       <td>
                         ${item.exactVersion}
                         <div class="ea-muted ea-mono">${item.integrity}</div>
@@ -731,7 +772,7 @@ ${JSON.stringify(request.capabilitySnapshot, null, 2)}</pre>
                               <div class="ea-muted">${item.requestKind}</div>
                             </td>
                             <td>
-                              ${item.requesterAccountId}
+                              ${item.requesterAccountId ?? ea("Không còn tồn tại")}
                               <div class="ea-muted">${ea("Agent: ")}${item.agentKey}</div>
                             </td>
                             <td>${item.marketplaceName}</td>

@@ -16,6 +16,8 @@ export type SessionSkillSnapshot = {
   skillFilter?: string[];
   /** Effective node-exec eligibility used to select connected node-hosted skills. */
   nodeSkillsEligibility?: { canExec: boolean; node?: string };
+  /** Enterprise capability revision used to refresh a resumed session. */
+  capabilityRevision?: string;
   /**
    * Runtime-only, never persisted. Carries the full parsed Skill[] (including
    * each SKILL.md body) so the embedded runner can skip a workspace skill

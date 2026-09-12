@@ -19,6 +19,7 @@ import {
   createEnterpriseCodexPluginRequest,
   getEnterpriseCodexPluginGrant,
   getEnterpriseCodexPluginRequest,
+  listActiveEnterpriseCodexPluginGrants,
   listEnterpriseAccountCodexPluginGrants,
   transitionEnterpriseCodexPluginGrant,
   transitionEnterpriseCodexPluginRequest,
@@ -77,6 +78,8 @@ function createRuntime(
     version: 1,
     summary: { id: item.id, name: item.name },
     apps: [],
+    appTemplates: [],
+    mcpServers: [],
   };
   return {
     list: vi.fn(async () => ({ items: [item], warnings: [] })),
@@ -119,6 +122,8 @@ function seedRequest(
       version: 1,
       summary: { id: "gmail@openai-curated-remote", name: "gmail" },
       apps: [],
+      appTemplates: [],
+      mcpServers: [],
     },
     capabilityDigest: "sha256:reviewed",
     ...overrides,
@@ -145,6 +150,109 @@ function accounts() {
 }
 
 describe("Enterprise Codex plugin lifecycle", () => {
+  it("keeps account grants private while sharing only an explicit shared-agent grant", () => {
+    const { requester, reviewer } = accounts();
+    const member = createEnterpriseAccount({
+      username: `codex-member-${accountSequence++}`,
+      displayName: "Codex Member",
+      passwordHash: "test-only",
+      role: "employee",
+      mustChangePassword: false,
+    });
+    const requestBase = {
+      requesterAccountId: requester.id,
+      agentKey: "shared:support" as const,
+      runtimeAgentId: "support",
+      marketplaceName: "openai-curated",
+      requestKind: "install" as const,
+      catalogSnapshot: { id: "test" },
+      capabilitySnapshot: {
+        version: 1,
+        apps: [],
+        appTemplates: [],
+        mcpServers: [],
+      },
+      capabilityDigest: "digest",
+    };
+    const privateRequest = createEnterpriseCodexPluginRequest({
+      ...requestBase,
+      pluginName: "same-plugin",
+      remotePluginId: "same-plugin",
+    });
+    const sharedRequest = createEnterpriseCodexPluginRequest({
+      ...requestBase,
+      pluginName: "same-plugin",
+      remotePluginId: "same-plugin",
+      scope: "shared_agent",
+    });
+    const privateAvailable = transitionEnterpriseCodexPluginRequest({
+      id: privateRequest.id,
+      baseRevision: privateRequest.revision,
+      from: ["pending"],
+      to: "available",
+      reviewerAccountId: reviewer.id,
+      installedPluginId: "same-plugin",
+    });
+    const sharedAvailable = transitionEnterpriseCodexPluginRequest({
+      id: sharedRequest.id,
+      baseRevision: sharedRequest.revision,
+      from: ["pending"],
+      to: "available",
+      reviewerAccountId: reviewer.id,
+      installedPluginId: "same-plugin",
+    });
+    upsertEnterpriseCodexPluginGrant({
+      accountId: requester.id,
+      scope: "account",
+      agentKey: privateAvailable.agentKey,
+      runtimeAgentId: privateAvailable.runtimeAgentId,
+      pluginName: privateAvailable.pluginName,
+      marketplaceName: privateAvailable.marketplaceName,
+      installedPluginId: "same-plugin",
+      capabilitySnapshot: privateAvailable.capabilitySnapshot,
+      capabilityDigest: privateAvailable.capabilityDigest,
+      sourceRequestId: privateAvailable.id,
+      approvedByAccountId: reviewer.id,
+      state: "active",
+    });
+    upsertEnterpriseCodexPluginGrant({
+      accountId: requester.id,
+      scope: "shared_agent",
+      agentKey: sharedAvailable.agentKey,
+      runtimeAgentId: sharedAvailable.runtimeAgentId,
+      pluginName: sharedAvailable.pluginName,
+      marketplaceName: sharedAvailable.marketplaceName,
+      installedPluginId: "same-plugin",
+      capabilitySnapshot: sharedAvailable.capabilitySnapshot,
+      capabilityDigest: sharedAvailable.capabilityDigest,
+      sourceRequestId: sharedAvailable.id,
+      approvedByAccountId: reviewer.id,
+      state: "active",
+    });
+
+    expect(listEnterpriseAccountCodexPluginGrants(requester.id)).toHaveLength(2);
+    expect(
+      listEnterpriseAccountCodexPluginGrants(requester.id).map((grant) => grant.scope),
+    ).toEqual(expect.arrayContaining(["account", "shared_agent"]));
+
+    expect(
+      listActiveEnterpriseCodexPluginGrants(member.id, "support").map((grant) => grant.pluginName),
+    ).toEqual(["same-plugin"]);
+    expect(
+      listActiveEnterpriseCodexPluginGrants(requester.id, "support").map(
+        (grant) => grant.pluginName,
+      ),
+    ).toEqual(["same-plugin"]);
+    updateEnterpriseAccount(requester.id, { enabled: false });
+    expect(
+      listActiveEnterpriseCodexPluginGrants(member.id, "support").map((grant) => grant.pluginName),
+    ).toEqual(["same-plugin"]);
+    deleteEnterpriseAccountForBootstrapRollback(requester.id);
+    expect(
+      listActiveEnterpriseCodexPluginGrants(member.id, "support").map((grant) => grant.pluginName),
+    ).toEqual(["same-plugin"]);
+  });
+
   it("fails closed when the authenticated account was deleted", async () => {
     await withOpenClawTestState({ scenario: "minimal", applyEnv: true }, async (state) => {
       const config = enterpriseConfig(state.workspaceDir);

@@ -61,8 +61,11 @@ export function buildSkillSnapshot(
     skills: eligible.map((entry) => ({
       name: entry.skill.name,
       skillKey: resolveSkillKey(entry.skill, entry),
+      source: entry.skill.source,
       primaryEnv: entry.metadata?.primaryEnv,
       requiredEnv: entry.metadata?.requires?.env?.slice(),
+      baseDir: entry.skill.baseDir,
+      scriptRuntime: entry.metadata?.scriptRuntime,
     })),
     ...(skillFilter === undefined ? {} : { skillFilter }),
     ...(opts?.skillOverrides ? { skillOverrides: opts.skillOverrides } : {}),

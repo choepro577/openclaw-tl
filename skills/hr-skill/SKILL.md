@@ -1,7 +1,88 @@
 ---
 name: hr-skill
 description: Tra cuu du lieu van hanh nhan su qua HRM Comnieu MCP authoritative; bat buoc goi router_tool_search truoc, khong fallback sang Enterprise Knowledge; cam list tools va cam truy cap source code.
-metadata: { "openclaw": { "emoji": "👥", "requires": { "bins": ["curl"] } } }
+metadata:
+  {
+    "openclaw":
+      {
+        "emoji": "👥",
+        "requires": { "bins": ["curl"] },
+        "scriptRuntime":
+          {
+            "entrypoints":
+              {
+                "health":
+                  {
+                    "path": "scripts/hr_health.sh",
+                    "kind": "fixed",
+                    "risk": "read",
+                    "timeoutMs": 30000,
+                  },
+                "call":
+                  {
+                    "path": "scripts/hr_call.sh",
+                    "kind": "operation",
+                    "routerOperation": "router_tool_search",
+                    "routerBypassOperations": ["router_index_status"],
+                    "authExemptOperations": ["router_tool_search", "router_index_status"],
+                    "readOperations":
+                      [
+                        "router_tool_search",
+                        "router_index_status",
+                        "employee_get_info",
+                        "get_areas",
+                        "get_departments",
+                        "get_levels",
+                        "get_positions",
+                        "get_staff_list",
+                        "get_assignment_child_tasks_one_level",
+                        "get_assignment_project_tasks_for_parent",
+                        "get_assignment_projects_for_task",
+                        "get_assignment_task_types_for_user",
+                        "get_assignment_user_task_list",
+                        "get_assignment_users_task_summary",
+                        "get_my_assigned_role_task_list",
+                        "check_task_sla_violations_me",
+                        "get_sla_dashboard",
+                        "get_sla_policies",
+                        "get_sla_policy_detail",
+                        "get_sla_policy_escalations",
+                        "get_sla_policy_options",
+                        "get_sla_policy_rules",
+                        "get_sla_report",
+                        "get_sla_ticket_detail",
+                        "get_sla_ticket_history",
+                        "get_sla_tickets",
+                        "get_procedure_advance_salary_limit",
+                        "get_procedure_form_detail",
+                        "get_procedure_form_list",
+                        "get_procedure_leave_history",
+                        "get_procedure_repair_product_list",
+                        "get_procedure_report_detail",
+                        "get_procedure_report_list",
+                        "get_procedure_shift_options",
+                        "get_procedure_submit_options",
+                        "get_procedure_timekeeping_options",
+                        "get_procedure_working_day_count",
+                        "get_ticket_department_report",
+                        "get_ticket_departments",
+                        "get_ticket_detail",
+                        "get_ticket_list",
+                        "get_ticket_list_for_supporter",
+                        "get_ticket_messages",
+                        "get_ticket_report",
+                        "get_ticket_reviews",
+                        "get_ticket_services",
+                        "get_ticket_types",
+                      ],
+                    "writeOperations": [],
+                    "unknownRisk": "approval",
+                    "timeoutMs": 30000,
+                  },
+              },
+          },
+      },
+  }
 ---
 
 # HR Skill
@@ -215,26 +296,43 @@ current session chua duoc gan dinh danh; khong suy ra tu ten hien thi.
 7. Khong duoc viet placeholder progress text kieu "Dang truy xuat..." hoac "Toi dang kiem tra..." tru khi da bat dau chay command that trong chinh turn nay.
 8. Staff/title requests must follow the authoritative HRM boundary and the staff/position lookup contract above.
 
-## Allowed Commands
+## Tool chung
 
-Trong Enterprise HRM sandbox, `{baseDir}` la `/workspace/.openclaw/sandbox-skills/skills/hr-skill`. Bat buoc dung duong dan tuyet doi nay; khong dung `./scripts/...`, khong dat `host: "gateway"`, va khong doi `workdir`, vi subagent nen khong co kenh phe duyet cho cac bien the lenh do.
+Dùng `skill_script` để chạy các entrypoint đã khai báo. Khi người dùng được cấp
+Shared Agent HR, cả phiên chọn trực tiếp HR và phiên Personal Agent giao việc
+cho HR đều có toàn bộ skill được cấu hình trên HR, không cần cấp lặp skill/tool.
 
 Health check:
 
-```bash
-{baseDir}/scripts/hr_health.sh
+```json
+{ "skill": "hr-skill", "entrypoint": "health", "arguments": {} }
 ```
 
 Tool discovery (bat buoc):
 
-```bash
-{baseDir}/scripts/hr_call.sh router_tool_search --args-json '{"query":"tim danh sach nhan vien phong Ke toan","top_k":1,"min_score":0.35,"company-id":1}'
+```json
+{
+  "skill": "hr-skill",
+  "entrypoint": "call",
+  "operation": "router_tool_search",
+  "arguments": {
+    "query": "tim danh sach nhan vien phong Ke toan",
+    "top_k": 1,
+    "min_score": 0.35,
+    "company-id": 1
+  }
+}
 ```
 
 Call tool duoc de xuat boi router:
 
-```bash
-{baseDir}/scripts/hr_call.sh <tool_name_from_search> --args-json '<suggested_arguments_json>'
+```json
+{
+  "skill": "hr-skill",
+  "entrypoint": "call",
+  "operation": "<operation_from_router>",
+  "arguments": {}
+}
 ```
 
 Both wrappers use finite connection/request deadlines. A non-zero exit emits

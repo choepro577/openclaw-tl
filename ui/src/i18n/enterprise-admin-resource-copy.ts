@@ -89,6 +89,16 @@ export const enterpriseAdminResourceCopy = {
   "Lý do từ chối": ["Lý do từ chối", "Rejection reason"],
   "Xác nhận Gateway đã load": ["Xác nhận Gateway đã load", "Confirm Gateway loaded"],
   "Phê duyệt": ["Phê duyệt", "Approve"],
+  "Phạm vi cấp quyền": ["Phạm vi cấp quyền", "Grant scope"],
+  "Shared Agent": ["Shared Agent", "Shared Agent"],
+  "Grant thuộc Agent dùng chung và áp dụng cho user được cấp Agent.": [
+    "Grant thuộc Agent dùng chung và áp dụng cho user được cấp Agent.",
+    "The grant belongs to the shared Agent and applies to users assigned to that Agent.",
+  ],
+  "Grant chỉ thuộc account yêu cầu.": [
+    "Grant chỉ thuộc account yêu cầu.",
+    "The grant belongs only to the requesting account.",
+  ],
   "Phê duyệt & cài Codex": ["Phê duyệt & cài Codex", "Approve & install Codex"],
   "Thử cài lại": ["Thử cài lại", "Retry installation"],
   "Yêu cầu từ User": ["Yêu cầu từ User", "User requests"],

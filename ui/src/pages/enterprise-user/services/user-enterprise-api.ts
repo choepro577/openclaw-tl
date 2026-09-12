@@ -48,6 +48,11 @@ export type EnterpriseConversationProject = {
   updatedAt: number;
 };
 
+export type EnterpriseSkillAuthStatus = {
+  connected: boolean;
+  expiresAt?: number;
+};
+
 export function loginEnterpriseUser(
   username: string,
   password: string,
@@ -98,6 +103,37 @@ export function loadEnterpriseUserBootstrapV2(): Promise<EnterpriseUserBootstrap
   return requestEnterpriseUserJson("/api/enterprise/user/v2/bootstrap");
 }
 
+export function loadEnterpriseSkillAuthStatus(
+  sessionKey: string,
+  skillKey: string,
+): Promise<EnterpriseSkillAuthStatus> {
+  const query = new URLSearchParams({ sessionKey, skillKey });
+  return requestEnterpriseUserJson(`/api/enterprise/user/v2/skill-auth?${query}`);
+}
+
+export function loginEnterpriseSkill(
+  sessionKey: string,
+  skillKey: string,
+  fields: Record<string, string>,
+  requestId?: string,
+): Promise<EnterpriseSkillAuthStatus> {
+  return requestEnterpriseUserJson("/api/enterprise/user/v2/skill-auth", {
+    method: "POST",
+    body: JSON.stringify({ sessionKey, skillKey, fields, ...(requestId ? { requestId } : {}) }),
+  });
+}
+
+export async function disconnectEnterpriseSkill(
+  sessionKey: string,
+  skillKey: string,
+  requestId?: string,
+): Promise<void> {
+  await requestEnterpriseUserJson("/api/enterprise/user/v2/skill-auth", {
+    method: "DELETE",
+    body: JSON.stringify({ sessionKey, skillKey, ...(requestId ? { requestId } : {}) }),
+  });
+}
+
 export async function listEnterpriseUserAgentAccessRequests(): Promise<
   EnterpriseUserAgentAccessRequest[]
 > {
@@ -145,6 +181,13 @@ export function openEnterpriseUserConversation(
       ...(options.projectId ? { projectId: options.projectId } : {}),
     }),
   });
+}
+
+export function resolveEnterpriseUserConversationAgentKey(
+  sessionKey: string,
+): Promise<{ agentKey: AgentKey }> {
+  const query = new URLSearchParams({ sessionKey });
+  return requestEnterpriseUserJson(`/api/enterprise/user/v2/conversations/owner?${query}`);
 }
 
 export async function listEnterpriseConversationProjects(): Promise<

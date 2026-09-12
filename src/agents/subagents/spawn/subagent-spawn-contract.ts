@@ -74,16 +74,26 @@ export type SpawnSubagentContext = {
   inheritedToolAllowlist?: string[];
   inheritedToolDenylist?: string[];
   requesterRunId?: string;
+  /** Host-attested reviewer device inherited by child tool approvals. */
+  approvalReviewerDeviceId?: string;
   /** Core-only hook used to bind security authority before a child can execute tools. */
   onBeforeChildDispatch?: (child: {
     childSessionKey: string;
     anticipatedRunId: string;
     targetAgentId: string;
   }) => void;
+  /** Core-only hook called as soon as Gateway resolves the accepted run id. */
+  onChildRunIdResolved?: (child: {
+    childSessionKey: string;
+    anticipatedRunId: string;
+    actualRunId: string;
+    targetAgentId: string;
+  }) => void;
   /** Core-only cleanup hook when a prepared child never reaches a managed terminal run. */
   onChildDispatchAborted?: (child: {
     childSessionKey: string;
     anticipatedRunId: string;
+    actualRunId?: string;
     targetAgentId: string;
   }) => void;
 };

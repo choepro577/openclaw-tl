@@ -81,6 +81,21 @@ type SanitizedSkillEnvOverrides = {
   warnings: string[];
 };
 
+function allowedSensitiveEnvKeys(primaryEnv?: string | null, requiredEnv?: string[] | null) {
+  const keys = new Set<string>();
+  const normalizedPrimaryEnv = primaryEnv?.trim();
+  if (normalizedPrimaryEnv) {
+    keys.add(normalizedPrimaryEnv);
+  }
+  for (const envName of requiredEnv ?? []) {
+    const trimmedEnv = envName.trim();
+    if (trimmedEnv) {
+      keys.add(trimmedEnv);
+    }
+  }
+  return keys;
+}
+
 // Always block skill env overrides that can alter runtime loading or host execution behavior.
 const SKILL_ALWAYS_BLOCKED_ENV_PATTERNS: ReadonlyArray<RegExp> = [/^OPENSSL_CONF$/i];
 
@@ -148,17 +163,8 @@ function applySkillConfigEnvOverrides(params: {
   skillKey: string;
 }) {
   const { updates, skillConfig, primaryEnv, requiredEnv, skillKey } = params;
-  const allowedSensitiveKeys = new Set<string>();
+  const allowedSensitiveKeys = allowedSensitiveEnvKeys(primaryEnv, requiredEnv);
   const normalizedPrimaryEnv = primaryEnv?.trim();
-  if (normalizedPrimaryEnv) {
-    allowedSensitiveKeys.add(normalizedPrimaryEnv);
-  }
-  for (const envName of requiredEnv ?? []) {
-    const trimmedEnv = envName.trim();
-    if (trimmedEnv) {
-      allowedSensitiveKeys.add(trimmedEnv);
-    }
-  }
 
   const pendingOverrides: Record<string, string> = {};
   if (skillConfig.env) {
@@ -207,6 +213,58 @@ function applySkillConfigEnvOverrides(params: {
     updates.push({ key: envKey });
     process.env[envKey] = activeSkillEnvEntries.get(envKey)?.value ?? envValue;
   }
+}
+
+/** Resolve only one skill's filtered environment for a host runner. */
+export function resolveSkillHostEnv(params: {
+  config?: OpenClawConfig;
+  skill: SkillSnapshot["skills"][number];
+}): Record<string, string> {
+  const skillKey = params.skill.skillKey ?? params.skill.name;
+  if (isSkillSecretOwnerUnavailable(skillKey)) {
+    return {};
+  }
+  const skillConfig = resolveSkillConfig(resolveSkillRuntimeConfig(params.config), skillKey);
+  if (!skillConfig || !shouldApplySkillConfigEnvOverrides(skillConfig)) {
+    return {};
+  }
+  const allowedSensitiveKeys = allowedSensitiveEnvKeys(
+    params.skill.primaryEnv,
+    params.skill.requiredEnv,
+  );
+  const overrides: Record<string, string> = {};
+  for (const key of allowedSensitiveKeys) {
+    if (process.env[key]) {
+      overrides[key] = process.env[key]!;
+    }
+  }
+  for (const [rawKey, value] of Object.entries(skillConfig.env ?? {})) {
+    const key = rawKey.trim();
+    if (key && value && overrides[key] === undefined) {
+      overrides[key] = value;
+    }
+  }
+  const primaryEnv = params.skill.primaryEnv?.trim();
+  if (primaryEnv && overrides[primaryEnv] === undefined) {
+    const apiKey =
+      normalizeResolvedSecretInputString({
+        value: skillConfig.apiKey,
+        path: `skills.entries.${skillKey}.apiKey`,
+      }) ?? "";
+    if (apiKey) {
+      overrides[primaryEnv] = apiKey;
+    }
+  }
+  const sanitized = sanitizeSkillEnvOverrides({ overrides, allowedSensitiveKeys });
+  if (sanitized.blocked.length > 0) {
+    log.warn(`Blocked host runner env overrides for ${skillKey}: ${sanitized.blocked.join(", ")}`);
+  }
+  if (sanitized.warnings.length > 0) {
+    log.warn(
+      `Suspicious host runner env overrides for ${skillKey}: ${sanitized.warnings.join(", ")}`,
+    );
+  }
+  return sanitized.allowed;
 }
 
 function shouldApplySkillConfigEnvOverrides(skillConfig: SkillConfig): boolean {

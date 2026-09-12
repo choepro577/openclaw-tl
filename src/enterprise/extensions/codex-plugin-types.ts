@@ -1,5 +1,6 @@
 import type { OpenClawConfig } from "../../config/types.openclaw.js";
 import type { AgentKey } from "../user/user-api-contracts.js";
+import type { EnterpriseExtensionGrantScope } from "./extension-types.js";
 
 /** Canonical identity of one Codex marketplace plugin. */
 export type EnterpriseCodexPluginIdentity = {
@@ -150,7 +151,9 @@ export type EnterpriseCodexPluginMcpOAuthResult = {
 
 export type EnterpriseCodexPluginRequest = EnterpriseCodexPluginIdentity & {
   id: string;
-  requesterAccountId: string;
+  /** Null after the requesting account is removed; the request is retained for audit. */
+  requesterAccountId: string | null;
+  scope: EnterpriseExtensionGrantScope;
   agentKey: AgentKey;
   runtimeAgentId: string;
   requestKind: EnterpriseCodexPluginRequestKind;
@@ -175,13 +178,16 @@ export type EnterpriseCodexPluginGrantState = "active" | "disabled" | "unavailab
 
 export type EnterpriseCodexPluginGrant = EnterpriseCodexPluginIdentity & {
   id: string;
-  accountId: string;
+  /** Null after the requester account is removed; shared scope is agent-owned. */
+  accountId: string | null;
+  scope: EnterpriseExtensionGrantScope;
   agentKey: AgentKey;
   runtimeAgentId: string;
   installedPluginId: string | null;
   capabilitySnapshot: Record<string, unknown>;
   capabilityDigest: string;
-  sourceRequestId: string;
+  sourceRequestId: string | null;
+  approvedByAccountId: string | null;
   state: EnterpriseCodexPluginGrantState;
   revision: number;
   createdAt: number;

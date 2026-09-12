@@ -8,6 +8,7 @@ import {
   resetPluginRuntimeStateForTest,
   setActivePluginRegistry,
 } from "../plugins/runtime.js";
+import { getPluginRuntimeGatewayRequestScope } from "../plugins/runtime/gateway-request-scope.js";
 import {
   createGatewayMethodRegistry,
   createPluginGatewayMethodDescriptor,
@@ -116,6 +117,53 @@ describe("handleGatewayRequest plugin gateway dispatch", () => {
 
     expect(handler).toHaveBeenCalledTimes(1);
     expect(respond).toHaveBeenCalledWith(true, { ok: true, source: "attached" });
+  });
+
+  it("propagates the Gateway context resolver into plugin handlers", async () => {
+    const resolveGatewayContext = vi.fn(() => undefined);
+    const attachedPluginRegistry = createEmptyPluginRegistry();
+    const handler = vi.fn<GatewayRequestHandler>(({ respond }) => {
+      expect(getPluginRuntimeGatewayRequestScope()?.resolveGatewayContext).toBe(
+        resolveGatewayContext,
+      );
+      respond(true, { ok: true });
+    });
+    const registry = createGatewayMethodRegistry(
+      [
+        createPluginGatewayMethodDescriptor({
+          pluginId: "demo",
+          name: "demo.resolver",
+          handler,
+          scope: WRITE_SCOPE,
+        }),
+      ],
+      attachedPluginRegistry,
+    );
+    const respond = vi.fn();
+
+    await handleGatewayRequest({
+      req: { type: "req", id: "proof-resolver", method: "demo.resolver", params: {} },
+      respond,
+      client: {
+        connId: "conn-proof",
+        connect: {
+          role: "operator",
+          scopes: [WRITE_SCOPE],
+          client: { id: "cli", version: "test", platform: "linux", mode: "cli" },
+          minProtocol: 1,
+          maxProtocol: 1,
+        },
+      },
+      isWebchatConnect: () => false,
+      context: {
+        logGateway: { warn: vi.fn() },
+        resolveGatewayContext,
+      } as unknown as Parameters<typeof handleGatewayRequest>[0]["context"],
+      methodRegistry: registry,
+    });
+
+    expect(handler).toHaveBeenCalledTimes(1);
+    expect(respond).toHaveBeenCalledWith(true, { ok: true });
   });
 
   it("fails closed when neither the attached snapshot nor the live registry owns the method", async () => {

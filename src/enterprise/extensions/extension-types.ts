@@ -59,9 +59,38 @@ export type EnterprisePluginRequestState =
   | "cancelled"
   | "install_failed";
 
+/**
+ * Ownership boundary for an installed native plugin. Existing account grants
+ * stay private to their account; a shared-agent grant is opt-in and is
+ * resolved only for that canonical runtime agent.
+ */
+export type EnterpriseExtensionGrantScope = "account" | "shared_agent";
+
+export function normalizeEnterpriseExtensionGrantTarget(input: {
+  scope?: EnterpriseExtensionGrantScope | null;
+  agentKey?: AgentKey | null;
+  runtimeAgentId?: string | null;
+}): {
+  scope: EnterpriseExtensionGrantScope;
+  agentKey: AgentKey | null;
+  runtimeAgentId: string | null;
+} {
+  const scope = input.scope ?? "account";
+  const agentKey = input.agentKey ?? null;
+  const runtimeAgentId = input.runtimeAgentId?.trim() || null;
+  if (scope === "shared_agent" && (!agentKey?.startsWith("shared:") || !runtimeAgentId)) {
+    throw new Error("EXTENSION_GRANT_SCOPE_INVALID");
+  }
+  return { scope, agentKey, runtimeAgentId };
+}
+
 export type EnterprisePluginRequest = {
   id: string;
-  requesterAccountId: string;
+  /** Null after the requesting account is removed; the request is retained for audit. */
+  requesterAccountId: string | null;
+  scope: EnterpriseExtensionGrantScope;
+  agentKey: AgentKey | null;
+  runtimeAgentId: string | null;
   packageName: string;
   packageFamily: "code_plugin" | "bundle_plugin";
   exactVersion: string;
@@ -90,13 +119,18 @@ export type EnterprisePluginGrantState =
 
 export type EnterpriseAccountPluginGrant = {
   id: string;
-  accountId: string;
+  /** Null after the requester account is removed; shared scope is agent-owned. */
+  accountId: string | null;
+  scope: EnterpriseExtensionGrantScope;
+  agentKey: AgentKey | null;
+  runtimeAgentId: string | null;
   pluginId: string;
   exactVersion: string;
   integrity: string;
   capabilityDigest: string;
   approvedTools: string[];
-  sourceRequestId: string;
+  sourceRequestId: string | null;
+  approvedByAccountId: string | null;
   state: EnterprisePluginGrantState;
   revision: number;
   createdAt: number;

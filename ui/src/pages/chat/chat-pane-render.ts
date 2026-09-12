@@ -495,6 +495,8 @@ export class ChatPane extends ChatPaneLayoutRender {
         : undefined,
       backgroundTasks: catalogKey ? undefined : backgroundTasks,
       delegationTasks: catalogKey ? [] : (backgroundTasks.tasks ?? []),
+      delegationTaskToolMessages: catalogKey ? undefined : backgroundTasks.taskToolMessages,
+      skillAuthRequest: catalogKey ? undefined : state.pendingSkillAuthRequest,
       ...this.suggestionChatProps(state.connected, selectedSessionArchived, multiIdentity),
       pullRequests: enterpriseUserPresentation
         ? []
@@ -616,6 +618,14 @@ export class ChatPane extends ChatPaneLayoutRender {
                 followUpModeOverride ? { followUpMode: followUpModeOverride } : undefined,
                 submissionAction,
               ),
+      onSkillAuthenticated: enterpriseUserPresentation
+        ? (request) => {
+            if (state.pendingSkillAuthRequest?.requestId === request.requestId) {
+              state.pendingSkillAuthRequest = undefined;
+              state.requestUpdate?.();
+            }
+          }
+        : undefined,
       onCompact: enterpriseUserPresentation ? undefined : sessionActionCallbacks.onCompact,
       // Checkpoint deep-link carries the archived filter so the row stays findable.
       onOpenSessionCheckpoints: enterpriseUserPresentation

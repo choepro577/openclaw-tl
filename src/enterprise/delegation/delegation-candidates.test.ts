@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -10,6 +10,7 @@ import {
   updateEnterpriseAccount,
 } from "../accounts/account-store.js";
 import { sharedAgentResourceKey } from "../entitlements/resource-keys.js";
+import { resolveEnterpriseSharedAgentSkillSnapshot } from "../isolation/enterprise-agent-capabilities.js";
 import { listEnterpriseDelegationCandidates } from "./delegation-candidates.js";
 import {
   writeEnterpriseDelegationOverride,
@@ -24,7 +25,10 @@ function stateOptions() {
   return { path: join(directory, "openclaw.sqlite") };
 }
 
-function configWithProfile(status: "draft" | "active" | "disabled" = "active"): OpenClawConfig {
+function configWithProfile(
+  status: "draft" | "active" | "disabled" = "active",
+  options: { skills?: string[]; workspaceDir?: string } = {},
+): OpenClawConfig {
   return {
     agents: {
       entries: {
@@ -43,6 +47,8 @@ function configWithProfile(status: "draft" | "active" | "disabled" = "active"): 
             avoidWhen: ["Soạn email chào mừng nhân viên mới"],
             requiredInputs: [],
           },
+          ...(options.skills ? { skills: options.skills } : {}),
+          ...(options.workspaceDir ? { workspace: options.workspaceDir } : {}),
         },
       },
     },
@@ -233,6 +239,116 @@ describe("enterprise delegation candidate read model", () => {
       effective: false,
       routable: false,
       reasonCodes: expect.arrayContaining(["explicit_deny"]),
+    });
+  });
+
+  it("changes the capability revision when target tools, skills, or host policy change", () => {
+    const options = stateOptions();
+    const account = createEnterpriseAccount(
+      {
+        username: "revision.employee",
+        displayName: "Revision Employee",
+        passwordHash: "test-hash",
+        role: "employee",
+        initialEntitlements: [
+          {
+            resourceType: "agent",
+            resourceId: sharedAgentResourceKey("contracts"),
+            effect: "allow",
+          },
+        ],
+      },
+      options,
+    );
+    const config = configWithProfile();
+    const revision = () =>
+      listEnterpriseDelegationCandidates(config, account, options)[0]!.profileRevision;
+    const initial = revision();
+    config.agents!.entries!.contracts!.tools = { profile: "minimal", allow: ["read"] };
+    const toolsChanged = revision();
+    expect(toolsChanged).not.toBe(initial);
+    config.agents!.entries!.contracts!.skills = ["contracts-skill"];
+    const skillsChanged = revision();
+    expect(skillsChanged).not.toBe(toolsChanged);
+    config.tools = { deny: ["web_search"] };
+    expect(revision()).not.toBe(skillsChanged);
+  });
+
+  it("reuses the canonical skill snapshot and refreshes it after content changes", () => {
+    const options = stateOptions();
+    const workspaceDir = mkdtempSync(join(tmpdir(), "openclaw-enterprise-candidate-skills-"));
+    tempDirectories.push(workspaceDir);
+    const skillDir = join(workspaceDir, "skills", "contracts-skill");
+    mkdirSync(skillDir, { recursive: true });
+    const skillPath = join(skillDir, "SKILL.md");
+    writeFileSync(
+      skillPath,
+      [
+        "---",
+        "name: contracts-skill",
+        "description: Contract test skill",
+        "---",
+        "Initial content",
+        "",
+      ].join("\n"),
+    );
+    const account = createEnterpriseAccount(
+      {
+        username: "snapshot.employee",
+        displayName: "Snapshot Employee",
+        passwordHash: "test-hash",
+        role: "employee",
+        initialEntitlements: [
+          {
+            resourceType: "agent",
+            resourceId: sharedAgentResourceKey("contracts"),
+            effect: "allow",
+          },
+        ],
+      },
+      options,
+    );
+    const config = configWithProfile("active", {
+      skills: ["contracts-skill"],
+      workspaceDir,
+    });
+
+    const first = listEnterpriseDelegationCandidates(config, account, options)[0]!;
+    const firstSnapshot = resolveEnterpriseSharedAgentSkillSnapshot({
+      config,
+      agentId: "contracts",
+    })!;
+    const second = listEnterpriseDelegationCandidates(config, account, options)[0]!;
+    const secondSnapshot = resolveEnterpriseSharedAgentSkillSnapshot({
+      config,
+      agentId: "contracts",
+    })!;
+    expect(second.profileRevision).toBe(first.profileRevision);
+    expect(secondSnapshot.snapshot).toBe(firstSnapshot.snapshot);
+    expect(secondSnapshot.snapshot.skills.map((skill) => skill.name)).toContain("contracts-skill");
+
+    writeFileSync(
+      skillPath,
+      [
+        "---",
+        "name: contracts-skill",
+        "description: Contract test skill",
+        "---",
+        "Changed content",
+        "",
+      ].join("\n"),
+    );
+    const changed = resolveEnterpriseSharedAgentSkillSnapshot({
+      config,
+      agentId: "contracts",
+    })!;
+    expect(changed.snapshot).not.toBe(secondSnapshot.snapshot);
+
+    updateEnterpriseAccount(account.id, { enabled: false }, options);
+    const disabled = getEnterpriseAccountById(account.id, options)!;
+    expect(listEnterpriseDelegationCandidates(config, disabled, options)[0]).toMatchObject({
+      effective: false,
+      routable: false,
     });
   });
 });

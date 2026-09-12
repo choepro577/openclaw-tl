@@ -15,6 +15,7 @@ import { createOpenClawCodingTools } from "../../agent-tools.js";
 import { getChannelAgentToolMeta } from "../../channel-tools.js";
 import type { CodeModeSkill } from "../../code-mode-skills.js";
 import { resolveConversationCapabilityProfile } from "../../conversation-capability-profile.js";
+import { assertEnterpriseToolSurface } from "../../enterprise-tool-surface.js";
 import {
   isLocalModelLeanEnabled,
   resolveLocalModelLeanPreserveToolNames,
@@ -357,6 +358,16 @@ export function prepareEmbeddedAttemptToolBase(params: {
           cronCreatorToolAllowlistCaptureRef,
           authProfileStore: attempt.authProfileStore,
           recordToolPrepStage: params.markCoreToolStage,
+          onToolSurfaceFilter: (diagnostic) => {
+            if (!log.isEnabled("debug")) {
+              return;
+            }
+            log.debug(
+              `agent tool surface ${diagnostic.stage} revision=${diagnostic.capabilityRevision ?? "none"}: ` +
+                `${diagnostic.beforeCount}->${diagnostic.afterCount} before=[${diagnostic.beforeNames.join(",")}] ` +
+                `after=[${diagnostic.afterNames.join(",")}]`,
+            );
+          },
           onToolOutcome: attempt.onToolOutcome,
           isTurnTainted: attempt.isTurnTainted,
           allocateToolOutcomeOrdinal: attempt.allocateToolOutcomeOrdinal,
@@ -376,6 +387,11 @@ export function prepareEmbeddedAttemptToolBase(params: {
           toolMeta: (tool) => getPluginToolMeta(tool),
         });
         params.markCoreToolStage("attempt:tools-allow");
+        if (log.isEnabled("debug")) {
+          log.debug(
+            `agent tool surface attempt:tools-allow: ${boundTools.length}->${filteredTools.length}`,
+          );
+        }
         return filteredTools;
       })();
   const toolsRaw =
@@ -384,6 +400,18 @@ export function prepareEmbeddedAttemptToolBase(params: {
       : attempt.forceRestartSafeTools
         ? constructedToolsRaw.filter((tool) => isAgentToolRestartSafe(tool, restartSafetyOptions))
         : constructedToolsRaw;
+  if (
+    !attempt.disableTools &&
+    !attempt.forceRestartSafeTools &&
+    !attempt.forceCodeModeReconciliationTools
+  ) {
+    assertEnterpriseToolSurface({
+      config: attempt.config,
+      agentId: attempt.agentId,
+      tools: toolsRaw,
+      boundary: "embedded-attempt:after-bind-and-allowlist",
+    });
+  }
   if (attempt.forceRestartSafeTools) {
     log.info(
       `restart-safe recovery tool policy retained ${toolsRaw.length}/${constructedToolsRaw.length} concrete tools`,

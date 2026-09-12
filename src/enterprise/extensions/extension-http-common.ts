@@ -14,12 +14,23 @@ import {
   hashEnterpriseExtensionRequest,
 } from "./extension-idempotency-store.js";
 import { EnterpriseExtensionError } from "./extension-service.js";
+import type { EnterpriseExtensionGrantScope } from "./extension-types.js";
 
 export function validAgentKey(value: string | null): AgentKey {
   if (value === "personal" || value?.startsWith("shared:")) {
     return value as AgentKey;
   }
   throw new EnterpriseExtensionError("AGENT_KEY_INVALID", 422);
+}
+
+export function validGrantScope(value: string | null | undefined): EnterpriseExtensionGrantScope {
+  if (value === undefined || value === null || value === "account") {
+    return "account";
+  }
+  if (value === "shared_agent") {
+    return value;
+  }
+  throw new EnterpriseExtensionError("GRANT_SCOPE_INVALID", 422);
 }
 
 export function stringField(body: JsonObject, key: string, max = 512): string {

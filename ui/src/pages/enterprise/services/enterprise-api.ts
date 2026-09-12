@@ -33,6 +33,8 @@ import type {
   EnterpriseUserCapabilities,
 } from "./enterprise-api-types.ts";
 
+type EnterpriseExtensionGrantScope = "account" | "shared_agent";
+
 export type * from "./enterprise-api-types.ts";
 
 const csrfTokens: Partial<Record<EnterprisePortalAudience, string>> = {};
@@ -824,7 +826,10 @@ export function loadAdminCodexPluginRequest(
   );
 }
 
-export function approveAdminCodexPluginRequest(request: EnterpriseCodexPluginRequest): Promise<{
+export function approveAdminCodexPluginRequest(
+  request: EnterpriseCodexPluginRequest,
+  scope: EnterpriseExtensionGrantScope = request.scope,
+): Promise<{
   request: EnterpriseCodexPluginRequest;
   grant: EnterpriseCodexPluginGrant | null;
   authRequired?: boolean;
@@ -837,7 +842,7 @@ export function approveAdminCodexPluginRequest(request: EnterpriseCodexPluginReq
     {
       method: "POST",
       headers: adminIdempotencyHeaders(),
-      body: JSON.stringify({ baseRevision: request.revision }),
+      body: JSON.stringify({ baseRevision: request.revision, scope }),
     },
     "admin",
   );
@@ -866,7 +871,10 @@ export function loadAdminPluginRequest(id: string): Promise<EnterprisePluginRequ
   );
 }
 
-export function approveAdminPluginRequest(request: EnterprisePluginRequest): Promise<{
+export function approveAdminPluginRequest(
+  request: EnterprisePluginRequest,
+  scope: EnterpriseExtensionGrantScope = request.scope,
+): Promise<{
   request: EnterprisePluginRequest;
   grant: EnterprisePluginGrant | null;
   restartRequired: boolean;
@@ -876,7 +884,7 @@ export function approveAdminPluginRequest(request: EnterprisePluginRequest): Pro
     {
       method: "POST",
       headers: adminIdempotencyHeaders(),
-      body: JSON.stringify({ baseRevision: request.revision }),
+      body: JSON.stringify({ baseRevision: request.revision, scope }),
     },
     "admin",
   );

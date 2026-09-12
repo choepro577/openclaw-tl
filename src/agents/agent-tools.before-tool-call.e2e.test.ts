@@ -8,8 +8,16 @@ import os from "node:os";
 import path from "node:path";
 import { createRequireRecord } from "openclaw/plugin-sdk/test-fixtures";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { ConnectErrorDetailCodes } from "../../packages/gateway-protocol/src/connect-error-details.js";
 import type { OpenClawConfig } from "../config/types.openclaw.js";
+import {
+  createEnterpriseAccount,
+  getEnterpriseAccountById,
+} from "../enterprise/accounts/account-store.js";
+import { sharedAgentResourceKey } from "../enterprise/entitlements/resource-keys.js";
+import { resolveEnterpriseSharedAgentCapabilities } from "../enterprise/isolation/enterprise-agent-capabilities.js";
 import { GatewayClientRequestError } from "../gateway/client.js";
+import { markGatewayRequestScopedRuntimeConfig } from "../gateway/request-runtime-config.js";
 import {
   onInternalDiagnosticEvent,
   onDiagnosticEvent,
@@ -41,6 +49,7 @@ import { setActivePluginRegistry } from "../plugins/runtime.js";
 import { setPluginToolMeta } from "../plugins/tools.js";
 import { consumeRunSkillUsage } from "../skills/runtime/run-usage.js";
 import { createCanonicalFixtureSkill } from "../skills/test-support/test-helpers.js";
+import { closeOpenClawStateDatabaseForTest } from "../state/openclaw-state-db.js";
 import { createChannelTestPluginBase, createTestRegistry } from "../test-utils/channel-plugins.js";
 import {
   getBeforeToolCallFailureDisposition,
@@ -51,6 +60,10 @@ import {
 import { createOpenClawCodingTools } from "./agent-tools.js";
 import { createWriteTool } from "./sessions/index.js";
 import type { AnyAgentTool } from "./tools/common.js";
+import {
+  getGatewayToolCallerIdentity,
+  withGatewayToolCallerIdentity,
+} from "./tools/gateway-caller-context.js";
 import { callGatewayTool } from "./tools/gateway.js";
 
 const CRITICAL_THRESHOLD = 20;
@@ -2086,6 +2099,149 @@ describe("before_tool_call requireApproval handling", () => {
     setActivePluginRegistry(createEmptyPluginRegistry());
   });
 
+  async function createEnterpriseSharedApprovalFixture() {
+    const rootDir = await fs.mkdtemp(path.join(os.tmpdir(), "openclaw-shared-approval-"));
+    const workspaceDir = path.join(rootDir, "workspace");
+    const skillDir = path.join(workspaceDir, "skills", "approval-skill");
+    await fs.mkdir(skillDir, { recursive: true });
+    await fs.writeFile(
+      path.join(skillDir, "SKILL.md"),
+      `---
+name: approval-skill
+description: Shared approval fixture.
+metadata: ${JSON.stringify({
+        openclaw: {
+          scriptRuntime: {
+            entrypoints: {
+              lookup: {
+                path: "scripts/lookup",
+                kind: "operation",
+                routerOperation: "router_tool_search",
+                readOperations: ["router_tool_search", "get_data"],
+                writeOperations: ["set_data"],
+                unknownRisk: "approval",
+              },
+            },
+          },
+        },
+      })}
+---
+`,
+    );
+    const stateOptions = { path: path.join(rootDir, "state.sqlite") };
+    const account = createEnterpriseAccount(
+      {
+        username: "shared.approval",
+        displayName: "Shared Approval",
+        passwordHash: "test-hash",
+        role: "employee",
+        initialEntitlements: [
+          {
+            resourceType: "agent",
+            resourceId: sharedAgentResourceKey("contracts"),
+            effect: "allow",
+          },
+        ],
+      },
+      stateOptions,
+    );
+    const baseConfig: OpenClawConfig = {
+      agents: {
+        entries: {
+          contracts: {
+            workspace: workspaceDir,
+            skills: ["approval-skill"],
+            tools: { profile: "minimal", allow: ["skill_script"] },
+          },
+        },
+      },
+    };
+    const config = markGatewayRequestScopedRuntimeConfig(baseConfig, {
+      enterpriseUser: {
+        accountId: account.id,
+        username: account.username,
+        displayName: account.displayName,
+        personalAgentId: `personal-${account.id}`,
+        personalAgentTemplateId: `personal-template-${account.id}`,
+      },
+      enterpriseCapabilities: {
+        resolve(agentId) {
+          const current = getEnterpriseAccountById(account.id, stateOptions);
+          if (!current) {
+            return {
+              allowed: false,
+              accountId: account.id,
+              agentId,
+              reason: "account_disabled" as const,
+            };
+          }
+          return resolveEnterpriseSharedAgentCapabilities({
+            config,
+            account: current,
+            agentId,
+            stateOptions,
+          });
+        },
+      },
+    });
+    return { config, rootDir, stateOptions };
+  }
+
+  it("routes Shared Agent write and unknown skill operations through the common owner and reviewer", async () => {
+    const fixture = await createEnterpriseSharedApprovalFixture();
+    let ownerAtRequest: string | undefined;
+    let requestCount = 0;
+    mockCallGateway.mockImplementation(async (method) => {
+      if (method === "plugin.approval.request") {
+        ownerAtRequest = getGatewayToolCallerIdentity()?.approvalOwnerPluginId;
+        requestCount += 1;
+        return { id: `shared-approval-${requestCount}`, status: "accepted" };
+      }
+      return { id: `shared-approval-${requestCount}`, decision: "allow-once" };
+    });
+    try {
+      for (const operation of ["set_data", "unclassified_operation"]) {
+        const result = await withGatewayToolCallerIdentity(
+          { agentId: "contracts", sessionKey: "shared-approval-session" },
+          async () =>
+            await runBeforeToolCallHook({
+              toolName: "skill_script",
+              params: {
+                skill: "approval-skill",
+                entrypoint: "lookup",
+                operation,
+              },
+              toolCallId: `shared-approval-${operation}`,
+              ctx: {
+                agentId: "contracts",
+                config: fixture.config,
+                sessionKey: "shared-approval-session",
+                runId: "shared-approval-run",
+                trigger: "user",
+                approvalReviewerDeviceId: "parent-reviewer-device",
+              },
+            }),
+        );
+        expect(result).toMatchObject({ blocked: false, approvalResolution: "allow-once" });
+      }
+      expect(requestCount).toBe(2);
+      expect(ownerAtRequest).toBe("enterprise-delegation");
+      for (const call of mockCallGateway.mock.calls.filter(
+        ([method]) => method === "plugin.approval.request",
+      )) {
+        const request = call[2] as Record<string, unknown>;
+        // The Gateway derives the owner from the host-bound approval context;
+        // the public payload intentionally does not carry a caller-selected
+        // plugin id that could be spoofed.
+        expect(request).not.toHaveProperty("pluginId");
+        expect(request.approvalReviewerDeviceIds).toEqual(["parent-reviewer-device"]);
+      }
+    } finally {
+      closeOpenClawStateDatabaseForTest();
+      await fs.rm(fixture.rootDir, { recursive: true, force: true });
+    }
+  });
+
   async function runAbortDuringApprovalWait(options?: {
     abortReason?: unknown;
     onResolution?: (decision: PluginApprovalResolution) => void | Promise<void>;
@@ -2741,6 +2897,18 @@ describe("before_tool_call requireApproval handling", () => {
         message: "approval service unavailable",
       }),
       "Plugin approval required (gateway unavailable)",
+    ],
+    [
+      "identifies Gateway Enterprise session rejection as transport failure",
+      new GatewayClientRequestError({
+        code: "INVALID_REQUEST",
+        message: "unauthorized",
+        details: {
+          code: ConnectErrorDetailCodes.AUTH_UNAUTHORIZED,
+          authReason: "enterprise_session_invalid",
+        },
+      }),
+      "Plugin approval transport authentication failed before the approval request reached the approval manager; the operation was not executed. This is a Gateway session problem, not a business-system login failure.",
     ],
   ])("%s", async (_label, error, expectedReason) => {
     hookRunner.runBeforeToolCall.mockResolvedValue({

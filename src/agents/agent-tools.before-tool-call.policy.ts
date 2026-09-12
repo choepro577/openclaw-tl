@@ -1,6 +1,6 @@
 import {
-  consumeEnterpriseDelegationMutationApproval,
   evaluateEnterpriseDelegationToolCall,
+  isEnterpriseSharedAgentSession,
   isEnterpriseDelegationChildSession,
 } from "../enterprise/delegation/delegation-mutation-guard.js";
 /**
@@ -160,6 +160,11 @@ export async function runBeforeToolCallHook(args: {
       childRunId: args.ctx?.runId,
       childAgentId: args.ctx?.agentId,
     });
+    const isEnterpriseSharedAgent = isEnterpriseSharedAgentSession({
+      config: args.ctx?.config,
+      agentId: args.ctx?.agentId,
+    });
+    const isEnterpriseCapabilityRun = isDelegatedChild || isEnterpriseSharedAgent;
     const initialCorePolicyResult = await resolveSkillWorkshopToolApproval({
       toolName,
       toolParams: normalizedParams,
@@ -186,7 +191,7 @@ export async function runBeforeToolCallHook(args: {
     }
     if (
       !initialCorePolicyResult &&
-      !isDelegatedChild &&
+      !isEnterpriseCapabilityRun &&
       !shouldRunTrustedPolicies &&
       !hasBeforeToolCallHooks
     ) {
@@ -224,7 +229,7 @@ export async function runBeforeToolCallHook(args: {
     const resolveEnterpriseDelegationGuard = async (
       candidateParams: unknown,
     ): Promise<HookOutcome | undefined> => {
-      if (!isDelegatedChild) {
+      if (!isEnterpriseCapabilityRun) {
         return undefined;
       }
       if (!args.ctx?.config) {
@@ -236,22 +241,17 @@ export async function runBeforeToolCallHook(args: {
           params: candidateParams,
         };
       }
-      const recordParams = isPlainObject(candidateParams) ? candidateParams : {};
       const decision = evaluateEnterpriseDelegationToolCall({
         config: args.ctx.config,
         childSessionKey: args.ctx.sessionKey,
         childRunId: args.ctx.runId,
         childAgentId: args.ctx.agentId,
         toolName,
-        toolCallId: args.toolCallId,
-        toolParams: recordParams,
-        skillsSnapshot: args.ctx.skillsSnapshot,
+        toolParams: isPlainObject(candidateParams) ? candidateParams : {},
+        ...(args.toolCallId ? { toolCallId: args.toolCallId } : {}),
+        ...(args.ctx?.skillsSnapshot ? { skillsSnapshot: args.ctx.skillsSnapshot } : {}),
       });
-      if (
-        decision.kind === "not_delegated_child" ||
-        decision.kind === "allow_read_only" ||
-        decision.kind === "allow_granted_skill_script"
-      ) {
+      if (decision.kind === "not_delegated_child" || decision.kind === "allow") {
         return undefined;
       }
       if (decision.kind === "block") {
@@ -263,20 +263,15 @@ export async function runBeforeToolCallHook(args: {
           params: candidateParams,
         };
       }
-      if (decision.kind !== "require_approval") {
-        return undefined;
-      }
       const approvalOutcome = await resolveBeforeToolCallApprovalOutcome({
         result: {
           requireApproval: {
             title: decision.title,
             description: decision.description,
-            severity: "warning",
             timeoutMs: decision.timeoutMs,
-            timeoutReason: "Hết thời gian xác nhận; thao tác của Agent chuyên môn đã bị từ chối.",
             allowedDecisions: decision.allowedDecisions,
             pluginId: "enterprise-delegation",
-            onResolution: decision.onResolution,
+            timeoutReason: "Thao tác bị hủy vì yêu cầu xác nhận đã hết thời gian chờ.",
           },
         },
         approvalMode: args.approvalMode,
@@ -286,31 +281,36 @@ export async function runBeforeToolCallHook(args: {
         signal: args.signal,
         baseParams: candidateParams,
       });
-      if (!approvalOutcome || approvalOutcome.blocked) {
+      if (!approvalOutcome) {
+        return undefined;
+      }
+      if (approvalOutcome.blocked || approvalOutcome.deferredApproval) {
         return approvalOutcome;
       }
-      if (approvalOutcome.deferredApproval) {
-        return approvalOutcome;
-      }
-      const approvedParams = isPlainObject(approvalOutcome.params) ? approvalOutcome.params : {};
-      const consumed = consumeEnterpriseDelegationMutationApproval({
-        token: decision.token,
+      const approvedParams = approvalOutcome.params;
+      const revalidated = evaluateEnterpriseDelegationToolCall({
         config: args.ctx.config,
         childSessionKey: args.ctx.sessionKey,
         childRunId: args.ctx.runId,
         childAgentId: args.ctx.agentId,
         toolName,
-        toolCallId: args.toolCallId,
-        toolParams: approvedParams,
-        resolution: approvalOutcome.approvalResolution,
+        toolParams: isPlainObject(approvedParams) ? approvedParams : {},
+        ...(args.toolCallId ? { toolCallId: args.toolCallId } : {}),
+        ...(args.ctx?.skillsSnapshot ? { skillsSnapshot: args.ctx.skillsSnapshot } : {}),
+        ...(approvalOutcome.approvalResolution
+          ? { approvalResolution: approvalOutcome.approvalResolution }
+          : {}),
       });
-      if (!consumed.ok) {
+      if (revalidated.kind !== "allow") {
         return {
           blocked: true,
           kind: "veto",
-          deniedReason: "plugin-approval",
-          reason: consumed.reason,
-          params: candidateParams,
+          deniedReason: "plugin-before-tool-call",
+          reason:
+            revalidated.kind === "block"
+              ? revalidated.reason
+              : "delegation_approval_not_revalidated",
+          params: approvedParams,
         };
       }
       return approvalOutcome;

@@ -1755,6 +1755,123 @@ describe("runCodexAppServerAttempt", () => {
     ]);
   });
 
+  it("routes a granted skill marker while keeping the generic runner deferred", async () => {
+    testing.setOpenClawCodingToolsFactoryForTests(() => [
+      createRuntimeDynamicTool("read"),
+      createRuntimeDynamicTool("skill_script"),
+    ]);
+    const { sessionFile, workspaceDir } = createRunPaths();
+    const harness = createStartedThreadHarness(async (method) => {
+      if (method === "config/read") {
+        return { config: {}, layers: [] };
+      }
+      if (method === "configRequirements/read") {
+        return { requirements: null };
+      }
+      if (method === "mcpServerStatus/list") {
+        return { data: [], nextCursor: null };
+      }
+      return undefined;
+    });
+    const params = createParams(sessionFile, workspaceDir, {
+      prompt: "Run the qa-shared-acceptance-skill marker.",
+    });
+    setCodexTestModelSupportsTools(params, true);
+    params.toolsAllow = ["read", "skill_script"];
+    params.runtimePlan = createCodexRuntimePlanFixture();
+    params.skillsSnapshot = {
+      prompt: [
+        "<available_skills>",
+        "  <skill>",
+        "    <name>qa-shared-acceptance-skill</name>",
+        "    <description>Read-only acceptance marker.</description>",
+        "  </skill>",
+        "  <skill>",
+        "    <name>workspace-script-skill</name>",
+        "    <description>Workspace-only script metadata.</description>",
+        "  </skill>",
+        "</available_skills>",
+      ].join("\n"),
+      skills: [
+        {
+          name: "qa-shared-acceptance-skill",
+          skillKey: "qa-shared-acceptance-skill",
+          source: "openclaw-managed",
+          scriptRuntime: {
+            entrypoints: {
+              marker: {
+                path: "scripts/qa_marker",
+                kind: "fixed",
+                risk: "read",
+                timeoutMs: 30_000,
+              },
+            },
+          },
+        },
+        {
+          name: "hidden-script-skill",
+          skillKey: "hidden-script-skill",
+          source: "openclaw-managed",
+          scriptRuntime: {
+            entrypoints: {
+              hidden: {
+                path: "scripts/hidden",
+                kind: "fixed",
+                risk: "read",
+              },
+            },
+          },
+        },
+        {
+          name: "workspace-script-skill",
+          skillKey: "workspace-script-skill",
+          source: "openclaw-workspace",
+          scriptRuntime: {
+            entrypoints: {
+              workspace: {
+                path: "scripts/workspace",
+                kind: "fixed",
+                risk: "read",
+              },
+            },
+          },
+        },
+      ],
+      capabilityRevision: "marker-revision",
+    };
+
+    const run = runCodexAppServerAttempt(params);
+    await harness.waitForMethod("turn/start");
+    const threadStart = harness.requests.find((request) => request.method === "thread/start");
+    const threadStartParams = threadStart?.params as { dynamicTools?: CodexDynamicToolSpec[] };
+    const dynamicToolSpecs = flattenSpecsWithNamespace(threadStartParams.dynamicTools ?? []);
+    expect(dynamicToolSpecs.map((tool) => tool.name)).toEqual(
+      expect.arrayContaining(["read", "skill_script"]),
+    );
+    const runnerSpec = dynamicToolSpecs.find((tool) => tool.name === "skill_script");
+    expect(runnerSpec?.namespace).toBe("openclaw");
+    expect(runnerSpec?.deferLoading).toBe(true);
+
+    const turnStart = harness.requests.find((request) => request.method === "turn/start");
+    const turnStartParams = turnStart?.params as {
+      collaborationMode?: { settings?: { developer_instructions?: string | null } };
+    };
+    const collaborationInstructions =
+      turnStartParams.collaborationMode?.settings?.developer_instructions ?? "";
+    expect(collaborationInstructions).toContain("## OpenClaw Skill Script Routing");
+    expect(collaborationInstructions).toContain(
+      'skill="qa-shared-acceptance-skill" entrypoint="marker"',
+    );
+    expect(collaborationInstructions).toContain("tools.openclaw__skill_script");
+    expect(collaborationInstructions).toContain("first use `read` to load that skill's SKILL.md");
+    expect(collaborationInstructions).not.toContain("scripts/qa_marker");
+    expect(collaborationInstructions).not.toContain('skill="hidden-script-skill"');
+    expect(collaborationInstructions).not.toContain('skill="workspace-script-skill"');
+
+    await harness.completeTurn({ threadId: "thread-1", turnId: "turn-1" });
+    await run;
+  });
+
   it("emits TUI-compatible tool events for Codex dynamic tool calls", async () => {
     const sessionFile = path.join(tempDir, "session-tool-events.jsonl");
     const workspaceDir = path.join(tempDir, "workspace-tool-events");

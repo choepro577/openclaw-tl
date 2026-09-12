@@ -750,6 +750,13 @@
     "enterprise_delegate": {
       "emoji": "🤝",
       "title": "Enterprise Delegation",
+      "detailKeys": [
+        "decisionId"
+      ]
+    },
+    "skill_script": {
+      "emoji": "🧩",
+      "title": "Skill Script",
       "detailKeys": []
     },
     "enterprise_knowledge_search": {

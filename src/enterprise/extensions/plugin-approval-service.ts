@@ -94,12 +94,16 @@ function activateGrantIfLoaded(
   ].toSorted();
   const grant = upsertEnterprisePluginGrant({
     accountId: request.requesterAccountId,
+    scope: request.scope,
+    agentKey: request.agentKey,
+    runtimeAgentId: request.runtimeAgentId,
     pluginId: plugin.id,
     exactVersion: request.exactVersion,
     integrity: request.integrity,
     capabilityDigest: request.capabilityDigest,
     approvedTools,
     sourceRequestId: request.id,
+    approvedByAccountId: request.reviewerAccountId,
     state: "active",
   });
   const available = transitionEnterprisePluginRequest({
@@ -118,6 +122,7 @@ export async function approveEnterprisePluginRequest(input: {
   reviewer: EnterpriseAccount;
   requestId: string;
   baseRevision: number;
+  scope?: EnterprisePluginRequest["scope"];
   install: (params: Record<string, unknown>) => Promise<unknown>;
 }): Promise<{
   request: EnterprisePluginRequest;
@@ -177,6 +182,7 @@ export async function approveEnterprisePluginRequest(input: {
     reviewerAccountId: input.reviewer.id,
     installedPluginId: pluginId ?? null,
     safeErrorCode: null,
+    ...(input.scope ? { scope: input.scope } : {}),
   });
   let restartRequired = false;
   try {
@@ -238,9 +244,11 @@ export function reconcileEnterprisePluginRequest(
     throw new EnterpriseExtensionError("PLUGIN_REQUEST_NOT_FOUND", 404);
   }
   if (request.state !== "approving" || !request.installedPluginId) {
-    const grant = listEnterpriseAccountPluginGrants(request.requesterAccountId).find(
-      (item) => item.sourceRequestId === request.id,
-    );
+    const grant = request.requesterAccountId
+      ? listEnterpriseAccountPluginGrants(request.requesterAccountId).find(
+          (item) => item.sourceRequestId === request.id,
+        )
+      : undefined;
     return { request, grant: grant ?? null };
   }
   return activateGrantIfLoaded(request, request.installedPluginId, registry);

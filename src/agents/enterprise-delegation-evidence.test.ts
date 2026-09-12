@@ -4,6 +4,7 @@ import type { EnterpriseEvidenceTransfer } from "../enterprise/knowledge/evidenc
 import { prepareSystemAgentRunAdmission } from "./admitted-run-context.js";
 import type { EmbeddedRunAttemptParams } from "./embedded-agent-runner/run/types.js";
 import {
+  confirmEnterpriseDelegationEvidenceRun,
   registerEnterpriseDelegationEvidence,
   revokeEnterpriseDelegationEvidence,
   withEnterpriseDelegationEvidence,
@@ -56,9 +57,12 @@ beforeEach(() => {
     sessionKey: childKey,
   });
 });
-afterEach(() => revokeEnterpriseDelegationEvidence(childKey, "child"));
+afterEach(() => {
+  revokeEnterpriseDelegationEvidence(childKey, "child");
+  revokeEnterpriseDelegationEvidence(childKey, "gateway-child");
+});
 
-async function fixture() {
+async function fixture(provisionalRunId = false) {
   const admission = prepareSystemAgentRunAdmission(config, "child", "finance", "test");
   const admittedRunContext = await admission.admit("embedded");
   const packet: EnterpriseEvidenceTransfer = {
@@ -75,6 +79,7 @@ async function fixture() {
     packet,
     decision,
     config,
+    provisionalRunId,
   });
   const authStorage = AuthStorage.inMemory();
   const params: EmbeddedRunAttemptParams = {
@@ -113,6 +118,28 @@ const destination = {
 };
 
 describe("exact-child Enterprise evidence leases", () => {
+  it("binds a provisional launch lease to the Gateway run id", async () => {
+    const { params, close } = await fixture(true);
+    try {
+      await expect(
+        withEnterpriseDelegationEvidence({ ...params, runId: "gateway-child" }),
+      ).resolves.toBeDefined();
+      confirmEnterpriseDelegationEvidenceRun({
+        childSessionKey: childKey,
+        anticipatedRunId: "child",
+        actualRunId: "gateway-child",
+      });
+      await expect(
+        withEnterpriseDelegationEvidence({ ...params, runId: "gateway-child" }),
+      ).resolves.toBeDefined();
+      await expect(withEnterpriseDelegationEvidence(params)).rejects.toThrow(
+        "EVIDENCE_CHILD_IDENTITY_MISMATCH",
+      );
+    } finally {
+      close();
+    }
+  });
+
   it("keeps the packet out of prompts and checks exact child identity before model access", async () => {
     const { params, packet, close } = await fixture();
     try {

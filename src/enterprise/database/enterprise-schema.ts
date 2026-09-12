@@ -45,6 +45,23 @@ CREATE TABLE IF NOT EXISTS enterprise_auth_sessions (
 CREATE INDEX IF NOT EXISTS idx_enterprise_auth_sessions_account
   ON enterprise_auth_sessions(account_id, revoked_at, expires_at);
 
+CREATE TABLE IF NOT EXISTS enterprise_skill_tokens (
+  account_id TEXT NOT NULL,
+  skill_key TEXT NOT NULL,
+  schema_version INTEGER NOT NULL,
+  iv TEXT NOT NULL,
+  auth_tag TEXT NOT NULL,
+  ciphertext TEXT NOT NULL,
+  expires_at INTEGER NOT NULL,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL,
+  PRIMARY KEY (account_id, skill_key),
+  FOREIGN KEY (account_id) REFERENCES enterprise_accounts(id) ON DELETE CASCADE
+) STRICT;
+
+CREATE INDEX IF NOT EXISTS idx_enterprise_skill_tokens_expiry
+  ON enterprise_skill_tokens(expires_at);
+
 CREATE TABLE IF NOT EXISTS enterprise_entitlements (
   account_id TEXT NOT NULL,
   resource_type TEXT NOT NULL CHECK (resource_type IN ('agent', 'skill', 'tool')),
@@ -283,7 +300,10 @@ CREATE INDEX IF NOT EXISTS idx_enterprise_user_skill_installs_agent
 
 CREATE TABLE IF NOT EXISTS enterprise_plugin_requests (
   id TEXT NOT NULL PRIMARY KEY,
-  requester_account_id TEXT NOT NULL,
+  requester_account_id TEXT,
+  scope TEXT NOT NULL DEFAULT 'account' CHECK (scope IN ('account', 'shared_agent')),
+  agent_key TEXT,
+  runtime_agent_id TEXT,
   package_name TEXT NOT NULL,
   package_family TEXT NOT NULL CHECK (package_family IN ('code_plugin', 'bundle_plugin')),
   exact_version TEXT NOT NULL,
@@ -301,7 +321,7 @@ CREATE TABLE IF NOT EXISTS enterprise_plugin_requests (
   created_at INTEGER NOT NULL,
   updated_at INTEGER NOT NULL,
   decided_at INTEGER,
-  FOREIGN KEY (requester_account_id) REFERENCES enterprise_accounts(id) ON DELETE CASCADE,
+  FOREIGN KEY (requester_account_id) REFERENCES enterprise_accounts(id) ON DELETE SET NULL,
   FOREIGN KEY (reviewer_account_id) REFERENCES enterprise_accounts(id) ON DELETE SET NULL
 ) STRICT;
 
@@ -309,30 +329,38 @@ CREATE INDEX IF NOT EXISTS idx_enterprise_plugin_requests_account
   ON enterprise_plugin_requests(requester_account_id, state, updated_at DESC);
 CREATE INDEX IF NOT EXISTS idx_enterprise_plugin_requests_admin
   ON enterprise_plugin_requests(state, created_at ASC);
-CREATE UNIQUE INDEX IF NOT EXISTS idx_enterprise_plugin_requests_open
-  ON enterprise_plugin_requests(requester_account_id, package_name, exact_version)
-  WHERE state IN ('pending', 'approving');
+-- The scope-aware open-request index is created by ensureAdditiveColumns after
+-- legacy databases have received the scope columns.
 
 CREATE TABLE IF NOT EXISTS enterprise_account_plugin_grants (
   id TEXT NOT NULL PRIMARY KEY,
-  account_id TEXT NOT NULL,
+  -- Account scope is owned by the account. Shared-agent rows retain the
+  -- requester for audit while that account exists, but become agent-owned
+  -- when the requester is removed, so the shared capability survives.
+  account_id TEXT,
+  scope TEXT NOT NULL DEFAULT 'account' CHECK (scope IN ('account', 'shared_agent')),
+  agent_key TEXT,
+  runtime_agent_id TEXT,
   plugin_id TEXT NOT NULL,
   exact_version TEXT NOT NULL,
   integrity TEXT NOT NULL,
   capability_digest TEXT NOT NULL,
   approved_tools_json TEXT NOT NULL,
-  source_request_id TEXT NOT NULL,
+  source_request_id TEXT,
+  approved_by_account_id TEXT,
   state TEXT NOT NULL CHECK (state IN ('active', 'suspended_version_mismatch', 'unavailable', 'orphaned', 'revoked')),
   revision INTEGER NOT NULL DEFAULT 1,
   created_at INTEGER NOT NULL,
   updated_at INTEGER NOT NULL,
-  FOREIGN KEY (account_id) REFERENCES enterprise_accounts(id) ON DELETE CASCADE,
-  FOREIGN KEY (source_request_id) REFERENCES enterprise_plugin_requests(id) ON DELETE RESTRICT,
-  UNIQUE (account_id, plugin_id)
+  FOREIGN KEY (account_id) REFERENCES enterprise_accounts(id) ON DELETE SET NULL,
+  FOREIGN KEY (source_request_id) REFERENCES enterprise_plugin_requests(id) ON DELETE SET NULL,
+  FOREIGN KEY (approved_by_account_id) REFERENCES enterprise_accounts(id) ON DELETE SET NULL
 ) STRICT;
 
 CREATE INDEX IF NOT EXISTS idx_enterprise_account_plugin_grants_active
   ON enterprise_account_plugin_grants(account_id, state, updated_at DESC);
+-- Scope-aware grant indexes are created by ensureAdditiveColumns after
+-- legacy databases have received the scope columns.
 
 -- Codex plugins are owned by the Codex app-server and have a different
 -- identity/install contract from ClawHub native plugins. Keep their request
@@ -340,7 +368,8 @@ CREATE INDEX IF NOT EXISTS idx_enterprise_account_plugin_grants_active
 -- package-family CHECK above.
 CREATE TABLE IF NOT EXISTS enterprise_codex_plugin_requests (
   id TEXT NOT NULL PRIMARY KEY,
-  requester_account_id TEXT NOT NULL,
+  requester_account_id TEXT,
+  scope TEXT NOT NULL DEFAULT 'account' CHECK (scope IN ('account', 'shared_agent')),
   agent_key TEXT NOT NULL,
   runtime_agent_id TEXT NOT NULL,
   plugin_name TEXT NOT NULL,
@@ -362,7 +391,7 @@ CREATE TABLE IF NOT EXISTS enterprise_codex_plugin_requests (
   created_at INTEGER NOT NULL,
   updated_at INTEGER NOT NULL,
   decided_at INTEGER,
-  FOREIGN KEY (requester_account_id) REFERENCES enterprise_accounts(id) ON DELETE CASCADE,
+  FOREIGN KEY (requester_account_id) REFERENCES enterprise_accounts(id) ON DELETE SET NULL,
   FOREIGN KEY (reviewer_account_id) REFERENCES enterprise_accounts(id) ON DELETE SET NULL
 ) STRICT;
 
@@ -370,14 +399,16 @@ CREATE INDEX IF NOT EXISTS idx_enterprise_codex_plugin_requests_account
   ON enterprise_codex_plugin_requests(requester_account_id, runtime_agent_id, state, updated_at DESC);
 CREATE INDEX IF NOT EXISTS idx_enterprise_codex_plugin_requests_admin
   ON enterprise_codex_plugin_requests(state, created_at ASC);
-CREATE UNIQUE INDEX IF NOT EXISTS idx_enterprise_codex_plugin_requests_open
-  ON enterprise_codex_plugin_requests(
-    requester_account_id, runtime_agent_id, plugin_name, marketplace_name
-  ) WHERE state IN ('pending', 'approving');
+-- The scope-aware open-request index is created by ensureAdditiveColumns after
+-- legacy databases have received the scope column.
 
 CREATE TABLE IF NOT EXISTS enterprise_codex_plugin_grants (
   id TEXT NOT NULL PRIMARY KEY,
-  account_id TEXT NOT NULL,
+  -- Account scope is owned by the account. Shared-agent rows retain the
+  -- requester for audit while that account exists, but become agent-owned
+  -- when the requester is removed, so the shared capability survives.
+  account_id TEXT,
+  scope TEXT NOT NULL DEFAULT 'account' CHECK (scope IN ('account', 'shared_agent')),
   agent_key TEXT NOT NULL,
   runtime_agent_id TEXT NOT NULL,
   plugin_name TEXT NOT NULL,
@@ -386,7 +417,8 @@ CREATE TABLE IF NOT EXISTS enterprise_codex_plugin_grants (
   installed_plugin_id TEXT,
   capability_snapshot_json TEXT NOT NULL,
   capability_digest TEXT NOT NULL,
-  source_request_id TEXT NOT NULL,
+  source_request_id TEXT,
+  approved_by_account_id TEXT,
   auth_required INTEGER NOT NULL DEFAULT 0 CHECK (auth_required IN (0, 1)),
   apps_needing_auth_json TEXT NOT NULL DEFAULT '[]',
   connect_urls_json TEXT NOT NULL DEFAULT '[]',
@@ -395,13 +427,15 @@ CREATE TABLE IF NOT EXISTS enterprise_codex_plugin_grants (
   revision INTEGER NOT NULL DEFAULT 1,
   created_at INTEGER NOT NULL,
   updated_at INTEGER NOT NULL,
-  FOREIGN KEY (account_id) REFERENCES enterprise_accounts(id) ON DELETE CASCADE,
-  FOREIGN KEY (source_request_id) REFERENCES enterprise_codex_plugin_requests(id) ON DELETE RESTRICT,
-  UNIQUE (account_id, runtime_agent_id, plugin_name, marketplace_name)
+  FOREIGN KEY (account_id) REFERENCES enterprise_accounts(id) ON DELETE SET NULL,
+  FOREIGN KEY (source_request_id) REFERENCES enterprise_codex_plugin_requests(id) ON DELETE SET NULL,
+  FOREIGN KEY (approved_by_account_id) REFERENCES enterprise_accounts(id) ON DELETE SET NULL
 ) STRICT;
 
 CREATE INDEX IF NOT EXISTS idx_enterprise_codex_plugin_grants_active
   ON enterprise_codex_plugin_grants(account_id, runtime_agent_id, state, updated_at DESC);
+-- Scope-aware grant indexes are created by ensureAdditiveColumns after
+-- legacy databases have received the scope column.
 
 CREATE TABLE IF NOT EXISTS enterprise_extension_idempotency (
   audience TEXT NOT NULL CHECK (audience IN ('admin', 'user')),
@@ -838,7 +872,370 @@ function tableColumns(db: DatabaseSync, table: string): Set<string> {
   );
 }
 
+function tableColumnIsNotNull(db: DatabaseSync, table: string, column: string): boolean {
+  const row = db
+    .prepare(`PRAGMA table_info(${table})`)
+    .all()
+    .find((value) => isRecord(value) && value.name === column);
+  return isRecord(row) && Number(row.notnull) === 1;
+}
+
+type GrantRequestLinkSnapshot = Map<string, string>;
+
+function snapshotGrantRequestLinks(db: DatabaseSync, table: string): GrantRequestLinkSnapshot {
+  const rows = db
+    .prepare(`SELECT id, source_request_id FROM ${table} WHERE source_request_id IS NOT NULL`)
+    .all();
+  return new Map(
+    rows.flatMap((row) =>
+      isRecord(row) && typeof row.id === "string" && typeof row.source_request_id === "string"
+        ? [[row.id, row.source_request_id] as const]
+        : [],
+    ),
+  );
+}
+
+function restoreGrantRequestLinks(
+  db: DatabaseSync,
+  table: string,
+  requestTable: string,
+  snapshot: GrantRequestLinkSnapshot,
+): void {
+  const update = db.prepare(
+    `UPDATE ${table}
+     SET source_request_id = ?
+     WHERE id = ? AND source_request_id IS NULL
+       AND EXISTS (SELECT 1 FROM ${requestTable} WHERE id = ?)`,
+  );
+  for (const [grantId, requestId] of snapshot) {
+    update.run(requestId, grantId, requestId);
+  }
+}
+
+function ensureNativePluginGrantIndexes(db: DatabaseSync): void {
+  db.exec(`
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_enterprise_account_plugin_grants_account_unique
+      ON enterprise_account_plugin_grants(account_id, plugin_id)
+      WHERE scope = 'account';
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_enterprise_account_plugin_grants_shared_unique
+      ON enterprise_account_plugin_grants(runtime_agent_id, plugin_id)
+      WHERE scope = 'shared_agent';
+    CREATE INDEX IF NOT EXISTS idx_enterprise_account_plugin_grants_runtime
+      ON enterprise_account_plugin_grants(scope, runtime_agent_id, state, updated_at DESC);
+  `);
+}
+
+function ensureCodexPluginGrantIndexes(db: DatabaseSync): void {
+  db.exec(`
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_enterprise_codex_plugin_grants_account_unique
+      ON enterprise_codex_plugin_grants(account_id, runtime_agent_id, plugin_name, marketplace_name)
+      WHERE scope = 'account';
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_enterprise_codex_plugin_grants_shared_unique
+      ON enterprise_codex_plugin_grants(runtime_agent_id, plugin_name, marketplace_name)
+      WHERE scope = 'shared_agent';
+    CREATE INDEX IF NOT EXISTS idx_enterprise_codex_plugin_grants_scope
+      ON enterprise_codex_plugin_grants(scope, runtime_agent_id, state, updated_at DESC);
+  `);
+}
+
+function migrateNativePluginRequestOwnershipSchema(db: DatabaseSync): void {
+  const table = "enterprise_plugin_requests";
+  if (!tableColumnIsNotNull(db, table, "requester_account_id")) {
+    return;
+  }
+  const migrationTable = `${table}_requester_migration`;
+  db.exec(`
+    DROP TABLE IF EXISTS ${migrationTable};
+    CREATE TABLE ${migrationTable} (
+      id TEXT NOT NULL PRIMARY KEY,
+      requester_account_id TEXT,
+      scope TEXT NOT NULL DEFAULT 'account' CHECK (scope IN ('account', 'shared_agent')),
+      agent_key TEXT,
+      runtime_agent_id TEXT,
+      package_name TEXT NOT NULL,
+      package_family TEXT NOT NULL CHECK (package_family IN ('code_plugin', 'bundle_plugin')),
+      exact_version TEXT NOT NULL,
+      integrity TEXT NOT NULL,
+      request_kind TEXT NOT NULL CHECK (request_kind IN ('install', 'access')),
+      trust_snapshot_json TEXT NOT NULL,
+      capability_snapshot_json TEXT NOT NULL,
+      capability_digest TEXT NOT NULL,
+      state TEXT NOT NULL CHECK (state IN ('pending', 'approving', 'available', 'rejected', 'cancelled', 'install_failed')),
+      installed_plugin_id TEXT,
+      reviewer_account_id TEXT,
+      decision_reason TEXT,
+      safe_error_code TEXT,
+      revision INTEGER NOT NULL DEFAULT 1,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL,
+      decided_at INTEGER,
+      FOREIGN KEY (requester_account_id) REFERENCES enterprise_accounts(id) ON DELETE SET NULL,
+      FOREIGN KEY (reviewer_account_id) REFERENCES enterprise_accounts(id) ON DELETE SET NULL
+    ) STRICT;
+    INSERT INTO ${migrationTable} (
+      id, requester_account_id, scope, agent_key, runtime_agent_id, package_name, package_family,
+      exact_version, integrity, request_kind, trust_snapshot_json, capability_snapshot_json,
+      capability_digest, state, installed_plugin_id, reviewer_account_id, decision_reason,
+      safe_error_code, revision, created_at, updated_at, decided_at
+    )
+    SELECT id, requester_account_id, scope, agent_key, runtime_agent_id, package_name, package_family,
+      exact_version, integrity, request_kind, trust_snapshot_json, capability_snapshot_json,
+      capability_digest, state, installed_plugin_id, reviewer_account_id, decision_reason,
+      safe_error_code, revision, created_at, updated_at, decided_at
+    FROM ${table};
+    DROP TABLE ${table};
+    ALTER TABLE ${migrationTable} RENAME TO ${table};
+    CREATE INDEX idx_enterprise_plugin_requests_account
+      ON ${table}(requester_account_id, state, updated_at DESC);
+    CREATE INDEX idx_enterprise_plugin_requests_admin
+      ON ${table}(state, created_at ASC);
+    CREATE UNIQUE INDEX idx_enterprise_plugin_requests_open
+      ON ${table}(requester_account_id, package_name, exact_version, scope, COALESCE(runtime_agent_id, ''))
+      WHERE state IN ('pending', 'approving');
+  `);
+}
+
+function migrateCodexPluginRequestOwnershipSchema(db: DatabaseSync): void {
+  const table = "enterprise_codex_plugin_requests";
+  if (!tableColumnIsNotNull(db, table, "requester_account_id")) {
+    return;
+  }
+  const migrationTable = `${table}_requester_migration`;
+  db.exec(`
+    DROP TABLE IF EXISTS ${migrationTable};
+    CREATE TABLE ${migrationTable} (
+      id TEXT NOT NULL PRIMARY KEY,
+      requester_account_id TEXT,
+      scope TEXT NOT NULL DEFAULT 'account' CHECK (scope IN ('account', 'shared_agent')),
+      agent_key TEXT NOT NULL,
+      runtime_agent_id TEXT NOT NULL,
+      plugin_name TEXT NOT NULL,
+      marketplace_name TEXT NOT NULL,
+      remote_plugin_id TEXT,
+      request_kind TEXT NOT NULL CHECK (request_kind IN ('install', 'access')),
+      catalog_snapshot_json TEXT NOT NULL,
+      capability_snapshot_json TEXT NOT NULL,
+      capability_digest TEXT NOT NULL,
+      state TEXT NOT NULL CHECK (state IN ('pending', 'approving', 'available', 'rejected', 'cancelled', 'install_failed')),
+      installed_plugin_id TEXT,
+      auth_required INTEGER NOT NULL DEFAULT 0 CHECK (auth_required IN (0, 1)),
+      apps_needing_auth_json TEXT NOT NULL DEFAULT '[]',
+      connect_urls_json TEXT NOT NULL DEFAULT '[]',
+      reviewer_account_id TEXT,
+      decision_reason TEXT,
+      safe_error_code TEXT,
+      revision INTEGER NOT NULL DEFAULT 1,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL,
+      decided_at INTEGER,
+      FOREIGN KEY (requester_account_id) REFERENCES enterprise_accounts(id) ON DELETE SET NULL,
+      FOREIGN KEY (reviewer_account_id) REFERENCES enterprise_accounts(id) ON DELETE SET NULL
+    ) STRICT;
+    INSERT INTO ${migrationTable} (
+      id, requester_account_id, scope, agent_key, runtime_agent_id, plugin_name, marketplace_name,
+      remote_plugin_id, request_kind, catalog_snapshot_json, capability_snapshot_json,
+      capability_digest, state, installed_plugin_id, auth_required, apps_needing_auth_json,
+      connect_urls_json, reviewer_account_id, decision_reason, safe_error_code, revision,
+      created_at, updated_at, decided_at
+    )
+    SELECT id, requester_account_id, scope, agent_key, runtime_agent_id, plugin_name, marketplace_name,
+      remote_plugin_id, request_kind, catalog_snapshot_json, capability_snapshot_json,
+      capability_digest, state, installed_plugin_id, auth_required, apps_needing_auth_json,
+      connect_urls_json, reviewer_account_id, decision_reason, safe_error_code, revision,
+      created_at, updated_at, decided_at
+    FROM ${table};
+    DROP TABLE ${table};
+    ALTER TABLE ${migrationTable} RENAME TO ${table};
+    CREATE INDEX idx_enterprise_codex_plugin_requests_account
+      ON ${table}(requester_account_id, runtime_agent_id, state, updated_at DESC);
+    CREATE INDEX idx_enterprise_codex_plugin_requests_admin
+      ON ${table}(state, created_at ASC);
+    CREATE UNIQUE INDEX idx_enterprise_codex_plugin_requests_open
+      ON ${table}(requester_account_id, runtime_agent_id, plugin_name, marketplace_name, scope)
+      WHERE state IN ('pending', 'approving');
+  `);
+}
+
+/**
+ * Replace the pre-scope grant tables with tables whose ownership keys match
+ * the runtime model. The old inline UNIQUE constraints keyed every grant by
+ * requester account, which meant a private and an agent-owned grant for the
+ * same plugin could not coexist. A table rebuild is required because SQLite
+ * cannot remove an inline UNIQUE constraint with ALTER TABLE.
+ *
+ * Existing rows default to account scope. Shared rows that were written by an
+ * early rollout are retained, but malformed shared targets are downgraded to
+ * private scope so the migration never broadens access accidentally.
+ */
+function migrateNativePluginGrantOwnershipSchema(db: DatabaseSync): void {
+  const table = "enterprise_account_plugin_grants";
+  // Fresh/current tables already have the nullable ownership column. They do
+  // not need a rebuild; only create the scope-aware indexes that the base
+  // schema intentionally defers for legacy compatibility.
+  if (!tableColumnIsNotNull(db, table, "account_id")) {
+    ensureNativePluginGrantIndexes(db);
+    return;
+  }
+  const migrationTable = `${table}_scope_migration`;
+  db.exec(`
+    DROP TABLE IF EXISTS ${migrationTable};
+    UPDATE ${table}
+       SET scope = 'account', agent_key = NULL, runtime_agent_id = NULL
+     WHERE scope IS NULL
+        OR scope <> 'shared_agent'
+        OR agent_key IS NULL
+        OR agent_key NOT LIKE 'shared:%'
+        OR runtime_agent_id IS NULL;
+    DELETE FROM ${table}
+     WHERE id IN (
+       SELECT duplicate.id
+         FROM ${table} AS duplicate
+         JOIN ${table} AS keeper
+           ON keeper.scope = duplicate.scope
+          AND keeper.plugin_id = duplicate.plugin_id
+          AND (
+            (duplicate.scope = 'account' AND keeper.account_id = duplicate.account_id)
+            OR (duplicate.scope = 'shared_agent' AND keeper.runtime_agent_id = duplicate.runtime_agent_id)
+          )
+          AND (
+            keeper.updated_at > duplicate.updated_at
+            OR (keeper.updated_at = duplicate.updated_at AND keeper.id > duplicate.id)
+          )
+    );
+    CREATE TABLE ${migrationTable} (
+      id TEXT NOT NULL PRIMARY KEY,
+      account_id TEXT,
+      scope TEXT NOT NULL DEFAULT 'account' CHECK (scope IN ('account', 'shared_agent')),
+      agent_key TEXT,
+      runtime_agent_id TEXT,
+      plugin_id TEXT NOT NULL,
+      exact_version TEXT NOT NULL,
+      integrity TEXT NOT NULL,
+      capability_digest TEXT NOT NULL,
+      approved_tools_json TEXT NOT NULL,
+      source_request_id TEXT,
+      approved_by_account_id TEXT,
+      state TEXT NOT NULL CHECK (state IN ('active', 'suspended_version_mismatch', 'unavailable', 'orphaned', 'revoked')),
+      revision INTEGER NOT NULL DEFAULT 1,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL,
+      FOREIGN KEY (account_id) REFERENCES enterprise_accounts(id) ON DELETE SET NULL,
+      FOREIGN KEY (source_request_id) REFERENCES enterprise_plugin_requests(id) ON DELETE SET NULL,
+      FOREIGN KEY (approved_by_account_id) REFERENCES enterprise_accounts(id) ON DELETE SET NULL
+    ) STRICT;
+    INSERT INTO ${migrationTable} (
+      id, account_id, scope, agent_key, runtime_agent_id, plugin_id, exact_version, integrity,
+      capability_digest, approved_tools_json, source_request_id, approved_by_account_id, state,
+      revision, created_at, updated_at
+    )
+    SELECT id, account_id, scope, agent_key, runtime_agent_id, plugin_id, exact_version, integrity,
+      capability_digest, approved_tools_json, source_request_id, approved_by_account_id, state,
+      revision, created_at, updated_at
+    FROM ${table};
+    DROP TABLE ${table};
+    ALTER TABLE ${migrationTable} RENAME TO ${table};
+    CREATE UNIQUE INDEX idx_enterprise_account_plugin_grants_account_unique
+      ON ${table}(account_id, plugin_id) WHERE scope = 'account';
+    CREATE UNIQUE INDEX idx_enterprise_account_plugin_grants_shared_unique
+      ON ${table}(runtime_agent_id, plugin_id) WHERE scope = 'shared_agent';
+    CREATE INDEX idx_enterprise_account_plugin_grants_active
+      ON ${table}(account_id, state, updated_at DESC);
+    CREATE INDEX idx_enterprise_account_plugin_grants_runtime
+      ON ${table}(scope, runtime_agent_id, state, updated_at DESC);
+  `);
+}
+
+function migrateCodexPluginGrantOwnershipSchema(db: DatabaseSync): void {
+  const table = "enterprise_codex_plugin_grants";
+  if (!tableColumnIsNotNull(db, table, "account_id")) {
+    ensureCodexPluginGrantIndexes(db);
+    return;
+  }
+  const migrationTable = `${table}_scope_migration`;
+  db.exec(`
+    DROP TABLE IF EXISTS ${migrationTable};
+    UPDATE ${table}
+       SET scope = 'account'
+     WHERE scope IS NULL
+        OR scope <> 'shared_agent'
+        OR agent_key IS NULL
+        OR agent_key NOT LIKE 'shared:%'
+        OR runtime_agent_id IS NULL;
+    DELETE FROM ${table}
+     WHERE id IN (
+       SELECT duplicate.id
+         FROM ${table} AS duplicate
+         JOIN ${table} AS keeper
+           ON keeper.scope = duplicate.scope
+          AND keeper.runtime_agent_id = duplicate.runtime_agent_id
+          AND keeper.plugin_name = duplicate.plugin_name
+          AND keeper.marketplace_name = duplicate.marketplace_name
+          AND (
+            (duplicate.scope = 'account' AND keeper.account_id = duplicate.account_id)
+            OR duplicate.scope = 'shared_agent'
+          )
+          AND (
+            keeper.updated_at > duplicate.updated_at
+            OR (keeper.updated_at = duplicate.updated_at AND keeper.id > duplicate.id)
+          )
+    );
+    CREATE TABLE ${migrationTable} (
+      id TEXT NOT NULL PRIMARY KEY,
+      account_id TEXT,
+      scope TEXT NOT NULL DEFAULT 'account' CHECK (scope IN ('account', 'shared_agent')),
+      agent_key TEXT NOT NULL,
+      runtime_agent_id TEXT NOT NULL,
+      plugin_name TEXT NOT NULL,
+      marketplace_name TEXT NOT NULL,
+      remote_plugin_id TEXT,
+      installed_plugin_id TEXT,
+      capability_snapshot_json TEXT NOT NULL,
+      capability_digest TEXT NOT NULL,
+      source_request_id TEXT,
+      approved_by_account_id TEXT,
+      auth_required INTEGER NOT NULL DEFAULT 0 CHECK (auth_required IN (0, 1)),
+      apps_needing_auth_json TEXT NOT NULL DEFAULT '[]',
+      connect_urls_json TEXT NOT NULL DEFAULT '[]',
+      ready INTEGER NOT NULL DEFAULT 0 CHECK (ready IN (0, 1)),
+      state TEXT NOT NULL CHECK (state IN ('active', 'disabled', 'unavailable', 'revoked')),
+      revision INTEGER NOT NULL DEFAULT 1,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL,
+      FOREIGN KEY (account_id) REFERENCES enterprise_accounts(id) ON DELETE SET NULL,
+      FOREIGN KEY (source_request_id) REFERENCES enterprise_codex_plugin_requests(id) ON DELETE SET NULL,
+      FOREIGN KEY (approved_by_account_id) REFERENCES enterprise_accounts(id) ON DELETE SET NULL
+    ) STRICT;
+    INSERT INTO ${migrationTable} (
+      id, account_id, scope, agent_key, runtime_agent_id, plugin_name, marketplace_name,
+      remote_plugin_id, installed_plugin_id, capability_snapshot_json, capability_digest,
+      source_request_id, approved_by_account_id, auth_required, apps_needing_auth_json,
+      connect_urls_json, ready, state, revision, created_at, updated_at
+    )
+    SELECT id, account_id, scope, agent_key, runtime_agent_id, plugin_name, marketplace_name,
+      remote_plugin_id, installed_plugin_id, capability_snapshot_json, capability_digest,
+      source_request_id, approved_by_account_id, auth_required, apps_needing_auth_json,
+      connect_urls_json, ready, state, revision, created_at, updated_at
+    FROM ${table};
+    DROP TABLE ${table};
+    ALTER TABLE ${migrationTable} RENAME TO ${table};
+    CREATE UNIQUE INDEX idx_enterprise_codex_plugin_grants_account_unique
+      ON ${table}(account_id, runtime_agent_id, plugin_name, marketplace_name)
+      WHERE scope = 'account';
+    CREATE UNIQUE INDEX idx_enterprise_codex_plugin_grants_shared_unique
+      ON ${table}(runtime_agent_id, plugin_name, marketplace_name)
+      WHERE scope = 'shared_agent';
+    CREATE INDEX idx_enterprise_codex_plugin_grants_active
+      ON ${table}(account_id, runtime_agent_id, state, updated_at DESC);
+    CREATE INDEX idx_enterprise_codex_plugin_grants_scope
+      ON ${table}(scope, runtime_agent_id, state, updated_at DESC);
+  `);
+}
+
 function ensureAdditiveColumns(db: DatabaseSync): void {
+  // Request/grant ownership migrations rebuild tables with foreign keys. Defer
+  // checks until the surrounding state transaction has recreated each parent
+  // table, keeping approved request evidence intact during the atomic swap.
+  db.exec("PRAGMA defer_foreign_keys = ON");
   const accountColumns = tableColumns(db, "enterprise_accounts");
   if (!accountColumns.has("access_preset_key")) {
     db.exec(
@@ -919,6 +1316,57 @@ function ensureAdditiveColumns(db: DatabaseSync): void {
     `CREATE INDEX IF NOT EXISTS idx_enterprise_conversation_project_sessions_order
      ON enterprise_conversation_project_sessions(account_id, project_id, position, session_key)`,
   );
+  const nativeRequestColumns = tableColumns(db, "enterprise_plugin_requests");
+  for (const [name, definition] of [
+    ["scope", "TEXT NOT NULL DEFAULT 'account'"],
+    ["agent_key", "TEXT"],
+    ["runtime_agent_id", "TEXT"],
+  ] as const) {
+    if (!nativeRequestColumns.has(name)) {
+      db.exec(`ALTER TABLE enterprise_plugin_requests ADD COLUMN ${name} ${definition}`);
+    }
+  }
+  const nativeGrantColumns = tableColumns(db, "enterprise_account_plugin_grants");
+  for (const [name, definition] of [
+    ["scope", "TEXT NOT NULL DEFAULT 'account'"],
+    ["agent_key", "TEXT"],
+    ["runtime_agent_id", "TEXT"],
+    ["approved_by_account_id", "TEXT"],
+  ] as const) {
+    if (!nativeGrantColumns.has(name)) {
+      db.exec(`ALTER TABLE enterprise_account_plugin_grants ADD COLUMN ${name} ${definition}`);
+    }
+  }
+  const nativeGrantRequestLinks = snapshotGrantRequestLinks(db, "enterprise_account_plugin_grants");
+  db.exec(
+    `UPDATE enterprise_account_plugin_grants
+     SET approved_by_account_id = (
+       SELECT reviewer_account_id FROM enterprise_plugin_requests r
+     WHERE r.id = enterprise_account_plugin_grants.source_request_id
+     )
+     WHERE approved_by_account_id IS NULL`,
+  );
+  // Rebuild grants before their parent requests. Legacy request FKs were
+  // RESTRICT/CASCADE and therefore either blocked or deleted grants when the
+  // request table was replaced. The rebuilt grant FK is nullable SET NULL;
+  // restoreGrantRequestLinks repairs the temporary nulls after the parent
+  // replacement using the pre-migration grant ids.
+  migrateNativePluginGrantOwnershipSchema(db);
+  ensureNativePluginGrantIndexes(db);
+  db.exec("DROP INDEX IF EXISTS idx_enterprise_plugin_requests_open");
+  db.exec(
+    `CREATE UNIQUE INDEX IF NOT EXISTS idx_enterprise_plugin_requests_open
+     ON enterprise_plugin_requests(
+       requester_account_id, package_name, exact_version, scope, COALESCE(runtime_agent_id, '')
+     ) WHERE state IN ('pending', 'approving')`,
+  );
+  migrateNativePluginRequestOwnershipSchema(db);
+  restoreGrantRequestLinks(
+    db,
+    "enterprise_account_plugin_grants",
+    "enterprise_plugin_requests",
+    nativeGrantRequestLinks,
+  );
   const knowledgeUploadColumns = tableColumns(db, "enterprise_knowledge_uploads");
   if (!knowledgeUploadColumns.has("target_source_id")) {
     db.exec("ALTER TABLE enterprise_knowledge_uploads ADD COLUMN target_source_id TEXT");
@@ -935,6 +1383,7 @@ function ensureAdditiveColumns(db: DatabaseSync): void {
   }
   const codexRequestColumns = tableColumns(db, "enterprise_codex_plugin_requests");
   for (const [name, definition] of [
+    ["scope", "TEXT NOT NULL DEFAULT 'account'"],
     ["auth_required", "INTEGER NOT NULL DEFAULT 0"],
     ["apps_needing_auth_json", "TEXT NOT NULL DEFAULT '[]'"],
     ["connect_urls_json", "TEXT NOT NULL DEFAULT '[]'"],
@@ -945,6 +1394,8 @@ function ensureAdditiveColumns(db: DatabaseSync): void {
   }
   const codexGrantColumns = tableColumns(db, "enterprise_codex_plugin_grants");
   for (const [name, definition] of [
+    ["scope", "TEXT NOT NULL DEFAULT 'account'"],
+    ["approved_by_account_id", "TEXT"],
     ["auth_required", "INTEGER NOT NULL DEFAULT 0"],
     ["apps_needing_auth_json", "TEXT NOT NULL DEFAULT '[]'"],
     ["connect_urls_json", "TEXT NOT NULL DEFAULT '[]'"],
@@ -954,6 +1405,31 @@ function ensureAdditiveColumns(db: DatabaseSync): void {
       db.exec(`ALTER TABLE enterprise_codex_plugin_grants ADD COLUMN ${name} ${definition}`);
     }
   }
+  const codexGrantRequestLinks = snapshotGrantRequestLinks(db, "enterprise_codex_plugin_grants");
+  db.exec(
+    `UPDATE enterprise_codex_plugin_grants
+     SET approved_by_account_id = (
+       SELECT reviewer_account_id FROM enterprise_codex_plugin_requests r
+     WHERE r.id = enterprise_codex_plugin_grants.source_request_id
+     )
+     WHERE approved_by_account_id IS NULL`,
+  );
+  migrateCodexPluginGrantOwnershipSchema(db);
+  ensureCodexPluginGrantIndexes(db);
+  db.exec("DROP INDEX IF EXISTS idx_enterprise_codex_plugin_requests_open");
+  db.exec(
+    `CREATE UNIQUE INDEX IF NOT EXISTS idx_enterprise_codex_plugin_requests_open
+     ON enterprise_codex_plugin_requests(
+       requester_account_id, runtime_agent_id, plugin_name, marketplace_name, scope
+     ) WHERE state IN ('pending', 'approving')`,
+  );
+  migrateCodexPluginRequestOwnershipSchema(db);
+  restoreGrantRequestLinks(
+    db,
+    "enterprise_codex_plugin_grants",
+    "enterprise_codex_plugin_requests",
+    codexGrantRequestLinks,
+  );
   const knowledgeZoneColumns = tableColumns(db, "enterprise_knowledge_zones");
   if (!knowledgeZoneColumns.has("build_revision")) {
     db.exec("ALTER TABLE enterprise_knowledge_zones ADD COLUMN build_revision INTEGER");

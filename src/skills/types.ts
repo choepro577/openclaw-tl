@@ -17,6 +17,44 @@ export type SkillInstallSpec = {
   targetDir?: string;
 };
 
+export type SkillScriptRisk = "read" | "write";
+
+export type SkillScriptEntrypoint = {
+  path: string;
+  timeoutMs?: number;
+} & (
+  | { kind: "fixed"; risk: SkillScriptRisk }
+  | {
+      kind: "operation";
+      routerOperation?: string;
+      routerBypassOperations?: string[];
+      authExemptOperations?: string[];
+      readOperations?: string[];
+      writeOperations?: string[];
+      unknownRisk: "approval";
+    }
+);
+
+export type SkillScriptAuth = {
+  mode: "login-token";
+  loginEntrypoint: string;
+  loginOperation: string;
+  fields: Array<{
+    id: string;
+    label: string;
+    argument: string;
+    type: "text" | "password";
+  }>;
+  tokenPaths: string[];
+  injectArgument: string;
+  ttlSeconds: number;
+};
+
+export type SkillScriptRuntime = {
+  entrypoints: Record<string, SkillScriptEntrypoint>;
+  auth?: SkillScriptAuth;
+};
+
 export type OpenClawSkillMetadata = {
   always?: boolean;
   skillKey?: string;
@@ -31,6 +69,7 @@ export type OpenClawSkillMetadata = {
     config?: string[];
   };
   install?: SkillInstallSpec[];
+  scriptRuntime?: SkillScriptRuntime;
 };
 
 export type SkillInvocationPolicy = {
@@ -133,8 +172,13 @@ export type SkillSnapshot = {
     name: string;
     /** Config key can differ from the prompt-facing skill name. */
     skillKey?: string;
+    /** Discovery source used to bind Enterprise grants to the published skill. */
+    source?: string;
     primaryEnv?: string;
     requiredEnv?: string[];
+    /** Host-only runtime data for administrator-granted skill scripts. */
+    baseDir?: string;
+    scriptRuntime?: SkillScriptRuntime;
   }>;
   /** Normalized agent-level filter used to build this snapshot; undefined means unrestricted. */
   skillFilter?: string[];
@@ -148,6 +192,8 @@ export type SkillSnapshot = {
     agentWorkspaceDir: string;
     executionSkillsDir: string;
   };
+  /** Enterprise capability revision used to invalidate a session on the next turn. */
+  capabilityRevision?: string;
   version?: number;
   promptFormatVersion?: number;
 };

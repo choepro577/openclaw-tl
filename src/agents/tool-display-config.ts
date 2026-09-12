@@ -496,6 +496,11 @@ export const TOOL_DISPLAY_CONFIG: ToolDisplayConfig = {
       title: "Enterprise Delegation",
       detailKeys: ["decisionId"],
     },
+    skill_script: {
+      emoji: "🧩",
+      title: "Skill Script",
+      detailKeys: [],
+    },
     enterprise_knowledge_search: {
       emoji: "🔎",
       title: "Enterprise Knowledge Search",

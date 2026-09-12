@@ -14,6 +14,7 @@ import {
   configureChannelAdmissionEvidenceCollection,
 } from "../channels/message-access/admission-evidence.js";
 import { getRuntimeConfig } from "../config/io.js";
+import { onEnterpriseSkillAuthRequired } from "../enterprise/skill-runtime/skill-auth-request.js";
 import { onAgentAuditEvent, onAgentRuntimeEvent } from "../infra/agent-events.js";
 import { clearAgentRunContext } from "../infra/agent-run-registry.js";
 import { onTrustedToolExecutionEvent } from "../infra/diagnostic-events.js";
@@ -390,6 +391,13 @@ export function startGatewayEventSubscriptions(params: {
     params.broadcast("heartbeat", evt, { dropIfSlow: true });
   });
 
+  const enterpriseSkillAuthUnsub = onEnterpriseSkillAuthRequired(({ accountId, ...request }) => {
+    params.broadcast("enterprise.skill-auth.required", request, {
+      sessionKeys: [request.parentSessionKey],
+      enterpriseAccountId: accountId,
+    });
+  });
+
   const transcriptUnsub = onInternalSessionTranscriptUpdate((evt) => {
     dispatchEventHandler({
       loadHandler: getTranscriptUpdateHandler,
@@ -479,6 +487,7 @@ export function startGatewayEventSubscriptions(params: {
     sessionObserver,
     agentUnsub,
     heartbeatUnsub,
+    enterpriseSkillAuthUnsub,
     transcriptUnsub,
     lifecycleUnsub,
     taskUnsub,

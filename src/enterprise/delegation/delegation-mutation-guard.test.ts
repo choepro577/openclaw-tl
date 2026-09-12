@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -9,9 +9,8 @@ import { applyEnterpriseAccessChanges } from "../entitlements/entitlement-store.
 import { sharedAgentResourceKey } from "../entitlements/resource-keys.js";
 import { listEnterpriseDelegationCandidates } from "./delegation-candidates.js";
 import {
-  consumeEnterpriseDelegationMutationApproval,
+  confirmEnterpriseDelegationChildRun,
   evaluateEnterpriseDelegationToolCall,
-  invalidateEnterpriseDelegationMutationApprovals,
   isEnterpriseDelegationChildSession,
   registerEnterpriseDelegationChildAuthority,
   revokeEnterpriseDelegationChildAuthority,
@@ -22,27 +21,25 @@ const tempDirectories: string[] = [];
 const childSessionKeys: string[] = [];
 
 function stateOptions() {
-  const directory = mkdtempSync(join(tmpdir(), "openclaw-enterprise-mutation-guard-"));
+  const directory = mkdtempSync(join(tmpdir(), "openclaw-enterprise-delegation-guard-"));
   tempDirectories.push(directory);
   return { path: join(directory, "openclaw.sqlite") };
 }
 
-function specialistConfig(): OpenClawConfig {
+function specialistConfig(workspaceDir: string): OpenClawConfig {
   return {
     agents: {
       entries: {
         contracts: {
-          name: "Agent Hợp đồng",
-          description:
-            "Chuyên kiểm tra điều khoản, rủi ro và nghĩa vụ trong hợp đồng doanh nghiệp.",
+          workspace: workspaceDir,
+          description: "Agent hợp đồng",
+          tools: { profile: "minimal", allow: ["read", "write", "skill_script"] },
+          skills: ["contracts-skill"],
           delegationTarget: {
             status: "active",
             aliases: [],
             handlingMode: "auto_when_certain",
-            useWhen: [
-              "Kiểm tra điều khoản phạt trong hợp đồng",
-              "Đánh giá rủi ro trước khi ký hợp đồng",
-            ],
+            useWhen: ["Kiểm tra hợp đồng"],
             avoidWhen: [],
             requiredInputs: [],
           },
@@ -52,14 +49,42 @@ function specialistConfig(): OpenClawConfig {
   };
 }
 
-function setupAuthority() {
+function setupAuthority(provisionalRunId = false) {
   const options = stateOptions();
-  const config = specialistConfig();
+  const workspaceDir = mkdtempSync(join(tmpdir(), "openclaw-enterprise-delegation-workspace-"));
+  tempDirectories.push(workspaceDir);
+  const skillDir = join(workspaceDir, "skills", "contracts-skill");
+  mkdirSync(skillDir, { recursive: true });
+  writeFileSync(
+    join(skillDir, "SKILL.md"),
+    `---
+name: contracts-skill
+description: Contract operations.
+metadata: ${JSON.stringify({
+      openclaw: {
+        scriptRuntime: {
+          entrypoints: {
+            lookup: {
+              path: "scripts/lookup",
+              kind: "operation",
+              routerOperation: "router_tool_search",
+              readOperations: ["router_tool_search", "get_data"],
+              writeOperations: ["set_data"],
+              unknownRisk: "approval",
+            },
+          },
+        },
+      },
+    })}
+---
+`,
+  );
+  const config = specialistConfig(workspaceDir);
   const key = sharedAgentResourceKey("contracts");
   const account = createEnterpriseAccount(
     {
-      username: `mutation.${tempDirectories.length}`,
-      displayName: "Mutation Employee",
+      username: `delegation.${tempDirectories.length}`,
+      displayName: "Delegation Employee",
       passwordHash: "test-hash",
       role: "employee",
       initialEntitlements: [{ resourceType: "agent", resourceId: key, effect: "allow" }],
@@ -95,12 +120,12 @@ function setupAuthority() {
     policyRevision: policy.revision,
     profileRevision: candidate.profileRevision,
     stateOptions: options,
+    provisionalRunId,
   });
-  return { account, candidate, childRunId, childSessionKey, config, key, options };
+  return { account, childRunId, childSessionKey, config, key, options };
 }
 
 afterEach(() => {
-  vi.useRealTimers();
   for (const key of childSessionKeys.splice(0)) {
     revokeEnterpriseDelegationChildAuthority(key);
   }
@@ -110,125 +135,10 @@ afterEach(() => {
   }
 });
 
-describe("enterprise delegated-child mutation guard", () => {
-  it("keeps authority for reordered profile keys but rejects a changed handling mode", () => {
+describe("enterprise delegated-child authority guard", () => {
+  it("allows target tools and declared read operations without one-shot approval", () => {
     const { childRunId, childSessionKey, config } = setupAuthority();
-    const entry = config.agents!.entries!.contracts!;
-    entry.delegationTarget = Object.fromEntries(
-      Object.entries(entry.delegationTarget!).reverse(),
-    ) as typeof entry.delegationTarget;
-    const evaluate = () =>
-      evaluateEnterpriseDelegationToolCall({
-        config,
-        childRunId,
-        childSessionKey,
-        childAgentId: "contracts",
-        toolName: "sandbox_exec",
-        toolCallId: "reordered-profile",
-        toolParams: { command: "true" },
-      });
-    expect(evaluate()).toMatchObject({ kind: "require_approval" });
-    entry.delegationTarget!.handlingMode = "confirm_before_handoff";
-    expect(evaluate()).toEqual({ kind: "block", reason: "delegation_target_changed" });
-  });
-
-  it("leaves direct Shared Agent sessions unchanged and allows classified read-only tools", () => {
-    const { childRunId, childSessionKey, config } = setupAuthority();
-    expect(
-      evaluateEnterpriseDelegationToolCall({
-        config,
-        childSessionKey: "direct-shared-session",
-        childRunId: "direct-shared-run",
-        childAgentId: "contracts",
-        toolName: "write",
-        toolCallId: "direct-call",
-        toolParams: { path: "/tmp/test" },
-      }),
-    ).toEqual({ kind: "not_delegated_child" });
-    expect(
-      evaluateEnterpriseDelegationToolCall({
-        config,
-        childSessionKey,
-        childRunId,
-        childAgentId: "contracts",
-        toolName: "read",
-        toolCallId: "read-call",
-        toolParams: { path: "/workspace/contract.pdf" },
-      }),
-    ).toEqual({ kind: "allow_read_only" });
-  });
-
-  it("requires one-time approval for write, exec, send, delete, and unknown tools", () => {
-    const { childRunId, childSessionKey, config } = setupAuthority();
-    for (const toolName of ["write", "exec", "message_send", "delete", "custom_unknown"]) {
-      const decision = evaluateEnterpriseDelegationToolCall({
-        config,
-        childSessionKey,
-        childRunId,
-        childAgentId: "contracts",
-        toolName,
-        toolCallId: `call-${toolName}`,
-        toolParams: { path: `/workspace/${toolName}.txt`, content: "changed" },
-      });
-      expect(decision).toMatchObject({
-        kind: "require_approval",
-        allowedDecisions: ["allow-once", "deny"],
-        description: expect.stringContaining("Agent Hợp đồng"),
-      });
-    }
-  });
-
-  it("allows only direct scripts from the delegated run's granted skills", () => {
-    const { childRunId, childSessionKey, config } = setupAuthority();
-    const skillBaseDir = "/workspace/.openclaw/sandbox-skills/skills/hr-skill";
-    const skillsSnapshot = {
-      prompt: "",
-      skills: [{ name: "hr-skill" }],
-      resolvedSkills: [
-        {
-          name: "hr-skill",
-          description: "HRM lookup",
-          filePath: `${skillBaseDir}/SKILL.md`,
-          baseDir: skillBaseDir,
-          sourceInfo: {
-            path: `${skillBaseDir}/SKILL.md`,
-            source: "test",
-            scope: "temporary" as const,
-            origin: "top-level" as const,
-          },
-          disableModelInvocation: false,
-          source: "managed",
-        },
-      ],
-    };
-    const decide = (command: string) =>
-      evaluateEnterpriseDelegationToolCall({
-        config,
-        childSessionKey,
-        childRunId,
-        childAgentId: "contracts",
-        toolName: "sandbox_exec",
-        toolCallId: command,
-        toolParams: { command },
-        skillsSnapshot,
-      });
-
-    expect(
-      decide(`${skillBaseDir}/scripts/hr_call.sh router_tool_search --args-json '{}'`),
-    ).toEqual({ kind: "allow_granted_skill_script" });
-    for (const command of [
-      `${skillBaseDir}/scripts/hr_call.sh ping; rm -rf /tmp/example`,
-      `${skillBaseDir}/scripts/hr_call.sh "$(touch /tmp/example)"`,
-      `${skillBaseDir}/other/hr_call.sh ping`,
-      "/workspace/ungranted/scripts/hr_call.sh ping",
-    ]) {
-      expect(decide(command)).toMatchObject({ kind: "require_approval" });
-    }
-  });
-
-  it("allows read-only process follow-up actions", () => {
-    const { childRunId, childSessionKey, config } = setupAuthority();
-    for (const toolName of ["process", "sandbox_process"]) {
+    for (const toolName of ["read", "write", "exec", "custom_unknown"]) {
       expect(
         evaluateEnterpriseDelegationToolCall({
           config,
@@ -236,254 +146,182 @@ describe("enterprise delegated-child mutation guard", () => {
           childRunId,
           childAgentId: "contracts",
           toolName,
-          toolCallId: `${toolName}-poll`,
-          toolParams: { action: "poll", sessionId: "skill-command" },
         }),
-      ).toEqual({ kind: "allow_read_only" });
+      ).toEqual({ kind: "allow" });
+    }
+    expect(
+      evaluateEnterpriseDelegationToolCall({
+        config,
+        childSessionKey,
+        childRunId,
+        childAgentId: "contracts",
+        toolName: "skill_script",
+        toolParams: {
+          skill: "contracts-skill",
+          entrypoint: "lookup",
+          operation: "get_data",
+        },
+      }),
+    ).toEqual({ kind: "allow" });
+  });
+
+  it("routes write and unknown skill operations through common approval", () => {
+    const { childRunId, childSessionKey, config } = setupAuthority();
+    for (const operation of ["set_data", "unclassified_operation"]) {
+      expect(
+        evaluateEnterpriseDelegationToolCall({
+          config,
+          childSessionKey,
+          childRunId,
+          childAgentId: "contracts",
+          toolName: "skill_script",
+          toolParams: {
+            skill: "contracts-skill",
+            entrypoint: "lookup",
+            operation,
+          },
+        }),
+      ).toMatchObject({
+        kind: "require_approval",
+        allowedDecisions: ["allow-once", "deny"],
+      });
     }
   });
 
-  it("does not treat another run in the same child session as delegated", () => {
+  it("keeps Personal/direct sessions separate until a Shared Agent capability is bound", () => {
+    const { config } = setupAuthority();
+    expect(
+      evaluateEnterpriseDelegationToolCall({
+        config,
+        childSessionKey: "direct",
+        childRunId: "direct-run",
+        childAgentId: "contracts",
+        toolName: "write",
+      }),
+    ).toEqual({ kind: "not_delegated_child" });
+    expect(
+      evaluateEnterpriseDelegationToolCall({
+        config,
+        childSessionKey: "direct",
+        childRunId: "direct-run",
+        childAgentId: "contracts",
+        toolName: "skill_script",
+      }),
+    ).toEqual({ kind: "not_delegated_child" });
+  });
+
+  it("invalidates the child when target tools or skills change", () => {
+    const { childRunId, childSessionKey, config } = setupAuthority();
+    config.agents!.entries!.contracts!.tools!.deny = ["write"];
+    expect(
+      evaluateEnterpriseDelegationToolCall({
+        config,
+        childSessionKey,
+        childRunId,
+        childAgentId: "contracts",
+        toolName: "read",
+      }),
+    ).toEqual({ kind: "block", reason: "DELEGATION_CAPABILITY_CHANGED" });
+  });
+
+  it("revokes authority at the next call when the Shared Agent grant is removed", () => {
+    const { account, childRunId, childSessionKey, config, key, options } = setupAuthority();
+    const current = getEnterpriseAccountById(account.id, options)!;
+    applyEnterpriseAccessChanges(
+      [{ accountId: account.id, resourceType: "agent", resourceId: key, effect: null }],
+      { [account.id]: current.policyRevision },
+      options,
+    );
+    expect(
+      evaluateEnterpriseDelegationToolCall({
+        config,
+        childSessionKey,
+        childRunId,
+        childAgentId: "contracts",
+        toolName: "read",
+      }),
+    ).toEqual({ kind: "block", reason: "SHARED_AGENT_NOT_GRANTED" });
+  });
+
+  it("does not let another run reuse a child session authority", () => {
     const { childSessionKey, config } = setupAuthority();
     expect(
       evaluateEnterpriseDelegationToolCall({
         config,
         childSessionKey,
-        childRunId: "different-child-run",
+        childRunId: "another-run",
         childAgentId: "contracts",
         toolName: "write",
-        toolCallId: "wrong-run-write",
-        toolParams: { path: "/workspace/a.txt" },
       }),
     ).toEqual({ kind: "not_delegated_child" });
+    expect(
+      isEnterpriseDelegationChildSession({
+        childSessionKey,
+        childRunId: "another-run",
+        childAgentId: "contracts",
+      }),
+    ).toBe(false);
   });
 
-  it("binds approval to exact args and consumes it once", () => {
+  it("keeps an active child valid beyond ten minutes until terminal revocation", () => {
     const { childRunId, childSessionKey, config } = setupAuthority();
-    const first = evaluateEnterpriseDelegationToolCall({
-      config,
-      childSessionKey,
-      childRunId,
-      childAgentId: "contracts",
-      toolName: "write",
-      toolCallId: "write-1",
-      toolParams: { path: "/workspace/a.txt", content: "A" },
-    });
-    expect(first.kind).toBe("require_approval");
-    if (first.kind !== "require_approval") {
-      throw new Error("approval expected");
-    }
-    expect(
-      consumeEnterpriseDelegationMutationApproval({
-        token: first.token,
-        config,
-        childSessionKey,
-        childRunId,
-        childAgentId: "contracts",
-        toolName: "write",
-        toolCallId: "write-1",
-        toolParams: { path: "/workspace/b.txt", content: "B" },
-        resolution: "allow-once",
-      }),
-    ).toMatchObject({ ok: false, reason: "delegation_approval_scope_mismatch" });
+    const future = Date.now() + 10 * 60_000 + 1;
+    const nowSpy = vi.spyOn(Date, "now").mockReturnValue(future);
+    try {
+      expect(
+        evaluateEnterpriseDelegationToolCall({
+          config,
+          childSessionKey,
+          childRunId,
+          childAgentId: "contracts",
+          toolName: "read",
+        }),
+      ).toEqual({ kind: "allow" });
 
-    const second = evaluateEnterpriseDelegationToolCall({
-      config,
-      childSessionKey,
-      childRunId,
-      childAgentId: "contracts",
-      toolName: "write",
-      toolCallId: "write-2",
-      toolParams: { path: "/workspace/a.txt", content: "A" },
-    });
-    if (second.kind !== "require_approval") {
-      throw new Error("approval expected");
+      revokeEnterpriseDelegationChildAuthority(childSessionKey, childRunId);
+      expect(
+        evaluateEnterpriseDelegationToolCall({
+          config,
+          childSessionKey,
+          childRunId,
+          childAgentId: "contracts",
+          toolName: "read",
+        }),
+      ).toEqual({ kind: "not_delegated_child" });
+    } finally {
+      nowSpy.mockRestore();
     }
-    const approved = {
-      token: second.token,
-      config,
-      childSessionKey,
-      childRunId,
-      childAgentId: "contracts",
-      toolName: "write",
-      toolCallId: "write-2",
-      toolParams: { path: "/workspace/a.txt", content: "A" },
-      resolution: "allow-once" as const,
-    };
-    expect(consumeEnterpriseDelegationMutationApproval(approved)).toEqual({ ok: true });
-    expect(consumeEnterpriseDelegationMutationApproval(approved)).toMatchObject({
-      ok: false,
-      reason: "delegation_approval_not_found",
-    });
   });
 
-  it("denies approval from another child run and treats user denial as final", () => {
-    const { childRunId, childSessionKey, config } = setupAuthority();
-    const decision = evaluateEnterpriseDelegationToolCall({
-      config,
+  it("accepts the Gateway run during dispatch, then binds authority to that exact run", () => {
+    const { childRunId, childSessionKey } = setupAuthority(true);
+    expect(
+      isEnterpriseDelegationChildSession({
+        childSessionKey,
+        childRunId: "gateway-run",
+        childAgentId: "contracts",
+      }),
+    ).toBe(true);
+
+    confirmEnterpriseDelegationChildRun({
       childSessionKey,
-      childRunId,
-      childAgentId: "contracts",
-      toolName: "write",
-      toolCallId: "write-denied",
-      toolParams: { path: "/workspace/a.txt", content: "A" },
+      anticipatedRunId: childRunId,
+      actualRunId: "gateway-run",
     });
-    if (decision.kind !== "require_approval") {
-      throw new Error("approval expected");
-    }
 
     expect(
-      consumeEnterpriseDelegationMutationApproval({
-        token: decision.token,
-        config,
+      isEnterpriseDelegationChildSession({
         childSessionKey,
-        childRunId: "different-child-run",
+        childRunId: "gateway-run",
         childAgentId: "contracts",
-        toolName: "write",
-        toolCallId: "write-denied",
-        toolParams: { path: "/workspace/a.txt", content: "A" },
-        resolution: "allow-once",
       }),
-    ).toEqual({ ok: false, reason: "delegation_approval_not_found" });
-
-    expect(
-      consumeEnterpriseDelegationMutationApproval({
-        token: decision.token,
-        config,
-        childSessionKey,
-        childRunId,
-        childAgentId: "contracts",
-        toolName: "write",
-        toolCallId: "write-denied",
-        toolParams: { path: "/workspace/a.txt", content: "A" },
-        resolution: "deny",
-      }),
-    ).toEqual({ ok: false, reason: "delegation_approval_denied" });
-    expect(
-      consumeEnterpriseDelegationMutationApproval({
-        token: decision.token,
-        config,
-        childSessionKey,
-        childRunId,
-        childAgentId: "contracts",
-        toolName: "write",
-        toolCallId: "write-denied",
-        toolParams: { path: "/workspace/a.txt", content: "A" },
-        resolution: "allow-once",
-      }),
-    ).toEqual({ ok: false, reason: "delegation_approval_not_found" });
-  });
-
-  it("expires a mutation approval after two minutes without authorizing the tool", () => {
-    vi.useFakeTimers({ toFake: ["Date"] });
-    vi.setSystemTime(new Date("2026-09-03T00:00:00.000Z"));
-    const { childRunId, childSessionKey, config } = setupAuthority();
-    const decision = evaluateEnterpriseDelegationToolCall({
-      config,
-      childSessionKey,
-      childRunId,
-      childAgentId: "contracts",
-      toolName: "write",
-      toolCallId: "write-expired",
-      toolParams: { path: "/workspace/a.txt", content: "A" },
-    });
-    if (decision.kind !== "require_approval") {
-      throw new Error("approval expected");
-    }
-    vi.setSystemTime(new Date("2026-09-03T00:02:00.001Z"));
-
-    expect(
-      consumeEnterpriseDelegationMutationApproval({
-        token: decision.token,
-        config,
-        childSessionKey,
-        childRunId,
-        childAgentId: "contracts",
-        toolName: "write",
-        toolCallId: "write-expired",
-        toolParams: { path: "/workspace/a.txt", content: "A" },
-        resolution: "allow-once",
-      }),
-    ).toEqual({ ok: false, reason: "delegation_approval_not_found" });
-  });
-
-  it("denies an already approved mutation when assignment is revoked before execution", () => {
-    const { account, childRunId, childSessionKey, config, key, options } = setupAuthority();
-    const decision = evaluateEnterpriseDelegationToolCall({
-      config,
-      childSessionKey,
-      childRunId,
-      childAgentId: "contracts",
-      toolName: "write",
-      toolCallId: "write-revoked",
-      toolParams: { path: "/workspace/a.txt", content: "A" },
-    });
-    if (decision.kind !== "require_approval") {
-      throw new Error("approval expected");
-    }
-    const current = getEnterpriseAccountById(account.id, options)!;
-    applyEnterpriseAccessChanges(
-      [
-        {
-          accountId: account.id,
-          resourceType: "agent",
-          resourceId: key,
-          effect: null,
-        },
-      ],
-      { [account.id]: current.policyRevision },
-      options,
-    );
-    expect(
-      consumeEnterpriseDelegationMutationApproval({
-        token: decision.token,
-        config,
-        childSessionKey,
-        childRunId,
-        childAgentId: "contracts",
-        toolName: "write",
-        toolCallId: "write-revoked",
-        toolParams: { path: "/workspace/a.txt", content: "A" },
-        resolution: "allow-once",
-      }),
-    ).toMatchObject({ ok: false, reason: "delegation_target_changed" });
-  });
-
-  it("invalidates pending approvals without dropping the child safety authority", () => {
-    const { childRunId, childSessionKey, config } = setupAuthority();
-    const decision = evaluateEnterpriseDelegationToolCall({
-      config,
-      childSessionKey,
-      childRunId,
-      childAgentId: "contracts",
-      toolName: "write",
-      toolCallId: "write-emergency-off",
-      toolParams: { path: "/workspace/a.txt", content: "A" },
-    });
-    if (decision.kind !== "require_approval") {
-      throw new Error("approval expected");
-    }
-
-    expect(invalidateEnterpriseDelegationMutationApprovals()).toBeGreaterThan(0);
-    expect(
-      consumeEnterpriseDelegationMutationApproval({
-        token: decision.token,
-        config,
-        childSessionKey,
-        childRunId,
-        childAgentId: "contracts",
-        toolName: "write",
-        toolCallId: "write-emergency-off",
-        toolParams: { path: "/workspace/a.txt", content: "A" },
-        resolution: "allow-once",
-      }),
-    ).toEqual({ ok: false, reason: "delegation_approval_not_found" });
+    ).toBe(true);
     expect(
       isEnterpriseDelegationChildSession({
         childSessionKey,
         childRunId,
         childAgentId: "contracts",
       }),
-    ).toBe(true);
+    ).toBe(false);
   });
 });

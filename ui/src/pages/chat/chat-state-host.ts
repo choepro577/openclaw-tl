@@ -14,6 +14,7 @@ import type {
   ChatStreamSegment,
 } from "../../lib/chat/chat-types.ts";
 import type { EmbedSandboxMode } from "../../lib/chat/tool-display.ts";
+import type { EnterpriseSkillAuthRequest } from "../enterprise-user/components/skill-auth-control.ts";
 import type { ChatState } from "./chat-history.ts";
 import type { ChatRealtimeState } from "./chat-realtime.ts";
 import type { ChatSendTimingEntry } from "./chat-send-ack.ts";
@@ -99,6 +100,7 @@ export type ChatPageHost = ChatHost &
     streamPullRequestTail?: { scope: string; text: string };
     waitingApprovalStatuses: Map<string, WaitingApprovalStatus>;
     waitingApprovalResolvedIds: Set<string>;
+    pendingSkillAuthRequest?: EnterpriseSkillAuthRequest;
     chatRunStatus: ChatProps["runStatus"];
     chatNewMessagesBelow: boolean;
     chatMetadataRequestVersion: number;

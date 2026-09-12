@@ -38,7 +38,7 @@ usage() {
   local code="${1:-2}"
   cat >&2 <<'EOF'
 Usage:
-  hr_health.sh [--base-url URL]
+  hr_health.sh [--payload-stdin] [--base-url URL]
 EOF
   exit "$code"
 }
@@ -47,6 +47,10 @@ base_url="${HR_MCP_BASE_URL:-${COMNIEU_MCP_BASE_URL:-http://192.168.10.249:10000
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
+    --payload-stdin)
+      cat >/dev/null
+      shift
+      ;;
     --base-url)
       base_url="${2:-}"
       shift 2

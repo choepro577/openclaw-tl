@@ -32,6 +32,8 @@ type ReusableSkillSnapshotParams = {
   eligibility?: SkillEligibilityContext;
   existingSnapshot?: SkillSnapshot;
   snapshotVersion?: number;
+  /** Optional Enterprise capability revision for next-turn invalidation. */
+  capabilityRevision?: string;
   watch?: boolean;
   hydrateExisting?: boolean;
   pluginMetadataSnapshot?: PluginMetadataSnapshot;
@@ -94,7 +96,9 @@ export function resolveReusableWorkspaceSkillSnapshot(
     nodeSkillsEligibilityChanged ||
     skillRootsChanged ||
     !matchesSkillFilter(params.existingSnapshot?.skillFilter, params.skillFilter) ||
-    skillOverridesChanged;
+    skillOverridesChanged ||
+    (params.capabilityRevision !== undefined &&
+      params.existingSnapshot?.capabilityRevision !== params.capabilityRevision);
   const buildSnapshot = () => {
     const entries = skillRoots
       ? loadMergedWorkspaceSkills({
@@ -117,7 +121,10 @@ export function resolveReusableWorkspaceSkillSnapshot(
       pluginMetadataSnapshot: params.pluginMetadataSnapshot,
       snapshotVersion,
     });
-    return skillRoots ? { ...snapshot, skillRoots } : snapshot;
+    return {
+      ...(skillRoots ? { ...snapshot, skillRoots } : snapshot),
+      ...(params.capabilityRevision ? { capabilityRevision: params.capabilityRevision } : {}),
+    };
   };
 
   const buildSnapshotCacheKey = () =>
@@ -129,6 +136,7 @@ export function resolveReusableWorkspaceSkillSnapshot(
       params.skillOverrides,
       params.agentId,
       params.eligibility,
+      params.capabilityRevision,
       fingerprintSkillSnapshotConfig(params.config),
     ]);
 

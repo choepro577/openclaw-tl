@@ -13,7 +13,9 @@ import {
 import type { AgentKey } from "../user/user-api-contracts.js";
 import { resolveEnterpriseUserRuntimeAgentId } from "../user/user-gateway-client.js";
 import {
+  CODEX_CONNECTOR_IDENTITY_REQUIRED,
   CODEX_CURATED_MARKETPLACE,
+  classifyEnterpriseCodexPluginCapabilitySnapshot,
   createEnterpriseCodexPluginRequest,
   getEnterpriseCodexPluginGrant,
   getEnterpriseCodexPluginRequest,
@@ -45,6 +47,7 @@ import type {
   EnterpriseCodexPluginSkill,
 } from "./codex-plugin-types.js";
 import { listCodexPublicCatalog, type CodexPublicCatalogItem } from "./codex-public-catalog.js";
+import type { EnterpriseExtensionGrantScope } from "./extension-types.js";
 
 /** Safe, machine-readable error returned by the Codex Enterprise lifecycle. */
 export class EnterpriseCodexPluginError extends Error {
@@ -76,6 +79,7 @@ export type EnterpriseCodexPluginServiceContext = {
   config: OpenClawConfig;
   account: EnterpriseAccount;
   agentKey: AgentKey;
+  scope?: EnterpriseExtensionGrantScope;
   runtime?: EnterpriseCodexPluginRuntime;
   resolveRuntime?: EnterpriseCodexPluginRuntimeResolver;
   options?: OpenClawStateDatabaseOptions;
@@ -511,25 +515,12 @@ function snapshotFromDetail(value: unknown, item: EnterpriseCodexPluginCatalogIt
   const detail = record(value);
   const summary = record(detail?.summary);
   const metadata = pluginMetadataFromDetail(value);
-  const apps = Array.isArray(detail?.apps)
-    ? detail.apps.flatMap((app) => {
-        const row = record(app);
-        const id = bounded(row?.id, 256);
-        const name = bounded(row?.name, 256);
-        if (!id || !name) {
-          return [];
-        }
-        return [
-          {
-            id,
-            name,
-            description: bounded(row?.description, 2_048) ?? null,
-            category: bounded(row?.category, 256) ?? null,
-            installUrl: validHttpUrl(row?.installUrl),
-          },
-        ];
-      })
-    : [];
+  // Keep an explicitly supplied array's shape for the capability classifier.
+  // Dropping malformed entries here would turn an unknown connector surface
+  // into an empty ordinary surface and could publish the wrong credential.
+  const apps = detail && Object.hasOwn(detail, "apps") ? detail.apps : [];
+  const appTemplates = detail && Object.hasOwn(detail, "appTemplates") ? detail.appTemplates : [];
+  const mcpServers = detail && Object.hasOwn(detail, "mcpServers") ? detail.mcpServers : [];
   return {
     catalog: snapshotFromCatalog(item),
     metadata,
@@ -548,11 +539,8 @@ function snapshotFromDetail(value: unknown, item: EnterpriseCodexPluginCatalogIt
     marketplaceName: bounded(detail?.marketplaceName, 128) ?? item.marketplaceName,
     marketplacePath: bounded(detail?.marketplacePath, 2_048) ?? null,
     apps,
-    mcpServers: Array.isArray(detail?.mcpServers)
-      ? detail.mcpServers
-          .filter((entry): entry is string => typeof entry === "string")
-          .slice(0, 128)
-      : [],
+    appTemplates,
+    mcpServers,
     skillCount: Array.isArray(detail?.skills) ? detail.skills.length : 0,
     hookCount: Array.isArray(detail?.hooks) ? detail.hooks.length : 0,
   };
@@ -884,6 +872,22 @@ function requireActiveCodexGrant(input: {
     throw new EnterpriseCodexPluginError("CODEX_PLUGIN_INSTALL_IDENTITY_MISMATCH", 409);
   }
   return grant;
+}
+
+function requireSharedCodexConnectorIdentity(input: {
+  scope: EnterpriseExtensionGrantScope;
+  capabilitySnapshot: unknown;
+}): void {
+  if (
+    input.scope === "shared_agent" &&
+    classifyEnterpriseCodexPluginCapabilitySnapshot(input.capabilitySnapshot) !== "ordinary"
+  ) {
+    throw new EnterpriseCodexPluginError(
+      CODEX_CONNECTOR_IDENTITY_REQUIRED,
+      409,
+      "Shared Codex hosted connectors require a requester-scoped connector identity.",
+    );
+  }
 }
 
 function requireCurrentCodexGrant(input: {
@@ -1295,6 +1299,7 @@ function presentRequest(request: EnterpriseCodexPluginRequest, includeAccount = 
     marketplaceName: request.marketplaceName,
     remotePluginId: request.remotePluginId,
     ...(includeAccount ? { requesterAccountId: request.requesterAccountId } : {}),
+    scope: request.scope,
     agentKey: request.agentKey,
     requestKind: request.requestKind,
     state: request.state,
@@ -1325,6 +1330,7 @@ function presentGrant(grant: EnterpriseCodexPluginGrant) {
     marketplaceName: grant.marketplaceName,
     remotePluginId: grant.remotePluginId,
     installedPluginId: grant.installedPluginId,
+    scope: grant.scope,
     agentKey: grant.agentKey,
     state: grant.state,
     authRequired: grant.authRequired,
@@ -1863,6 +1869,7 @@ export async function requestEnterpriseCodexPlugin(
       marketplaceName: reviewed.item.marketplaceName,
       remotePluginId: reviewed.item.remotePluginId,
       requesterAccountId: context.account.id,
+      scope: context.scope ?? "account",
       agentKey: context.agentKey,
       runtimeAgentId: current.runtimeAgentId,
       requestKind: reviewed.item.installed || grant ? "access" : "install",
@@ -1913,6 +1920,7 @@ export async function approveEnterpriseCodexPluginRequest(context: {
   reviewer: EnterpriseAccount;
   requestId: string;
   baseRevision: number;
+  scope?: EnterpriseExtensionGrantScope;
   runtime?: EnterpriseCodexPluginRuntime;
   resolveRuntime?: EnterpriseCodexPluginRuntimeResolver;
   options?: OpenClawStateDatabaseOptions;
@@ -1921,7 +1929,9 @@ export async function approveEnterpriseCodexPluginRequest(context: {
   if (!request) {
     throw new EnterpriseCodexPluginError("CODEX_PLUGIN_REQUEST_NOT_FOUND", 404);
   }
-  const requester = getEnterpriseAccountById(request.requesterAccountId, context.options);
+  const requester = request.requesterAccountId
+    ? getEnterpriseAccountById(request.requesterAccountId, context.options)
+    : undefined;
   if (!requester || !requester.enabled) {
     throw new EnterpriseCodexPluginError("CODEX_REQUEST_ACCOUNT_UNAVAILABLE", 409);
   }
@@ -1956,6 +1966,10 @@ export async function approveEnterpriseCodexPluginRequest(context: {
   if (!reviewed.item.available) {
     throw new EnterpriseCodexPluginError("CODEX_PLUGIN_UNAVAILABLE", 409);
   }
+  requireSharedCodexConnectorIdentity({
+    scope: context.scope ?? request.scope,
+    capabilitySnapshot: reviewed.capabilitySnapshot,
+  });
   let approving: EnterpriseCodexPluginRequest;
   try {
     approving = transitionEnterpriseCodexPluginRequest(
@@ -1966,6 +1980,7 @@ export async function approveEnterpriseCodexPluginRequest(context: {
         to: "approving",
         reviewerAccountId: context.reviewer.id,
         safeErrorCode: null,
+        ...(context.scope ? { scope: context.scope } : {}),
       },
       context.options,
     );
@@ -2075,6 +2090,7 @@ export async function approveEnterpriseCodexPluginRequest(context: {
   const grant = upsertEnterpriseCodexPluginGrant(
     {
       accountId: requester.id,
+      scope: approving.scope,
       agentKey: request.agentKey,
       runtimeAgentId: current.runtimeAgentId,
       pluginName: request.pluginName,
@@ -2084,6 +2100,7 @@ export async function approveEnterpriseCodexPluginRequest(context: {
       capabilitySnapshot: reviewed.capabilitySnapshot,
       capabilityDigest: reviewed.capabilityDigest,
       sourceRequestId: request.id,
+      approvedByAccountId: approving.reviewerAccountId,
       state: "active",
       authRequired: auth.authRequired,
       appsNeedingAuth: auth.appsNeedingAuth,

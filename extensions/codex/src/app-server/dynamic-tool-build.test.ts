@@ -2048,6 +2048,34 @@ describe("Codex app-server dynamic tool build", () => {
     });
   });
 
+  it("keeps the granted skill runner callable and identifies a later allowlist loss", async () => {
+    const workspaceDir = path.join(tempDir, "shared-skill-workspace");
+    const params = createParams(path.join(tempDir, "shared-skill.jsonl"), workspaceDir);
+    params.disableTools = false;
+    params.runtimePlan = createCodexRuntimePlanFixture();
+    const runner = createRuntimeDynamicTool("skill_script");
+    setOpenClawCodingToolsFactoryForTests(() => [createRuntimeDynamicTool("read"), runner]);
+    const tools = await buildDynamicToolsForTest(params, workspaceDir, {
+      nativeToolSurfaceEnabled: false,
+    });
+    expect(tools.map((tool) => tool.name)).toEqual(["read", "skill_script"]);
+    await expectDefined(
+      tools.find((tool) => tool.name === "skill_script"),
+      "skill runner",
+    ).execute("router-call", {});
+    expect(runner.execute).toHaveBeenCalledTimes(1);
+    params.toolsAllow = ["read"];
+    await expect(
+      buildDynamicToolsForTest(params, workspaceDir, {
+        nativeToolSurfaceEnabled: false,
+      }),
+    ).rejects.toMatchObject({
+      code: "ENTERPRISE_RUNTIME_CAPABILITY_MISSING",
+      boundary: "codex:runtime-allowlist",
+      missing: ["skill_script"],
+    });
+  });
+
   it("passes the approval reviewer device into Codex dynamic tools", async () => {
     const sessionFile = path.join(tempDir, "session.jsonl");
     const workspaceDir = path.join(tempDir, "workspace");
@@ -2128,7 +2156,10 @@ describe("Codex app-server dynamic tool build", () => {
       sandbox: null as never,
       nativeToolSurfaceEnabled: false,
     });
-    const read = expectDefined(tools.find((tool) => tool.name === "read"));
+    const read = expectDefined(
+      tools.find((tool) => tool.name === "read"),
+      "granted skill reader",
+    );
     expect(JSON.stringify(await read.execute("read-granted", { path: skillFile }))).toContain(
       "Run scripts/query.sh",
     );

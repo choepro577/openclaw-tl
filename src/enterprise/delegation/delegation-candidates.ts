@@ -4,15 +4,19 @@ import { stableStringify } from "@openclaw/normalization-core/stable-stringify";
 import { listAgentEntries } from "../../agents/agent-scope.js";
 import type { AgentDelegationTargetConfig } from "../../config/types.agents.js";
 import type { OpenClawConfig } from "../../config/types.openclaw.js";
+import { readGatewayRequestRuntimeMetadata } from "../../gateway/request-runtime-config.js";
 import { normalizeAgentId } from "../../routing/session-key.js";
 import type { OpenClawStateDatabaseOptions } from "../../state/openclaw-state-db.js";
 import { isReservedSystemAgentId } from "../../system-agent/agent-id.js";
 import type { EnterpriseAccount } from "../accounts/account-types.js";
 import { listEnterpriseEntitlements } from "../entitlements/entitlement-store.js";
 import {
+  ENTERPRISE_DELEGATION_MANAGED_TOOL_IDS,
+  ENTERPRISE_NON_DELEGABLE_TOOL_IDS,
   enterpriseRuntimeResourceId,
   sharedAgentResourceKey,
 } from "../entitlements/resource-keys.js";
+import { resolveEnterpriseSharedAgentSkillSnapshot } from "../isolation/enterprise-agent-capabilities.js";
 import {
   listEnterpriseDelegationOverrides,
   readEnterpriseDelegationPolicy,
@@ -61,14 +65,56 @@ export function enterpriseDelegationModeCanOverride(
   return override === "inherit" || HANDLING_RANK[override] >= HANDLING_RANK[configured];
 }
 
-function profileRevision(
-  description: string,
-  profile: AgentDelegationTargetConfig | undefined,
-): string {
+function profileRevision(config: OpenClawConfig, agentId: string): string {
+  // A user request runs against an account-scoped projection, while the live
+  // delegation guard rechecks the host source config. The projection already
+  // carries the profile revision computed from that source catalog; reuse it
+  // so Personal policy additions (read/skill_script and sandbox controls) do
+  // not make the same Shared Agent look changed at the child boundary.
+  const requestSpecialist = readGatewayRequestRuntimeMetadata(
+    config,
+  )?.enterpriseDelegation?.specialists.find(
+    (candidate) => normalizeAgentId(candidate.agentId) === normalizeAgentId(agentId),
+  );
+  if (requestSpecialist?.profileRevision) {
+    return requestSpecialist.profileRevision;
+  }
+  const entry = listAgentEntries(config).find(
+    (candidate) => normalizeAgentId(candidate.id) === normalizeAgentId(agentId),
+  );
+  const skillFilter = entry?.skills ?? config.agents?.defaults?.skills;
+  const snapshot = entry
+    ? resolveEnterpriseSharedAgentSkillSnapshot({ config, agentId })?.snapshot
+    : undefined;
   return (
     createHash("sha256")
       // Config parsing and projection may reorder keys without changing the delegated authority.
-      .update(stableStringify({ description, profile: profile ?? null }))
+      .update(
+        stableStringify({
+          description: entry?.description?.trim() ?? "",
+          profile: entry?.delegationTarget ?? null,
+          tools: {
+            global: config.tools ?? null,
+            agent: entry?.tools ?? null,
+          },
+          skills: skillFilter ?? null,
+          sandbox: {
+            defaults: config.agents?.defaults?.sandbox ?? null,
+            agent: entry?.sandbox ?? null,
+          },
+          skillRuntime:
+            snapshot?.skills.map((skill) => ({
+              name: skill.name,
+              skillKey: skill.skillKey ?? skill.name,
+              source: skill.source ?? null,
+              scriptRuntime: skill.scriptRuntime ?? null,
+            })) ?? [],
+          hardDeny: [
+            ...ENTERPRISE_NON_DELEGABLE_TOOL_IDS,
+            ...ENTERPRISE_DELEGATION_MANAGED_TOOL_IDS,
+          ],
+        }),
+      )
       .digest("hex")
       .slice(0, 16)
   );
@@ -143,7 +189,7 @@ export function listEnterpriseDelegationCandidates(
         name: entry?.identity?.name ?? entry?.name ?? agentId,
         description: entry?.description?.trim() ?? "",
         profile: profile ?? null,
-        profileRevision: profileRevision(entry?.description?.trim() ?? "", profile),
+        profileRevision: profileRevision(config, agentId),
         assigned: true,
         effective,
         routable:

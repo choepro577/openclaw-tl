@@ -1,51 +1,24 @@
-// One-shot mutation approvals for Enterprise specialist child runs.
-import { createHash } from "node:crypto";
-import path from "node:path";
-import { isRecord } from "@openclaw/normalization-core/record-coerce";
+// Live authority guard for Enterprise specialist child runs.
 import type { OpenClawConfig } from "../../config/types.openclaw.js";
-import { isPathInside } from "../../infra/path-guards.js";
+import { readGatewayRequestRuntimeMetadata } from "../../gateway/request-runtime-config.js";
 import { createSubsystemLogger } from "../../logging/subsystem.js";
-import type { PluginApprovalResolution } from "../../plugins/types.js";
+import { PluginApprovalResolutions, type PluginApprovalResolution } from "../../plugins/types.js";
 import { normalizeAgentId } from "../../routing/session-key.js";
 import { resolveGlobalSingleton } from "../../shared/global-singleton.js";
 import type { SkillSnapshot } from "../../skills/types.js";
 import type { OpenClawStateDatabaseOptions } from "../../state/openclaw-state-db.js";
-import { hasTopLevelShellControlOperator, splitShellArgs } from "../../utils/shell-argv.js";
 import { getEnterpriseAccountById } from "../accounts/account-store.js";
+import { resolveEnterpriseSharedAgentCapabilities } from "../isolation/enterprise-agent-capabilities.js";
+import { cancelEnterpriseSkillAuthForChild } from "../skill-runtime/skill-auth-request.js";
+import { skillScriptRisk } from "../skill-runtime/skill-script-runtime.js";
 import { listEnterpriseDelegationCandidates } from "./delegation-candidates.js";
-import {
-  appendEnterpriseDelegationEvent,
-  readEnterpriseDelegationPolicy,
-} from "./delegation-store.js";
+import { readEnterpriseDelegationPolicy } from "./delegation-store.js";
 
 const log = createSubsystemLogger("enterprise/delegation-guard");
+const SKILL_SCRIPT_TOOL = "skill_script";
+const APPROVAL_TIMEOUT_MS = 2 * 60_000;
 
-const AUTHORITY_TTL_MS = 10 * 60_000;
-const APPROVAL_TTL_MS = 2 * 60_000;
-
-const READ_ONLY_TOOLS = new Set([
-  "read",
-  "grep",
-  "glob",
-  "find",
-  "search",
-  "web_search",
-  "web_fetch",
-  "memory_search",
-  "memory_get",
-  "knowledge_search",
-  "knowledge_get",
-  "enterprise_knowledge_search",
-  "enterprise_knowledge_get",
-  "sessions_list",
-  "sessions_history",
-  "sessions_search",
-  "session_status",
-]);
-const EXEC_TOOLS = new Set(["exec", "sandbox_exec"]);
-const READ_ONLY_PROCESS_ACTIONS = new Set(["list", "poll", "log"]);
-
-type DelegationChildAuthority = {
+export type DelegationChildAuthority = {
   childSessionKey: string;
   childRunId: string;
   accountId: string;
@@ -54,77 +27,49 @@ type DelegationChildAuthority = {
   parentRunId: string;
   childAgentId: string;
   childAgentName: string;
+  approvalReviewerDeviceId?: string;
   policyRevision: number;
   profileRevision: string;
-  createdAt: number;
-  expiresAt: number;
+  provisionalRunId: boolean;
   stateOptions?: OpenClawStateDatabaseOptions;
 };
 
-type PendingApproval = {
-  token: string;
-  childSessionKey: string;
-  childRunId: string;
-  toolName: string;
-  toolCallId: string;
-  argsHash: string;
-  expiresAt: number;
-  consumed: boolean;
-};
-
-const CHILD_AUTHORITIES_KEY = Symbol.for("openclaw.enterprise.delegationChildAuthorities");
-const PENDING_APPROVALS_KEY = Symbol.for("openclaw.enterprise.delegationMutationApprovals");
+// This process-local map indexes an admitted child until the existing terminal
+// or dispatch-abort callback revokes it. It is not a time-based grant: every
+// call revalidates the live account, policy, profile, and capability revision.
 const childAuthorities = resolveGlobalSingleton<Map<string, DelegationChildAuthority>>(
-  CHILD_AUTHORITIES_KEY,
+  Symbol.for("openclaw.enterprise.delegationChildAuthorities"),
   () => new Map(),
 );
-const pendingApprovals = resolveGlobalSingleton<Map<string, PendingApproval>>(
-  PENDING_APPROVALS_KEY,
-  () => new Map(),
-);
-
-function stableValue(value: unknown): unknown {
-  if (Array.isArray(value)) {
-    return value.map(stableValue);
-  }
-  if (isRecord(value)) {
-    return Object.fromEntries(
-      Object.entries(value)
-        .toSorted(([left], [right]) => left.localeCompare(right))
-        .map(([key, item]) => [key, stableValue(item)]),
-    );
-  }
-  return value;
-}
-
-function hashArgs(value: unknown): string {
-  return createHash("sha256")
-    .update(JSON.stringify(stableValue(value)))
-    .digest("hex");
-}
-
-function cleanupExpired(now = Date.now()): void {
-  for (const [key, authority] of childAuthorities) {
-    if (authority.expiresAt <= now) {
-      childAuthorities.delete(key);
-    }
-  }
-  for (const [key, approval] of pendingApprovals) {
-    if (approval.expiresAt <= now || approval.consumed) {
-      pendingApprovals.delete(key);
-    }
-  }
-}
 
 export function registerEnterpriseDelegationChildAuthority(
-  input: Omit<DelegationChildAuthority, "createdAt" | "expiresAt">,
+  input: Omit<DelegationChildAuthority, "provisionalRunId"> & {
+    provisionalRunId?: boolean;
+  },
 ): void {
-  cleanupExpired();
-  const now = Date.now();
   childAuthorities.set(input.childSessionKey, {
     ...input,
-    createdAt: now,
-    expiresAt: now + AUTHORITY_TTL_MS,
+    provisionalRunId: input.provisionalRunId === true,
+  });
+}
+
+export function confirmEnterpriseDelegationChildRun(params: {
+  childSessionKey: string;
+  anticipatedRunId: string;
+  actualRunId: string;
+}): void {
+  const authority = childAuthorities.get(params.childSessionKey);
+  if (
+    !authority ||
+    !authority.provisionalRunId ||
+    authority.childRunId !== params.anticipatedRunId
+  ) {
+    throw new Error("DELEGATION_CHILD_AUTHORITY_CONFIRMATION_FAILED");
+  }
+  childAuthorities.set(params.childSessionKey, {
+    ...authority,
+    childRunId: params.actualRunId,
+    provisionalRunId: false,
   });
 }
 
@@ -137,18 +82,7 @@ export function revokeEnterpriseDelegationChildAuthority(
     return;
   }
   childAuthorities.delete(childSessionKey);
-  for (const [key, approval] of pendingApprovals) {
-    if (approval.childSessionKey === childSessionKey) {
-      pendingApprovals.delete(key);
-    }
-  }
-}
-
-/** Invalidates unused one-shot approvals while retaining child authority so live policy checks fail closed. */
-export function invalidateEnterpriseDelegationMutationApprovals(): number {
-  const count = pendingApprovals.size;
-  pendingApprovals.clear();
-  return count;
+  cancelEnterpriseSkillAuthForChild(childSessionKey);
 }
 
 function resolveAuthority(params: {
@@ -156,16 +90,37 @@ function resolveAuthority(params: {
   childRunId?: string;
   childAgentId?: string;
 }): DelegationChildAuthority | undefined {
-  cleanupExpired();
   if (!params.childSessionKey || !params.childRunId || !params.childAgentId) {
     return undefined;
   }
   const authority = childAuthorities.get(params.childSessionKey);
   return authority &&
-    authority.childRunId === params.childRunId &&
+    (authority.provisionalRunId || authority.childRunId === params.childRunId) &&
     normalizeAgentId(authority.childAgentId) === normalizeAgentId(params.childAgentId)
     ? authority
     : undefined;
+}
+
+export function readEnterpriseDelegationChildAuthority(params: {
+  childSessionKey?: string;
+  childRunId?: string;
+  childAgentId?: string;
+}): DelegationChildAuthority | undefined {
+  const authority = resolveAuthority(params);
+  if (!authority && childAuthorities.size > 0) {
+    const registered = childAuthorities.get(params.childSessionKey ?? "");
+    log.warn("delegation child authority lookup missed", {
+      childSessionKey: params.childSessionKey,
+      childRunId: params.childRunId,
+      childAgentId: params.childAgentId,
+      authorityRegistered: Boolean(registered),
+      registeredRunId: registered?.childRunId,
+      registeredAgentId: registered?.childAgentId,
+      provisionalRunId: registered?.provisionalRunId,
+      registeredSessionKeys: [...childAuthorities.keys()],
+    });
+  }
+  return authority ? { ...authority } : undefined;
 }
 
 export function isEnterpriseDelegationChildSession(params: {
@@ -176,6 +131,70 @@ export function isEnterpriseDelegationChildSession(params: {
   return Boolean(resolveAuthority(params));
 }
 
+type EnterpriseSharedCapability = ReturnType<typeof resolveEnterpriseSharedAgentCapabilities>;
+
+function resolveLiveEnterpriseSharedAgentCapabilities(
+  config: OpenClawConfig,
+  accountId: string,
+  agentId: string,
+  stateOptions?: OpenClawStateDatabaseOptions,
+): EnterpriseSharedCapability | undefined {
+  const resolver = readGatewayRequestRuntimeMetadata(config)?.enterpriseCapabilities;
+  if (resolver) {
+    const capability = resolver.resolve(agentId);
+    return capability.accountId === accountId ? capability : undefined;
+  }
+  const account = getEnterpriseAccountById(accountId, stateOptions);
+  return account
+    ? resolveEnterpriseSharedAgentCapabilities({ config, account, agentId, stateOptions })
+    : undefined;
+}
+
+/**
+ * Identifies a directly selected Shared Agent before the tool call reaches the
+ * normal policy chain. Personal Agent policy is deliberately not consulted.
+ */
+export function isEnterpriseSharedAgentSession(params: {
+  config?: OpenClawConfig;
+  agentId?: string;
+}): boolean {
+  const metadata = readGatewayRequestRuntimeMetadata(params.config);
+  const user = metadata?.enterpriseUser;
+  const agentId = params.agentId?.trim();
+  if (!user || !agentId) {
+    return false;
+  }
+  const normalized = normalizeAgentId(agentId);
+  return (
+    normalized !== normalizeAgentId(user.personalAgentId) &&
+    normalized !== normalizeAgentId(user.personalAgentTemplateId)
+  );
+}
+
+function resolveDirectEnterpriseSharedCapability(params: {
+  config: OpenClawConfig;
+  agentId?: string;
+}): EnterpriseSharedCapability | undefined {
+  if (!isEnterpriseSharedAgentSession(params) || !params.agentId) {
+    return undefined;
+  }
+  const accountId = readGatewayRequestRuntimeMetadata(params.config)?.enterpriseUser?.accountId;
+  return accountId
+    ? resolveLiveEnterpriseSharedAgentCapabilities(params.config, accountId, params.agentId)
+    : undefined;
+}
+
+function approvalDescription(params: { toolName: string; agentName?: string }): {
+  title: string;
+  description: string;
+} {
+  const owner = params.agentName?.trim() || "Shared Agent";
+  return {
+    title: `Xác nhận thao tác của ${owner}`,
+    description: `Công cụ ${params.toolName} yêu cầu xác nhận trước khi thực hiện thao tác có thể thay đổi dữ liệu hoặc chưa được phân loại là chỉ đọc.`,
+  };
+}
+
 function liveAuthorityReason(
   authority: DelegationChildAuthority,
   config: OpenClawConfig,
@@ -183,101 +202,74 @@ function liveAuthorityReason(
   const account = getEnterpriseAccountById(authority.accountId, authority.stateOptions);
   const policy = readEnterpriseDelegationPolicy(authority.stateOptions);
   if (!account?.enabled || !account.personalAgentEnabled) {
-    return "delegation_account_disabled";
+    return "AGENT_DISABLED";
   }
   if (policy.rollout !== "on" || policy.revision !== authority.policyRevision) {
-    return "delegation_policy_changed";
+    return "DELEGATION_POLICY_CHANGED";
   }
-  const target = listEnterpriseDelegationCandidates(config, account, authority.stateOptions).find(
-    (candidate) => candidate.agentId === normalizeAgentId(authority.childAgentId),
-  );
-  if (!target?.routable || target.profileRevision !== authority.profileRevision) {
+  const liveResolver =
+    readGatewayRequestRuntimeMetadata(config)?.enterpriseDelegation?.resolveSpecialist;
+  const target = liveResolver
+    ? liveResolver(authority.childAgentId)
+    : listEnterpriseDelegationCandidates(config, account, authority.stateOptions).find(
+        (candidate) => candidate.agentId === normalizeAgentId(authority.childAgentId),
+      );
+  if (!target?.routable) {
     log.warn("delegation target validation failed", {
       childRunId: authority.childRunId,
-      expectedProfileRevision: authority.profileRevision,
-      actualProfileRevision: target?.profileRevision,
       routable: target?.routable ?? false,
       reasonCodes: target?.reasonCodes ?? ["target_missing"],
     });
-    return "delegation_target_changed";
+    return target?.reasonCodes.includes("profile_disabled")
+      ? "AGENT_DISABLED"
+      : "SHARED_AGENT_NOT_GRANTED";
+  }
+  if (target.profileRevision !== authority.profileRevision) {
+    log.warn("delegation capability revision changed", {
+      childRunId: authority.childRunId,
+      expectedProfileRevision: authority.profileRevision,
+      actualProfileRevision: target.profileRevision,
+    });
+    return "DELEGATION_CAPABILITY_CHANGED";
+  }
+  const capability = resolveLiveEnterpriseSharedAgentCapabilities(
+    config,
+    authority.accountId,
+    authority.childAgentId,
+    authority.stateOptions,
+  );
+  if (!capability?.allowed) {
+    return capability?.reason === "account_disabled"
+      ? "AGENT_DISABLED"
+      : "SHARED_AGENT_NOT_GRANTED";
   }
   return undefined;
 }
 
-function actionLabel(toolName: string): string {
-  if (["write", "edit", "apply_patch"].includes(toolName)) {
-    return "ghi hoặc thay đổi dữ liệu";
+export function validateEnterpriseDelegationChildAuthority(params: {
+  config: OpenClawConfig;
+  childSessionKey?: string;
+  childRunId?: string;
+  childAgentId?: string;
+}): { ok: true; authority: DelegationChildAuthority } | { ok: false; reason: string } {
+  const authority = resolveAuthority(params);
+  if (!authority) {
+    return { ok: false, reason: "SHARED_AGENT_NOT_GRANTED" };
   }
-  if (["message", "send", "email", "notify"].some((name) => toolName.includes(name))) {
-    return "gửi dữ liệu hoặc thông báo ra bên ngoài";
-  }
-  if (["delete", "remove", "trash"].some((name) => toolName.includes(name))) {
-    return "xóa dữ liệu";
-  }
-  if (["exec", "bash", "process", "shell"].some((name) => toolName.includes(name))) {
-    return "chạy lệnh hoặc điều khiển tiến trình";
-  }
-  return "thực hiện thao tác chưa được phân loại là chỉ đọc";
-}
-
-function targetLabel(params: Record<string, unknown>): string {
-  for (const key of ["path", "file", "target", "to", "channel", "url", "resourceId", "id"]) {
-    const value = params[key];
-    if (typeof value === "string" && value.trim()) {
-      return `${key}: ${value.trim().slice(0, 240)}`;
-    }
-  }
-  return "đối tượng do công cụ xác định từ tham số hiện tại";
-}
-
-function changedFields(params: Record<string, unknown>): string {
-  const fields = Object.keys(params).slice(0, 12);
-  return fields.length > 0 ? fields.join(", ") : "không có trường dữ liệu mô tả";
-}
-
-function isReadOnlyProcessCall(toolName: string, toolParams: Record<string, unknown>): boolean {
-  return (
-    (toolName === "process" || toolName === "sandbox_process") &&
-    typeof toolParams.action === "string" &&
-    READ_ONLY_PROCESS_ACTIONS.has(toolParams.action.trim().toLowerCase())
-  );
-}
-
-function isGrantedSkillScriptCall(params: {
-  toolName: string;
-  toolParams: Record<string, unknown>;
-  skillsSnapshot?: SkillSnapshot;
-}): boolean {
-  if (!EXEC_TOOLS.has(params.toolName) || typeof params.toolParams.command !== "string") {
-    return false;
-  }
-  const command = params.toolParams.command.trim();
-  if (!command || hasTopLevelShellControlOperator(command) || /[`<>]|\$\(/u.test(command)) {
-    return false;
-  }
-  const argv = splitShellArgs(command);
-  const executable = argv?.[0];
-  if (!executable || !path.isAbsolute(executable)) {
-    return false;
-  }
-  const resolvedExecutable = path.resolve(executable);
-  return (params.skillsSnapshot?.resolvedSkills ?? []).some((skill) => {
-    const scriptsDir = path.resolve(skill.baseDir, "scripts");
-    return resolvedExecutable !== scriptsDir && isPathInside(scriptsDir, resolvedExecutable);
-  });
+  const reason = liveAuthorityReason(authority, params.config);
+  return reason ? { ok: false, reason } : { ok: true, authority: { ...authority } };
 }
 
 export type EnterpriseDelegationToolGuardDecision =
-  | { kind: "not_delegated_child" | "allow_read_only" | "allow_granted_skill_script" }
+  | { kind: "not_delegated_child" }
+  | { kind: "allow" }
   | { kind: "block"; reason: string }
   | {
       kind: "require_approval";
-      token: string;
       title: string;
       description: string;
       timeoutMs: number;
       allowedDecisions: Array<"allow-once" | "deny">;
-      onResolution: (resolution: PluginApprovalResolution) => void;
     };
 
 export function evaluateEnterpriseDelegationToolCall(params: {
@@ -286,166 +278,98 @@ export function evaluateEnterpriseDelegationToolCall(params: {
   childRunId?: string;
   childAgentId?: string;
   toolName: string;
+  toolParams?: Record<string, unknown>;
   toolCallId?: string;
-  toolParams: Record<string, unknown>;
   skillsSnapshot?: SkillSnapshot;
+  approvalResolution?: PluginApprovalResolution;
 }): EnterpriseDelegationToolGuardDecision {
   const authority = resolveAuthority(params);
-  if (!authority || !params.config) {
-    return { kind: "not_delegated_child" };
+  if (!params.config) {
+    return authority || params.toolName === SKILL_SCRIPT_TOOL
+      ? { kind: "block", reason: "DELEGATION_REQUEST_CONFIG_MISSING" }
+      : { kind: "not_delegated_child" };
   }
-  const normalizedTool = params.toolName.trim().toLowerCase();
-  if (
-    READ_ONLY_TOOLS.has(normalizedTool) ||
-    isReadOnlyProcessCall(normalizedTool, params.toolParams)
-  ) {
-    return { kind: "allow_read_only" };
-  }
-  const invalidReason = liveAuthorityReason(authority, params.config);
-  if (invalidReason) {
-    return { kind: "block", reason: invalidReason };
-  }
-  if (
-    isGrantedSkillScriptCall({
-      toolName: normalizedTool,
-      toolParams: params.toolParams,
-      skillsSnapshot: params.skillsSnapshot,
-    })
-  ) {
-    return { kind: "allow_granted_skill_script" };
-  }
-  const toolCallId = params.toolCallId?.trim();
-  if (!toolCallId) {
-    return { kind: "block", reason: "delegation_tool_call_id_required" };
-  }
-  const argsHash = hashArgs(params.toolParams);
-  const token = createHash("sha256")
-    .update(
-      [
-        authority.accountId,
-        authority.parentRunId,
-        authority.childSessionKey,
-        authority.childRunId,
-        toolCallId,
-        normalizedTool,
-        argsHash,
-        String(Date.now()),
-      ].join("\0"),
-    )
-    .digest("hex");
-  const approval: PendingApproval = {
-    token,
-    childSessionKey: authority.childSessionKey,
-    childRunId: authority.childRunId,
-    toolName: normalizedTool,
-    toolCallId,
-    argsHash,
-    expiresAt: Date.now() + APPROVAL_TTL_MS,
-    consumed: false,
-  };
-  pendingApprovals.set(token, approval);
-  return {
-    kind: "require_approval",
-    token,
-    title: `Xác nhận thao tác của ${authority.childAgentName}`,
-    description: [
-      `Agent: ${authority.childAgentName}`,
-      `Hành động: ${actionLabel(normalizedTool)} (${normalizedTool})`,
-      `Đối tượng: ${targetLabel(params.toolParams)}`,
-      `Dữ liệu chính sẽ tác động: ${changedFields(params.toolParams)}`,
-      "Xác nhận này chỉ có hiệu lực cho đúng thao tác và tham số hiện tại.",
-    ].join("\n"),
-    timeoutMs: APPROVAL_TTL_MS,
-    allowedDecisions: ["allow-once", "deny"],
-    onResolution(resolution) {
-      if (resolution !== "allow-once") {
-        pendingApprovals.delete(token);
-        appendEnterpriseDelegationEvent(
-          {
-            accountId: authority.accountId,
-            personalAgentId: authority.personalAgentId,
-            sharedAgentIds: [authority.childAgentId],
-            childRunIds: [authority.childRunId],
-            prompt: "",
-            parentRunId: authority.parentRunId,
-            parentSessionKey: authority.parentSessionKey,
-            decisionSource: "system",
-            outcome: "blocked",
-            confidenceBand: null,
-            reasonCode:
-              resolution === "deny"
-                ? "mutation_confirmation_denied"
-                : "mutation_confirmation_expired",
-            policyRevision: authority.policyRevision,
-            profileRevisions: { [authority.childAgentId]: authority.profileRevision },
-            confirmationState: resolution === "deny" ? "denied" : "expired",
-            latencyMs: null,
-          },
-          authority.stateOptions,
-        );
-      }
-    },
-  };
-}
 
-export function consumeEnterpriseDelegationMutationApproval(params: {
-  token: string;
-  config: OpenClawConfig;
-  childSessionKey?: string;
-  childRunId?: string;
-  childAgentId?: string;
-  toolName: string;
-  toolCallId?: string;
-  toolParams: Record<string, unknown>;
-  resolution?: PluginApprovalResolution;
-}): { ok: true } | { ok: false; reason: string } {
-  const authority = resolveAuthority(params);
-  const approval = pendingApprovals.get(params.token);
-  if (!authority || !approval) {
-    return { ok: false, reason: "delegation_approval_not_found" };
+  const normalizedTool = params.toolName.trim().toLowerCase();
+  const toolParams = params.toolParams ?? {};
+  let capability: EnterpriseSharedCapability | undefined;
+  if (authority) {
+    const reason = liveAuthorityReason(authority, params.config);
+    if (reason) {
+      return { kind: "block", reason };
+    }
+    capability = resolveLiveEnterpriseSharedAgentCapabilities(
+      params.config,
+      authority.accountId,
+      authority.childAgentId,
+      authority.stateOptions,
+    );
+  } else {
+    capability = resolveDirectEnterpriseSharedCapability({
+      config: params.config,
+      agentId: params.childAgentId,
+    });
+    if (
+      !capability &&
+      !isEnterpriseSharedAgentSession({ config: params.config, agentId: params.childAgentId })
+    ) {
+      return { kind: "not_delegated_child" };
+    }
   }
-  if (params.resolution !== "allow-once") {
-    pendingApprovals.delete(params.token);
-    return { ok: false, reason: "delegation_approval_denied" };
+
+  if (!capability?.allowed) {
+    return {
+      kind: "block",
+      reason:
+        capability?.reason === "account_disabled" ? "AGENT_DISABLED" : "SHARED_AGENT_NOT_GRANTED",
+    };
   }
-  if (
-    approval.consumed ||
-    approval.expiresAt <= Date.now() ||
-    approval.childSessionKey !== params.childSessionKey ||
-    approval.childRunId !== params.childRunId ||
-    approval.toolName !== params.toolName.trim().toLowerCase() ||
-    approval.toolCallId !== params.toolCallId ||
-    approval.argsHash !== hashArgs(params.toolParams)
-  ) {
-    pendingApprovals.delete(params.token);
-    return { ok: false, reason: "delegation_approval_scope_mismatch" };
+
+  if (normalizedTool === SKILL_SCRIPT_TOOL) {
+    const skillKey = typeof toolParams.skill === "string" ? toolParams.skill.trim() : "";
+    const entrypointName =
+      typeof toolParams.entrypoint === "string" ? toolParams.entrypoint.trim() : "";
+    if (!skillKey || !entrypointName) {
+      return { kind: "block", reason: "SKILL_ENTRYPOINT_INVALID" };
+    }
+    let risk: "read" | "approval";
+    try {
+      risk = skillScriptRisk({
+        snapshot: capability.skillsSnapshot,
+        skillKey,
+        entrypointName,
+        ...(typeof toolParams.operation === "string" ? { operation: toolParams.operation } : {}),
+      });
+    } catch (error) {
+      const code =
+        error instanceof Error && "code" in error && typeof error.code === "string"
+          ? error.code
+          : "SKILL_ENTRYPOINT_INVALID";
+      return { kind: "block", reason: code };
+    }
+    if (risk === "read") {
+      return { kind: "allow" };
+    }
+
+    if (params.approvalResolution === PluginApprovalResolutions.ALLOW_ONCE) {
+      return { kind: "allow" };
+    }
+    if (params.approvalResolution) {
+      return { kind: "block", reason: "delegation_approval_denied" };
+    }
+    const approval = approvalDescription({
+      toolName: normalizedTool,
+      agentName: authority?.childAgentName ?? params.childAgentId,
+    });
+    return {
+      kind: "require_approval",
+      ...approval,
+      timeoutMs: APPROVAL_TIMEOUT_MS,
+      allowedDecisions: ["allow-once", "deny"],
+    };
   }
-  const invalidReason = liveAuthorityReason(authority, params.config);
-  if (invalidReason) {
-    pendingApprovals.delete(params.token);
-    return { ok: false, reason: invalidReason };
-  }
-  approval.consumed = true;
-  pendingApprovals.delete(params.token);
-  appendEnterpriseDelegationEvent(
-    {
-      accountId: authority.accountId,
-      personalAgentId: authority.personalAgentId,
-      sharedAgentIds: [authority.childAgentId],
-      childRunIds: [],
-      prompt: "",
-      parentRunId: authority.parentRunId,
-      parentSessionKey: authority.childSessionKey,
-      decisionSource: "system",
-      outcome: "delegated",
-      confidenceBand: null,
-      reasonCode: "mutation_confirmation_approved",
-      policyRevision: authority.policyRevision,
-      profileRevisions: { [authority.childAgentId]: authority.profileRevision },
-      confirmationState: "approved",
-      latencyMs: null,
-    },
-    authority.stateOptions,
-  );
-  return { ok: true };
+  // Existing tool owners, trusted policies, and harness capability checks own
+  // approval for non-script tools. This guard only establishes that the live
+  // Shared Agent capability is still valid for the call.
+  return { kind: "allow" };
 }

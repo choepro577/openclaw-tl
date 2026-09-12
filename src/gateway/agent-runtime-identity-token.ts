@@ -149,6 +149,7 @@ const stringListSchema = z
 const sessionSpawnContextSchema = z
   .object({
     completionOwnerSessionKey: normalizedRequiredStringSchema.optional(),
+    approvalReviewerDeviceId: normalizedRequiredStringSchema.optional(),
     inheritedToolPolicy: z.object({
       version: z.literal(1),
       allow: stringListSchema,
@@ -159,6 +160,9 @@ const sessionSpawnContextSchema = z
     (context): AgentRuntimeSessionSpawnContext => ({
       ...(context.completionOwnerSessionKey
         ? { completionOwnerSessionKey: context.completionOwnerSessionKey }
+        : {}),
+      ...(context.approvalReviewerDeviceId
+        ? { approvalReviewerDeviceId: context.approvalReviewerDeviceId }
         : {}),
       inheritedToolPolicy: context.inheritedToolPolicy,
     }),

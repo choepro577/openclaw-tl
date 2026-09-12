@@ -62,6 +62,14 @@ type CodexBootstrapContext = {
   bootstrapFiles: CodexBootstrapFile[];
   contextFiles: EmbeddedContextFile[];
 };
+type CodexSkillsSnapshot = NonNullable<EmbeddedRunAttemptParams["skillsSnapshot"]>;
+// Mirrors isEnterpriseHostScriptSource; workspace metadata has no runner authority.
+const CODEX_ENTERPRISE_SCRIPT_SOURCES = new Set([
+  "openclaw-bundled",
+  "openclaw-custodian",
+  "openclaw-extra",
+  "openclaw-managed",
+]);
 /** System prompt accounting report attached to Codex attempt results. */
 export type CodexSystemPromptReport = NonNullable<EmbeddedRunAttemptResult["systemPromptReport"]>;
 type CodexToolReportEntry = CodexSystemPromptReport["tools"]["entries"][number];
@@ -612,9 +620,96 @@ export function renderCodexSkillsCollaborationInstructions(params: {
   if (!shouldInjectCodexOpenClawPromptContext(params.attempt)) {
     return undefined;
   }
-  return params.skillsPrompt?.trim()
-    ? ["## OpenClaw Skills", "", params.skillsPrompt.trim()].join("\n")
+  const skillsPrompt = params.skillsPrompt?.trim();
+  const scriptRoutingInstructions = buildCodexSkillScriptRoutingInstructions(
+    params.attempt.skillsSnapshot,
+    skillsPrompt,
+  );
+  if (!skillsPrompt && !scriptRoutingInstructions) {
+    return undefined;
+  }
+  return [
+    skillsPrompt ? ["## OpenClaw Skills", "", skillsPrompt].join("\n") : undefined,
+    scriptRoutingInstructions,
+  ]
+    .filter(isNonEmptyString)
+    .join("\n\n");
+}
+
+function buildCodexSkillScriptRoutingInstructions(
+  skillsSnapshot: CodexSkillsSnapshot | undefined,
+  skillsPrompt: string | undefined,
+): string | undefined {
+  if (!skillsSnapshot?.capabilityRevision) {
+    return undefined;
+  }
+  const promptVisibleSkillNames = new Set<string>();
+  const catalog = skillsPrompt
+    ? /<available_skills>([\s\S]*?)<\/available_skills>/u.exec(skillsPrompt)?.[1]
     : undefined;
+  for (const match of catalog?.matchAll(/<name>([\s\S]*?)<\/name>/g) ?? []) {
+    const name = decodeCodexSkillXml(match[1] ?? "").trim();
+    if (name.length > 0) {
+      promptVisibleSkillNames.add(name);
+    }
+  }
+  if (promptVisibleSkillNames.size === 0) {
+    return undefined;
+  }
+  const routes = (skillsSnapshot?.skills ?? [])
+    .flatMap((skill) => {
+      const skillKey = skill.skillKey?.trim() || skill.name.trim();
+      if (
+        !skillKey ||
+        !promptVisibleSkillNames.has(skill.name.trim()) ||
+        !CODEX_ENTERPRISE_SCRIPT_SOURCES.has(skill.source ?? "") ||
+        !skill.scriptRuntime
+      ) {
+        return [];
+      }
+      return Object.entries(skill.scriptRuntime.entrypoints).map(
+        ([entrypointName, entrypoint]) => ({
+          skillKey,
+          entrypointName,
+          entrypoint,
+        }),
+      );
+    })
+    .toSorted((left, right) =>
+      `${left.skillKey}\0${left.entrypointName}`.localeCompare(
+        `${right.skillKey}\0${right.entrypointName}`,
+      ),
+    );
+  if (routes.length === 0) {
+    return undefined;
+  }
+  return [
+    "## OpenClaw Skill Script Routing",
+    "",
+    "When a user asks to run a granted skill with a listed script entrypoint, first use `read` to load that skill's SKILL.md and follow its instructions, then invoke the deferred generic `skill_script` tool with the exact `skill` and `entrypoint` values below.",
+    "In code mode, call the runner through `tools.openclaw__skill_script`.",
+    "The catalog entry is generic (`openclaw__skill_script`), so searching tool names for a skill name will not find a separate per-skill tool.",
+    "Do not treat a granted skill as unavailable because the runner is deferred, and do not use shell or file tools to run a declared skill script.",
+    "Granted script entrypoints for this turn:",
+    ...routes.map(({ skillKey, entrypointName, entrypoint }) => {
+      const descriptor =
+        entrypoint.kind === "fixed"
+          ? `kind=fixed risk=${entrypoint.risk}`
+          : entrypoint.routerOperation
+            ? `kind=operation routerOperation=${JSON.stringify(entrypoint.routerOperation)}`
+            : "kind=operation";
+      return `- skill=${JSON.stringify(skillKey)} entrypoint=${JSON.stringify(entrypointName)} (${descriptor})`;
+    }),
+  ].join("\n");
+}
+
+function decodeCodexSkillXml(value: string): string {
+  return value
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&amp;/g, "&");
 }
 
 /**

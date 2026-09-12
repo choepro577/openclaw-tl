@@ -3,10 +3,14 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { closeOpenClawStateDatabaseForTest } from "../../state/openclaw-state-db.js";
-import { createEnterpriseAccount } from "../accounts/account-store.js";
+import {
+  createEnterpriseAccount,
+  deleteEnterpriseAccountForBootstrapRollback,
+} from "../accounts/account-store.js";
 import {
   createEnterprisePluginRequest,
   listEnterpriseAccountPluginGrants,
+  listEnterpriseEffectivePluginGrants,
   listEnterprisePluginRequests,
   listEnterpriseUserSkillInstalls,
   transitionEnterprisePluginRequest,
@@ -147,5 +151,126 @@ describe("Enterprise extension store", () => {
     expect(listEnterprisePluginRequests({ accountId: account.id }, options)).toHaveLength(1);
     expect(listEnterpriseAccountPluginGrants(account.id, options)).toEqual([grant]);
     expect(grant.approvedTools).toEqual(["acme.search"]);
+  });
+
+  it("keeps private native grants private while projecting an explicit shared grant", () => {
+    const options = createOptions();
+    const first = createEnterpriseAccount(
+      {
+        username: "native-owner",
+        displayName: "Native Owner",
+        passwordHash: "test-only",
+        role: "employee",
+      },
+      options,
+    );
+    const second = createEnterpriseAccount(
+      {
+        username: "native-member",
+        displayName: "Native Member",
+        passwordHash: "test-only",
+        role: "employee",
+      },
+      options,
+    );
+    const privateRequest = createEnterprisePluginRequest(
+      {
+        requesterAccountId: first.id,
+        packageName: "@acme/shared-tools",
+        packageFamily: "code_plugin",
+        exactVersion: "1.0.0",
+        integrity: "sha256:private",
+        requestKind: "install",
+        trustSnapshot: {},
+        capabilitySnapshot: { tools: ["shared.search"] },
+        capabilityDigest: "private-shared-digest",
+      },
+      options,
+    );
+    const sharedRequest = createEnterprisePluginRequest(
+      {
+        requesterAccountId: first.id,
+        scope: "shared_agent",
+        agentKey: "shared:support",
+        runtimeAgentId: "support",
+        packageName: "@acme/shared-tools",
+        packageFamily: "code_plugin",
+        exactVersion: "1.0.0",
+        integrity: "sha256:shared",
+        requestKind: "install",
+        trustSnapshot: {},
+        capabilitySnapshot: { tools: ["shared.search"] },
+        capabilityDigest: "shared-digest",
+      },
+      options,
+    );
+    upsertEnterprisePluginGrant(
+      {
+        accountId: first.id,
+        pluginId: "shared-plugin",
+        exactVersion: privateRequest.exactVersion,
+        integrity: privateRequest.integrity,
+        capabilityDigest: privateRequest.capabilityDigest,
+        approvedTools: ["shared.search"],
+        sourceRequestId: privateRequest.id,
+        approvedByAccountId: first.id,
+        state: "active",
+      },
+      options,
+    );
+    upsertEnterprisePluginGrant(
+      {
+        accountId: first.id,
+        scope: "shared_agent",
+        agentKey: "shared:support",
+        runtimeAgentId: "support",
+        pluginId: "shared-plugin",
+        exactVersion: sharedRequest.exactVersion,
+        integrity: sharedRequest.integrity,
+        capabilityDigest: sharedRequest.capabilityDigest,
+        approvedTools: ["shared.search"],
+        sourceRequestId: sharedRequest.id,
+        approvedByAccountId: first.id,
+        state: "active",
+      },
+      options,
+    );
+
+    const ownerGrants = listEnterpriseEffectivePluginGrants(
+      first.id,
+      "support",
+      { sharedAgentAllowed: true },
+      options,
+    );
+    expect(ownerGrants).toHaveLength(2);
+    expect(ownerGrants.map((grant) => grant.scope)).toEqual(
+      expect.arrayContaining(["account", "shared_agent"]),
+    );
+    expect(listEnterpriseEffectivePluginGrants(second.id, "support", {}, options)).toEqual([]);
+    expect(
+      listEnterpriseEffectivePluginGrants(
+        second.id,
+        "support",
+        { sharedAgentAllowed: true },
+        options,
+      ).map((grant) => grant.pluginId),
+    ).toEqual(["shared-plugin"]);
+    expect(
+      listEnterpriseEffectivePluginGrants(
+        second.id,
+        "other",
+        { sharedAgentAllowed: true },
+        options,
+      ),
+    ).toEqual([]);
+    deleteEnterpriseAccountForBootstrapRollback(first.id, options);
+    expect(
+      listEnterpriseEffectivePluginGrants(
+        second.id,
+        "support",
+        { sharedAgentAllowed: true },
+        options,
+      ).map((grant) => grant.pluginId),
+    ).toEqual(["shared-plugin"]);
   });
 });

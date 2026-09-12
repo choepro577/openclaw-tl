@@ -296,6 +296,7 @@ export function resolveGatewayScopedTools(params: {
     sourceReplyDeliveryMode,
     sourceReplyOnly: params.sourceReplyOnly,
     taskSuggestionDeliveryMode: params.taskSuggestionDeliveryMode,
+    approvalReviewerDeviceId: params.approvalReviewerDeviceId,
     agentTo: params.agentTo,
     agentThreadId: params.agentThreadId,
     currentChannelId: params.currentChannelId ?? params.agentTo,

@@ -63,6 +63,7 @@ describe("resolveSandboxSkillRuntimeInputs", () => {
           skillsAnchorWorkspace: root,
           skillsSnapshot: {
             ...coldSnapshot,
+            capabilityRevision: "granted-revision",
             nodeSkillsEligibility: { canExec: true, node: "build-node" },
           },
         });
@@ -70,6 +71,7 @@ describe("resolveSandboxSkillRuntimeInputs", () => {
           ? "/workspace/.openclaw/sandbox-skills/skills/demo/SKILL.md"
           : path.join(root, "skills", "demo", "SKILL.md");
         expect(result?.nodeSkillsEligibility).toEqual({ canExec: true, node: "build-node" });
+        expect(result?.capabilityRevision).toBe("granted-revision");
         expect(result?.prompt).toContain(expectedPath);
         expect(result?.prompt).not.toContain(hostSkillPath);
         expect(result?.prompt).not.toContain("ungranted");

@@ -20,6 +20,7 @@ import {
   forgetActiveSessionForShutdown,
   noteActiveSessionForShutdown,
 } from "../../gateway/active-sessions-shutdown-tracker.js";
+import { readGatewayRequestRuntimeMetadata } from "../../gateway/request-runtime-config.js";
 import { resolveStableSessionEndTranscript } from "../../gateway/session-transcript-files.fs.js";
 import { logVerbose } from "../../globals.js";
 import { isFastTestRuntimeEnv } from "../../infra/env.js";
@@ -210,6 +211,12 @@ export async function ensureSkillSnapshot(params: {
   let nextEntry = sessionEntryHandle?.getCurrent() ?? sessionEntry;
   let systemSent = sessionEntry?.systemSent ?? false;
   const sessionAgentId = resolveSessionAgentId({ sessionKey, config: cfg });
+  const capabilityResolution =
+    readGatewayRequestRuntimeMetadata(cfg)?.enterpriseCapabilities?.resolve(sessionAgentId);
+  const capabilityRevision =
+    capabilityResolution?.allowed && capabilityResolution.scope === "shared"
+      ? capabilityResolution.revision
+      : undefined;
   const nodeSkillsEligibility = resolveNodeExecEligibility({
     cfg,
     sessionEntry,
@@ -230,6 +237,7 @@ export async function ensureSkillSnapshot(params: {
       skillFilter,
       skillOverrides,
       eligibility: { nodeSkills: nodeSkillsEligibility, remote: remoteEligibility },
+      ...(capabilityRevision ? { capabilityRevision } : {}),
       existingSnapshot: snapshot,
     });
   const initialSnapshotState = resolveSnapshot(existingSnapshot);

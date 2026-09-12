@@ -13,7 +13,10 @@ import { getEnterpriseAccountByProfileId } from "../accounts/account-store.js";
 import { readEnterpriseAccountToolPolicy } from "../accounts/account-tool-policy-store.js";
 import type { EnterpriseAccount } from "../accounts/account-types.js";
 import { getActiveEnterpriseSession } from "../auth/session-store.js";
-import { listEnterpriseDelegationCandidates } from "../delegation/delegation-candidates.js";
+import {
+  listEnterpriseDelegationCandidates,
+  type EnterpriseDelegationCandidate,
+} from "../delegation/delegation-candidates.js";
 import { explicitlyMentionedEnterpriseAgentIds } from "../delegation/delegation-explicit-match.js";
 import { isEnterpriseEnabled } from "../enterprise-config.js";
 import {
@@ -23,6 +26,7 @@ import {
 import {
   ENTERPRISE_ACCESS_PRESET_BASIC,
   ENTERPRISE_DELEGATION_MANAGED_TOOL_IDS,
+  ENTERPRISE_NON_DELEGABLE_TOOL_IDS,
   enterpriseRuntimeResourceId,
   parseEnterpriseResourceKey,
   personalAgentResourceKey,
@@ -37,6 +41,8 @@ import {
   resolveEnterprisePersonalAgentTemplateId,
 } from "../personal-agent/personal-agent-config.js";
 import { ensureEnterpriseWorkspaceFromTemplate } from "../personal-agent/personal-workspace.js";
+import { isEnterpriseHostScriptSource } from "../skill-runtime/skill-script-runtime.js";
+import { resolveEnterpriseSharedAgentCapabilities } from "./enterprise-agent-capabilities.js";
 import { compileEnterpriseToolPolicy } from "./enterprise-tool-policy.js";
 import {
   enterpriseUserGatewayMethodAllowed,
@@ -69,6 +75,7 @@ const KNOWLEDGE_TOOL_IDS: readonly string[] = [
   "enterprise_knowledge_search",
   "enterprise_knowledge_get",
 ];
+const SKILL_SCRIPT_TOOL_ID = "skill_script";
 
 export type EnterpriseGatewayAdmission =
   | { allowed: true; context: GatewayRequestContext; account?: EnterpriseAccount }
@@ -186,29 +193,38 @@ function scopedTools(
   accountAllow: readonly string[],
   accountDeny: readonly string[],
   restricted: boolean,
+  accountScoped = true,
 ): AgentToolsConfig | undefined {
   if (!restricted) {
     return configured;
   }
-  const allowedForAgent = intersectToolGrants(configured?.allow, accountAllow);
-  const denied = [...new Set([...(configured?.deny ?? []), ...accountDeny])].toSorted();
+  const allowedForAgent = accountScoped
+    ? intersectToolGrants(configured?.allow, accountAllow)
+    : configured?.allow;
+  const denied = [
+    ...new Set([...(configured?.deny ?? []), ...(accountScoped ? accountDeny : [])]),
+  ].toSorted();
   const inheritedSandboxDeny = [
     ...(configured?.sandbox?.tools?.deny ?? globalSandboxPolicy?.deny ?? []),
   ];
-  const accountSandboxAllow = accountAllow.filter((toolId) =>
-    isToolAllowedByPolicyName(toolId, { deny: [...accountDeny] }),
-  );
+  const accountSandboxAllow = accountScoped
+    ? accountAllow.filter((toolId) => isToolAllowedByPolicyName(toolId, { deny: [...accountDeny] }))
+    : [];
   const sandboxAlsoAllow = [
     ...new Set([
       ...(configured?.sandbox?.tools?.alsoAllow ?? globalSandboxPolicy?.alsoAllow ?? []),
       ...(configured?.allow ?? []),
       ...accountSandboxAllow,
-      ...allowedForAgent.filter((toolId) => isToolAllowedByPolicyName(toolId, { deny: denied })),
+      ...(allowedForAgent ?? []).filter((toolId) =>
+        isToolAllowedByPolicyName(toolId, { deny: denied }),
+      ),
     ]),
   ].toSorted();
   const sandboxDeny = [
     ...new Set([
-      ...removeSandboxDeniesCoveredByAccountGrants(inheritedSandboxDeny, accountSandboxAllow),
+      ...(accountScoped
+        ? removeSandboxDeniesCoveredByAccountGrants(inheritedSandboxDeny, accountSandboxAllow)
+        : inheritedSandboxDeny),
       ...denied,
     ]),
   ].toSorted();
@@ -217,8 +233,8 @@ function scopedTools(
     // Account grants must survive the profile stage. Preserve an Agent allowlist
     // as an independent runtime restriction while the account-scoped global
     // allowlist remains the final security cap.
-    allow: configured?.allow,
-    alsoAllow: allowedForAgent,
+    allow: allowedForAgent,
+    alsoAllow: accountScoped ? allowedForAgent : configured?.alsoAllow,
     deny: denied,
     elevated: { ...configured?.elevated, enabled: false },
     fs: { ...configured?.fs, workspaceOnly: true },
@@ -255,6 +271,10 @@ function scopedSkills(
   if (!restricted) {
     return agent.skills;
   }
+  if (!requiresAccountGrant) {
+    const inherited = agent.skills ?? config.agents?.defaults?.skills;
+    return inherited === undefined ? undefined : [...new Set(inherited)].toSorted();
+  }
   const grantedEntitlements = listEnterpriseEntitlements(account.id)
     .filter(
       (item) =>
@@ -266,15 +286,6 @@ function scopedSkills(
       const parsed = parseEnterpriseResourceKey("skill", item.resourceId);
       return (
         parsed.scope !== "agent" ||
-        normalizeAgentId(parsed.agentId ?? "") === normalizeAgentId(entitlementAgentId)
-      );
-    })
-    .map((item) => enterpriseRuntimeResourceId("skill", item.resourceId));
-  const agentGranted = grantedEntitlements
-    .filter((item) => {
-      const parsed = parseEnterpriseResourceKey("skill", item.resourceId);
-      return (
-        parsed.scope === "agent" &&
         normalizeAgentId(parsed.agentId ?? "") === normalizeAgentId(entitlementAgentId)
       );
     })
@@ -298,13 +309,7 @@ function scopedSkills(
     .filter((skillName) => !explicitDenied.has(skillName));
   return [
     ...new Set([
-      ...(requiresAccountGrant
-        ? intersectAllowed(agent.skills ?? config.agents?.defaults?.skills, granted)
-        : agentGranted.length > 0
-          ? intersectAllowed(agent.skills ?? config.agents?.defaults?.skills, agentGranted)
-          : (agent.skills ?? config.agents?.defaults?.skills ?? []).filter(
-              (skillName) => !explicitDenied.has(skillName),
-            )),
+      ...intersectAllowed(agent.skills ?? config.agents?.defaults?.skills, granted),
       ...installed,
     ]),
   ].toSorted();
@@ -320,6 +325,7 @@ function toScopedAgent(
   templateAgentId = agent.id,
   restricted = account.role === "employee",
   requiresSkillGrant = restricted,
+  accountScopedTools = true,
 ): AgentConfig {
   const agentId = normalizeAgentId(agent.id);
   const templateWorkspace = resolveAgentWorkspaceDir(config, normalizeAgentId(templateAgentId));
@@ -368,6 +374,7 @@ function toScopedAgent(
       accountToolAllow,
       accountToolDeny,
       restricted,
+      accountScopedTools,
     ),
   };
 }
@@ -375,7 +382,11 @@ function toScopedAgent(
 export function projectEnterpriseRuntimeConfig(
   config: OpenClawConfig,
   account: EnterpriseAccount,
-  options: { userAudience?: boolean } = {},
+  options: {
+    userAudience?: boolean;
+    /** Reuse the roster already resolved for this request when available. */
+    delegationCandidates?: readonly EnterpriseDelegationCandidate[];
+  } = {},
 ): OpenClawConfig {
   const restricted = account.role === "employee" || options.userAudience === true;
   const allowed = resolveEnterpriseAllowedAgentIds(config, account, options);
@@ -395,7 +406,8 @@ export function projectEnterpriseRuntimeConfig(
       : [],
   );
   const storedAccountToolPolicy = readEnterpriseAccountToolPolicy(account.id);
-  const delegationCandidates = listEnterpriseDelegationCandidates(config, account);
+  const delegationCandidates =
+    options.delegationCandidates ?? listEnterpriseDelegationCandidates(config, account);
   const hasAssignedSpecialist = delegationCandidates.some((candidate) => candidate.effective);
   const routableSpecialistIds = delegationCandidates
     .filter((candidate) => candidate.routable)
@@ -441,33 +453,90 @@ export function projectEnterpriseRuntimeConfig(
   const preferredDefault = normalizeAgentId(
     account.personalAgentEnabled ? personalAgentId : (account.defaultAgentId ?? personalAgentId),
   );
-  const scopedShared = sourceEntries
-    .filter((entry) => allowed.has(normalizeAgentId(entry.id)))
-    .map((entry) => {
-      const scopedAgent = toScopedAgent(
-        config,
-        entry,
-        account,
-        preferredDefault,
-        toolAllowForAgent(normalizeAgentId(entry.id)),
-        accountToolDeny,
-        entry.id,
-        restricted,
-        false,
-      );
-      return {
-        ...scopedAgent,
-        tools: {
-          ...scopedAgent.tools,
-          deny: [
-            ...new Set([
-              ...(scopedAgent.tools?.deny ?? []),
-              ...ENTERPRISE_DELEGATION_MANAGED_TOOL_IDS,
-            ]),
-          ].toSorted(),
-        },
-      };
+  const scopedShared: AgentConfig[] = [];
+  for (const entry of sourceEntries) {
+    if (
+      normalizeAgentId(entry.id) === normalizeAgentId(personalTemplateId) ||
+      !allowed.has(normalizeAgentId(entry.id))
+    ) {
+      continue;
+    }
+    const sharedCapabilities = resolveEnterpriseSharedAgentCapabilities({
+      config,
+      account,
+      agentId: normalizeAgentId(entry.id),
     });
+    if (!sharedCapabilities.allowed) {
+      continue;
+    }
+    const sharedSkillToolIds = [
+      ...(sharedCapabilities.skillsSnapshot.skills.length > 0 ? ["read"] : []),
+      ...(sharedCapabilities.skillsSnapshot.skills.some(
+        (skill) =>
+          Boolean(skill.scriptRuntime) &&
+          Boolean(skill.source) &&
+          isEnterpriseHostScriptSource(skill.source!),
+      )
+        ? [SKILL_SCRIPT_TOOL_ID]
+        : []),
+    ];
+    const sharedCapabilityToolIds = [
+      ...new Set([...sharedCapabilities.pluginTools, ...sharedSkillToolIds]),
+    ].toSorted();
+    const sharedEntry =
+      sharedCapabilityToolIds.length > 0
+        ? {
+            ...entry,
+            tools: {
+              ...entry.tools,
+              allow:
+                entry.tools?.allow === undefined
+                  ? undefined
+                  : [...new Set([...entry.tools.allow, ...sharedCapabilityToolIds])].toSorted(),
+              alsoAllow: [
+                ...new Set([...(entry.tools?.alsoAllow ?? []), ...sharedCapabilityToolIds]),
+              ].toSorted(),
+              sandbox: {
+                ...entry.tools?.sandbox,
+                tools: {
+                  ...entry.tools?.sandbox?.tools,
+                  alsoAllow: [
+                    ...new Set([
+                      ...(entry.tools?.sandbox?.tools?.alsoAllow ?? []),
+                      ...sharedCapabilityToolIds,
+                    ]),
+                  ].toSorted(),
+                },
+              },
+            },
+          }
+        : entry;
+    const scopedAgent = toScopedAgent(
+      config,
+      sharedEntry,
+      account,
+      preferredDefault,
+      toolAllowForAgent(normalizeAgentId(entry.id)),
+      accountToolDeny,
+      entry.id,
+      restricted,
+      false,
+      false,
+    );
+    scopedShared.push({
+      ...scopedAgent,
+      tools: {
+        ...scopedAgent.tools,
+        deny: [
+          ...new Set([
+            ...(scopedAgent.tools?.deny ?? []),
+            ...ENTERPRISE_NON_DELEGABLE_TOOL_IDS,
+            ...ENTERPRISE_DELEGATION_MANAGED_TOOL_IDS,
+          ]),
+        ].toSorted(),
+      },
+    });
+  }
   const personalTemplate = sourceEntries.find(
     (entry) => normalizeAgentId(entry.id) === normalizeAgentId(personalTemplateId),
   );
@@ -566,11 +635,27 @@ export function projectEnterpriseRuntimeConfig(
     tools: restricted
       ? {
           ...config.tools,
-          // This is the account boundary, not a host-global mutation. Agent
-          // `alsoAllow` widens the selected profile only inside this cap.
-          allow: accountToolAllow,
-          alsoAllow: undefined,
-          deny: [...new Set([...(config.tools?.deny ?? []), ...accountToolDeny])].toSorted(),
+          // Keep host policy global. Account policy is attached only to the
+          // synthetic Personal Agent so it cannot trim delegated children.
+          allow: config.tools?.allow
+            ? [
+                ...new Set([
+                  ...config.tools.allow,
+                  ...managedDelegationTools,
+                  ...(knowledgeAgentIds.size > 0 ? KNOWLEDGE_TOOL_IDS : []),
+                  ...(hasAssignedSpecialist ? [SKILL_SCRIPT_TOOL_ID] : []),
+                ]),
+              ].toSorted()
+            : undefined,
+          alsoAllow: [
+            ...new Set([
+              ...(config.tools?.alsoAllow ?? []),
+              ...managedDelegationTools,
+              ...(knowledgeAgentIds.size > 0 ? KNOWLEDGE_TOOL_IDS : []),
+              ...(hasAssignedSpecialist ? [SKILL_SCRIPT_TOOL_ID] : []),
+            ]),
+          ].toSorted(),
+          deny: config.tools?.deny,
           fs: { ...config.tools?.fs, workspaceOnly: true },
           elevated: { ...config.tools?.elevated, enabled: false },
           exec: {
@@ -644,8 +729,7 @@ function contextWithConfig(
   context: GatewayRequestContext,
   config: OpenClawConfig,
 ): GatewayRequestContext {
-  let scopedContext: GatewayRequestContext;
-  scopedContext = new Proxy(context, {
+  const scopedContext: GatewayRequestContext = new Proxy(context, {
     get(target, property, receiver) {
       if (property === "getRuntimeConfig") {
         return () => config;
@@ -718,12 +802,12 @@ export function prepareEnterpriseGatewayRequest(params: {
     string,
     ReturnType<typeof createEnterpriseKnowledgeAuthority>
   >();
-  const projectedConfig = managementRequest
-    ? undefined
-    : projectEnterpriseRuntimeConfig(config, account, { userAudience });
   const personalAgentId = resolveEnterprisePersonalAgentId(config, account);
+  const resolvedDelegationCandidates = userAudience
+    ? listEnterpriseDelegationCandidates(config, account)
+    : [];
   const delegationCandidates = userAudience
-    ? listEnterpriseDelegationCandidates(config, account).map((candidate) => ({
+    ? resolvedDelegationCandidates.map((candidate) => ({
         agentId: candidate.agentId,
         name: candidate.name,
         description: candidate.description,
@@ -732,8 +816,15 @@ export function prepareEnterpriseGatewayRequest(params: {
         routable: candidate.routable,
         effectiveMode: candidate.effectiveMode,
         reasonCodes: candidate.reasonCodes,
+        profileRevision: candidate.profileRevision,
       }))
     : [];
+  const projectedConfig = managementRequest
+    ? undefined
+    : projectEnterpriseRuntimeConfig(config, account, {
+        userAudience,
+        delegationCandidates: userAudience ? resolvedDelegationCandidates : undefined,
+      });
   const scopedContext = managementRequest
     ? params.context
     : contextWithConfig(
@@ -743,7 +834,7 @@ export function prepareEnterpriseGatewayRequest(params: {
           userAudience
             ? {
                 nativePluginGrants: (agentId, harnessPluginId) => {
-                  const activeSession = getActiveEnterpriseSession(
+                  const currentSession = getActiveEnterpriseSession(
                     enterpriseSession.sessionId,
                     {},
                     "user",
@@ -751,7 +842,7 @@ export function prepareEnterpriseGatewayRequest(params: {
                   const currentAccount = getEnterpriseAccountByProfileId(account.profileId);
                   if (
                     harnessPluginId !== "codex" ||
-                    activeSession?.accountId !== account.id ||
+                    currentSession?.accountId !== account.id ||
                     !currentAccount?.enabled ||
                     !resolveEnterpriseAllowedAgentIds(config, currentAccount, {
                       userAudience: true,
@@ -766,6 +857,7 @@ export function prepareEnterpriseGatewayRequest(params: {
                 },
                 enterpriseUser: {
                   accountId: account.id,
+                  sessionId: enterpriseSession.sessionId,
                   username: account.username,
                   displayName: account.displayName,
                   personalAgentId,
@@ -774,10 +866,61 @@ export function prepareEnterpriseGatewayRequest(params: {
                     account,
                   ),
                 },
+                enterpriseCapabilities: {
+                  resolve: (agentId) => {
+                    const currentSession = getActiveEnterpriseSession(
+                      enterpriseSession.sessionId,
+                      {},
+                      "user",
+                    );
+                    const currentAccount = getEnterpriseAccountByProfileId(account.profileId);
+                    if (
+                      !currentSession ||
+                      currentSession.accountId !== account.id ||
+                      !currentAccount?.enabled
+                    ) {
+                      return {
+                        allowed: false as const,
+                        accountId: account.id,
+                        agentId: normalizeAgentId(agentId),
+                        reason: "account_disabled" as const,
+                      };
+                    }
+                    return resolveEnterpriseSharedAgentCapabilities({
+                      config: params.context.getRuntimeConfig(),
+                      account: currentAccount,
+                      agentId,
+                    });
+                  },
+                },
                 enterpriseDelegation: {
                   accountId: account.id,
                   personalAgentId,
                   specialists: delegationCandidates,
+                  resolveSpecialist: (agentId) => {
+                    const currentAccount = getEnterpriseAccountByProfileId(account.profileId);
+                    if (!currentAccount?.enabled) {
+                      return undefined;
+                    }
+                    const liveConfig = params.context.getRuntimeConfig();
+                    const candidate = listEnterpriseDelegationCandidates(
+                      liveConfig,
+                      currentAccount,
+                    ).find((item) => normalizeAgentId(item.agentId) === normalizeAgentId(agentId));
+                    return candidate
+                      ? {
+                          agentId: candidate.agentId,
+                          name: candidate.name,
+                          description: candidate.description,
+                          assigned: candidate.assigned,
+                          effective: candidate.effective,
+                          routable: candidate.routable,
+                          effectiveMode: candidate.effectiveMode,
+                          reasonCodes: candidate.reasonCodes,
+                          profileRevision: candidate.profileRevision,
+                        }
+                      : undefined;
+                  },
                   resolveExplicitAgentIds: (prompt) =>
                     explicitlyMentionedEnterpriseAgentIds(config, prompt),
                 },

@@ -251,3 +251,69 @@ user-invocable: true
     });
   });
 });
+
+describe("resolveSkillManifestMetadata script runtime validation", () => {
+  const resolveRuntime = (scriptRuntime: unknown) =>
+    resolveSkillManifestMetadata({
+      metadata: JSON.stringify({ openclaw: { scriptRuntime } }),
+    })?.scriptRuntime;
+
+  it("accepts a declared operation entrypoint and login-token contract", () => {
+    expect(
+      resolveRuntime({
+        entrypoints: {
+          call: {
+            path: "scripts/call.sh",
+            kind: "operation",
+            routerOperation: "router_tool_search",
+            readOperations: ["get_data"],
+            writeOperations: ["set_data"],
+            unknownRisk: "approval",
+          },
+        },
+        auth: {
+          mode: "login-token",
+          loginEntrypoint: "call",
+          loginOperation: "employee_login",
+          fields: [
+            { id: "username", label: "User", argument: "userName", type: "text" },
+            { id: "password", label: "Password", argument: "password", type: "password" },
+          ],
+          tokenPaths: ["data.authorization"],
+          injectArgument: "authorization",
+          ttlSeconds: 3600,
+        },
+      }),
+    ).toMatchObject({ entrypoints: { call: { path: "scripts/call.sh" } } });
+  });
+
+  it.each([
+    {
+      entrypoints: {
+        call: { path: "../outside.sh", kind: "fixed", risk: "read" },
+      },
+    },
+    {
+      entrypoints: {
+        call: {
+          path: "scripts/call.sh",
+          kind: "operation",
+          readOperations: ["same_operation"],
+          writeOperations: ["same_operation"],
+          unknownRisk: "approval",
+        },
+      },
+    },
+    {
+      entrypoints: {
+        call: {
+          path: "scripts/call.sh",
+          kind: "operation",
+          unknownRisk: "read",
+        },
+      },
+    },
+  ])("fails closed for invalid script metadata", (scriptRuntime) => {
+    expect(resolveRuntime(scriptRuntime)).toBeUndefined();
+  });
+});

@@ -349,6 +349,9 @@ describe("Enterprise User extension DTO boundary", () => {
     const request = enterpriseExtensionHttpTestHooks.presentUserPluginRequest({
       id: "request-1",
       requesterAccountId: "account-secret",
+      scope: "account",
+      agentKey: null,
+      runtimeAgentId: null,
       packageName: "native",
       packageFamily: "code_plugin",
       exactVersion: "1.0.0",

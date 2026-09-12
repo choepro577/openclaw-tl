@@ -1,6 +1,7 @@
 /** Canonical managed specialist spawn service; invoked only by admitted runtime orchestration. */
 import type { OpenClawConfig } from "../config/types.openclaw.js";
 import {
+  confirmEnterpriseDelegationChildRun,
   registerEnterpriseDelegationChildAuthority,
   revokeEnterpriseDelegationChildAuthority,
 } from "../enterprise/delegation/delegation-mutation-guard.js";
@@ -14,6 +15,7 @@ import type { EnterpriseEvidenceTransfer } from "../enterprise/knowledge/evidenc
 import { createSubsystemLogger } from "../logging/subsystem.js";
 import type { AcceptedSessionSpawn } from "./accepted-session-spawn.js";
 import {
+  confirmEnterpriseDelegationEvidenceRun,
   registerEnterpriseDelegationEvidence,
   revokeEnterpriseDelegationEvidence,
 } from "./enterprise-delegation-evidence.js";
@@ -23,6 +25,7 @@ import type { SpawnSubagentResult } from "./subagents/spawn/subagent-spawn-contr
 import { spawnSubagentDirect } from "./subagents/spawn/subagent-spawn.js";
 import {
   discardSubagentTerminalCallback,
+  rebindSubagentTerminalCallback,
   registerSubagentTerminalCallback,
 } from "./subagents/subagent-terminal-callbacks.js";
 import { getGatewayToolCallerIdentity } from "./tools/gateway-caller-context.js";
@@ -132,6 +135,7 @@ export type EnterpriseDelegationExecutionOptions = {
   agentSessionKey?: string;
   runSessionKey?: string;
   runId?: string;
+  approvalReviewerDeviceId?: string;
   requesterUserTurnIdempotencyKey?: string;
   requesterUserTurnSessionId?: string;
   agentChannel?: string;
@@ -142,8 +146,6 @@ export type EnterpriseDelegationExecutionOptions = {
   currentChannelId?: string;
   currentMessageId?: string | number;
   workspaceDir?: string;
-  inheritedToolAllowlist?: string[];
-  inheritedToolDenylist?: string[];
 };
 
 const ENTERPRISE_DELEGATION_CHILD_DENYLIST = [
@@ -160,7 +162,7 @@ const ENTERPRISE_DELEGATION_CHILD_DENYLIST = [
   "subagents",
 ] as const;
 
-export function buildEnterpriseDelegationChildDenylist(inherited: string[] | undefined): string[] {
+export function buildEnterpriseDelegationChildDenylist(inherited?: readonly string[]): string[] {
   return [...new Set([...(inherited ?? []), ...ENTERPRISE_DELEGATION_CHILD_DENYLIST])].toSorted();
 }
 
@@ -213,6 +215,10 @@ export async function executeEnterpriseDelegationAssignments(input: {
         });
       let result: SpawnSubagentResult;
       let thrownError: unknown;
+      let preparedChild:
+        | { childSessionKey: string; anticipatedRunId: string; targetAgentId: string }
+        | undefined;
+      let terminalRunId: string | undefined;
       try {
         assertCurrent();
         if (evidence && "errorCode" in evidence) {
@@ -256,10 +262,12 @@ export async function executeEnterpriseDelegationAssignments(input: {
               currentMessageId: options.currentMessageId,
               requesterAgentIdOverride: decision.personalAgentId,
               workspaceDir: resolveWorkspaceRoot(options.workspaceDir),
-              inheritedToolAllowlist: options.inheritedToolAllowlist,
-              inheritedToolDenylist: buildEnterpriseDelegationChildDenylist(
-                options.inheritedToolDenylist,
-              ),
+              // A managed Shared Agent child must inherit only coordination
+              // controls. Its own global and agent policy is rebuilt from the
+              // target config; the Personal Agent's denylist is not authority
+              // for the target and must never cross this boundary.
+              inheritedToolDenylist: buildEnterpriseDelegationChildDenylist(),
+              approvalReviewerDeviceId: options.approvalReviewerDeviceId,
               requesterRunId: decision.parentRunId,
               onBeforeChildDispatch(child) {
                 input.assertActive();
@@ -283,7 +291,9 @@ export async function executeEnterpriseDelegationAssignments(input: {
                   childAgentName: route.agentName,
                   policyRevision: decision.policyRevision,
                   profileRevision: route.profileRevision,
+                  provisionalRunId: true,
                 });
+                preparedChild = child;
                 if (packet) {
                   registerEnterpriseDelegationEvidence({
                     childSessionKey: child.childSessionKey,
@@ -292,30 +302,59 @@ export async function executeEnterpriseDelegationAssignments(input: {
                     packet,
                     decision,
                     config: options.config,
+                    provisionalRunId: true,
                   });
                 }
+                terminalRunId = child.anticipatedRunId;
                 registerSubagentTerminalCallback({
                   runId: child.anticipatedRunId,
                   childSessionKey: child.childSessionKey,
                   onTerminal: () => {
-                    revokeEnterpriseDelegationEvidence(
-                      child.childSessionKey,
-                      child.anticipatedRunId,
-                    );
-                    revokeEnterpriseDelegationChildAuthority(
-                      child.childSessionKey,
-                      child.anticipatedRunId,
-                    );
+                    if (!terminalRunId) {
+                      return;
+                    }
+                    revokeEnterpriseDelegationEvidence(child.childSessionKey, terminalRunId);
+                    revokeEnterpriseDelegationChildAuthority(child.childSessionKey, terminalRunId);
                   },
                 });
               },
+              onChildRunIdResolved(child) {
+                if (
+                  !preparedChild ||
+                  preparedChild.childSessionKey !== child.childSessionKey ||
+                  preparedChild.anticipatedRunId !== child.anticipatedRunId
+                ) {
+                  throw new Error("DELEGATION_CHILD_IDENTITY_MISMATCH");
+                }
+                const confirmedRun = {
+                  childSessionKey: child.childSessionKey,
+                  anticipatedRunId: child.anticipatedRunId,
+                  actualRunId: child.actualRunId,
+                };
+                confirmEnterpriseDelegationChildRun(confirmedRun);
+                if (packet) {
+                  confirmEnterpriseDelegationEvidenceRun(confirmedRun);
+                }
+                rebindSubagentTerminalCallback({
+                  fromRunId: child.anticipatedRunId,
+                  toRunId: child.actualRunId,
+                  childSessionKey: child.childSessionKey,
+                });
+                terminalRunId = child.actualRunId;
+              },
               onChildDispatchAborted(child) {
-                revokeEnterpriseDelegationEvidence(child.childSessionKey, child.anticipatedRunId);
-                discardSubagentTerminalCallback(child.anticipatedRunId);
-                revokeEnterpriseDelegationChildAuthority(
-                  child.childSessionKey,
-                  child.anticipatedRunId,
-                );
+                for (const runId of new Set([child.actualRunId, child.anticipatedRunId])) {
+                  if (!runId) {
+                    continue;
+                  }
+                  revokeEnterpriseDelegationEvidence(child.childSessionKey, runId);
+                  revokeEnterpriseDelegationChildAuthority(child.childSessionKey, runId);
+                }
+                for (const runId of new Set([terminalRunId, child.anticipatedRunId])) {
+                  if (runId) {
+                    discardSubagentTerminalCallback(runId);
+                  }
+                }
               },
             },
             parentExecutionIdentityToken,

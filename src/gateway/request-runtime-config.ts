@@ -1,6 +1,8 @@
 import type { OpenClawConfig } from "../config/types.openclaw.js";
+import type { EnterpriseSharedAgentCapabilityResolver } from "../enterprise/isolation/enterprise-agent-capabilities.js";
 import type { EnterpriseKnowledgeAuthority } from "../enterprise/knowledge/authority.js";
 import { generateSecureUuid } from "../infra/secure-random.js";
+import { resolveGlobalSingleton } from "../shared/global-singleton.js";
 
 export type GatewayEnterpriseDelegationSpecialist = {
   agentId: string;
@@ -11,6 +13,7 @@ export type GatewayEnterpriseDelegationSpecialist = {
   routable: boolean;
   effectiveMode: "auto_when_certain" | "confirm_before_handoff" | "explicit_only" | "disabled";
   reasonCodes: string[];
+  profileRevision?: string;
 };
 
 export type GatewayEnterpriseDelegationTurn = {
@@ -26,7 +29,6 @@ export type GatewayEnterpriseDelegationTurn = {
   clarificationQuestion?: string;
   reasonCode: string;
 };
-import { resolveGlobalSingleton } from "../shared/global-singleton.js";
 
 const GATEWAY_REQUEST_SCOPED_CONFIGS_KEY = Symbol.for(
   "openclaw.gateway.requestScopedRuntimeConfigs",
@@ -44,7 +46,9 @@ const gatewayRequestConfigIdentities = resolveGlobalSingleton<WeakMap<OpenClawCo
 
 /** Runtime metadata is request-private even when two configs serialize identically. */
 export function getGatewayRequestRuntimeConfigIdentity(config: OpenClawConfig): string | undefined {
-  if (!isGatewayRequestScopedRuntimeConfig(config)) return undefined;
+  if (!isGatewayRequestScopedRuntimeConfig(config)) {
+    return undefined;
+  }
   let identity = gatewayRequestConfigIdentities.get(config);
   if (!identity) {
     identity = generateSecureUuid();
@@ -61,6 +65,8 @@ export type GatewayRequestRuntimeMetadata = {
   ) => readonly { pluginName: string; marketplaceName: string; capabilityDigest?: string | null }[];
   enterpriseUser?: {
     accountId: string;
+    /** Present only for a live Enterprise User session; omitted for automations. */
+    sessionId?: string;
     username: string;
     displayName: string;
     personalAgentId: string;
@@ -69,10 +75,13 @@ export type GatewayRequestRuntimeMetadata = {
   enterpriseKnowledge?: {
     createAuthority(agentId: string): EnterpriseKnowledgeAuthority;
   };
+  /** Live capability resolver for Shared Agents. Re-resolves after every session turn. */
+  enterpriseCapabilities?: EnterpriseSharedAgentCapabilityResolver;
   enterpriseDelegation?: {
     accountId: string;
     personalAgentId: string;
     specialists: GatewayEnterpriseDelegationSpecialist[];
+    resolveSpecialist?: (agentId: string) => GatewayEnterpriseDelegationSpecialist | undefined;
     resolveExplicitAgentIds?: (prompt: string) => string[];
     request?: { sessionKey: string; parentRunId: string };
     turn?: GatewayEnterpriseDelegationTurn;

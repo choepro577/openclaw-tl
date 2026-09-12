@@ -35,6 +35,7 @@ import {
   revisionField,
   stringField,
   validAgentKey,
+  validGrantScope,
 } from "./extension-http-common.js";
 import {
   EnterpriseExtensionError,
@@ -106,6 +107,9 @@ function presentUserSkillInstall(install: EnterpriseUserSkillInstall) {
 function presentUserPluginRequest(request: EnterprisePluginRequest) {
   return {
     id: request.id,
+    scope: request.scope,
+    agentKey: request.agentKey,
+    runtimeAgentId: request.runtimeAgentId,
     packageName: request.packageName,
     packageFamily: request.packageFamily,
     exactVersion: request.exactVersion,
@@ -123,6 +127,9 @@ function presentUserPluginRequest(request: EnterprisePluginRequest) {
 function presentUserPluginGrant(grant: EnterpriseAccountPluginGrant) {
   return {
     id: grant.id,
+    scope: grant.scope,
+    agentKey: grant.agentKey,
+    runtimeAgentId: grant.runtimeAgentId,
     pluginId: grant.pluginId,
     exactVersion: grant.exactVersion,
     integrity: grant.integrity,
@@ -221,7 +228,8 @@ export async function handleEnterpriseExtensionHttpRequest(params: {
           account: principal.account,
           kind,
           catalogKey: query.get("catalogKey") ?? "",
-          ...(kind === "skill" ? { agentKey: validAgentKey(query.get("agentKey")) } : {}),
+          ...(query.has("scope") ? { scope: validGrantScope(query.get("scope")) } : {}),
+          ...(query.has("agentKey") ? { agentKey: validAgentKey(query.get("agentKey")) } : {}),
           ...(query.get("version") ? { version: query.get("version")! } : {}),
         }),
       );
@@ -426,7 +434,9 @@ export async function handleEnterpriseExtensionHttpRequest(params: {
       if (!request) {
         throw new EnterpriseExtensionError("PLUGIN_REQUEST_NOT_FOUND", 404);
       }
-      const account = getEnterpriseAccountById(request.requesterAccountId);
+      const account = request.requesterAccountId
+        ? getEnterpriseAccountById(request.requesterAccountId)
+        : undefined;
       const globalStatus = readEnterprisePluginGlobalStatus(request);
       const grants = globalStatus.pluginId
         ? listEnterprisePluginGrantImpact(globalStatus.pluginId)
@@ -471,7 +481,7 @@ export async function handleEnterpriseExtensionHttpRequest(params: {
     ) {
       action = "extension.plugin.request.approve";
       const body = await readJson(req);
-      rejectUnknownFields(body, ["baseRevision"]);
+      rejectUnknownFields(body, ["baseRevision", "scope"]);
       const context = params.getGatewayContext?.();
       if (!context) {
         throw new EnterpriseExtensionError("GATEWAY_RUNTIME_UNAVAILABLE", 503);
@@ -490,6 +500,7 @@ export async function handleEnterpriseExtensionHttpRequest(params: {
             reviewer: principal!.account,
             requestId: adminRequestParts[0]!,
             baseRevision: revisionField(body),
+            ...(body.scope === undefined ? {} : { scope: validGrantScope(body.scope as string) }),
             install: async (installParams) =>
               await invokeEnterpriseGatewayHandler(
                 pluginsHandlers["plugins.install"],

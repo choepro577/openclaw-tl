@@ -317,4 +317,20 @@ describe("resolveReusableWorkspaceSkillSnapshot", () => {
     expect(result.shouldRefresh).toBe(true);
     expect(buildWorkspaceSkillSnapshotMock).toHaveBeenCalledTimes(1);
   });
+
+  it("refreshes an open session when the Enterprise capability revision changes", () => {
+    const result = resolveReusableWorkspaceSkillSnapshot({
+      workspaceDir: TEST_WORKSPACE_DIR,
+      config: {},
+      capabilityRevision: "current-revision",
+      existingSnapshot: {
+        ...strippedSnapshot(),
+        capabilityRevision: "previous-revision",
+      },
+    });
+
+    expect(result.shouldRefresh).toBe(true);
+    expect(result.snapshot.capabilityRevision).toBe("current-revision");
+    expect(buildWorkspaceSkillSnapshotMock).toHaveBeenCalledTimes(1);
+  });
 });

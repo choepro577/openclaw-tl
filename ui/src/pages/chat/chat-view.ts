@@ -39,6 +39,7 @@ import {
 import type { ProviderUsageDisplayProps } from "../../lib/provider-quota-summary.ts";
 import type { SessionToolOverrides } from "../../lib/sessions/patch.ts";
 import type { UiSessionDefaultsHost } from "../../lib/sessions/session-key.ts";
+import type { EnterpriseSkillAuthRequest } from "../enterprise-user/components/skill-auth-control.ts";
 import type { ChatRunStartupStatus } from "./chat-run-startup.ts";
 import {
   type ChatPlacementStartupNoticeProps,
@@ -85,6 +86,7 @@ type ChatReplyTarget = {
   senderLabel?: string | null;
   sourceMessageId?: string | null;
 };
+
 export type ChatProps = ChatTaskSuggestionTrayProps &
   ChatPlacementStartupNoticeProps & {
     transcript: ChatTranscriptController;
@@ -219,6 +221,8 @@ export type ChatProps = ChatTaskSuggestionTrayProps &
     onHistoryKeydown?: (input: ChatInputHistoryKeyInput) => ChatInputHistoryKeyResult;
     onSlashIntent?: () => void | Promise<void>;
     onSend: ChatComposerProps["onSend"];
+    onSkillAuthenticated?: (request: EnterpriseSkillAuthRequest) => void;
+    skillAuthRequest?: EnterpriseSkillAuthRequest;
     onCompact?: () => void | Promise<void>;
     onOpenSessionCheckpoints?: () => void | Promise<void>;
     onToggleRealtimeTalk?: () => void;
@@ -269,6 +273,7 @@ export type ChatProps = ChatTaskSuggestionTrayProps &
     onForkMessage?: (entryId: string) => Promise<void> | void;
     backgroundTasks?: BackgroundTasksProps;
     delegationTasks?: readonly import("../../lib/tasks/task-summary.ts").TaskSummary[];
+    delegationTaskToolMessages?: ReadonlyMap<string, unknown[]>;
     header?: TemplateResult | typeof nothing;
     sessionSuggestions?: readonly SessionSuggestion[];
     sessionSuggestionRole?: SessionSharingRole;
@@ -392,6 +397,7 @@ export function renderChat(props: ChatProps) {
       onModelSetup: props.onModelSetup,
       backgroundTasks: props.backgroundTasks,
       delegationTasks: props.delegationTasks,
+      delegationTaskToolMessages: props.delegationTaskToolMessages,
       onFocusComposer: () =>
         chatSection
           ?.querySelector<HTMLTextAreaElement>(".agent-chat__composer-combobox > textarea")
@@ -419,6 +425,8 @@ export function renderChat(props: ChatProps) {
     progressCard: props.progressCard,
     onDismissProgressCard: props.onDismissProgressCard,
     gatewayQuestionPrompts: props.gatewayQuestionPrompts,
+    skillAuthRequest: props.skillAuthRequest,
+    onSkillAuthenticated: props.onSkillAuthenticated,
     messages: props.messages,
     stream: props.stream,
     queue: props.queue,
