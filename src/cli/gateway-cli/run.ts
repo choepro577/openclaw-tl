@@ -243,7 +243,8 @@ function shouldBlockGatewayBindWithoutExplicitAuth(params: {
   return (
     !isLoopbackHost(params.bindHost) &&
     !params.hasSharedSecret &&
-    params.resolvedAuthMode !== "trusted-proxy"
+    params.resolvedAuthMode !== "trusted-proxy" &&
+    params.resolvedAuthMode !== "accounts"
   );
 }
 

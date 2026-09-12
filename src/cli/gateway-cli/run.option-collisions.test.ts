@@ -1655,6 +1655,23 @@ describe("gateway run option collisions", () => {
     expect(options.auth?.token).toBe("tok_run");
   });
 
+  it("allows Enterprise account authentication on LAN without a shared secret", async () => {
+    configState.cfg = {
+      enterprise: { enabled: true },
+      gateway: { mode: "local", auth: { mode: "accounts" } },
+    };
+    configState.snapshot = {
+      config: configState.cfg,
+      sourceConfig: configState.cfg,
+      exists: true,
+      valid: true,
+    };
+    await withEnvAsync(withoutGatewayAuthEnv, async () => {
+      await runGatewayCli(["gateway", "run", "--bind", "lan"]);
+    });
+    expect(gatewayStartOptions().bind).toBe("lan");
+  });
+
   it("uses the startup snapshot only for the first in-process gateway start", async () => {
     runGatewayLoop.mockImplementationOnce(async ({ start }: { start: GatewayLoopStart }) => {
       await start({ startupStartedAt: 1000 });
