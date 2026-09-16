@@ -660,7 +660,10 @@ export async function runExecProcess(opts: {
 }): Promise<ExecProcessHandle> {
   const startedAt = Date.now();
   const sessionId = createSessionSlug(isProcessSessionIdTaken);
-  const execCommand = opts.execCommand ?? opts.command;
+  const requestedExecCommand = opts.execCommand ?? opts.command;
+  const execCommand = opts.sandbox
+    ? requestedExecCommand.replaceAll(opts.sandbox.workspaceDir, opts.sandbox.containerWorkdir)
+    : requestedExecCommand;
   const diagnosticTarget = opts.sandbox ? "sandbox" : "host";
   const supervisor = getProcessSupervisor();
   const shellRuntimeEnv: Record<string, string> = {

@@ -477,6 +477,55 @@ describe("exec foreground failures", () => {
     }
   });
 
+  it("maps host workspace paths only for sandbox commands", async () => {
+    const workspaceDir = tempDirs.make("openclaw-sandbox-command-path-");
+    mockSpawn();
+
+    const tool = createExecTool({
+      host: "sandbox",
+      security: "full",
+      ask: "off",
+      allowBackground: false,
+      sandbox: {
+        containerName: "sandbox-command-path-test",
+        workspaceDir,
+        containerWorkdir: "/workspace",
+      },
+    });
+
+    const result = await tool.execute("call-sandbox-command-path", {
+      command: `ls -la '${workspaceDir}' && find '${workspaceDir}/reports'`,
+    });
+
+    expect(result.details.status).toBe("completed");
+    const input = supervisorMock.spawn.mock.calls[0]?.[0];
+    expect(input?.mode).toBe("child");
+    if (input?.mode === "child") {
+      const shellCommand = input.argv.at(-1) ?? "";
+      expect(shellCommand).toContain("ls -la '/workspace'");
+      expect(shellCommand).toContain("find '/workspace/reports'");
+      expect(shellCommand).not.toContain(workspaceDir);
+    }
+
+    supervisorMock.spawn.mockClear();
+    mockSpawn();
+    const gatewayTool = createExecTool({
+      host: "gateway",
+      security: "full",
+      ask: "off",
+      allowBackground: false,
+    });
+    await gatewayTool.execute("call-gateway-command-path", {
+      command: `ls -la '${workspaceDir}'`,
+    });
+
+    const gatewayInput = supervisorMock.spawn.mock.calls[0]?.[0];
+    expect(gatewayInput?.mode).toBe("child");
+    if (gatewayInput?.mode === "child") {
+      expect(gatewayInput.argv.at(-1)).toContain(workspaceDir);
+    }
+  });
+
   it("lets backend-validated sandbox workdirs reach the backend without host stat fallback", async () => {
     const workspaceDir = tempDirs.make("openclaw-sandbox-workdir-");
     const { buildExecSpec, tool, validateWorkdir } = createBackendSandboxTool({ workspaceDir });
