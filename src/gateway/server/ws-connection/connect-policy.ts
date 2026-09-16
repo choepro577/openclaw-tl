@@ -1,4 +1,4 @@
-// WebSocket connect policy resolves Control UI pairing bypasses and missing-device identity decisions.
+// WebSocket connect policy resolves pairing bypasses and missing-device identity decisions.
 import type { ConnectParams } from "../../../../packages/gateway-protocol/src/index.js";
 import type { GatewayRole } from "../../role-policy.js";
 import { roleCanSkipDeviceIdentity } from "../../role-policy.js";
@@ -20,8 +20,9 @@ export function shouldSkipControlUiPairing(params: {
   ) {
     return "tailscale-device";
   }
+  // A verified Enterprise account is the operator identity, so browser clients
+  // do not need a second per-device approval step.
   if (
-    params.isControlUi &&
     params.role === "operator" &&
     params.authMode === "accounts" &&
     params.authMethod === "accounts"

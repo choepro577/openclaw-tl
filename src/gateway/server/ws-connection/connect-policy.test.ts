@@ -189,7 +189,7 @@ describe("ws connect policy", () => {
     );
   });
 
-  test("accounts auth skips pairing for the enterprise user control-ui", () => {
+  test("accounts auth skips pairing for authenticated enterprise operators", () => {
     const device = deviceRaw("enterprise-browser");
 
     expectSkipPairing(
@@ -201,8 +201,14 @@ describe("ws connect policy", () => {
       null,
     );
     expectSkipPairing(
-      { device, role: "operator", authMode: "accounts", authMethod: "accounts" },
-      null,
+      {
+        isControlUi: false,
+        device,
+        role: "operator",
+        authMode: "accounts",
+        authMethod: "accounts",
+      },
+      "enterprise-account",
     );
   });
 
