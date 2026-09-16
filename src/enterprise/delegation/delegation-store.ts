@@ -172,7 +172,9 @@ function overrideRowFromUnknown(value: unknown): OverrideRow | undefined {
   return {
     account_id: value.account_id,
     agent_resource_key: value.agent_resource_key,
-    mode: value.mode,
+    // Legacy per-account modes are routing preferences; access grants own
+    // authorization. Read them as the canonical inherited mode in memory.
+    mode: "inherit",
     revision: value.revision,
     updated_at: value.updated_at,
   };
@@ -379,6 +381,9 @@ export function writeEnterpriseDelegationOverride(
   ) {
     throw new Error("DELEGATION_OVERRIDE_MODE_INVALID");
   }
+  // Persist the canonical routing preference. Legacy values remain accepted
+  // above so existing API clients and rows continue to be readable.
+  const mode: EnterpriseDelegationOverrideMode = "inherit";
   if (!input.agentResourceKey.startsWith("agent:shared:") || input.agentResourceKey.length > 256) {
     throw new Error("DELEGATION_OVERRIDE_AGENT_INVALID");
   }
@@ -418,7 +423,7 @@ export function writeEnterpriseDelegationOverride(
       ).run(
         input.accountId,
         input.agentResourceKey,
-        input.mode,
+        mode,
         revision,
         current?.created_at ?? now,
         now,
@@ -439,7 +444,7 @@ export function writeEnterpriseDelegationOverride(
           `${input.accountId}:${input.agentResourceKey}`,
           audit.requestId,
           JSON.stringify(current ? { revision: currentRevision } : null),
-          JSON.stringify({ mode: input.mode, revision }),
+          JSON.stringify({ mode, revision }),
           now,
         ); // sqlite-allow-raw -- Override and audit are atomic.
       }
@@ -447,7 +452,7 @@ export function writeEnterpriseDelegationOverride(
         override: {
           accountId: input.accountId,
           agentResourceKey: input.agentResourceKey,
-          mode: input.mode,
+          mode,
           revision,
           updatedAt: now,
         },
@@ -804,9 +809,9 @@ export function activateEnterpriseDelegation(
         db.prepare(
           `INSERT INTO enterprise_delegation_overrides
             (account_id, agent_resource_key, mode, revision, created_at, updated_at)
-           VALUES (?, ?, 'disabled', ?, ?, ?)
+           VALUES (?, ?, 'inherit', ?, ?, ?)
            ON CONFLICT(account_id, agent_resource_key) DO UPDATE SET
-             mode = 'disabled', revision = excluded.revision, updated_at = excluded.updated_at`,
+             mode = 'inherit', revision = excluded.revision, updated_at = excluded.updated_at`,
         ).run(
           exclusion.accountId,
           exclusion.agentResourceKey,

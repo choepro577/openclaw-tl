@@ -36,6 +36,7 @@ import {
   resolveSessionEntry,
   upsertSessionEntryCore,
 } from "./session-accessor.sqlite-entry.js";
+import { listLatestSessionEntriesReadOnly } from "./session-accessor.sqlite-owner.js";
 import type {
   SessionAccessScope,
   LogicalSessionAccessScope,
@@ -72,6 +73,7 @@ export {
   hasSessionEntriesByStatusReadOnly,
   listSessionGenerationIdsForCanonicalRepair,
   listSessionChildEntriesReadOnly,
+  listLatestSessionEntriesReadOnly,
   listSessionEntriesReadOnly,
   rehomeSessionDeliveryReferencesForCanonicalRepair,
   rehomeSessionDeliveryReferencesForCanonicalRepairBatch,

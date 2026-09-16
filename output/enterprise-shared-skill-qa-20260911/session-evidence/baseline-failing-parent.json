@@ -1,0 +1,58 @@
+{
+  "capturedAt": "2026-09-11T14:03:44.164402+00:00",
+  "label": "baseline-failing-parent",
+  "agentId": "enterprise-personal-2ae2cbc2deecdb86fe86",
+  "sessionId": "c203315a-acef-44f4-b1f6-78a21f1f1df1",
+  "sessionKey": "agent:enterprise-personal-2ae2cbc2deecdb86fe86:dashboard:fe0d73fa-1b6d-45b8-b636-632af71f7efc",
+  "runIds": [
+    "54e59eb0-cd61-4cd1-977a-4ba445485a1c",
+    "announce:v1:agent:purchase-order-skill:subagent:8385ce01-253b-4aad-b4a1-db7d86457d11:0abb4a45-c702-4a7f-b377-6a9adf5f3ed8"
+  ],
+  "modelId": null,
+  "materializedCatalog": {
+    "toolCount": 0,
+    "toolNames": [],
+    "modelId": null
+  },
+  "transcript": {
+    "eventCount": 10,
+    "eventTypes": {
+      "custom": 1,
+      "message": 7,
+      "session": 1,
+      "thinking_level_change": 1
+    },
+    "toolCalls": [
+      "enterprise_delegate",
+      "progress_card"
+    ],
+    "toolResults": [],
+    "toolErrorCount": 0,
+    "codes": []
+  },
+  "trajectory": {
+    "eventCount": 18,
+    "eventTypes": {
+      "context.compiled": 2,
+      "model.completed": 2,
+      "prompt.submitted": 2,
+      "provider.prompt.observed": 4,
+      "session.ended": 2,
+      "session.started": 2,
+      "trace.artifacts": 2,
+      "trace.metadata": 2
+    },
+    "toolCalls": [],
+    "toolResults": [],
+    "toolResultSuccess": [],
+    "codes": []
+  },
+  "taskRuns": [],
+  "acceptanceSignals": {
+    "hasMaterializedToolCatalog": false,
+    "hasToolCall": true,
+    "hasSkillScriptCall": false,
+    "hasRouterCall": false,
+    "hasAuthorizationError": false
+  }
+}

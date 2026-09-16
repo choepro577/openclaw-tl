@@ -57,9 +57,8 @@ describe("Enterprise delegation admin views", () => {
     container.remove();
   });
 
-  it("renders searchable, pageable activation exclusions and server log filters", () => {
+  it("renders searchable, pageable activation preview and server log filters", () => {
     const onPreviewPage = vi.fn();
-    const onPreviewExclusion = vi.fn();
     const onEventFilter = vi.fn();
     const rows = Array.from({ length: 26 }, (_, index) => ({
       accountId: `account-${index}`,
@@ -122,7 +121,6 @@ describe("Enterprise delegation admin views", () => {
           },
           rows,
         },
-        previewExclusions: new Set(),
         previewQuery: "",
         previewPage: 0,
         onPolicy: vi.fn(),
@@ -133,7 +131,6 @@ describe("Enterprise delegation admin views", () => {
         onPreview: vi.fn(),
         onPreviewQuery: vi.fn(),
         onPreviewPage,
-        onPreviewExclusion,
         onActivate: vi.fn(),
         onEmergencyOff: vi.fn(),
       }),
@@ -141,13 +138,10 @@ describe("Enterprise delegation admin views", () => {
     );
 
     expect(container.querySelectorAll(".ea-preview-row")).toHaveLength(25);
+    expect(findButton("Activate 26 assignments")).toBeTruthy();
+    expect(container.querySelectorAll(".ea-preview-row input[type='checkbox']")).toHaveLength(0);
     findButton("Next page").click();
     expect(onPreviewPage).toHaveBeenCalledWith(1);
-    const exclusion = container.querySelector<HTMLInputElement>(
-      ".ea-preview-row input[type='checkbox']",
-    );
-    exclusion?.click();
-    expect(onPreviewExclusion).toHaveBeenCalledWith("account-0\u0000agent:shared:contracts", true);
     const accountFilter = [...container.querySelectorAll("label")]
       .find((label) => label.textContent?.includes("Account ID"))
       ?.querySelector("input");
@@ -218,6 +212,7 @@ describe("Enterprise delegation admin views", () => {
     expect(container.textContent).toContain("AI suggestion has not been saved");
     expect(container.textContent).toContain("More information is required");
     expect(container.textContent).toContain("Which contract number should be reviewed?");
+    expect(container.querySelectorAll("input[name='handlingMode']")).toHaveLength(0);
     expect(container.querySelector("pre")).toBeNull();
   });
 

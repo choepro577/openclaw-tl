@@ -68,6 +68,30 @@ export type SessionEntryListScope = Partial<Omit<SessionAccessScope, "sessionKey
   projection?: "full" | "list";
 };
 
+/**
+ * Bounded latest-row probe for callers that can prove an owner/key scope.
+ *
+ * The accessor deliberately keeps this narrower than a general list: without
+ * an owner id or explicit keys, callers must use the canonical full listing so
+ * visibility and alias rules cannot be accidentally weakened.
+ */
+export type SessionEntryLatestReadScope = SessionEntryListScope & {
+  /** Promoted creator identity used to bound an Enterprise user probe. */
+  createdActorId?: string;
+  /** Additional canonical keys (for example an administrator's home key). */
+  exactSessionKeys?: readonly string[];
+  /** Canonical agent-key prefix to search, including the trailing colon. */
+  sessionKeyPrefix?: string;
+  /** Maximum rows returned after the one-row look-ahead. */
+  limit?: number;
+};
+
+export type SessionEntryLatestReadResult = {
+  entries: SessionEntrySummary[];
+  /** True when the bounded SQL probe found more candidates than returned. */
+  hasMore: boolean;
+};
+
 export type ResolvedSessionEntryAccessTarget = {
   /** Agent owner inferred from the canonical session key. */
   agentId: string;

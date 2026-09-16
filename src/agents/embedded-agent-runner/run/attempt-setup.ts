@@ -41,7 +41,7 @@ import { resolveCodeModeSkills, type CodeModeSkillReader } from "../../code-mode
 import { DEFAULT_CONTEXT_TOKENS } from "../../defaults.js";
 import type { EmbeddedContextFile } from "../../embedded-agent-helpers.js";
 import { resolveImageSanitizationLimits } from "../../image-sanitization.js";
-import { resolveSandboxContext } from "../../sandbox.js";
+import { acquireSandboxActiveLease, resolveSandboxContext } from "../../sandbox.js";
 import type { SandboxContext } from "../../sandbox/types.js";
 import type { guardSessionManager } from "../../session-tool-result-guard-wrapper.js";
 import { sanitizeToolUseResultPairingForModel } from "../../session-transcript-repair.js";
@@ -93,10 +93,12 @@ type PreparedProviderRuntimePluginHandle = ProviderRuntimePluginHandle & {
 type AttemptWorkspaceParams = Pick<
   EmbeddedRunAttemptParams,
   | "agentId"
+  | "abortSignal"
   | "config"
   | "cwd"
   | "execOverrides"
   | "permissionMode"
+  | "sandbox"
   | "sandboxSessionKey"
   | "sessionId"
   | "sessionKey"
@@ -107,57 +109,82 @@ type AttemptWorkspaceParams = Pick<
 >;
 
 /** Resolves the shared workspace and sandbox policy used by native and plugin harnesses. */
-export async function resolveAttemptWorkspaceSandbox(params: AttemptWorkspaceParams) {
+export async function resolveAttemptWorkspaceSandbox(
+  params: AttemptWorkspaceParams & { holdSandboxLease?: boolean },
+) {
   const resolvedWorkspace = resolveUserPath(params.workspaceDir);
   await fs.mkdir(resolvedWorkspace, { recursive: true });
   const sandboxSessionKey =
     params.sandboxSessionKey?.trim() || params.sessionKey?.trim() || params.sessionId;
   // Collection review is a host-owned maintenance run with one restricted tool.
   // Sandboxing would hide that tool or redirect it to a disposable workspace.
+  // Plugin dispatch may already have prepared the exact sandbox used for
+  // prompt/media setup. Reuse it through the attempt instead of resolving,
+  // syncing skills, and acquiring a second active lease immediately before
+  // the model call. A null sandbox is the host's explicit admission that this
+  // attempt runs without sandboxing.
   const sandbox = params.skillWorkshopCollectionReconcile
     ? null
-    : await resolveSandboxContext({
-        config: params.config,
-        execOverrides: params.execOverrides,
-        sessionKey: sandboxSessionKey,
-        skillsSnapshot: params.skillsSnapshot,
-        workspaceDir: resolvedWorkspace,
-      });
-  const effectiveWorkspace =
-    sandbox?.enabled && sandbox.workspaceAccess !== "rw" ? sandbox.workspaceDir : resolvedWorkspace;
-  const requestedCwd = params.cwd ? resolveUserPath(params.cwd) : undefined;
-  if (params.permissionMode && !params.sessionRoot) {
-    throw new Error("session permission mode requires a recorded session root");
-  }
-  const sessionPermissionPolicy =
-    params.permissionMode && params.sessionRoot
-      ? { root: params.sessionRoot, mode: params.permissionMode }
-      : undefined;
-  if (sandbox?.enabled && requestedCwd && requestedCwd !== resolvedWorkspace) {
-    throw new Error(
-      "cwd override is not supported for sandboxed embedded agent runs; omit cwd or use the agent workspace as cwd",
-    );
-  }
-  await fs.mkdir(effectiveWorkspace, { recursive: true });
-  const { defaultAgentId, sessionAgentId } = resolveSessionAgentIds({
-    sessionKey: params.sessionKey,
-    config: params.config,
-    agentId: params.agentId,
-  });
-  return {
-    defaultAgentId,
-    effectiveCwd: sandbox?.enabled ? effectiveWorkspace : (requestedCwd ?? effectiveWorkspace),
-    effectiveFsWorkspaceOnly: resolveAttemptFsWorkspaceOnly({
+    : params.sandbox !== undefined
+      ? params.sandbox
+      : await resolveSandboxContext({
+          config: params.config,
+          execOverrides: params.execOverrides,
+          holdActiveLease: params.holdSandboxLease,
+          signal: params.abortSignal,
+          sessionKey: sandboxSessionKey,
+          skillsSnapshot: params.skillsSnapshot,
+          workspaceDir: resolvedWorkspace,
+        });
+  const releaseSandboxActive =
+    params.holdSandboxLease && sandbox?.lifecycleActiveRelease
+      ? sandbox.lifecycleActiveRelease
+      : params.holdSandboxLease && sandbox?.lifecycleKey
+        ? await acquireSandboxActiveLease(sandbox.lifecycleKey)
+        : undefined;
+  try {
+    const effectiveWorkspace =
+      sandbox?.enabled && sandbox.workspaceAccess !== "rw"
+        ? sandbox.workspaceDir
+        : resolvedWorkspace;
+    const requestedCwd = params.cwd ? resolveUserPath(params.cwd) : undefined;
+    if (params.permissionMode && !params.sessionRoot) {
+      throw new Error("session permission mode requires a recorded session root");
+    }
+    const sessionPermissionPolicy =
+      params.permissionMode && params.sessionRoot
+        ? { root: params.sessionRoot, mode: params.permissionMode }
+        : undefined;
+    if (sandbox?.enabled && requestedCwd && requestedCwd !== resolvedWorkspace) {
+      throw new Error(
+        "cwd override is not supported for sandboxed embedded agent runs; omit cwd or use the agent workspace as cwd",
+      );
+    }
+    await fs.mkdir(effectiveWorkspace, { recursive: true });
+    const { defaultAgentId, sessionAgentId } = resolveSessionAgentIds({
+      sessionKey: params.sessionKey,
       config: params.config,
+      agentId: params.agentId,
+    });
+    return {
+      defaultAgentId,
+      effectiveCwd: sandbox?.enabled ? effectiveWorkspace : (requestedCwd ?? effectiveWorkspace),
+      effectiveFsWorkspaceOnly: resolveAttemptFsWorkspaceOnly({
+        config: params.config,
+        sessionAgentId,
+      }),
+      effectiveWorkspace,
+      resolvedWorkspace,
+      sessionPermissionPolicy,
+      sandbox,
+      sandboxLifecycleRelease: releaseSandboxActive,
+      sandboxSessionKey,
       sessionAgentId,
-    }),
-    effectiveWorkspace,
-    resolvedWorkspace,
-    sessionPermissionPolicy,
-    sandbox,
-    sandboxSessionKey,
-    sessionAgentId,
-  };
+    };
+  } catch (error) {
+    releaseSandboxActive?.();
+    throw error;
+  }
 }
 
 export async function prepareEmbeddedAttemptSetup(params: EmbeddedRunAttemptParams) {
@@ -204,7 +231,10 @@ export async function prepareEmbeddedAttemptSetup(params: EmbeddedRunAttemptPara
     }
   };
 
-  const workspace = await resolveAttemptWorkspaceSandbox(params);
+  const workspace = await resolveAttemptWorkspaceSandbox({
+    ...params,
+    holdSandboxLease: true,
+  });
   const { effectiveWorkspace } = workspace;
 
   const getCurrentAttemptPluginMetadataSnapshot = (): PluginMetadataSnapshot | undefined =>

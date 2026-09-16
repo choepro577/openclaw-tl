@@ -191,6 +191,53 @@ describe("withReplyDispatcher", () => {
     expect(order).toEqual(["sendFinalReply", "markComplete", "waitForIdle", "onSettled"]);
   });
 
+  it("reuses the buffered dispatch context after its canonical finalization", async () => {
+    const ctx = buildTestCtx({ Body: "hello\r\nworld" });
+    const finalize = vi.fn((input: unknown) => {
+      const source = input as Record<string, unknown>;
+      const body = typeof source.Body === "string" ? source.Body.replace(/\r\n?/g, "\n") : "";
+      return {
+        ...source,
+        Body: body,
+        RawBody: body,
+        CommandBody: body,
+        rawText: body,
+        agentText: body,
+        commandText: body,
+        BodyForAgent: body,
+        BodyForCommands: body,
+      };
+    });
+    hoisted.finalizeInboundContextMock.mockImplementation(finalize);
+    hoisted.createReplyDispatcherWithTypingMock.mockReturnValueOnce({
+      dispatcher: createDispatcher([]),
+      replyOptions: {},
+      markDispatchIdle: vi.fn(),
+      markRunComplete: vi.fn(),
+    });
+    let dispatchedCtx: unknown;
+    hoisted.dispatchReplyFromConfigMock.mockImplementationOnce(async ({ ctx: finalizedCtx }) => {
+      dispatchedCtx = finalizedCtx;
+      return { text: "ok" };
+    });
+
+    const result = await dispatchInboundMessageWithBufferedDispatcher({
+      ctx,
+      cfg: {} as OpenClawConfig,
+      dispatcherOptions: { deliver: async () => undefined },
+    });
+
+    expect(result).toEqual({ text: "ok" });
+    // The reply-payload hook owns its own canonical context boundary; dispatch adds no extra pass.
+    expect(finalize).toHaveBeenCalledTimes(2);
+    expect(dispatchedCtx).toMatchObject({
+      Body: "hello\nworld",
+      agentText: "hello\nworld",
+      commandText: "hello\nworld",
+      rawText: "hello\nworld",
+    });
+  });
+
   it("emits message.received diagnostics before dispatch", async () => {
     const events: Array<{ type: string; channel?: string; sessionKey?: string; source?: string }> =
       [];

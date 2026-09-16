@@ -27,6 +27,22 @@ function expectSchemaFailurePath(result: SchemaParseResult, expectedPathPrefix: 
 }
 
 describe("agent defaults schema", () => {
+  it("accepts legacy delegation handling modes for runtime normalization", () => {
+    const agent = AgentEntrySchema.parse({
+      id: "specialist",
+      delegationTarget: {
+        status: "draft",
+        aliases: [],
+        handlingMode: "explicit_only",
+        useWhen: [],
+        avoidWhen: [],
+        requiredInputs: [],
+      },
+    });
+
+    expect(agent.delegationTarget?.handlingMode).toBe("explicit_only");
+  });
+
   it("accepts utility models on defaults and agent entries", () => {
     const defaults = AgentDefaultsSchema.parse({ utilityModel: "openai/gpt-5.4-mini" })!;
     const agent = AgentEntrySchema.parse({

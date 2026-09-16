@@ -1,0 +1,42 @@
+{
+  "finalBuild": "2026.8.1-2d6f02d14f5e-2026-09-11T17-15-18.656Z",
+  "testResults": [
+    {
+      "suite": "service, gateway policy, delegation guard, skill runtime",
+      "passed": 53,
+      "log": "final-unit-tests.log",
+      "note": "The extracted connector fixture failed due shared test state; fixed and separately rerun."
+    },
+    {
+      "suite": "connector guards, gateway dispatcher, host capability, before-tool-call approval",
+      "passed": 148,
+      "log": "final-boundary-tests.log"
+    },
+    {
+      "suite": "plugin service plus extracted connector guards after JSON parser cleanup",
+      "passed": 15,
+      "log": "final-plugin-tests.log"
+    }
+  ],
+  "review": {
+    "threshold": "P0",
+    "actionableFindings": 0,
+    "log": "final-autoreview.json"
+  },
+  "lint": {
+    "newExtractedModule": "pass",
+    "remainingBaseline": [
+      "codex-plugin-store text helper no-base-to-string at lines115 and119"
+    ],
+    "globalPass": false
+  },
+  "liveAcceptance": "passed for original parent, fresh direct/delegated PO with Personal deny, agent revoke/regrant, skill add/remove, delegated HR",
+  "liveBusinessPolicy": "read-only; no PO writes",
+  "typecheck": {
+    "diagnostics": 166,
+    "newDiagnosticsComparedWithPriorRun": 0,
+    "globalPass": false
+  },
+  "personalPolicyRestored": true,
+  "markerCleaned": true
+}

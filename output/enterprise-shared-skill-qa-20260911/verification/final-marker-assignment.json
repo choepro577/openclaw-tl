@@ -1,0 +1,8 @@
+{
+  "addedAt": "2026-09-12T01:28:49.452Z",
+  "agent": "purchase-order-skill",
+  "skills": [
+    "purchase-order-skill",
+    "qa-shared-acceptance-skill"
+  ]
+}

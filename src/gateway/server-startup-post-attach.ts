@@ -1620,13 +1620,21 @@ export async function startGatewayPostAttachRuntime(
           }
           if (!params.minimalTestGateway && params.cfgAtStart.enterprise?.enabled) {
             try {
-              const [{ prewarmEnterpriseCatalogs }, { readGatewayConfigResponse }] =
-                await Promise.all([
-                  import("../enterprise/catalog/enterprise-catalog.js"),
-                  import("./server-methods/config.js"),
-                ]);
+              const [
+                { prewarmEnterpriseCatalogs },
+                { resumeEnterpriseDeveloperWorker },
+                { readGatewayConfigResponse },
+              ] = await Promise.all([
+                import("../enterprise/catalog/enterprise-catalog.js"),
+                import("../enterprise/developer/developer-http.js"),
+                import("./server-methods/config.js"),
+              ]);
               prewarmEnterpriseCatalogs(params.cfgAtStart);
               const gatewayContext = params.resolveGatewayContext();
+              resumeEnterpriseDeveloperWorker(
+                params.cfgAtStart,
+                gatewayContext?.resolveGatewayContext,
+              );
               if (gatewayContext) {
                 await readGatewayConfigResponse(gatewayContext, { primeCache: true });
               }

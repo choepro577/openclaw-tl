@@ -1,6 +1,6 @@
 ---
 name: purchase-order-skill
-description: Tra cuu va thao tac de nghi mua hang, purchase order (PO), nha cung cap, hang hoa va chi nhanh qua PO service; router-first, dung dang nhap PO bao mat trong chat, va xac nhan truoc moi thao tac ghi.
+description: Tra cuu va thao tac de nghi mua hang, purchase order (PO), nha cung cap, hang hoa va chi nhanh qua PO service; router-first, dung dang nhap PO bao mat trong chat, chi hoi lai khi yeu cau ghi thieu hoac mo ho.
 metadata:
   {
     "openclaw":
@@ -45,6 +45,7 @@ metadata:
                         "delete_po_product",
                         "confirm_po",
                       ],
+                    "userVisibleUrlPaths": { "create_po_draft": ["result.data"] },
                     "unknownRisk": "approval",
                     "timeoutMs": 30000,
                   },
@@ -98,8 +99,11 @@ không diễn giải thành một yêu cầu mới.
 
 ## Dang nhap PO bao mat
 
-1. Khong bao gio hoi, nhan, lap lai hoac luu password/token trong chat,
-   transcript, file, command hay tool arguments.
+1. Khong bao gio hoi, nhan, lap lai hoac luu password/token dang nhap trong chat,
+   transcript, file, command hay tool arguments. Ngoại lệ duy nhất là URL truy
+   cập do `create_po_draft.result.data` trả về: đây là link dành cho user và thẻ
+   kết quả `skill_script` hiển thị nguyên văn, kể cả query parameter tên `token`,
+   `signature` hoặc tương tự. Không lặp lại token đó trong văn bản assistant.
 2. Khong goi `employee_login`. Dang nhap do UI/Gateway thuc hien ngoai
    transcript bang hop thoai bao mat; nut **PO** canh o chat van dung de mo lai.
 3. Nếu `skill_script` trả `SKILL_AUTH_REQUIRED`, dừng các operation PO còn
@@ -174,17 +178,27 @@ của lần tạo hiện tại.
 
 ## An toàn thao tác ghi
 
-Trước các tool ghi như
-`create_po_draft`, `update_po_draft`, `save_po_product`,
-`delete_po_product`, `confirm_po`, phai tom tat PO/chi nhanh/nha cung cap/san
-phẩm và xin xác nhận rõ ràng nếu user chưa yêu cầu ghi trong current turn. Nếu
-current turn đã nói rõ “tạo”, chuẩn bị payload và gọi tool; mutation guard vẫn
-hiển thị bước phê duyệt một lần trước khi ghi.
+Giữ nguyên yêu cầu và phạm vi qua mọi lần router, prerequisite, auth, retry và
+delegation. Khi user đã nói rõ thao tác ghi trong request hiện tại, hoặc đang tiếp
+tục đúng request chưa thay đổi sau auth/retry, đó là quyền thực hiện thao tác đã
+nêu. Chuẩn bị payload rồi gọi mutation tool đúng một lần; không hỏi lại xác nhận
+và không tạo thêm một bước phê duyệt plugin cho cùng request.
 
-Sau `create_po_draft`, chỉ báo thành công khi chính call đó trả thành công. Link
-duy nhất được phép gửi là URL nguyên văn trong `result.data` của call đó. Không
-tạo URL từ `Notes`, mã PO, dữ liệu nháp cũ hoặc ghép query string. Nếu không có
-`result.data`, nói rõ service không trả link; không tự dựng link.
+Chỉ hỏi user khi action, target, scope, ngày hoặc trường nghiệp vụ `required` còn
+thiếu hay mơ hồ. Không tự đổi yêu cầu ghi thành preview/read, không thu hẹp
+`toàn bộ chi nhánh`, không đoán dữ liệu và không báo thành công nếu tool chưa trả
+thành công.
+
+`confirm_po` là thao tác nghiệp vụ riêng: yêu cầu tạo PO nháp chỉ cho phép gọi
+`create_po_draft`; chỉ gọi `confirm_po` khi user yêu cầu xác nhận/chuyển trạng
+thái PO nháp đó. Nếu một tool hoặc backend chỉ hỗ trợ preview, giữ nguyên
+preview-only và chỉ commit khi user đã nêu rõ chính thao tác commit đó.
+
+Sau `create_po_draft`, chỉ báo thành công khi chính call đó trả thành công. Thẻ
+`skill_script` tự hiển thị URL nguyên văn trong `result.data` để user bấm/copy;
+trong câu trả lời chỉ dẫn user đến link gốc ngay dưới thẻ công cụ. Không chép lại,
+rút gọn hoặc dựng URL từ `Notes`, mã PO, dữ liệu nháp cũ hay query string. Nếu
+không có `result.data`, nói rõ service không trả link; không tự dựng link.
 
 Neu tool tra loi, giu nguyen ma phan loai de user biet buoc tiep theo:
 

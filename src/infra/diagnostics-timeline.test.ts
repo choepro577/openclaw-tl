@@ -5,6 +5,7 @@ import { dirname, join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { OpenClawConfig } from "../config/types.openclaw.js";
 import {
+  emitCompletedDiagnosticsTimelineSpan,
   emitDiagnosticsTimelineEvent,
   isDiagnosticsTimelineEnabled,
   measureDiagnosticsTimelineSpan,
@@ -227,6 +228,39 @@ describe("diagnostics timeline", () => {
     expect(attributesRecord(end).pluginCount).toBe(3);
     expect(end.spanId).toBe(start.spanId);
     expect(end.durationMs).toBeGreaterThanOrEqual(0);
+    expect(start.monotonicMs).toEqual(expect.any(Number));
+    expect(end.monotonicMs).toEqual(expect.any(Number));
+  });
+
+  it("replays completed spans with their original monotonic boundary", async () => {
+    const { env, path } = await createTimelineEnv();
+    const startedAtMs = 100;
+    const endedAtMs = 145;
+
+    emitCompletedDiagnosticsTimelineSpan("gateway.chat_send.authorization", 45, {
+      env,
+      phase: "agent-turn",
+      runId: "run-replay",
+      startedAtMs,
+      endedAtMs,
+      omitErrorMessage: true,
+    });
+
+    const events = await readTimeline(path);
+    expect(events).toHaveLength(2);
+    expect(events[0]).toMatchObject({
+      type: "span.start",
+      name: "gateway.chat_send.authorization",
+      runId: "run-replay",
+      monotonicMs: startedAtMs,
+    });
+    expect(events[1]).toMatchObject({
+      type: "span.end",
+      name: "gateway.chat_send.authorization",
+      runId: "run-replay",
+      monotonicMs: endedAtMs,
+      durationMs: 45,
+    });
   });
 
   it("records span error events and rethrows failures", async () => {
@@ -328,5 +362,34 @@ describe("diagnostics timeline", () => {
     expect(parentEnd?.type).toBe("span.end");
     expect(parentEnd?.name).toBe("reply.run_agent_turn");
     expect(parentEnd?.phase).toBe("agent-turn");
+  });
+
+  it("lets nested transport marks inherit config-only timeline enablement", async () => {
+    const { env, path } = await createTimelineEnv();
+    const envWithoutFlag = { ...env };
+    delete envWithoutFlag.OPENCLAW_DIAGNOSTICS;
+    const config = { diagnostics: { flags: ["timeline"] } } as OpenClawConfig;
+
+    await measureDiagnosticsTimelineSpan(
+      "agent.model_call",
+      () => {
+        emitDiagnosticsTimelineEvent({
+          type: "provider.request",
+          name: "provider.http.submit",
+          runId: "run-transport",
+          monotonicMs: 123,
+        });
+      },
+      { config, env: envWithoutFlag, runId: "run-transport" },
+    );
+
+    const events = await readTimeline(path);
+    expect(events).toHaveLength(3);
+    expect(events[1]).toMatchObject({
+      type: "provider.request",
+      name: "provider.http.submit",
+      runId: "run-transport",
+      monotonicMs: 123,
+    });
   });
 });

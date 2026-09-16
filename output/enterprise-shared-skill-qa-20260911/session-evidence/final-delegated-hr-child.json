@@ -1,0 +1,100 @@
+{
+  "capturedAt": "2026-09-12T01:34:21.933456+00:00",
+  "label": "final-delegated-hr-child",
+  "agentId": "hrm",
+  "sessionId": "f9e70f2d-7943-46a1-ab7d-a471ed726ee0",
+  "sessionKey": "agent:hrm:subagent:605b1a8a-0422-42a3-a2af-19c580665399",
+  "runIds": [
+    "7fde7b66-9981-4725-9a86-bd12308805e0"
+  ],
+  "modelId": null,
+  "materializedCatalog": {
+    "toolCount": 2,
+    "toolNames": [
+      "read",
+      "skill_script"
+    ]
+  },
+  "transcript": {
+    "eventCount": 10,
+    "eventTypes": {
+      "message": 9,
+      "session": 1
+    },
+    "toolCalls": [
+      "read",
+      "skill_script",
+      "skill_script"
+    ],
+    "toolResults": [
+      "read",
+      "skill_script",
+      "skill_script"
+    ],
+    "toolErrorCount": 0,
+    "codes": []
+  },
+  "trajectory": {
+    "eventCount": 11,
+    "eventTypes": {
+      "context.compiled": 1,
+      "model.completed": 1,
+      "prompt.submitted": 1,
+      "session.ended": 1,
+      "session.started": 1,
+      "tool.call": 3,
+      "tool.result": 3
+    },
+    "toolCalls": [
+      "read",
+      "skill_script",
+      "skill_script"
+    ],
+    "toolResults": [
+      "read",
+      "skill_script",
+      "skill_script"
+    ],
+    "toolResultSuccess": [
+      true,
+      true,
+      true
+    ],
+    "codes": []
+  },
+  "taskRuns": [
+    {
+      "runId": "7fde7b66-9981-4725-9a86-bd12308805e0",
+      "status": "succeeded",
+      "deliveryStatus": "delivered",
+      "toolUseCount": 3,
+      "lastToolName": "skill_script",
+      "errorClass": null
+    }
+  ],
+  "skillOperations": [
+    {
+      "skill": "hr-skill",
+      "entrypoint": "call",
+      "operation": "router_tool_search"
+    },
+    {
+      "skill": "hr-skill",
+      "entrypoint": "call",
+      "operation": "get_departments"
+    }
+  ],
+  "acceptanceSignals": {
+    "hasMaterializedToolCatalog": true,
+    "hasToolCall": true,
+    "hasSkillScriptCall": true,
+    "hasRouterCall": true,
+    "hasAuthorizationError": false
+  },
+  "acceptance": {
+    "uiObserved": true,
+    "readOnly": true,
+    "departmentsReturned": 16,
+    "parentSessionId": "9e46ca35-18bb-48aa-994e-1fc452a358c4"
+  }
+}

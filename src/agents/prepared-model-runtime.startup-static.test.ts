@@ -379,6 +379,7 @@ describe("prepared model runtime Gateway catalog mode", () => {
     );
     expect(mocks.resolveAmbientCredentials).toHaveBeenCalledWith(
       expect.objectContaining({
+        metadataSnapshot: mocks.metadataSnapshot,
         syntheticAuthProviderRefs: ["openai"],
         resolveSyntheticAuth: expect.any(Function),
       }),

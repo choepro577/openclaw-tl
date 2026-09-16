@@ -150,6 +150,51 @@ counts, event-loop delay samples, provider operation names, child-process exit
 state, and startup error names/messages. Treat timeline files as local
 diagnostics artifacts; review before sharing them outside your machine.
 
+### Measure chat startup latency
+
+Measure from Gateway receipt to the first provider submission, and report
+provider response time separately. An ACK confirms admission; it does not mean
+the model request has started. With the Codex harness, `thread/start` and
+`turn/start` measure app-server RPC work. The native turn can still prepare
+context before submitting a model request.
+
+For HTTP model transports, `provider.http.submit` marks the fetch invocation
+after transport policy and DNS checks. It does not prove provider acceptance.
+Redirect attempts include `redirectCount`; do not count redirects as additional
+LLM decisions. The marker records model identifiers and timing, without request
+content, headers, or endpoint URLs.
+
+For example, a request can spend 20 ms in admission, wait 200 ms in a queue,
+and spend another 80 ms preparing the agent. Its server startup is 300 ms,
+even if the ACK arrived after the first 20 ms. If two preparation spans overlap,
+use their actual start and end times instead of adding their durations.
+
+Compare the same source configuration, model, reasoning level, history, and
+tool schemas. Report sample count, failures, p50, and p95 separately for cold
+starts, prewarmed sessions, reused sessions, queue waits, and compaction. A
+slow-stage warning is a selected sample, not a percentile. Keep prewarm time
+visible even when it finishes before the user presses Send.
+
+Client and server monotonic clocks have different origins. Use request
+correlation to join their records, but compute durations within each clock;
+do not subtract a browser timestamp from a Gateway timestamp. Missing native
+provider telemetry remains unknown rather than being replaced with an RPC ACK.
+
+### Compare Enterprise routing strategies
+
+`OPENCLAW_EXPERIMENT_ENTERPRISE_AGENT_FIRST=1` enables the opt-in Enterprise
+Personal-Agent-first experiment on an isolated Gateway. It is off by default.
+The Personal Agent proposes a structured delegation decision through
+`enterprise_delegate`; the server still validates required inputs, user sources,
+scope, permissions, and replay state before starting a specialist. Pending
+clarification continues through the existing router. Invalid proposals may fall
+back to that router once, only before any specialist has started.
+
+Unset the variable to use the existing routing flow. Keep the experiment off
+until paired conversations demonstrate both fewer sequential model calls and
+no observed quality regression. Do not change the model, reasoning level,
+context budget, or tool permissions to improve a latency score.
+
 ## Where logs go
 
 Flags emit logs into the standard diagnostics log file. By default:

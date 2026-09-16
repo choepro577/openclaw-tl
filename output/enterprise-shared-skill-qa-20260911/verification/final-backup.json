@@ -1,0 +1,41 @@
+{
+  "backup": "/Users/hieunguyenduc/.openclaw/backups/shared-agent-20260912-001245",
+  "databases": [
+    {
+      "path": "state/openclaw.sqlite",
+      "integrity": "ok"
+    },
+    {
+      "path": "agents/purchase-order-skill/agent/openclaw-agent.sqlite",
+      "integrity": "ok"
+    },
+    {
+      "path": "agents/hrm/agent/openclaw-agent.sqlite",
+      "integrity": "ok"
+    },
+    {
+      "path": "agents/enterprise-hr-specialist/agent/openclaw-agent.sqlite",
+      "integrity": "ok"
+    },
+    {
+      "path": "agents/enterprise-finance-specialist/agent/openclaw-agent.sqlite",
+      "integrity": "ok"
+    },
+    {
+      "path": "agents/main/agent/openclaw-agent.sqlite",
+      "integrity": "ok"
+    },
+    {
+      "path": "agents/enterprise-personal-3c29830f7a4e00f56f51/agent/openclaw-agent.sqlite",
+      "integrity": "ok"
+    },
+    {
+      "path": "agents/enterprise-personal-2ae2cbc2deecdb86fe86/agent/openclaw-agent.sqlite",
+      "integrity": "ok"
+    },
+    {
+      "path": "agents/enterprise-contract-specialist/agent/openclaw-agent.sqlite",
+      "integrity": "ok"
+    }
+  ]
+}

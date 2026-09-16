@@ -27,6 +27,7 @@ const accessPresets: EnterpriseAccessPreset[] = [
     label: "Quyền cơ bản",
     description: "Basic access",
     toolIds: ["read"],
+    initialSkillIds: [],
   },
 ];
 

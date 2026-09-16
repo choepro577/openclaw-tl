@@ -1,13 +1,13 @@
 // Verifies sandbox context resolution, backend registration, and main-session bypass.
 import fs from "node:fs/promises";
-import os from "node:os";
 import path from "node:path";
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { OpenClawConfig } from "../config/config.js";
 import type { SkillUsagePath } from "../skills/types.js";
 import { registerSandboxBackend } from "./sandbox/backend.js";
 import { ensureSandboxWorkspaceForSession, resolveSandboxContext } from "./sandbox/context.js";
 import { isSandboxProvisioningError } from "./sandbox/provisioning-error.js";
+import { useSandboxFixtureDir } from "./sandbox/resolve-context.test-helpers.js";
 
 const updateRegistryMock = vi.hoisted(() => vi.fn());
 const readRegisteredSandboxRuntimeIdsMock = vi.hoisted(() => vi.fn(async () => [] as string[]));
@@ -64,23 +64,7 @@ vi.mock("../skills/loading/workspace-skill-sync.runtime.js", () => ({
   syncWorkspaceSkills: syncSkillsToWorkspaceMock,
 }));
 
-let sandboxFixtureRoot = "";
-let sandboxFixtureCount = 0;
-
-async function createSandboxFixtureDir(prefix: string): Promise<string> {
-  // Shared fixture root avoids repeated temp-dir setup across sandbox context cases.
-  const dir = path.join(sandboxFixtureRoot, `${prefix}-${sandboxFixtureCount++}`);
-  await fs.mkdir(dir, { recursive: true });
-  return dir;
-}
-
-beforeAll(async () => {
-  sandboxFixtureRoot = await fs.mkdtemp(path.join(os.tmpdir(), "openclaw-sandbox-context-"));
-});
-
-afterAll(async () => {
-  await fs.rm(sandboxFixtureRoot, { recursive: true, force: true });
-});
+const createSandboxFixtureDir = useSandboxFixtureDir();
 
 describe("resolveSandboxContext", () => {
   it("does not sandbox the agent main session in non-main mode", async () => {

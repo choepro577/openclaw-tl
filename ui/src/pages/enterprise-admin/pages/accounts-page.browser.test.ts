@@ -47,20 +47,23 @@ const accessPresets: EnterpriseAccessPreset[] = [
   {
     key: "basic@1",
     label: "Quyền cơ bản",
-    description: "Cấp 32 công cụ cơ bản, đồng bộ quyền sử dụng trong sandbox.",
+    description: "Cấp 32 công cụ và chọn sẵn 15 skill ban đầu.",
     toolIds: [...basicToolIds],
+    initialSkillIds: [],
   },
   {
     key: "standard-coding@1",
     label: "Lập trình tiêu chuẩn",
     description: "Đọc, ghi, sửa file và chạy lệnh trong sandbox.",
     toolIds: ["read", "write", "edit", "apply_patch", "exec", "process"],
+    initialSkillIds: [],
   },
   {
     key: "none",
     label: "Không có preset",
     description: "Chỉ sử dụng các quyền được cấp riêng.",
     toolIds: [],
+    initialSkillIds: [],
   },
 ];
 
@@ -267,7 +270,7 @@ describe("Enterprise access preset browser flow", () => {
     firstStep.requestSubmit();
     await waitForUpdate(page);
 
-    await waitForText(page, "Cấp 32 công cụ cơ bản, đồng bộ quyền sử dụng trong sandbox.");
+    await waitForText(page, "Cấp 32 công cụ và chọn sẵn 15 skill ban đầu.");
     const presetSelect = page.querySelector<HTMLSelectElement>("select[name='accessPresetKey']");
     expect(presetSelect?.value).toBe("basic@1");
     expect(page.querySelectorAll(".ea-account-tool-list .ea-badge")).toHaveLength(32);

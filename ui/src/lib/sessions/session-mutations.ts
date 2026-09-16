@@ -304,9 +304,6 @@ export function createSessionMutations(host: SessionMutationsHost) {
       startModelPatch();
       startPinPatch();
     };
-    if (!options.waitFor) {
-      startOptimisticPatch();
-    }
     const settleModelOverride = (completed: boolean) => {
       const pendingModelPatch = pendingModelPatches.get(normalizedKey);
       if (modelPatchStarted && pendingModelPatch?.token === modelPatchToken) {
@@ -372,6 +369,9 @@ export function createSessionMutations(host: SessionMutationsHost) {
           settleOptimisticPatch(false);
           return null;
         }
+      }
+      if (options.shouldDispatch?.() === false) {
+        return null;
       }
       startOptimisticPatch();
       const result = await requestSessionPatch(scope.client, key, patchParams, options);

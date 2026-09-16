@@ -98,6 +98,7 @@ function createContainerSandboxBackendHandle(params: {
     id: params.engine.id,
     runtimeId: params.containerName,
     runtimeLabel: params.containerName,
+    registryManaged: true,
     workdir: params.workdir,
     env: params.env,
     configLabel: params.image,

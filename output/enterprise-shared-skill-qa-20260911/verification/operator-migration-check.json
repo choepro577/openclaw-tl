@@ -1,0 +1,15 @@
+{
+  "foreignKeyViolations": 0,
+  "enterprise_account_plugin_grants": {
+    "scopes": {
+      "account": 2
+    },
+    "approvalLinks": 2
+  },
+  "enterprise_codex_plugin_grants": {
+    "scopes": {
+      "account": 1
+    },
+    "approvalLinks": 1
+  }
+}

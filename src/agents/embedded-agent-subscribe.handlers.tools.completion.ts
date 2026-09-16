@@ -124,7 +124,7 @@ export async function handleToolExecutionEnd(
   const result = evt.result;
   const toolSendReceiptResult = ctx.consumeToolSendReceipt?.(toolCallId);
   const observerIsError = isError || isToolResultError(result);
-  const sanitizedResult = sanitizeToolResult(result);
+  const sanitizedResult = sanitizeToolResult(result, toolName);
   const approvalUnavailable =
     isExecToolName(toolName) &&
     readExecToolDetails(sanitizedResult)?.status === "approval-unavailable";

@@ -105,6 +105,30 @@ function createDispatcher(
 }
 
 describe("authenticated WebSocket request cancellation", () => {
+  it("forwards only the server-owned WebSocket receive timestamp", async () => {
+    const socket = new EventEmitter();
+    const { client, dispatcher } = createDispatcher(socket);
+    handleGatewayRequest.mockResolvedValue(undefined);
+
+    await dispatcher.dispatch(
+      {
+        type: "req",
+        id: "chat-send-timing",
+        method: "chat.send",
+        params: { requestTiming: { receivedAtMs: 1 }, message: "hello" },
+      },
+      client,
+      42.5,
+    );
+
+    await vi.waitFor(() => expect(handleGatewayRequest).toHaveBeenCalledOnce());
+    expect(handleGatewayRequest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        requestTiming: expect.objectContaining({ receivedAtMs: 42.5 }),
+      }),
+    );
+  });
+
   it("forwards CLI socket closure to the actual first-party node cancel event", async () => {
     const socket = new EventEmitter();
     const { registry, frames } = createPairedNode();

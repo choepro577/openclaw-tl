@@ -101,6 +101,7 @@ export function resolvePersistedModelRef(params: {
   overrideModel?: unknown;
   allowManifestNormalization?: boolean;
   allowPluginNormalization?: boolean;
+  manifestPlugins?: ModelManifestNormalizationContext["manifestPlugins"];
 }): ModelRef | null {
   const defaultProvider = normalizePersistedDefaultProvider(params.defaultProvider);
   const runtimeProvider = normalizeOptionalString(params.runtimeProvider);
@@ -113,6 +114,7 @@ export function resolvePersistedModelRef(params: {
       parseModelRef(runtimeModel, defaultProvider, {
         allowManifestNormalization: params.allowManifestNormalization,
         allowPluginNormalization: params.allowPluginNormalization,
+        manifestPlugins: params.manifestPlugins,
       }) ?? {
         provider: defaultProvider,
         model: runtimeModel,
@@ -125,6 +127,7 @@ export function resolvePersistedModelRef(params: {
     overrideModel: params.overrideModel,
     allowManifestNormalization: params.allowManifestNormalization,
     allowPluginNormalization: params.allowPluginNormalization,
+    manifestPlugins: params.manifestPlugins,
   });
 }
 
@@ -141,6 +144,7 @@ export function resolvePersistedSelectedModelRef(params: {
   overrideModel?: unknown;
   allowManifestNormalization?: boolean;
   allowPluginNormalization?: boolean;
+  manifestPlugins?: ModelManifestNormalizationContext["manifestPlugins"];
 }): ModelRef | null {
   const override = resolvePersistedOverrideModelRef({
     defaultProvider: params.defaultProvider,
@@ -148,6 +152,7 @@ export function resolvePersistedSelectedModelRef(params: {
     overrideModel: params.overrideModel,
     allowManifestNormalization: params.allowManifestNormalization,
     allowPluginNormalization: params.allowPluginNormalization,
+    manifestPlugins: params.manifestPlugins,
   });
   if (override) {
     return override;
@@ -158,6 +163,7 @@ export function resolvePersistedSelectedModelRef(params: {
     runtimeModel: params.runtimeModel,
     allowManifestNormalization: params.allowManifestNormalization,
     allowPluginNormalization: params.allowPluginNormalization,
+    manifestPlugins: params.manifestPlugins,
   });
 }
 

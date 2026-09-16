@@ -1,0 +1,70 @@
+{
+  "capturedAt": "2026-09-12T01:20:01.018682+00:00",
+  "label": "final-original-parent",
+  "agentId": "enterprise-personal-2ae2cbc2deecdb86fe86",
+  "sessionId": "c203315a-acef-44f4-b1f6-78a21f1f1df1",
+  "sessionKey": "agent:enterprise-personal-2ae2cbc2deecdb86fe86:dashboard:fe0d73fa-1b6d-45b8-b636-632af71f7efc",
+  "runIds": [
+    "54e59eb0-cd61-4cd1-977a-4ba445485a1c",
+    "88cbc1fe-5735-4363-a6a5-ec7b17443085",
+    "announce:v1:agent:purchase-order-skill:subagent:8385ce01-253b-4aad-b4a1-db7d86457d11:0abb4a45-c702-4a7f-b377-6a9adf5f3ed8",
+    "announce:v1:agent:purchase-order-skill:subagent:8e2971c1-2d3d-451d-883f-3eafa8289ce0:ef50cbdb-921d-4d15-b76d-b776194c972e",
+    "announce:v1:agent:purchase-order-skill:subagent:ee5271a3-45bf-4f3c-b8e4-06aea051929a:2e1c338b-9c8a-4e01-a34b-b4c9371cb936",
+    "d3c15894-a0e9-4133-a79c-e07ccb6e0280"
+  ],
+  "modelId": null,
+  "materializedCatalog": {
+    "toolCount": 28,
+    "toolNames": [
+      "apply_patch",
+      "ask_user",
+      "browser"
+    ]
+  },
+  "transcript": {
+    "eventCount": 24,
+    "eventTypes": {
+      "custom": 1,
+      "message": 21,
+      "session": 1,
+      "thinking_level_change": 1
+    },
+    "toolCalls": [
+      "enterprise_delegate",
+      "enterprise_delegate",
+      "enterprise_delegate",
+      "progress_card",
+      "progress_card",
+      "progress_card"
+    ],
+    "toolResults": [],
+    "toolErrorCount": 0,
+    "codes": []
+  },
+  "trajectory": {
+    "eventCount": 54,
+    "eventTypes": {
+      "context.compiled": 6,
+      "model.completed": 6,
+      "prompt.submitted": 6,
+      "provider.prompt.observed": 12,
+      "session.ended": 6,
+      "session.started": 6,
+      "trace.artifacts": 6,
+      "trace.metadata": 6
+    },
+    "toolCalls": [],
+    "toolResults": [],
+    "toolResultSuccess": [],
+    "codes": []
+  },
+  "taskRuns": [],
+  "skillOperations": [],
+  "acceptanceSignals": {
+    "hasMaterializedToolCatalog": true,
+    "hasToolCall": true,
+    "hasSkillScriptCall": false,
+    "hasRouterCall": false,
+    "hasAuthorizationError": false
+  }
+}

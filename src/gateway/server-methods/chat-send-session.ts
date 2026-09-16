@@ -68,6 +68,7 @@ function loadChatSendSessionContext(params: {
     () => loadSessionEntry(sessionLoadKey, sessionLoadOptions),
     {
       phase: "agent-turn",
+      runId: clientRunId,
       attributes: {
         runId: clientRunId,
         hasAttachments: normalizedAttachments.length > 0,

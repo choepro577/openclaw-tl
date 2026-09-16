@@ -1,0 +1,471 @@
+{
+  "capturedAt": "2026-09-11T16:21:58.783829+00:00",
+  "label": "operator-old-session-marker-success",
+  "agentId": "purchase-order-skill",
+  "sessionId": "9904b634-4f30-450f-af7f-32704d2e8a45",
+  "sessionKey": "agent:purchase-order-skill:dashboard:767c9833-74cd-4927-9069-4dfeb3dc79d8",
+  "runIds": [
+    "2d41b0ca-2ff3-456a-9d4c-93921bec480e",
+    "2fe762cd-3394-47c7-b601-9d74775b8df1",
+    "4b073eb7-fd11-432b-b01d-d178075fad4c",
+    "5a492618-a83b-4f81-8f7f-e0498eb163bd",
+    "79b636d1-46f0-4a39-961a-bcdbd4ef8ae6",
+    "acafa247-a51a-423c-b584-6b97e62dda9b",
+    "d2653106-bfe5-4918-afcd-e4760b3a2e4e"
+  ],
+  "modelId": null,
+  "materializedCatalog": {
+    "toolCount": 3,
+    "toolNames": [
+      "read",
+      "session_status",
+      "skill_script"
+    ]
+  },
+  "transcript": {
+    "eventCount": 97,
+    "eventTypes": {
+      "message": 96,
+      "session": 1
+    },
+    "toolCalls": [
+      "read",
+      "read",
+      "skill_script",
+      "skill_script",
+      "skill_script",
+      "skill_script",
+      "skill_script",
+      "skill_script",
+      "skill_script",
+      "skill_script",
+      "skill_script",
+      "skill_script",
+      "skill_script",
+      "skill_script",
+      "skill_script",
+      "skill_script",
+      "skill_script",
+      "skill_script",
+      "skill_script",
+      "skill_script",
+      "skill_script",
+      "skill_script",
+      "skill_script",
+      "skill_script",
+      "skill_script",
+      "skill_script",
+      "skill_script",
+      "skill_script",
+      "skill_script",
+      "skill_script",
+      "skill_script",
+      "skill_script",
+      "skill_script",
+      "skill_script",
+      "skill_script",
+      "skill_script"
+    ],
+    "toolResults": [
+      "read",
+      "read",
+      "skill_script",
+      "skill_script",
+      "skill_script",
+      "skill_script",
+      "skill_script",
+      "skill_script",
+      "skill_script",
+      "skill_script",
+      "skill_script",
+      "skill_script",
+      "skill_script",
+      "skill_script",
+      "skill_script",
+      "skill_script",
+      "skill_script",
+      "skill_script",
+      "skill_script",
+      "skill_script",
+      "skill_script",
+      "skill_script",
+      "skill_script",
+      "skill_script",
+      "skill_script",
+      "skill_script",
+      "skill_script",
+      "skill_script",
+      "skill_script",
+      "skill_script",
+      "skill_script",
+      "skill_script",
+      "skill_script",
+      "skill_script",
+      "skill_script",
+      "skill_script"
+    ],
+    "toolErrorCount": 0,
+    "codes": [
+      "CN01",
+      "CN02",
+      "CN042",
+      "CN043",
+      "CN044",
+      "CN045",
+      "CN046",
+      "CN05",
+      "CN06",
+      "CN07",
+      "CN08",
+      "CN09",
+      "CN10",
+      "CN11",
+      "CN12",
+      "CN13",
+      "CN15",
+      "CN16",
+      "CN18",
+      "CN19",
+      "CN20",
+      "CN21",
+      "CN22",
+      "CN23",
+      "CN24",
+      "CN25",
+      "CN26",
+      "CN27",
+      "CN28",
+      "CN29",
+      "CN30",
+      "CN31",
+      "CN32",
+      "CN33",
+      "CN34",
+      "CN35",
+      "CN36",
+      "CN37",
+      "CN38",
+      "CN39",
+      "CN40",
+      "CN41",
+      "HH_0012",
+      "SKILL_ROUTER_REQUIRED",
+      "TL01"
+    ]
+  },
+  "trajectory": {
+    "eventCount": 107,
+    "eventTypes": {
+      "context.compiled": 7,
+      "model.completed": 7,
+      "prompt.submitted": 7,
+      "session.ended": 7,
+      "session.started": 7,
+      "tool.call": 36,
+      "tool.result": 36
+    },
+    "toolCalls": [
+      "read",
+      "read",
+      "skill_script",
+      "skill_script",
+      "skill_script",
+      "skill_script",
+      "skill_script",
+      "skill_script",
+      "skill_script",
+      "skill_script",
+      "skill_script",
+      "skill_script",
+      "skill_script",
+      "skill_script",
+      "skill_script",
+      "skill_script",
+      "skill_script",
+      "skill_script",
+      "skill_script",
+      "skill_script",
+      "skill_script",
+      "skill_script",
+      "skill_script",
+      "skill_script",
+      "skill_script",
+      "skill_script",
+      "skill_script",
+      "skill_script",
+      "skill_script",
+      "skill_script",
+      "skill_script",
+      "skill_script",
+      "skill_script",
+      "skill_script",
+      "skill_script",
+      "skill_script"
+    ],
+    "toolResults": [
+      "read",
+      "read",
+      "skill_script",
+      "skill_script",
+      "skill_script",
+      "skill_script",
+      "skill_script",
+      "skill_script",
+      "skill_script",
+      "skill_script",
+      "skill_script",
+      "skill_script",
+      "skill_script",
+      "skill_script",
+      "skill_script",
+      "skill_script",
+      "skill_script",
+      "skill_script",
+      "skill_script",
+      "skill_script",
+      "skill_script",
+      "skill_script",
+      "skill_script",
+      "skill_script",
+      "skill_script",
+      "skill_script",
+      "skill_script",
+      "skill_script",
+      "skill_script",
+      "skill_script",
+      "skill_script",
+      "skill_script",
+      "skill_script",
+      "skill_script",
+      "skill_script",
+      "skill_script"
+    ],
+    "toolResultSuccess": [
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      false,
+      true,
+      true,
+      true,
+      false,
+      true,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      false,
+      true,
+      true
+    ],
+    "codes": []
+  },
+  "taskRuns": [],
+  "skillOperations": [
+    {
+      "skill": "purchase-order-skill",
+      "entrypoint": "call",
+      "operation": "router_tool_search"
+    },
+    {
+      "skill": "purchase-order-skill",
+      "entrypoint": "call",
+      "operation": "router_tool_search"
+    },
+    {
+      "skill": "purchase-order-skill",
+      "entrypoint": "call",
+      "operation": "search_po_sites"
+    },
+    {
+      "skill": "purchase-order-skill",
+      "entrypoint": "call",
+      "operation": "get_po_draft_list"
+    },
+    {
+      "skill": "purchase-order-skill",
+      "entrypoint": "call",
+      "operation": "router_tool_search"
+    },
+    {
+      "skill": "purchase-order-skill",
+      "entrypoint": "call",
+      "operation": "get_po_draft_list"
+    },
+    {
+      "skill": "purchase-order-skill",
+      "entrypoint": "call",
+      "operation": "router_tool_search"
+    },
+    {
+      "skill": "purchase-order-skill",
+      "entrypoint": "call",
+      "operation": "search_po_sites"
+    },
+    {
+      "skill": "purchase-order-skill",
+      "entrypoint": "call",
+      "operation": "get_po_draft_list"
+    },
+    {
+      "skill": "purchase-order-skill",
+      "entrypoint": "call",
+      "operation": "get_po_detail"
+    },
+    {
+      "skill": "purchase-order-skill",
+      "entrypoint": "call",
+      "operation": "router_tool_search"
+    },
+    {
+      "skill": "purchase-order-skill",
+      "entrypoint": "call",
+      "operation": "router_tool_search"
+    },
+    {
+      "skill": "purchase-order-skill",
+      "entrypoint": "call",
+      "operation": "router_tool_search"
+    },
+    {
+      "skill": "purchase-order-skill",
+      "entrypoint": "call",
+      "operation": "search_po_products"
+    },
+    {
+      "skill": "purchase-order-skill",
+      "entrypoint": "call",
+      "operation": "router_tool_search"
+    },
+    {
+      "skill": "purchase-order-skill",
+      "entrypoint": "call",
+      "operation": "search_po_sites"
+    },
+    {
+      "skill": "purchase-order-skill",
+      "entrypoint": "call",
+      "operation": "get_po_draft_list"
+    },
+    {
+      "skill": "purchase-order-skill",
+      "entrypoint": "call",
+      "operation": "save_po_product"
+    },
+    {
+      "skill": "purchase-order-skill",
+      "entrypoint": "call",
+      "operation": "router_tool_search"
+    },
+    {
+      "skill": "purchase-order-skill",
+      "entrypoint": "call",
+      "operation": "save_po_product"
+    },
+    {
+      "skill": "purchase-order-skill",
+      "entrypoint": "call",
+      "operation": "router_tool_search"
+    },
+    {
+      "skill": "purchase-order-skill",
+      "entrypoint": "call",
+      "operation": "search_po_products"
+    },
+    {
+      "skill": "purchase-order-skill",
+      "entrypoint": "call",
+      "operation": "router_tool_search"
+    },
+    {
+      "skill": "purchase-order-skill",
+      "entrypoint": "call",
+      "operation": "search_po_products"
+    },
+    {
+      "skill": "purchase-order-skill",
+      "entrypoint": "call",
+      "operation": "search_po_sites"
+    },
+    {
+      "skill": "purchase-order-skill",
+      "entrypoint": "call",
+      "operation": "get_po_draft_list"
+    },
+    {
+      "skill": "purchase-order-skill",
+      "entrypoint": "call",
+      "operation": "router_tool_search"
+    },
+    {
+      "skill": "purchase-order-skill",
+      "entrypoint": "call",
+      "operation": "search_po_products"
+    },
+    {
+      "skill": "purchase-order-skill",
+      "entrypoint": "call",
+      "operation": "router_tool_search"
+    },
+    {
+      "skill": "purchase-order-skill",
+      "entrypoint": "call",
+      "operation": "save_po_product"
+    },
+    {
+      "skill": "purchase-order-skill",
+      "entrypoint": "call",
+      "operation": "router_tool_search"
+    },
+    {
+      "skill": "purchase-order-skill",
+      "entrypoint": "call",
+      "operation": "get_po_detail"
+    }
+  ],
+  "acceptanceSignals": {
+    "hasMaterializedToolCatalog": true,
+    "hasToolCall": true,
+    "hasSkillScriptCall": true,
+    "hasRouterCall": true,
+    "hasAuthorizationError": false
+  },
+  "markerAcceptance": {
+    "passed": true,
+    "userHistoryPreserved": true,
+    "buildId": {
+      "version": "2026.8.1",
+      "commit": "2d6f02d14f5e60869a0a3864fb3365fa3aa233e9",
+      "builtAt": "2026-09-11T16:05:29.194Z",
+      "buildId": "2026.8.1-2d6f02d14f5e-2026-09-11T16-05-29.194Z"
+    },
+    "toolResults": [
+      {
+        "seq": 95,
+        "toolCallId": "exec-51be8ba1-e454-4419-a0c1-c3298e5f43ca",
+        "tool": "skill_script",
+        "result": "{\n  \"ok\": true,\n  \"marker\": \"QA_SHARED_SKILL_OK\"\n}"
+      }
+    ]
+  }
+}

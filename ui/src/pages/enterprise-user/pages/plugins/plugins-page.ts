@@ -84,7 +84,7 @@ export class UserPluginsPage extends OpenClawLightDomElement {
   private context!: ApplicationContext<RouteId>;
   @state() private tab: UserPluginsTab = "installed";
   @state() private installedFilter: UserInstalledFilter = "all";
-  @state() private agentKey: AgentKey = "personal";
+  private readonly agentKey: AgentKey = "personal";
   @state() private query = "";
   @state() private loading = false;
   @state() private searching = false;
@@ -214,12 +214,6 @@ export class UserPluginsPage extends OpenClawLightDomElement {
     const bootstrapState = userBootstrapStore.state;
     if (bootstrapState.phase !== "ready") {
       return;
-    }
-    const agents = bootstrapState.data.agents.filter(
-      (agent) => agent.kind === "personal" || agent.actions.canChat,
-    );
-    if (!agents.some((agent) => agent.key === this.agentKey)) {
-      this.agentKey = bootstrapState.data.defaultAgentKey ?? agents[0]?.key ?? "personal";
     }
     if (this.bootstrappedAgentKey === this.agentKey) {
       return;
@@ -359,40 +353,6 @@ export class UserPluginsPage extends OpenClawLightDomElement {
       return;
     }
     void this.search();
-  }
-
-  private changeAgent(agentKey: string): void {
-    const bootstrap = userBootstrapStore.state;
-    const agent =
-      bootstrap.phase === "ready"
-        ? bootstrap.data.agents.find(
-            (candidate) =>
-              candidate.key === agentKey &&
-              (candidate.kind === "personal" || candidate.actions.canChat),
-          )
-        : undefined;
-    if (!agent) {
-      return;
-    }
-    this.agentKey = agent.key;
-    this.bootstrappedAgentKey = this.agentKey;
-    this.installedFilter = "all";
-    this.installs = [];
-    this.grants = [];
-    this.catalog = [];
-    this.codexDetail = null;
-    this.reviewingCodexPluginId = null;
-    this.requestingCodexPluginId = null;
-    this.codexCatalog = {
-      status: "available",
-      items: [],
-      installed: [],
-      requests: [],
-    };
-    void this.loadInventory();
-    if (this.tab === "discover") {
-      void this.search();
-    }
   }
 
   private retry(): void {
@@ -793,9 +753,7 @@ export class UserPluginsPage extends OpenClawLightDomElement {
     const bootstrap = userBootstrapStore.state;
     const agents =
       bootstrap.phase === "ready"
-        ? bootstrap.data.agents.filter(
-            (agent) => agent.kind === "personal" || agent.actions.canChat,
-          )
+        ? bootstrap.data.agents.filter((agent) => agent.kind === "personal")
         : [];
     return renderUserPlugins({
       tab: this.tab,
@@ -826,7 +784,6 @@ export class UserPluginsPage extends OpenClawLightDomElement {
       onInstalledFilterChange: (filter) => {
         this.installedFilter = filter;
       },
-      onAgentChange: (agentKey) => this.changeAgent(agentKey),
       onQueryChange: (query) => this.queueSearch(query),
       onRetry: () => this.retry(),
       onDismissError: () => {

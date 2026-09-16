@@ -317,6 +317,8 @@ describe("canonical Enterprise delegation execution", () => {
       expect(spawn.context).toBe("isolated");
       expect(spawn.task).toContain("Complete only the assignedTask");
       expect(spawn.task).toContain("not permission for additional actions");
+      expect(spawn.task).toContain("do not ask for confirmation again");
+      expect(spawn.task).toContain("A preview-only request never authorizes a write");
     }
     expect(result).toMatchObject({
       reasonCode: "delegate_partial_failure",

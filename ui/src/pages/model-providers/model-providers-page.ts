@@ -8,7 +8,6 @@ import type { FastMode, ModelsProbeResult } from "../../api/types.ts";
 import { titleForRoute } from "../../app-navigation.ts";
 import { modelManagementContext, type ModelManagementContext } from "../../app/context.ts";
 import { hasOperatorAdminAccess } from "../../app/operator-access.ts";
-import { renderAgentScopeControl } from "../../components/agent-scope-control.ts";
 import { renderSettingsWorkspace } from "../../components/settings-workspace.ts";
 import { t } from "../../i18n/index.ts";
 import { normalizeAgentLabel } from "../../lib/agents/display.ts";
@@ -189,10 +188,6 @@ export class ModelProvidersPage extends OpenClawLightDomElement {
       () => this.context?.agents,
       (agents, notify) => agents.subscribe(notify),
       () => this.syncSelectedAgent(),
-    )
-    .effect(
-      () => this.context?.agentSelection,
-      (selection) => selection.subscribe(() => this.syncSelectedAgent()),
     );
 
   override disconnectedCallback() {
@@ -284,8 +279,8 @@ export class ModelProvidersPage extends OpenClawLightDomElement {
   }
 
   private resolveSelectedAgentId(): string {
-    const selected = this.context.agentSelection.state.selectedId;
-    return selected ? normalizeAgentId(selected) : "";
+    const agents = this.context.agents.state.agentsList;
+    return agents ? normalizeAgentId(agents.defaultId ?? agents.agents[0]?.id ?? "main") : "";
   }
 
   private setSelectedAgent(agentId: string): boolean {
@@ -772,12 +767,6 @@ export class ModelProvidersPage extends OpenClawLightDomElement {
           <div class="page-subtitle">${t("modelProviders.subtitle")}</div>
         </div>
         <div class="page-header-actions">
-          ${renderAgentScopeControl({
-            agents,
-            selection: this.context.agentSelection,
-            allowAll: false,
-            selectedId: this.selectedAgentId,
-          })}
           <button class="btn" @click=${() => this.context.navigate("model-setup")}>
             ${t("tabs.modelSetup")}
           </button>

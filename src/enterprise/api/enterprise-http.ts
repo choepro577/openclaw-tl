@@ -65,7 +65,12 @@ import {
   logoutEnterprisePrincipal,
   resetEnterpriseAccountPassword,
 } from "../auth/auth-service.js";
-import { clearEnterpriseAuthCookie, createEnterpriseAuthCookie } from "../auth/cookie.js";
+import {
+  clearEnterpriseAuthCookie,
+  clearRequestUserAuthCookie,
+  createEnterpriseAuthCookie,
+} from "../auth/cookie.js";
+import { handleEnterpriseEmbeddedHttpRequest } from "../auth/embedded-http.js";
 import { issueEnterpriseCsrfToken, verifyEnterpriseCsrfToken } from "../auth/jwt.js";
 import { hashEnterprisePassword } from "../auth/password.js";
 import {
@@ -99,10 +104,7 @@ import {
   readEnterpriseAgentDelegationProfile,
   simulateEnterpriseDelegation,
 } from "../delegation/delegation-admin-service.js";
-import {
-  enterpriseDelegationModeCanOverride,
-  listEnterpriseDelegationCandidates,
-} from "../delegation/delegation-candidates.js";
+import { listEnterpriseDelegationCandidates } from "../delegation/delegation-candidates.js";
 import { validateEnterpriseDelegationChildAuthority } from "../delegation/delegation-mutation-guard.js";
 import { invalidateEnterpriseDelegationRouterRuntimeState } from "../delegation/delegation-router.js";
 import {
@@ -112,6 +114,18 @@ import {
   writeEnterpriseDelegationOverride,
   writeEnterpriseDelegationPolicy,
 } from "../delegation/delegation-store.js";
+import { handleEnterpriseDeveloperPublicHttpRequest } from "../developer/developer-http.js";
+import {
+  createDeveloperIntegration,
+  getDeveloperIntegration,
+  getDeveloperResponse,
+  listDeveloperIntegrations,
+  listDeveloperResponses,
+  rotateDeveloperApiKey,
+  readDeveloperResponseTranscript,
+  testDeveloperWebhook,
+  updateDeveloperIntegration,
+} from "../developer/developer-store.js";
 import { isEnterpriseEnabled } from "../enterprise-config.js";
 import {
   listEnterpriseEntitlements,
@@ -125,7 +139,10 @@ import {
 } from "../entitlements/entitlement-store.js";
 // Same-origin HTTP API for Enterprise login, accounts, and entitlements.
 import {
+  accessPresetInitialSkillIds,
   ENTERPRISE_ACCESS_PRESETS,
+  ENTERPRISE_ACCESS_PRESET_BASIC,
+  ENTERPRISE_ACCESS_PRESET_NONE,
   personalAgentResourceKey,
 } from "../entitlements/resource-keys.js";
 import { handleEnterpriseExtensionHttpRequest } from "../extensions/enterprise-extension-http.js";
@@ -144,6 +161,10 @@ import {
   readEnterpriseAdminModelContext,
 } from "../models/admin-model-service.js";
 import { resolveEnterprisePersonalAgentId } from "../personal-agent/personal-agent-config.js";
+import {
+  invalidateEnterprisePrewarmForAccount,
+  scheduleEnterpriseLoginPrewarm,
+} from "../prewarm/enterprise-prewarm.js";
 import {
   cancelEnterpriseSkillAuthRequest,
   claimEnterpriseSkillAuthRequest,
@@ -650,6 +671,29 @@ function adminAgentPath(
   };
 }
 
+function adminAgentDeveloperPath(pathname: string):
+  | {
+      agentId: string;
+      section?: "integrations" | "responses";
+      itemId?: string;
+      action?: "rotate" | "test";
+    }
+  | undefined {
+  const match =
+    /^\/api\/enterprise\/admin\/agents\/shared\/([^/]+)\/developer(?:\/(integrations|responses)(?:\/([^/]+)(?:\/(rotate|test))?)?)?$/.exec(
+      pathname,
+    );
+  if (!match?.[1]) {
+    return undefined;
+  }
+  return {
+    agentId: decodeURIComponent(match[1]),
+    section: match[2] as "integrations" | "responses" | undefined,
+    itemId: match[3] ? decodeURIComponent(match[3]) : undefined,
+    action: match[4] as "rotate" | "test" | undefined,
+  };
+}
+
 function adminDelegationProfilePath(
   pathname: string,
 ): { agentId: string; action: "profile" | "draft" | "simulate" } | undefined {
@@ -928,6 +972,20 @@ export async function handleEnterpriseHttpRequest(
   const searchParams = new URL(req.url ?? "/", "http://localhost").searchParams;
 
   try {
+    if (
+      await handleEnterpriseDeveloperPublicHttpRequest({
+        req,
+        res,
+        pathname,
+        config,
+        resolveGatewayContext: hooks.getGatewayContext?.()?.resolveGatewayContext,
+      })
+    ) {
+      return true;
+    }
+    if (await handleEnterpriseEmbeddedHttpRequest(req, res, config, pathname)) {
+      return true;
+    }
     if (await handleThienLyHttpRequest(req, res, config, pathname)) {
       return true;
     }
@@ -1115,6 +1173,13 @@ export async function handleEnterpriseHttpRequest(
       try {
         const result = await loginEnterpriseAccount(username, password, {}, portal.audience);
         loginFailures.delete(rateLimitKey);
+        if (result.principal.audience === "user") {
+          scheduleEnterpriseLoginPrewarm({
+            accountId: result.principal.account.id,
+            sessionId: result.principal.sessionId,
+            ...(hooks.getGatewayContext ? { getContext: hooks.getGatewayContext } : {}),
+          });
+        }
         res.setHeader("Set-Cookie", createEnterpriseAuthCookie(result.token, portal.audience));
         return sendJson(res, 200, {
           account:
@@ -1152,9 +1217,19 @@ export async function handleEnterpriseHttpRequest(
       }
       if (principal) {
         logoutEnterprisePrincipal(principal);
+        invalidateEnterprisePrewarmForAccount({
+          accountId: principal.account.id,
+          sessionId: principal.sessionId,
+          reason: "logout",
+        });
         hooks.disconnectClientsForProfile?.(principal.account.profileId);
       }
-      res.setHeader("Set-Cookie", clearEnterpriseAuthCookie(portal.audience));
+      res.setHeader(
+        "Set-Cookie",
+        portal.audience === "user"
+          ? clearRequestUserAuthCookie(req)
+          : clearEnterpriseAuthCookie("admin"),
+      );
       return sendJson(res, 200, { ok: true });
     }
 
@@ -1173,7 +1248,12 @@ export async function handleEnterpriseHttpRequest(
         requireString(body, "newPassword", 512),
       );
       hooks.disconnectClientsForProfile?.(principal.account.profileId);
-      res.setHeader("Set-Cookie", clearEnterpriseAuthCookie(portal.audience));
+      res.setHeader(
+        "Set-Cookie",
+        portal.audience === "user"
+          ? clearRequestUserAuthCookie(req)
+          : clearEnterpriseAuthCookie("admin"),
+      );
       return sendJson(res, 200, { ok: true, reloginRequired: true });
     }
 
@@ -1201,6 +1281,13 @@ export async function handleEnterpriseHttpRequest(
           result = await loginEnterpriseAccount(username, password, {}, "user");
         }
         loginFailures.delete(rateLimitKey);
+        if (result.principal.audience === "user") {
+          scheduleEnterpriseLoginPrewarm({
+            accountId: result.principal.account.id,
+            sessionId: result.principal.sessionId,
+            ...(hooks.getGatewayContext ? { getContext: hooks.getGatewayContext } : {}),
+          });
+        }
         res.setHeader(
           "Set-Cookie",
           createEnterpriseAuthCookie(result.token, result.principal.audience),
@@ -1235,6 +1322,11 @@ export async function handleEnterpriseHttpRequest(
         authenticateEnterpriseRequest(req, "admin") ?? authenticateEnterpriseRequest(req, "user");
       if (principal) {
         logoutEnterprisePrincipal(principal);
+        invalidateEnterprisePrewarmForAccount({
+          accountId: principal.account.id,
+          sessionId: principal.sessionId,
+          reason: "logout",
+        });
         hooks.disconnectClientsForProfile?.(principal.account.profileId);
       }
       res.setHeader("Set-Cookie", [
@@ -1572,6 +1664,10 @@ export async function handleEnterpriseHttpRequest(
       const body = await readJson(req);
       const displayName = requireString(body, "displayName", 128);
       const account = updateEnterpriseAccount(principal.account.id, { displayName });
+      invalidateEnterprisePrewarmForAccount({
+        accountId: account.id,
+        reason: "account_profile_changed",
+      });
       appendEnterpriseAuditEvent({
         actorAccountId: principal.account.id,
         actorSessionId: principal.sessionId,
@@ -2187,7 +2283,10 @@ export async function handleEnterpriseHttpRequest(
       if (role !== "administrator" && role !== "employee") {
         return sendError(res, 400, "ROLE_INVALID", "Role không hợp lệ.");
       }
-      const skillGrants = body.skillGrants ?? [];
+      const accessPresetKey =
+        optionalString(body, "accessPresetKey", 64) ??
+        (role === "employee" ? ENTERPRISE_ACCESS_PRESET_BASIC : ENTERPRISE_ACCESS_PRESET_NONE);
+      const skillGrants = body.skillGrants ?? accessPresetInitialSkillIds(accessPresetKey);
       if (
         !Array.isArray(skillGrants) ||
         skillGrants.length > 200 ||
@@ -2265,7 +2364,7 @@ export async function handleEnterpriseHttpRequest(
             enabled: optionalBoolean(body, "enabled"),
             personalAgentEnabled: effectivePersonalAgentEnabled,
             defaultAgentId,
-            accessPresetKey: optionalString(body, "accessPresetKey", 64) ?? undefined,
+            accessPresetKey,
             initialEntitlements,
             audit: {
               actorAccountId: admin.account.id,
@@ -2331,6 +2430,10 @@ export async function handleEnterpriseHttpRequest(
         ...(body.accessPresetKey === undefined
           ? {}
           : { accessPresetKey: requireString(body, "accessPresetKey", 64) }),
+      });
+      invalidateEnterprisePrewarmForAccount({
+        accountId: account.id,
+        reason: "account_policy_changed",
       });
       if (account.enabled !== before.enabled || account.role !== before.role) {
         hooks.disconnectClientsForProfile?.(account.profileId);
@@ -2439,14 +2542,6 @@ export async function handleEnterpriseHttpRequest(
       );
       if (!specialist) {
         throw new Error("DELEGATION_OVERRIDE_ASSIGNMENT_REQUIRED");
-      }
-      if (
-        !enterpriseDelegationModeCanOverride(
-          specialist.profile?.handlingMode ?? "explicit_only",
-          mode,
-        )
-      ) {
-        throw new Error("DELEGATION_OVERRIDE_CANNOT_LOOSEN");
       }
       const result = writeEnterpriseDelegationOverride(
         {
@@ -2836,6 +2931,162 @@ export async function handleEnterpriseHttpRequest(
         outcome: "success",
       });
       return sendJson(res, 200, { profile });
+    }
+
+    const developerRoute = adminAgentDeveloperPath(pathname);
+    if (developerRoute) {
+      const admin = requireAdmin(req, res);
+      if (!admin) {
+        return true;
+      }
+      await readEnterpriseAgentPanel(config, "shared", developerRoute.agentId, "overview", {
+        gatewayContext: hooks.getGatewayContext?.(),
+      });
+      if (req.method === "GET" && developerRoute.section === "responses" && developerRoute.itemId) {
+        const response = getDeveloperResponse(developerRoute.itemId);
+        if (!response || response.agentId !== developerRoute.agentId) {
+          return sendError(res, 404, "RESPONSE_NOT_FOUND", "Không tìm thấy response.");
+        }
+        const { sessionKey: _sessionKey, request, ...safe } = response;
+        const sanitizedRequest = JSON.parse(
+          JSON.stringify(request, (key, value: unknown) =>
+            key === "data" && typeof value === "string"
+              ? `[base64 omitted: ${Buffer.from(value, "base64").byteLength} bytes]`
+              : value,
+          ),
+        ) as unknown;
+        return sendJson(res, 200, {
+          response: { ...safe, request: sanitizedRequest },
+          transcript: await readDeveloperResponseTranscript(config, response),
+        });
+      }
+      const integration = developerRoute.itemId
+        ? getDeveloperIntegration(developerRoute.itemId)
+        : null;
+      if (integration && integration.agentId !== developerRoute.agentId) {
+        return sendError(res, 404, "INTEGRATION_NOT_FOUND", "Không tìm thấy Integration.");
+      }
+      if (req.method === "GET" && !developerRoute.itemId) {
+        const requestedLimit = Math.max(1, Math.min(99, Number(searchParams.get("limit")) || 50));
+        const filters =
+          developerRoute.section === "responses"
+            ? {
+                integrationId: searchParams.get("integrationId") ?? undefined,
+                externalConversationId: searchParams.get("externalConversationId") ?? undefined,
+                externalUserId: searchParams.get("externalUserId") ?? undefined,
+                status: searchParams.get("status") ?? undefined,
+                before: Number(searchParams.get("before")) || undefined,
+                after: Number(searchParams.get("after")) || undefined,
+                limit: requestedLimit + 1,
+              }
+            : { limit: requestedLimit + 1 };
+        const listedResponses = listDeveloperResponses(developerRoute.agentId, filters);
+        const hasMore = listedResponses.length > requestedLimit;
+        const responses = listedResponses.slice(0, requestedLimit).map((item) => {
+          const { sessionKey: _sessionKey, request, ...safe } = item;
+          return {
+            ...safe,
+            request: JSON.parse(
+              JSON.stringify(request, (key, value: unknown) =>
+                key === "data" && typeof value === "string"
+                  ? `[base64 omitted: ${Buffer.from(value, "base64").byteLength} bytes]`
+                  : value,
+              ),
+            ) as unknown,
+          };
+        });
+        return sendJson(res, 200, {
+          agentId: developerRoute.agentId,
+          basePath: "/api/enterprise/developer/v1",
+          integrations: listDeveloperIntegrations(developerRoute.agentId),
+          responses,
+          pageInfo: {
+            hasMore,
+            nextBefore: hasMore ? (responses.at(-1)?.createdAt ?? null) : null,
+          },
+          retentionDays: 90,
+        });
+      }
+      if (!requirePortalCsrf(req, res, admin, "admin")) {
+        return true;
+      }
+      const body = req.method === "POST" || req.method === "PATCH" ? await readJson(req) : {};
+      if (
+        req.method === "POST" &&
+        developerRoute.section === "integrations" &&
+        !developerRoute.itemId
+      ) {
+        const result = await createDeveloperIntegration({
+          agentId: developerRoute.agentId,
+          name: requireString(body, "name", 128),
+          webhookUrl: optionalString(body, "webhookUrl", 2048),
+          uploadPolicy: optionalString(body, "uploadPolicy", 64) ?? undefined,
+          maxUploadBytes: typeof body.maxUploadBytes === "number" ? body.maxUploadBytes : undefined,
+        });
+        appendEnterpriseAuditEvent({
+          actorAccountId: admin.account.id,
+          actorSessionId: admin.sessionId,
+          action: "agent.developer.integration.create",
+          targetType: "agent-integration",
+          targetId: result.integration.id,
+          requestId: requestId(req),
+          before: null,
+          after: { agentId: developerRoute.agentId, name: result.integration.name },
+          outcome: "success",
+        });
+        return sendJson(res, 201, result);
+      }
+      if (!integration) {
+        return sendError(res, 404, "INTEGRATION_NOT_FOUND", "Không tìm thấy Integration.");
+      }
+      if (
+        req.method === "PATCH" &&
+        developerRoute.section === "integrations" &&
+        !developerRoute.action
+      ) {
+        const updated = await updateDeveloperIntegration(integration.id, {
+          name: optionalString(body, "name", 128) ?? undefined,
+          webhookUrl: Object.hasOwn(body, "webhookUrl")
+            ? (optionalString(body, "webhookUrl", 2048) ?? null)
+            : undefined,
+          uploadPolicy: optionalString(body, "uploadPolicy", 64) ?? undefined,
+          maxUploadBytes: typeof body.maxUploadBytes === "number" ? body.maxUploadBytes : undefined,
+          status: optionalString(body, "status", 32) ?? undefined,
+          revokePreviousKey: body.revokePreviousKey === true,
+        });
+        appendEnterpriseAuditEvent({
+          actorAccountId: admin.account.id,
+          actorSessionId: admin.sessionId,
+          action: "agent.developer.integration.update",
+          targetType: "agent-integration",
+          targetId: integration.id,
+          requestId: requestId(req),
+          before: { name: integration.name, status: integration.status },
+          after: { name: updated.name, status: updated.status },
+          outcome: "success",
+        });
+        return sendJson(res, 200, { integration: updated });
+      }
+      if (req.method === "POST" && developerRoute.action === "rotate") {
+        const overlapHours = typeof body.overlapHours === "number" ? body.overlapHours : 24;
+        const result = rotateDeveloperApiKey(integration.id, overlapHours);
+        appendEnterpriseAuditEvent({
+          actorAccountId: admin.account.id,
+          actorSessionId: admin.sessionId,
+          action: "agent.developer.integration.rotate",
+          targetType: "agent-integration",
+          targetId: integration.id,
+          requestId: requestId(req),
+          before: { keyPrefix: integration.keyPrefix },
+          after: { keyPrefix: result.integration.keyPrefix, overlapHours },
+          outcome: "success",
+        });
+        return sendJson(res, 200, result);
+      }
+      if (req.method === "POST" && developerRoute.action === "test") {
+        return sendJson(res, 200, await testDeveloperWebhook(integration.id));
+      }
+      return sendError(res, 405, "METHOD_NOT_ALLOWED", "Thao tác không được hỗ trợ.");
     }
 
     const adminAgentRoute = adminAgentPath(pathname);
@@ -3471,6 +3722,10 @@ export async function handleEnterpriseHttpRequest(
       );
       for (const accountId of new Set(parsed.changes.map((change) => change.accountId))) {
         pruneEnterpriseSkillTokensForCurrentAccess(config, accountId);
+        invalidateEnterprisePrewarmForAccount({
+          accountId,
+          reason: "account_access_changed",
+        });
       }
       return sendJson(res, 200, result);
     }
@@ -3673,6 +3928,10 @@ export async function handleEnterpriseHttpRequest(
           ? {}
           : { defaultAgentId: optionalString(body, "defaultAgentId", 128) }),
       });
+      invalidateEnterprisePrewarmForAccount({
+        accountId: account.id,
+        reason: "account_policy_changed",
+      });
       if (account.enabled !== current.enabled || account.role !== current.role) {
         hooks.disconnectClientsForProfile?.(account.profileId);
       }
@@ -3709,6 +3968,10 @@ export async function handleEnterpriseHttpRequest(
         parseEntitlements(body),
       );
       pruneEnterpriseSkillTokensForCurrentAccess(config, accountRoute.accountId);
+      invalidateEnterprisePrewarmForAccount({
+        accountId: accountRoute.accountId,
+        reason: "account_access_changed",
+      });
       return sendJson(res, 200, { entitlements });
     }
 
@@ -3992,6 +4255,29 @@ export async function handleEnterpriseHttpRequest(
     }
     if (message === "AGENT_NOT_FOUND") {
       return sendError(res, 404, message, "Không tìm thấy agent.");
+    }
+    if (
+      message === "INTEGRATION_NOT_FOUND" ||
+      message === "INTEGRATION_REVOKED" ||
+      message === "RESPONSE_NOT_FOUND"
+    ) {
+      return sendError(res, 404, message, "Không tìm thấy dữ liệu Developer Integration.");
+    }
+    if (message === "WEBHOOK_URL_INVALID" || message === "WEBHOOK_URL_REQUIRED") {
+      return sendError(
+        res,
+        400,
+        message,
+        "Webhook phải là URL HTTPS công khai và không được trỏ tới mạng nội bộ.",
+      );
+    }
+    if (message === "DEVELOPER_SECRET_KEY_UNAVAILABLE") {
+      return sendError(
+        res,
+        503,
+        message,
+        "Chưa cấu hình khóa mã hóa secret cho Enterprise Developer API.",
+      );
     }
     if (message === "AGENT_NOT_ASSIGNED") {
       return sendError(res, 409, message, "Agent chưa được cấp cho tài khoản này.");

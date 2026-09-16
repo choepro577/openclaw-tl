@@ -1,0 +1,116 @@
+diff --git a/src/agents/subagents/registry/subagent-session-reconciliation.test.ts b/src/agents/subagents/registry/subagent-session-reconciliation.test.ts
+index 15f9468b9e0..f90c6670e17 100644
+--- a/src/agents/subagents/registry/subagent-session-reconciliation.test.ts
++++ b/src/agents/subagents/registry/subagent-session-reconciliation.test.ts
+@@ -58,3 +58,58 @@ describe("subagent session reconciliation keys", () => {
+     },
+   );
+ });
++
++describe("subagent session reconciliation failures", () => {
++  function resolveFailedCompletion(lastRunError?: string) {
++    const failedSession: SessionEntry = {
++      sessionId: "failed-session",
++      status: "failed",
++      startedAt: 1_000,
++      updatedAt: 2_000,
++      endedAt: 2_000,
++      ...(lastRunError === undefined ? {} : { lastRunError }),
++    };
++    const storeCache: SubagentSessionStoreCache = new Map([
++      [storePath, { "agent:main:subagent:failed": failedSession }],
++    ]);
++    return resolveSubagentSessionCompletion({
++      childSessionKey: "agent:main:subagent:failed",
++      fallbackEndedAt: 3_000,
++      notBeforeMs: 0,
++      storeCache,
++      cfg,
++    });
++  }
++
++  it("preserves the persisted terminal error for late registry reconciliation", () => {
++    expect(resolveFailedCompletion("skill_script failed: entrypoint unavailable")).toMatchObject({
++      outcome: { status: "error", error: "skill_script failed: entrypoint unavailable" },
++    });
++  });
++
++  it("does not claim a restart when no persisted error identifies one", () => {
++    expect(resolveFailedCompletion()).toMatchObject({
++      outcome: { status: "error", error: "subagent session failed before registry settled" },
++    });
++  });
++
++  it("normalizes legacy persisted error whitespace without changing its meaning", () => {
++    expect(resolveFailedCompletion("provider failed\nwhile starting")).toMatchObject({
++      outcome: { status: "error", error: "provider failed while starting" },
++    });
++  });
++
++  it.each([
++    ["blank", " \n\t", "subagent session failed before registry settled"],
++    ["oversize", "x".repeat(200), "x".repeat(160)],
++    [
++      "raw API payload",
++      '{"type":"error","error":{"type":"server_error","message":"Something exploded"}}',
++      "LLM error server_error: Something exploded",
++    ],
++  ])("sanitizes persisted terminal error (%s)", (_label, input, expected) => {
++    expect(resolveFailedCompletion(input)).toMatchObject({
++      outcome: { status: "error", error: expected },
++    });
++  });
++});
+diff --git a/src/agents/subagents/registry/subagent-session-reconciliation.ts b/src/agents/subagents/registry/subagent-session-reconciliation.ts
+index 669dc0a265d..e1a565bb509 100644
+--- a/src/agents/subagents/registry/subagent-session-reconciliation.ts
++++ b/src/agents/subagents/registry/subagent-session-reconciliation.ts
+@@ -4,6 +4,8 @@
+  * Infers child completion from persisted session entries when registry updates arrive late.
+  */
+ import { asFiniteNumber } from "@openclaw/normalization-core/number-coercion";
++import { truncateUtf16Safe } from "@openclaw/normalization-core/utf16-slice";
++import { renderUserFacingText } from "../../../agents/embedded-agent-helpers/user-facing-text.js";
+ import { getRuntimeConfig } from "../../../config/config.js";
+ import {
+   resolveAgentIdFromSessionKey,
+@@ -40,6 +42,8 @@ export type SubagentSessionCompletion = {
+   reason: SubagentLifecycleEndedReason;
+ };
+ 
++const MAX_PERSISTED_SESSION_ERROR_CHARS = 160;
++
+ function finiteTimestamp(value: number | undefined): number | undefined {
+   return asFiniteNumber(value);
+ }
+@@ -70,6 +74,16 @@ function freshSessionStartedAt(
+   return notBeforeMs === undefined || startedAt >= notBeforeMs ? startedAt : undefined;
+ }
+ 
++function normalizeSubagentSessionError(error: unknown): string | undefined {
++  if (typeof error !== "string") {
++    return undefined;
++  }
++  const normalized = renderUserFacingText(error, { errorContext: true })
++    .replace(/\s+/g, " ")
++    .trim();
++  return normalized ? truncateUtf16Safe(normalized, MAX_PERSISTED_SESSION_ERROR_CHARS) : undefined;
++}
++
+ /** Load a child session entry using the agent-specific session store path. */
+ export function loadSubagentSessionEntry(params: {
+   childSessionKey: string;
+@@ -193,7 +207,12 @@ export function resolveCompletionFromSessionEntry(
+     return {
+       startedAt,
+       endedAt,
+-      outcome: { status: "error", error: "session completed before registry settled" },
++      outcome: {
++        status: "error",
++        error:
++          normalizeSubagentSessionError(sessionEntry?.lastRunError) ??
++          "subagent session failed before registry settled",
++      },
+       reason: SUBAGENT_ENDED_REASON_ERROR,
+     };
+   }

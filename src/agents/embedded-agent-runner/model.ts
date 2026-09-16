@@ -1,14 +1,16 @@
+import path from "node:path";
 import type { OpenClawConfig } from "../../config/types.openclaw.js";
 import type { Model } from "../../llm/types.js";
 import type { ProviderRuntimeModel } from "../../plugins/provider-runtime-model.types.js";
 import { withPluginRuntimeGenerationScope } from "../../plugins/runtime/generation-scope.js";
 import { resolveDefaultAgentDir } from "../agent-scope.js";
-import type { AuthProfileCredential } from "../auth-profiles/types.js";
+import type { AuthProfileCredential, AuthProfileStore } from "../auth-profiles/types.js";
 import { resolveLegacyInheritedAuthDir } from "../legacy-inherited-auth-dir.js";
 import { resolveModelWorkspaceDir } from "../model-discovery-context.js";
-import { modelKey } from "../model-ref-shared.js";
+import { createStaticProviderModelIdNormalizer, modelKey } from "../model-ref-shared.js";
 import { findNormalizedProviderValue, normalizeProviderId } from "../model-selection.js";
 import { buildSuppressedBuiltInModelError } from "../model-suppression.js";
+import { getPreparedModelRuntimeAuthStore } from "../prepared-model-runtime-auth.js";
 import {
   PreparedModelRuntimeOwnerNotPublishedError,
   getPreparedModelRuntimeSnapshot,
@@ -46,7 +48,7 @@ import {
   resolveBundledProviderStaticCatalogModel,
   resolveBundledStaticCatalogModel,
 } from "./model.static-catalog.js";
-import { staticModelIdMatches } from "./model.static-id.js";
+import { createStaticModelIdMatcher, staticModelIdMatches } from "./model.static-id.js";
 
 export { resolveModelWithRegistry } from "./model.registry-resolution.js";
 
@@ -111,6 +113,42 @@ function resolvePreparedAgentSnapshot(
   return getPreparedModelRuntimeSnapshot({ ...base, workspaceDir: derivedWorkspaceDir });
 }
 
+function normalizePreparedOwnerPath(value: string | undefined): string | undefined {
+  return value ? path.resolve(value) : undefined;
+}
+
+/** Reuse auth facts only when the prepared generation owns this exact request scope. */
+function resolvePreparedAuthProfileStore(params: {
+  preparedModelRuntime?: PreparedModelRuntimeSnapshot;
+  agentDir: string;
+  cfg?: OpenClawConfig;
+  workspaceDir?: string;
+}): AuthProfileStore | undefined {
+  const preparedModelRuntime = params.preparedModelRuntime;
+  if (!preparedModelRuntime) {
+    return undefined;
+  }
+  if (
+    normalizePreparedOwnerPath(preparedModelRuntime.agentDir) !==
+    normalizePreparedOwnerPath(params.agentDir)
+  ) {
+    return undefined;
+  }
+  if (
+    normalizePreparedOwnerPath(preparedModelRuntime.inheritedAuthDir) !==
+    normalizePreparedOwnerPath(resolveLegacyInheritedAuthDir(params.cfg ?? {}))
+  ) {
+    return undefined;
+  }
+  if (
+    normalizePreparedOwnerPath(preparedModelRuntime.workspaceDir) !==
+    normalizePreparedOwnerPath(params.workspaceDir)
+  ) {
+    return undefined;
+  }
+  return getPreparedModelRuntimeAuthStore(preparedModelRuntime);
+}
+
 export function resolveModel(
   provider: string,
   modelId: string,
@@ -150,7 +188,25 @@ export function resolveModel(
   const resolve = () => {
     const workspaceDir =
       options?.workspaceDir ?? preparedModelRuntime?.workspaceDir ?? derivedWorkspaceDir;
-    const normalizedRef = normalizeProviderModelRef({ provider, modelId, cfg, workspaceDir });
+    const normalizeModelId = preparedModelRuntime
+      ? createStaticProviderModelIdNormalizer({
+          manifestPlugins: preparedModelRuntime.metadataSnapshot.plugins,
+        })
+      : undefined;
+    const authProfileStore = resolvePreparedAuthProfileStore({
+      preparedModelRuntime,
+      agentDir: resolvedAgentDir,
+      cfg,
+      workspaceDir,
+    });
+    const normalizedRef = normalizeProviderModelRef({
+      provider,
+      modelId,
+      cfg,
+      workspaceDir,
+      manifestPlugins: preparedModelRuntime?.metadataSnapshot.plugins,
+      ...(normalizeModelId ? { normalizeModelId } : {}),
+    });
     const preparedStores =
       !options?.authStorage || !options?.modelRegistry
         ? preparedModelRuntime?.createStores()
@@ -188,6 +244,8 @@ export function resolveModel(
       authProfileId: options?.authProfileId,
       authProfileMode: options?.authProfileMode,
       preferredProfile: options?.preferredProfile,
+      ...(authProfileStore ? { authProfileStore } : {}),
+      ...(normalizeModelId ? { normalizeModelId } : {}),
       runtimeHooks,
       getStaticCatalogModel,
     });
@@ -264,7 +322,30 @@ export async function resolveModelAsync(
   const resolve = async () => {
     const workspaceDir =
       options?.workspaceDir ?? preparedModelRuntime?.workspaceDir ?? derivedWorkspaceDir;
-    const normalizedRef = normalizeProviderModelRef({ provider, modelId, cfg, workspaceDir });
+    const normalizeModelId = preparedModelRuntime
+      ? createStaticProviderModelIdNormalizer({
+          manifestPlugins: preparedModelRuntime.metadataSnapshot.plugins,
+        })
+      : undefined;
+    const matchesStaticModelId = preparedModelRuntime
+      ? createStaticModelIdMatcher({
+          manifestPlugins: preparedModelRuntime.metadataSnapshot.plugins,
+        })
+      : staticModelIdMatches;
+    const authProfileStore = resolvePreparedAuthProfileStore({
+      preparedModelRuntime,
+      agentDir: resolvedAgentDir,
+      cfg,
+      workspaceDir,
+    });
+    const normalizedRef = normalizeProviderModelRef({
+      provider,
+      modelId,
+      cfg,
+      workspaceDir,
+      manifestPlugins: preparedModelRuntime?.metadataSnapshot.plugins,
+      ...(normalizeModelId ? { normalizeModelId } : {}),
+    });
     const preparedStores =
       !options?.authStorage || !options?.modelRegistry
         ? preparedModelRuntime?.createStores()
@@ -286,7 +367,7 @@ export async function resolveModelAsync(
         staticCatalogModel =
           preparedModelRuntime?.configuredRuntimeModels?.find(
             ({ modelId: candidateId, provider: rowProvider }) =>
-              staticModelIdMatches({
+              matchesStaticModelId({
                 candidateId,
                 rowProvider,
                 provider: normalizedRef.provider,
@@ -327,6 +408,7 @@ export async function resolveModelAsync(
       cfg,
       agentDir: resolvedAgentDir,
       manifestAlias: normalizedRef.manifestAlias,
+      ...(normalizeModelId ? { normalizeModelId } : {}),
       workspaceDir,
       runtimeHooks,
       preparedInlineProviderModels: preparedModelRuntime?.inlineProviderModels,
@@ -345,6 +427,8 @@ export async function resolveModelAsync(
         authProfileId: options?.authProfileId,
         authProfileMode: options?.authProfileMode,
         preferredProfile: options?.preferredProfile,
+        ...(authProfileStore ? { authProfileStore } : {}),
+        ...(normalizeModelId ? { normalizeModelId } : {}),
         runtimeHooks,
         getStaticCatalogModel: getManifestStaticCatalogModel,
       });
@@ -373,6 +457,7 @@ export async function resolveModelAsync(
       authProfileId: options?.authProfileId,
       authProfileMode: options?.authProfileMode,
       preferredProfile: options?.preferredProfile,
+      ...(authProfileStore ? { authProfileStore } : {}),
     });
     const preparedMetadataSnapshot = preparedModelRuntime?.metadataSnapshot;
     let providerStaticCatalogLookup: Promise<ProviderRuntimeModel | undefined> | undefined;
@@ -408,6 +493,7 @@ export async function resolveModelAsync(
         preferDiscoveredModelMetadata: true,
         preferDiscoveredTransport: options?.preferBundledStaticCatalogTransport,
         staticCatalogModel: catalogModel,
+        ...(normalizeModelId ? { normalizeModelId } : {}),
       });
       return normalizeResolvedModel({
         provider: normalizedRef.provider,
@@ -447,8 +533,10 @@ export async function resolveModelAsync(
         authProfileId: options?.authProfileId,
         authProfileMode: options?.authProfileMode,
         preferredProfile: options?.preferredProfile,
+        ...(authProfileStore ? { authProfileStore } : {}),
         runtimeHooks,
         ...(preparedDynamicModel ? { preparedDynamicModel } : {}),
+        ...(normalizeModelId ? { normalizeModelId } : {}),
         getStaticCatalogModel: getManifestStaticCatalogModel,
         ...(options?.allowBundledStaticCatalogFallback ? { skipConfiguredFallback: true } : {}),
       });
@@ -479,6 +567,7 @@ export async function resolveModelAsync(
         workspaceDir,
         runtimeHooks,
         getStaticCatalogModel: getManifestStaticCatalogModel,
+        ...(normalizeModelId ? { normalizeModelId } : {}),
       });
     }
     if (model && options?.allowBundledStaticCatalogFallback) {

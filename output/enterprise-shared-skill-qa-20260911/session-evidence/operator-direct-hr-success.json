@@ -1,0 +1,86 @@
+{
+  "capturedAt": "2026-09-11T16:14:16.495640+00:00",
+  "label": "operator-direct-hr-success",
+  "agentId": "hrm",
+  "sessionId": "eaeab4c7-70ae-4332-8a6a-7972f5c7f8ce",
+  "sessionKey": "agent:hrm:dashboard:efc6353c-bf04-4dae-9d93-9b68deb7d00a",
+  "runIds": [
+    "042612e1-5293-4fe1-9b95-62f3ec99d338"
+  ],
+  "modelId": null,
+  "materializedCatalog": {
+    "toolCount": 3,
+    "toolNames": [
+      "read",
+      "session_status",
+      "skill_script"
+    ]
+  },
+  "transcript": {
+    "eventCount": 10,
+    "eventTypes": {
+      "message": 9,
+      "session": 1
+    },
+    "toolCalls": [
+      "read",
+      "skill_script",
+      "skill_script"
+    ],
+    "toolResults": [
+      "read",
+      "skill_script",
+      "skill_script"
+    ],
+    "toolErrorCount": 0,
+    "codes": []
+  },
+  "trajectory": {
+    "eventCount": 11,
+    "eventTypes": {
+      "context.compiled": 1,
+      "model.completed": 1,
+      "prompt.submitted": 1,
+      "session.ended": 1,
+      "session.started": 1,
+      "tool.call": 3,
+      "tool.result": 3
+    },
+    "toolCalls": [
+      "read",
+      "skill_script",
+      "skill_script"
+    ],
+    "toolResults": [
+      "read",
+      "skill_script",
+      "skill_script"
+    ],
+    "toolResultSuccess": [
+      true,
+      true,
+      true
+    ],
+    "codes": []
+  },
+  "taskRuns": [],
+  "skillOperations": [
+    {
+      "skill": "hr-skill",
+      "entrypoint": "call",
+      "operation": "router_tool_search"
+    },
+    {
+      "skill": "hr-skill",
+      "entrypoint": "call",
+      "operation": "get_departments"
+    }
+  ],
+  "acceptanceSignals": {
+    "hasMaterializedToolCatalog": true,
+    "hasToolCall": true,
+    "hasSkillScriptCall": true,
+    "hasRouterCall": true,
+    "hasAuthorizationError": false
+  }
+}

@@ -64,6 +64,7 @@ export function resolveAmbientAgentCredentialsForDiscovery(
         config: options.config,
         authAliasLookupParams: {
           ...(options.env ? { env: options.env } : {}),
+          ...(options.metadataSnapshot ? { metadataSnapshot: options.metadataSnapshot } : {}),
           ...(options.workspaceDir ? { workspaceDir: options.workspaceDir } : {}),
         },
         provider,
@@ -116,6 +117,7 @@ export function resolveAgentDiscoveryAuthFacts(
     options?.ambientCredentials ??
     resolveAmbientAgentCredentialsForDiscovery({
       config: options?.config,
+      ...(options?.metadataSnapshot ? { metadataSnapshot: options.metadataSnapshot } : {}),
       workspaceDir: options?.workspaceDir,
       env: options?.env,
       syntheticAuthProviderRefs: options?.syntheticAuthProviderRefs,

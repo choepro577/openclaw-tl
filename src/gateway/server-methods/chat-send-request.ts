@@ -25,7 +25,7 @@ import {
   type ChatSendExplicitOrigin,
 } from "./chat-origin-routing.js";
 import { resolveControlUiReconnectResumeParams } from "./chat-server-timing.js";
-import type { GatewayRequestHandlerOptions } from "./types.js";
+import type { GatewayRequestHandlerOptions, GatewayRequestTiming } from "./types.js";
 
 type ChatSendRequestParams = {
   sessionKey: string;
@@ -60,6 +60,8 @@ type ChatSendRequestParams = {
 
 export type NormalizedChatSendRequest = {
   chatSendReceivedAtMs: number;
+  chatSendNormalizeStartedAtMs: number;
+  chatSendNormalizeMs: number;
   clientInfo?: GatewayClientInfo;
   supportsTaskSuggestions: boolean;
   p: ChatSendRequestParams;
@@ -85,8 +87,14 @@ export function normalizeChatSendRequest(params: {
   params: Record<string, unknown>;
   client: GatewayRequestHandlerOptions["client"];
   trustedSystemInput?: boolean;
+  requestTiming?: GatewayRequestTiming;
 }): NormalizeChatSendRequestResult {
-  const chatSendReceivedAtMs = performance.now();
+  const chatSendNormalizeStartedAtMs = performance.now();
+  const chatSendReceivedAtMs =
+    typeof params.requestTiming?.receivedAtMs === "number" &&
+    Number.isFinite(params.requestTiming.receivedAtMs)
+      ? params.requestTiming.receivedAtMs
+      : chatSendNormalizeStartedAtMs;
   const client = params.client;
   const clientInfo = client?.connect?.client;
   const supportsTaskSuggestions =
@@ -175,6 +183,8 @@ export function normalizeChatSendRequest(params: {
     ok: true,
     value: {
       chatSendReceivedAtMs,
+      chatSendNormalizeStartedAtMs,
+      chatSendNormalizeMs: Math.max(0, performance.now() - chatSendNormalizeStartedAtMs),
       clientInfo,
       supportsTaskSuggestions,
       p,

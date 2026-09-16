@@ -24,11 +24,11 @@ async function loadModelProvidersRouteData(
   const gatewaySnapshot = gateway.snapshot;
   const { EMPTY_MODEL_PROVIDERS_DATA, loadModelProvidersData } = await import("./load.ts");
   const client = gatewaySnapshot.phase === "connected" ? gatewaySnapshot.client : null;
-  if (!context.agentSelection.state.selectedId && client) {
-    await context.agents.ensureList();
-  }
-  const selectedAgentId = context.agentSelection.state.selectedId;
-  const agentId = selectedAgentId ? normalizeAgentId(selectedAgentId) : null;
+  const agents =
+    context.agents.state.agentsList ?? (client ? await context.agents.ensureList() : null);
+  const agentId = agents
+    ? normalizeAgentId(agents.defaultId ?? agents.agents[0]?.id ?? "main")
+    : null;
   if (!client || !agentId) {
     return { gateway, gatewaySnapshot, data: EMPTY_MODEL_PROVIDERS_DATA, client: null, agentId };
   }

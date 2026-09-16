@@ -8,7 +8,13 @@ type ChatSendAckStatus = "started" | "in_flight" | "ok" | "timeout" | "error";
 
 type ChatSendAckServerTiming = {
   receivedToAckMs?: number;
+  receivedToNormalizeMs?: number;
+  normalizeMs?: number;
+  enterpriseProjectionMs?: number;
+  authorizationMs?: number;
   loadSessionMs?: number;
+  admissionMs?: number;
+  queueWaitMs?: number;
   prepareAttachmentsMs?: number;
 };
 
@@ -24,11 +30,23 @@ function normalizeChatSendAckServerTiming(value: unknown): ChatSendAckServerTimi
   }
   const record = value as Record<string, unknown>;
   const receivedToAckMs = normalizeAckTimingValue(record.receivedToAckMs);
+  const receivedToNormalizeMs = normalizeAckTimingValue(record.receivedToNormalizeMs);
+  const normalizeMs = normalizeAckTimingValue(record.normalizeMs);
+  const enterpriseProjectionMs = normalizeAckTimingValue(record.enterpriseProjectionMs);
+  const authorizationMs = normalizeAckTimingValue(record.authorizationMs);
   const loadSessionMs = normalizeAckTimingValue(record.loadSessionMs);
+  const admissionMs = normalizeAckTimingValue(record.admissionMs);
+  const queueWaitMs = normalizeAckTimingValue(record.queueWaitMs);
   const prepareAttachmentsMs = normalizeAckTimingValue(record.prepareAttachmentsMs);
   const timing: ChatSendAckServerTiming = {
     ...(receivedToAckMs !== undefined ? { receivedToAckMs } : {}),
+    ...(receivedToNormalizeMs !== undefined ? { receivedToNormalizeMs } : {}),
+    ...(normalizeMs !== undefined ? { normalizeMs } : {}),
+    ...(enterpriseProjectionMs !== undefined ? { enterpriseProjectionMs } : {}),
+    ...(authorizationMs !== undefined ? { authorizationMs } : {}),
     ...(loadSessionMs !== undefined ? { loadSessionMs } : {}),
+    ...(admissionMs !== undefined ? { admissionMs } : {}),
+    ...(queueWaitMs !== undefined ? { queueWaitMs } : {}),
     ...(prepareAttachmentsMs !== undefined ? { prepareAttachmentsMs } : {}),
   };
   return Object.keys(timing).length > 0 ? timing : undefined;

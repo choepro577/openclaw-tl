@@ -1,0 +1,474 @@
+{
+  "capturedAt": "2026-09-11T14:06:36.815852+00:00",
+  "label": "baseline-po-current-dist-v8",
+  "gateway": {
+    "port": 18889,
+    "stateRoot": "/var/folders/m4/71w5wnxs0tjd2cdkbcc7846m0000gn/T/openclaw-shared-skill-qa.5cQB4i"
+  },
+  "runtime": {
+    "gitSha": "2d6f02d14f5e60869a0a3864fb3365fa3aa233e9",
+    "buildstamp": {
+      "builtAt": 1789132082038,
+      "head": "2d6f02d14f5e60869a0a3864fb3365fa3aa233e9"
+    },
+    "node": "v26.8.1",
+    "pnpm": "11.22.0",
+    "codexCli": "codex-cli 0.147.0",
+    "bundledCodexPackage": "0.148.0",
+    "codexExtensionDependency": "0.148.0",
+    "configSha256": "bfcc0c5be5964c0fae230cb81a80c4c20a1a93062b37a02cc268a01514b8cbb6"
+  },
+  "agentProjection": {
+    "agent": "purchase-order-skill",
+    "configuredSkills": [
+      "purchase-order-skill"
+    ],
+    "toolsProfile": "minimal",
+    "allowCount": 0,
+    "alsoAllow": [],
+    "denyCount": 24
+  },
+  "catalogCommands": {
+    "agentsList": {
+      "type": "list"
+    },
+    "skillsList": {
+      "count": 58,
+      "skills": [
+        {
+          "name": "1password",
+          "eligible": false,
+          "disabled": true,
+          "modelVisible": false,
+          "commandVisible": false
+        },
+        {
+          "name": "analytic-skill",
+          "eligible": true,
+          "disabled": false,
+          "modelVisible": false,
+          "commandVisible": false
+        },
+        {
+          "name": "apple-notes",
+          "eligible": false,
+          "disabled": true,
+          "modelVisible": false,
+          "commandVisible": false
+        },
+        {
+          "name": "apple-reminders",
+          "eligible": false,
+          "disabled": true,
+          "modelVisible": false,
+          "commandVisible": false
+        },
+        {
+          "name": "bear-notes",
+          "eligible": false,
+          "disabled": true,
+          "modelVisible": false,
+          "commandVisible": false
+        },
+        {
+          "name": "blogwatcher",
+          "eligible": false,
+          "disabled": true,
+          "modelVisible": false,
+          "commandVisible": false
+        },
+        {
+          "name": "blucli",
+          "eligible": false,
+          "disabled": true,
+          "modelVisible": false,
+          "commandVisible": false
+        },
+        {
+          "name": "browser-automation",
+          "eligible": true,
+          "disabled": false,
+          "modelVisible": false,
+          "commandVisible": false
+        },
+        {
+          "name": "camsnap",
+          "eligible": false,
+          "disabled": true,
+          "modelVisible": false,
+          "commandVisible": false
+        },
+        {
+          "name": "canvas",
+          "eligible": true,
+          "disabled": false,
+          "modelVisible": false,
+          "commandVisible": false
+        },
+        {
+          "name": "clawhub",
+          "eligible": true,
+          "disabled": false,
+          "modelVisible": false,
+          "commandVisible": false
+        },
+        {
+          "name": "coding-agent",
+          "eligible": false,
+          "disabled": true,
+          "modelVisible": false,
+          "commandVisible": false
+        },
+        {
+          "name": "cskh-skill",
+          "eligible": true,
+          "disabled": false,
+          "modelVisible": false,
+          "commandVisible": false
+        },
+        {
+          "name": "diagram-maker",
+          "eligible": true,
+          "disabled": false,
+          "modelVisible": false,
+          "commandVisible": false
+        },
+        {
+          "name": "diffs",
+          "eligible": true,
+          "disabled": false,
+          "modelVisible": false,
+          "commandVisible": false
+        },
+        {
+          "name": "eightctl",
+          "eligible": false,
+          "disabled": true,
+          "modelVisible": false,
+          "commandVisible": false
+        },
+        {
+          "name": "gemini",
+          "eligible": true,
+          "disabled": false,
+          "modelVisible": false,
+          "commandVisible": false
+        },
+        {
+          "name": "gh-issues",
+          "eligible": false,
+          "disabled": true,
+          "modelVisible": false,
+          "commandVisible": false
+        },
+        {
+          "name": "gifgrep",
+          "eligible": false,
+          "disabled": true,
+          "modelVisible": false,
+          "commandVisible": false
+        },
+        {
+          "name": "github",
+          "eligible": false,
+          "disabled": true,
+          "modelVisible": false,
+          "commandVisible": false
+        },
+        {
+          "name": "gog",
+          "eligible": false,
+          "disabled": true,
+          "modelVisible": false,
+          "commandVisible": false
+        },
+        {
+          "name": "goplaces",
+          "eligible": false,
+          "disabled": true,
+          "modelVisible": false,
+          "commandVisible": false
+        },
+        {
+          "name": "healthcheck",
+          "eligible": true,
+          "disabled": false,
+          "modelVisible": false,
+          "commandVisible": false
+        },
+        {
+          "name": "himalaya",
+          "eligible": false,
+          "disabled": true,
+          "modelVisible": false,
+          "commandVisible": false
+        },
+        {
+          "name": "hr-skill",
+          "eligible": true,
+          "disabled": false,
+          "modelVisible": false,
+          "commandVisible": false
+        },
+        {
+          "name": "mcporter",
+          "eligible": false,
+          "disabled": true,
+          "modelVisible": false,
+          "commandVisible": false
+        },
+        {
+          "name": "meme-maker",
+          "eligible": true,
+          "disabled": false,
+          "modelVisible": false,
+          "commandVisible": false
+        },
+        {
+          "name": "model-usage",
+          "eligible": false,
+          "disabled": true,
+          "modelVisible": false,
+          "commandVisible": false
+        },
+        {
+          "name": "nano-pdf",
+          "eligible": true,
+          "disabled": false,
+          "modelVisible": false,
+          "commandVisible": false
+        },
+        {
+          "name": "node-connect",
+          "eligible": true,
+          "disabled": false,
+          "modelVisible": false,
+          "commandVisible": false
+        },
+        {
+          "name": "node-inspect-debugger",
+          "eligible": true,
+          "disabled": false,
+          "modelVisible": false,
+          "commandVisible": false
+        },
+        {
+          "name": "notion",
+          "eligible": true,
+          "disabled": false,
+          "modelVisible": false,
+          "commandVisible": false
+        },
+        {
+          "name": "obsidian",
+          "eligible": false,
+          "disabled": true,
+          "modelVisible": false,
+          "commandVisible": false
+        },
+        {
+          "name": "openai-whisper",
+          "eligible": false,
+          "disabled": true,
+          "modelVisible": false,
+          "commandVisible": false
+        },
+        {
+          "name": "openai-whisper-api",
+          "eligible": false,
+          "disabled": true,
+          "modelVisible": false,
+          "commandVisible": false
+        },
+        {
+          "name": "openhue",
+          "eligible": false,
+          "disabled": true,
+          "modelVisible": false,
+          "commandVisible": false
+        },
+        {
+          "name": "oracle",
+          "eligible": false,
+          "disabled": true,
+          "modelVisible": false,
+          "commandVisible": false
+        },
+        {
+          "name": "ordercli",
+          "eligible": false,
+          "disabled": true,
+          "modelVisible": false,
+          "commandVisible": false
+        },
+        {
+          "name": "peekaboo",
+          "eligible": false,
+          "disabled": true,
+          "modelVisible": false,
+          "commandVisible": false
+        },
+        {
+          "name": "purchase-order-skill",
+          "eligible": true,
+          "disabled": false,
+          "modelVisible": true,
+          "commandVisible": true
+        },
+        {
+          "name": "python-debugpy",
+          "eligible": true,
+          "disabled": false,
+          "modelVisible": false,
+          "commandVisible": false
+        },
+        {
+          "name": "sag",
+          "eligible": false,
+          "disabled": true,
+          "modelVisible": false,
+          "commandVisible": false
+        },
+        {
+          "name": "session-logs",
+          "eligible": false,
+          "disabled": true,
+          "modelVisible": false,
+          "commandVisible": false
+        },
+        {
+          "name": "sherpa-onnx-tts",
+          "eligible": false,
+          "disabled": true,
+          "modelVisible": false,
+          "commandVisible": false
+        },
+        {
+          "name": "skill-creator",
+          "eligible": true,
+          "disabled": false,
+          "modelVisible": false,
+          "commandVisible": false
+        },
+        {
+          "name": "songsee",
+          "eligible": false,
+          "disabled": true,
+          "modelVisible": false,
+          "commandVisible": false
+        },
+        {
+          "name": "sonoscli",
+          "eligible": false,
+          "disabled": true,
+          "modelVisible": false,
+          "commandVisible": false
+        },
+        {
+          "name": "spike",
+          "eligible": true,
+          "disabled": false,
+          "modelVisible": false,
+          "commandVisible": false
+        },
+        {
+          "name": "spotify-player",
+          "eligible": false,
+          "disabled": true,
+          "modelVisible": false,
+          "commandVisible": false
+        },
+        {
+          "name": "summarize",
+          "eligible": false,
+          "disabled": true,
+          "modelVisible": false,
+          "commandVisible": false
+        },
+        {
+          "name": "taskflow",
+          "eligible": true,
+          "disabled": false,
+          "modelVisible": false,
+          "commandVisible": false
+        },
+        {
+          "name": "taskflow-inbox-triage",
+          "eligible": true,
+          "disabled": false,
+          "modelVisible": false,
+          "commandVisible": false
+        },
+        {
+          "name": "things-mac",
+          "eligible": false,
+          "disabled": true,
+          "modelVisible": false,
+          "commandVisible": false
+        },
+        {
+          "name": "tmux",
+          "eligible": true,
+          "disabled": false,
+          "modelVisible": false,
+          "commandVisible": false
+        },
+        {
+          "name": "trello",
+          "eligible": false,
+          "disabled": true,
+          "modelVisible": false,
+          "commandVisible": false
+        },
+        {
+          "name": "video-frames",
+          "eligible": true,
+          "disabled": false,
+          "modelVisible": false,
+          "commandVisible": false
+        },
+        {
+          "name": "weather",
+          "eligible": true,
+          "disabled": false,
+          "modelVisible": false,
+          "commandVisible": false
+        },
+        {
+          "name": "xurl",
+          "eligible": false,
+          "disabled": true,
+          "modelVisible": false,
+          "commandVisible": false
+        }
+      ]
+    },
+    "skillsCheck": {
+      "agentId": "purchase-order-skill",
+      "managedSkillsDir": "/var/folders/m4/71w5wnxs0tjd2cdkbcc7846m0000gn/T/openclaw-shared-skill-qa.5cQB4i/skills",
+      "summary": {
+        "total": 58,
+        "eligible": 24,
+        "modelVisible": 1,
+        "commandVisible": 1,
+        "disabled": 34,
+        "blocked": 0,
+        "agentFiltered": 23,
+        "notInjected": 0,
+        "missingRequirements": 0
+      }
+    }
+  },
+  "databaseCounts": {
+    "available": true,
+    "enterpriseAccountPluginGrants": 1,
+    "enterpriseCodexPluginGrants": 1,
+    "enterpriseEntitlements": 11,
+    "delegationTaskRuns": 448,
+    "subagentRuns": 119
+  },
+  "limitations": [
+    "skills list/check is the configured CLI catalog, not proof that a freshly spawned model session received the runtime tool manifest",
+    "fresh direct and delegated session evidence must record the actual materialized catalog and tool calls"
+  ]
+}

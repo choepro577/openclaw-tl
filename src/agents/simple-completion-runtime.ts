@@ -13,6 +13,7 @@ import {
 import type { ThinkLevel } from "../auto-reply/thinking.js";
 import type { OpenClawConfig } from "../config/types.openclaw.js";
 import { isGatewayRequestScopedRuntimeConfig } from "../gateway/request-runtime-config.js";
+import { measureDiagnosticsTimelineSpan } from "../infra/diagnostics-timeline.js";
 import { formatErrorMessage } from "../infra/errors.js";
 import { bindModelLlmRuntime, getModelLlmRuntime } from "../llm/model-runtime-binding.js";
 import { completeSimple } from "../llm/stream.js";
@@ -22,9 +23,11 @@ import type {
   ModelThinkingLevel,
   ThinkingLevel as SimpleCompletionThinkingLevel,
 } from "../llm/types.js";
+import { loadManifestMetadataSnapshot } from "../plugins/manifest-contract-eligibility.js";
 import { resolvePluginMetadataSnapshot } from "../plugins/plugin-metadata-snapshot.js";
 import type { PluginMetadataSnapshot } from "../plugins/plugin-metadata-snapshot.types.js";
 import { prepareProviderRuntimeAuth } from "../plugins/provider-runtime.runtime.js";
+import { getActivePluginRegistryWorkspaceDirFromState } from "../plugins/runtime-state.js";
 import { withPluginRuntimeGenerationScope } from "../plugins/runtime/generation-scope.js";
 import {
   resolveAgentDir,
@@ -241,20 +244,19 @@ async function prepareSimpleCompletionModelCore(
   context: PreparedSimpleCompletionResolverContext,
 ): Promise<PreparedSimpleCompletionModel> {
   const { modelResolver, workspaceDir } = context;
-  const resolved = await modelResolver(
-    params.provider,
-    params.modelId,
-    params.agentDir,
-    params.cfg,
-    {
-      ...(params.agentId ? { agentId: params.agentId } : {}),
-      ...(params.allowBundledStaticCatalogFallback !== undefined
-        ? { allowBundledStaticCatalogFallback: params.allowBundledStaticCatalogFallback }
-        : {}),
-      ...(params.skipAgentDiscovery ? { skipAgentDiscovery: true } : {}),
-      authProfileId: params.profileId,
-      preferredProfile: params.preferredProfile,
-    },
+  const resolved = await measureDiagnosticsTimelineSpan(
+    "completion.prepare.model",
+    () =>
+      modelResolver(params.provider, params.modelId, params.agentDir, params.cfg, {
+        ...(params.agentId ? { agentId: params.agentId } : {}),
+        ...(params.allowBundledStaticCatalogFallback !== undefined
+          ? { allowBundledStaticCatalogFallback: params.allowBundledStaticCatalogFallback }
+          : {}),
+        ...(params.skipAgentDiscovery ? { skipAgentDiscovery: true } : {}),
+        authProfileId: params.profileId,
+        preferredProfile: params.preferredProfile,
+      }),
+    { config: params.cfg },
   );
   if (!resolved.model) {
     return {
@@ -486,27 +488,34 @@ async function withPreparedSimpleCompletionRuntime<T>(
     resolveAgentWorkspaceDir(config, agentId);
   const lease = params.preparedModelRuntime
     ? undefined
-    : await acquireAgentRunPreparedModelRuntime(
-        {
-          config,
-          // Router/utility completions must retain the same account projection
-          // as full agent runs, including synthetic owners absent from global config.
-          ...(isGatewayRequestScopedRuntimeConfig(config) ? { preserveConfigOnRefresh: true } : {}),
-          agentId,
-          agentDir,
-          workspaceDir: requestedWorkspaceDir,
-          loadRuntimePlugins: true,
-          runtimePluginSelections: runtimePluginSelections.map((selection) => ({
-            ...selection,
-            agentId,
-          })),
-        },
-        {
-          catalogMode: "static",
-          ...(params.pluginMetadataSnapshot
-            ? { pluginMetadataSnapshot: params.pluginMetadataSnapshot }
-            : {}),
-        },
+    : await measureDiagnosticsTimelineSpan(
+        "completion.prepare.runtime",
+        () =>
+          acquireAgentRunPreparedModelRuntime(
+            {
+              config,
+              // Router/utility completions must retain the same account projection
+              // as full agent runs, including synthetic owners absent from global config.
+              ...(isGatewayRequestScopedRuntimeConfig(config)
+                ? { preserveConfigOnRefresh: true }
+                : {}),
+              agentId,
+              agentDir,
+              workspaceDir: requestedWorkspaceDir,
+              loadRuntimePlugins: true,
+              runtimePluginSelections: runtimePluginSelections.map((selection) => ({
+                ...selection,
+                agentId,
+              })),
+            },
+            {
+              catalogMode: "static",
+              ...(params.pluginMetadataSnapshot
+                ? { pluginMetadataSnapshot: params.pluginMetadataSnapshot }
+                : {}),
+            },
+          ),
+        { config },
       );
   const preparedModelRuntime = params.preparedModelRuntime ?? lease!.snapshot;
   const workspaceDir =
@@ -545,6 +554,12 @@ export async function prepareSimpleCompletionModelForAgent(params: {
     agentDir: params.agentDir,
     modelRef: params.modelRef,
     useUtilityModel: params.useUtilityModel,
+    // Default, alias, and explicit-ref resolution consume the same discovery view.
+    // Keep the existing normalization workspace; execution is scoped separately below.
+    manifestPlugins: loadManifestMetadataSnapshot({
+      config: params.cfg,
+      workspaceDir: getActivePluginRegistryWorkspaceDirFromState(),
+    }).plugins,
   };
   const tentativeRequest = resolveSimpleCompletionSelectionRequest(selectionParams);
   if (!tentativeRequest) {

@@ -1,9 +1,18 @@
 import { isOperatorUiClient } from "../../utils/message-channel.js";
+import { enterpriseUserPortalIdentity } from "./gateway-client-identity.js";
 import type { GatewayClient, GatewayRequestContext } from "./types.js";
+
+type ChatSendClientInfo = { id?: string | null; mode?: string | null };
 
 type ChatSendAckServerTiming = {
   receivedToAckMs: number;
+  receivedToNormalizeMs?: number;
+  normalizeMs?: number;
+  enterpriseProjectionMs?: number;
+  authorizationMs?: number;
   loadSessionMs: number;
+  admissionMs?: number;
+  queueWaitMs?: number;
   prepareAttachmentsMs?: number;
 };
 
@@ -27,18 +36,34 @@ export function chatSendAckServerTimingAttributes(
   }
   return {
     serverReceivedToAckMs: timing.receivedToAckMs,
+    ...(timing.receivedToNormalizeMs !== undefined
+      ? { serverReceivedToNormalizeMs: timing.receivedToNormalizeMs }
+      : {}),
+    ...(timing.normalizeMs !== undefined ? { serverNormalizeMs: timing.normalizeMs } : {}),
+    ...(timing.enterpriseProjectionMs !== undefined
+      ? { serverEnterpriseProjectionMs: timing.enterpriseProjectionMs }
+      : {}),
+    ...(timing.authorizationMs !== undefined
+      ? { serverAuthorizationMs: timing.authorizationMs }
+      : {}),
     serverLoadSessionMs: timing.loadSessionMs,
+    ...(timing.admissionMs !== undefined ? { serverAdmissionMs: timing.admissionMs } : {}),
+    ...(timing.queueWaitMs !== undefined ? { serverQueueWaitMs: timing.queueWaitMs } : {}),
     ...(timing.prepareAttachmentsMs !== undefined
       ? { serverPrepareAttachmentsMs: timing.prepareAttachmentsMs }
       : {}),
   };
 }
 
-export function shouldIncludeChatSendAckServerTiming(client?: {
-  id?: string | null;
-  mode?: string | null;
-}): boolean {
-  return isOperatorUiClient(client);
+export function shouldIncludeChatSendAckServerTiming(
+  client?: GatewayClient | ChatSendClientInfo | null,
+): boolean {
+  const fullClient =
+    client && typeof client === "object" && "connect" in client
+      ? (client as GatewayClient)
+      : undefined;
+  const clientInfo = fullClient ? fullClient.connect?.client : (client as ChatSendClientInfo);
+  return isOperatorUiClient(clientInfo) || enterpriseUserPortalIdentity(fullClient) !== undefined;
 }
 
 const CONTROL_UI_RECONNECT_RESUME_PARAM = "__controlUiReconnectResume";
@@ -77,7 +102,11 @@ export function emitOperatorChatSendServerTiming(params: {
     typeof params.client?.connId === "string" && params.client.connId.trim()
       ? params.client.connId.trim()
       : undefined;
-  if (!connId || !isOperatorUiClient(params.client?.connect?.client)) {
+  if (
+    !connId ||
+    (!isOperatorUiClient(params.client?.connect?.client) &&
+      enterpriseUserPortalIdentity(params.client) === undefined)
+  ) {
     return;
   }
   const nowMs = performance.now();

@@ -1,6 +1,7 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { afterEach, describe, expect, it } from "vitest";
 import { listAgentIds, resolveAgentConfig } from "../../agents/agent-scope.js";
+import { resolveDefaultModelForAgent } from "../../agents/model-selection.js";
 import { resolveSandboxConfigForAgent } from "../../agents/sandbox/config.js";
 import {
   isToolAllowed,
@@ -456,6 +457,72 @@ describe("enterprise gateway policy", () => {
         ).toEqual(["finance"]);
         expect(listAgentIds(scopedConfig)).not.toContain("finance");
       }
+    });
+  });
+
+  it("uses system model defaults for Personal Agents without overriding Shared Agents", async () => {
+    await withOpenClawTestState({ scenario: "minimal", applyEnv: true }, async () => {
+      const account = createEnterpriseAccount({
+        username: "administrator.personal-model-defaults",
+        displayName: "Personal Model Defaults",
+        passwordHash: await hashEnterprisePassword("enterprise-password"),
+        role: "administrator",
+        mustChangePassword: false,
+        personalAgentEnabled: true,
+      });
+      const config: OpenClawConfig = {
+        enterprise: { enabled: true, personalAgent: { templateAgentId: "main" } },
+        agents: {
+          defaults: {
+            model: "luna",
+            models: { "openai/gpt-5.6-luna": { alias: "luna" } },
+            modelPolicy: { allow: ["openai/gpt-5.6-luna"] },
+            utilityModel: "openai/gpt-5.6-luna",
+            thinkingDefault: "high",
+            fastModeDefault: true,
+          },
+          entries: {
+            main: {
+              model: "openai/gpt-5.6-sol",
+              models: { "openai/gpt-5.6-sol": { alias: "luna" } },
+              modelPolicy: { allow: ["openai/gpt-5.6-sol"] },
+              utilityModel: "openai/gpt-5.6-sol",
+              thinkingDefault: "low",
+              fastModeDefault: false,
+            },
+            shared: {
+              model: "openai/gpt-5.6-sol",
+              utilityModel: "openai/gpt-5.6-sol",
+              thinkingDefault: "low",
+              fastModeDefault: false,
+            },
+          },
+        },
+      };
+
+      const projected = projectEnterpriseRuntimeConfig(config, account, { userAudience: true });
+      const personalAgentId = resolveEnterprisePersonalAgentId(config, account);
+      const personal = resolveAgentConfig(projected, personalAgentId);
+      const shared = resolveAgentConfig(projected, "shared");
+
+      expect(personal).toMatchObject({
+        model: "luna",
+        models: { "openai/gpt-5.6-luna": { alias: "luna" } },
+        modelPolicy: { allow: ["openai/gpt-5.6-luna"] },
+        utilityModel: "openai/gpt-5.6-luna",
+        thinkingDefault: "high",
+        fastModeDefault: true,
+      });
+      expect(resolveDefaultModelForAgent({ cfg: projected, agentId: personalAgentId })).toEqual({
+        provider: "openai",
+        model: "gpt-5.6-luna",
+      });
+      expect(shared).toMatchObject({
+        model: "openai/gpt-5.6-sol",
+        utilityModel: "openai/gpt-5.6-sol",
+        thinkingDefault: "low",
+        fastModeDefault: false,
+      });
     });
   });
 

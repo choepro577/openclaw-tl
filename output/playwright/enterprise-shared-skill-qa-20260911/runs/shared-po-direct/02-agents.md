@@ -1,0 +1,193 @@
+- generic [ref=e45]:
+  - link "Skip to main content" [ref=e46] [cursor=pointer]:
+    - /url: "#enterprise-user-main"
+  - complementary "Enterprise User navigation" [ref=e49]:
+    - generic [ref=e50]:
+      - generic [ref=e52]:
+        - group [ref=e54]:
+          - generic "Switch active Agent" [ref=e55]:
+            - generic [aria-hidden] [ref=e56]: 💼
+            - generic [ref=e57]:
+              - generic [ref=e58]: Active Agent
+              - strong [ref=e59]: Personal Agent
+        - button "New chat" [ref=e63]
+        - navigation "User pages" [ref=e66]:
+          - button "Agents" [ref=e67]
+          - button "Automations" [ref=e73]
+          - button "Plugins" [ref=e79]
+          - generic "Organized chats" [ref=e86]:
+            - generic [ref=e87]:
+              - button "Projects" [expanded] [ref=e88]
+              - button "New Project" [ref=e91]
+            - generic [ref=e244]:
+              - generic [ref=e245]:
+                - button "Thiên Lý MAAP" [expanded] [ref=e246]
+                - button "New chat in Thiên Lý MAAP"
+                - generic:
+                  - button "Project actions"
+              - generic [ref=e252]:
+                - button "Bạn có thể làm gì?" [ref=e253]
+                - generic:
+                  - button "Chat actions"
+            - generic [ref=e258]:
+              - button "Recent 83" [expanded] [ref=e259]:
+                - generic [ref=e260]: Recent
+                - generic [ref=e261]: "83"
+              - generic [ref=e262]:
+                - generic [ref=e263]:
+                  - button "Tra cứu đơn nhập hàng nháp" [ref=e264]
+                  - generic:
+                    - button "Chat actions"
+                - generic [ref=e269]:
+                  - button "Tra cứu đơn nhập hàng nháp" [ref=e270]
+                  - generic:
+                    - button "Chat actions"
+                - generic [ref=e275]:
+                  - button "Tra cứu đơn nhập hàng nháp" [ref=e276]
+                  - generic:
+                    - button "Chat actions"
+                - generic [ref=e281]:
+                  - button "Tra cứu đơn nhập hàng nháp" [ref=e282]
+                  - generic:
+                    - button "Chat actions"
+                - generic [ref=e287]:
+                  - button "Kiểm tra đơn nhập hàng nháp" [ref=e288]
+                  - generic:
+                    - button "Chat actions"
+              - button "Show more" [ref=e293]
+      - group [ref=e95]:
+        - generic "Hiếu DZ" [ref=e96]:
+          - generic [aria-hidden] [ref=e97]: H
+  - main [ref=e99]:
+    - generic [ref=e104]:
+      - generic [ref=e106]:
+        - heading "Agent Library" [level=1] [ref=e107]
+        - paragraph [ref=e108]: Choose your Personal Agent or an Agent assigned by your company.
+      - generic [ref=e109]:
+        - generic [ref=e110]: Search Agents
+        - searchbox "Search Agents" [ref=e111]
+      - generic [ref=e112]:
+        - article [ref=e114]:
+          - generic [ref=e115]:
+            - generic [aria-hidden] [ref=e116]: 💼
+            - generic [ref=e117]:
+              - generic [ref=e118]: Personal Agent
+              - heading "Personal Agent" [level=2] [ref=e119]
+          - paragraph [ref=e120]: Xin chào Hiếu DZ, tôi có thể giúp gì cho bạn?
+          - generic [ref=e121]:
+            - status [ref=e122]:
+              - generic [ref=e123]: Ready to chat
+            - generic [ref=e124]:
+              - button "Start chat" [ref=e125]
+              - button "Edit" [ref=e126]
+        - article [ref=e128]:
+          - generic [ref=e129]:
+            - generic [aria-hidden] [ref=e130]: M
+            - generic [ref=e131]:
+              - generic [ref=e132]: Enterprise Agent
+              - heading "main" [level=2] [ref=e133]
+          - paragraph [ref=e134]: Managed by company
+          - list "Capabilities" [ref=e135]:
+            - listitem [ref=e136]: acp-router
+            - listitem [ref=e137]: add-model-provider
+            - listitem [ref=e138]: analytic-skill
+            - listitem [ref=e139]: browser-automation
+            - listitem [ref=e140]: canvas
+            - listitem [ref=e141]: clawhub
+          - generic [ref=e142]:
+            - status [ref=e143]:
+              - generic [ref=e144]: Ready to chat
+            - generic [ref=e145]:
+              - button "Start chat" [ref=e146]
+              - button "View capabilities" [ref=e147]
+        - article [ref=e149]:
+          - generic [ref=e150]:
+            - generic [aria-hidden] [ref=e151]: C
+            - generic [ref=e152]:
+              - generic [ref=e153]: Enterprise Agent
+              - heading "Chuyên gia Hợp đồng & Pháp chế" [level=2] [ref=e154]
+          - paragraph [ref=e155]: Chuyên kiểm tra điều khoản, rủi ro, nghĩa vụ và điểm bất lợi trong hợp đồng doanh nghiệp.
+          - list "Capabilities" [ref=e156]:
+            - listitem [ref=e157]: acp-router
+            - listitem [ref=e158]: analytic-skill
+            - listitem [ref=e159]: browser-automation
+            - listitem [ref=e160]: canvas
+            - listitem [ref=e161]: clawhub
+            - listitem [ref=e162]: cskh-skill
+          - generic [ref=e163]:
+            - status [ref=e164]:
+              - generic [ref=e165]: Ready to chat
+            - generic [ref=e166]:
+              - button "Start chat" [ref=e167]
+              - button "View capabilities" [ref=e168]
+        - article [ref=e170]:
+          - generic [ref=e171]:
+            - generic [aria-hidden] [ref=e172]: C
+            - generic [ref=e173]:
+              - generic [ref=e174]: Enterprise Agent
+              - heading "Chuyên gia Tài chính & Ngân sách" [level=2] [ref=e175]
+          - paragraph [ref=e176]: Chuyên phân tích ngân sách, dòng tiền, chi phí và chênh lệch tài chính doanh nghiệp.
+          - list "Capabilities" [ref=e177]:
+            - listitem [ref=e178]: acp-router
+            - listitem [ref=e179]: analytic-skill
+            - listitem [ref=e180]: browser-automation
+            - listitem [ref=e181]: canvas
+            - listitem [ref=e182]: clawhub
+            - listitem [ref=e183]: cskh-skill
+          - generic [ref=e184]:
+            - status [ref=e185]:
+              - generic [ref=e186]: Ready to chat
+            - generic [ref=e187]:
+              - button "Start chat" [ref=e188]
+              - button "View capabilities" [ref=e189]
+        - article [ref=e191]:
+          - generic [ref=e192]:
+            - generic [aria-hidden] [ref=e193]: C
+            - generic [ref=e194]:
+              - generic [ref=e195]: Enterprise Agent
+              - heading "Chuyên gia Nhân sự & Chính sách" [level=2] [ref=e196]
+          - paragraph [ref=e197]: Chuyên xử lý chính sách nhân sự, tuyển dụng, đào tạo và quy trình đánh giá nhân viên.
+          - list "Capabilities" [ref=e198]:
+            - listitem [ref=e199]: acp-router
+            - listitem [ref=e200]: analytic-skill
+            - listitem [ref=e201]: browser-automation
+            - listitem [ref=e202]: canvas
+            - listitem [ref=e203]: clawhub
+            - listitem [ref=e204]: cskh-skill
+          - generic [ref=e205]:
+            - status [ref=e206]:
+              - generic [ref=e207]: Ready to chat
+            - generic [ref=e208]:
+              - button "Start chat" [ref=e209]
+              - button "View capabilities" [ref=e210]
+        - article [ref=e212]:
+          - generic [ref=e213]:
+            - generic [aria-hidden] [ref=e214]: H
+            - generic [ref=e215]:
+              - generic [ref=e216]: Enterprise Agent
+              - heading "HRM" [level=2] [ref=e217]
+          - paragraph [ref=e218]: Chuyên gia nghiệp vụ Enterprise nội bộ Cơm Niêu Thiên Lý, hỗ trợ tra cứu nhân sự, tổ chức, công việc, ticket, SLA, phiếu và báo cáo; thực hiện thao tác ghi theo quyền, có xem trước và yêu cầu xác nhận.
+          - list "Capabilities" [ref=e219]:
+            - listitem [ref=e220]: hr-skill
+          - generic [ref=e221]:
+            - status [ref=e222]:
+              - generic [ref=e223]: Ready to chat
+            - generic [ref=e224]:
+              - button "Start chat" [ref=e225]
+              - button "View capabilities" [ref=e226]
+        - article [ref=e228]:
+          - generic [ref=e229]:
+            - generic [aria-hidden] [ref=e230]: M
+            - generic [ref=e231]:
+              - generic [ref=e232]: Enterprise Agent
+              - heading "Mua hàng" [level=2] [ref=e233]
+          - paragraph [ref=e234]: Chuyên gia nghiệp vụ mua hàng nội bộ, hỗ trợ tra cứu đề nghị mua hàng, đơn mua hàng, nhà cung cấp, hàng hóa và chi nhánh; mọi thao tác ghi đều được xem lại và xác nhận trước khi gửi.
+          - list "Capabilities" [ref=e235]:
+            - listitem [ref=e236]: purchase-order-skill
+            - listitem [ref=e237]: qa-shared-acceptance-skill
+          - generic [ref=e238]:
+            - status [ref=e239]:
+              - generic [ref=e240]: Ready to chat
+            - generic [ref=e241]:
+              - button "Start chat" [ref=e242]
+              - button "View capabilities" [ref=e243]

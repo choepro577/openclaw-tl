@@ -46,6 +46,23 @@ describe("normalizeChatSendRequest", () => {
     });
   });
 
+  it("uses the server-owned raw receive timestamp when supplied", () => {
+    const result = normalizeChatSendRequest({
+      params: validParams(),
+      client: null,
+      requestTiming: { receivedAtMs: 1234.5 },
+    });
+
+    expect(result).toMatchObject({
+      ok: true,
+      value: {
+        chatSendReceivedAtMs: 1234.5,
+        chatSendNormalizeStartedAtMs: expect.any(Number),
+        chatSendNormalizeMs: expect.any(Number),
+      },
+    });
+  });
+
   it("rejects an empty text-and-attachment request", () => {
     const result = normalizeChatSendRequest({
       params: validParams({ message: "  " }),

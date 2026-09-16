@@ -1,6 +1,6 @@
 # CSKH Skill Routing Policy
 
-This skill is search-first, prerequisite-first, and preview-first for customer-service actions.
+This skill is search-first, prerequisite-first, and preview-first for customer-service actions. A clear write request authorizes the commit step after required business data and prerequisites are resolved.
 
 ## Customer-Facing Response Policy
 
@@ -17,7 +17,7 @@ This skill is search-first, prerequisite-first, and preview-first for customer-s
 1. Always call `router_tool_search` first with the current customer-service intent, except for pure public-ordering guidance intents that only need the public ordering link and the standard short notes for delivery or takeaway/pickup.
 2. Select tool candidates only from `router_tool_search.results`.
 3. Execute prerequisite tools from `results[].prerequisites` before the main tool.
-4. For any write tool, run preview first and wait for explicit user confirmation before calling the same tool again with `confirm=true`.
+4. For any write tool, run preview first. If the user clearly requested that named write and the preview reports `ready_to_commit`, call the same tool again with `confirm=true` in the same request flow; do not ask for a second confirmation. Ask only when the action, target, scope, date/time, or required business data is missing or ambiguous.
 5. Re-run `router_tool_search` with a refined query when results are empty, weak, or missing prerequisites.
 
 ## Hard Restrictions
@@ -26,7 +26,7 @@ This skill is search-first, prerequisite-first, and preview-first for customer-s
 - Do not use any list-tool script.
 - Do not inspect or read source code to discover tool names or schemas.
 - Do not guess business identifiers; obtain them from routed tool outputs.
-- Do not commit write tools without a clear confirmation from the user.
+- Do not commit write tools without a clear user request for that named action and verified required business data. The backend `confirm=true` flag is the commit operation; it is not a reason to ask the user to repeat the same confirmation.
 - Do not use web lookup or other skills in this workspace.
 - Do not execute delivery/send-order actions outside the routed `cskh-skill` workflow. Generic public-ordering guidance that only sends the public ordering link and short notes is allowed without routed tools.
 - Do not provide HOS operations guidance or internal platform consulting.
@@ -69,7 +69,7 @@ This skill is search-first, prerequisite-first, and preview-first for customer-s
 
 1. Resolve current order and customer context first.
 2. Preview write tools such as add/remove/apply/change-site.
-3. Commit only after the user confirms the preview intent.
+3. If the user clearly requested the named change and the preview is ready, commit with `confirm=true` without asking for repeated confirmation. Ask only when the target, scope, or required order data remains ambiguous.
 
 ### Public ordering, delivery, and takeaway/pickup
 
@@ -82,7 +82,7 @@ This skill is search-first, prerequisite-first, and preview-first for customer-s
 7. Do not use a reply pattern that first asks which branch the customer wants to pick up from or which dishes they want before sharing the public ordering link.
 8. Resolve customer, order, branch, and other prerequisites first only when the request actually needs routed delivery/order support, such as an existing order, an order change/cancel, or another operational action that needs confirmed tool data.
 9. Preview the write action when the routed tool supports preview.
-10. Commit only after the user explicitly confirms the final action.
+10. If the user clearly requested the named action and the preview is ready, commit with `confirm=true` without asking for repeated confirmation. Ask only when the action, target, scope, or required data remains ambiguous.
 
 ### Out-of-scope requests
 
@@ -93,7 +93,7 @@ This skill is search-first, prerequisite-first, and preview-first for customer-s
 
 1. Resolve customer and branch context first.
 2. For create booking, preview the payload before commit.
-3. Confirm booking data explicitly with the user before commit.
+3. If the user clearly supplied the booking action, branch, date/time, and party size and the preview is ready, commit with `confirm=true` without asking for repeated confirmation. Ask only for missing or ambiguous booking data.
 
 ## Minimal Command Pattern
 

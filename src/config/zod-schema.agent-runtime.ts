@@ -905,6 +905,9 @@ const AgentDelegationTargetSchema = z
   .object({
     status: z.enum(["draft", "active", "disabled"]),
     aliases: z.array(z.string().trim().min(1).max(64)).max(20),
+    // Keep the legacy values in the config schema so JSON Schema generation
+    // remains lossless. Runtime delegation projections canonicalize them at
+    // their read/write boundaries.
     handlingMode: z.enum(["auto_when_certain", "confirm_before_handoff", "explicit_only"]),
     useWhen: z.array(DelegationTargetTextSchema).max(20),
     avoidWhen: z.array(DelegationTargetTextSchema).max(20),

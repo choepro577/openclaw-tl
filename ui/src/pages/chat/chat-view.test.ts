@@ -6912,6 +6912,10 @@ describe("chat model controls", () => {
       key: "main",
       entry: { sessionId: "main" },
     };
+    const refresh = vi.fn(async () => {
+      reconciliationStarted.resolve();
+      await releaseReconciliation.promise;
+    });
     const sessions = {
       state: { modelOverrides: {} },
       patch: vi.fn(
@@ -6920,15 +6924,13 @@ describe("chat model controls", () => {
             await options.waitFor;
           }
           patches.push(patch);
+          await refresh();
           return patchResult;
         },
       ),
       // The list refresh is the reconcile step switchChatModel awaits; holding
       // it open models a slow reconciliation inside the settings lane.
-      refresh: async () => {
-        reconciliationStarted.resolve();
-        await releaseReconciliation.promise;
-      },
+      refresh,
       setModelOverride: vi.fn(),
       patchRowLocal: vi.fn(),
     };
@@ -6961,6 +6963,7 @@ describe("chat model controls", () => {
     releaseReconciliation.resolve();
     await expect(Promise.all([modelSwitch, thinkingPatch])).resolves.toEqual([true, true]);
     expect(patches).toEqual([{ model: "openai/gpt-5.6-sol" }, { thinkingLevel: "ultra" }]);
+    expect(refresh).toHaveBeenCalledTimes(2);
   });
 
   it("validates queued settings independently after a model switch fails", async () => {
@@ -7128,6 +7131,80 @@ describe("chat model controls", () => {
     // The newer selection keeps its own validation turn after the older failure.
     const row = host.sessionsResult?.sessions.find((entry) => entry.key === "main");
     expect(row?.fastMode).toBe(false);
+  });
+
+  it("keeps the newest rapid effort selection and skips queued intermediate values", async () => {
+    const patchResult = {
+      ok: true,
+      path: "",
+      key: "main",
+      entry: { sessionId: "main" },
+    };
+    const pendingPatches: Array<{ value: string; resolve: () => void }> = [];
+    let serverThinkingLevel = "high";
+    let host: Parameters<typeof switchChatThinkingLevel>[0];
+    const sessions = {
+      patch: async (
+        _key: string,
+        patch: Record<string, unknown>,
+        options?: SessionPatchOptions,
+      ) => {
+        if (options?.waitFor) {
+          await options.waitFor;
+        }
+        if (options?.shouldDispatch?.() === false) {
+          return null;
+        }
+        const value = String(patch.thinkingLevel);
+        const result = await new Promise<typeof patchResult>((resolve) => {
+          pendingPatches.push({
+            value,
+            resolve: () => {
+              serverThinkingLevel = value;
+              resolve(patchResult);
+            },
+          });
+        });
+        host.sessionsResult = createSessionsResultFromRows([
+          {
+            key: "main",
+            kind: "direct",
+            updatedAt: 1,
+            thinkingLevel: serverThinkingLevel,
+          },
+        ]);
+        return result;
+      },
+      refresh: async () => {},
+      patchRowLocal: () => {},
+    };
+    host = {
+      client: {},
+      connected: true,
+      sessionKey: "main",
+      chatModelCatalog: [],
+      chatThinkingLevel: "high",
+      sessions,
+      sessionsResult: createSessionsResultFromRows([
+        { key: "main", kind: "direct", updatedAt: 1, thinkingLevel: "high" },
+      ]),
+    } as unknown as Parameters<typeof switchChatThinkingLevel>[0];
+
+    const first = switchChatThinkingLevel(host, "ultra");
+    await waitForFast(() => expect(pendingPatches).toHaveLength(1));
+    const second = switchChatThinkingLevel(host, "low");
+    const third = switchChatThinkingLevel(host, "minimal");
+
+    pendingPatches[0]?.resolve();
+    await expect(first).resolves.toBe(true);
+    await waitForFast(() => expect(pendingPatches).toHaveLength(2));
+    expect(pendingPatches.map((patch) => patch.value)).toEqual(["ultra", "minimal"]);
+    expect(host.chatThinkingLevel).toBe("minimal");
+    expect(host.sessionsResult?.sessions[0]?.thinkingLevel).toBe("minimal");
+
+    pendingPatches[1]?.resolve();
+    await expect(Promise.all([second, third])).resolves.toEqual([false, true]);
+    expect(host.sessionsResult?.sessions[0]?.thinkingLevel).toBe("minimal");
   });
 
   it("renders the committed model selection when a model switch fails", async () => {

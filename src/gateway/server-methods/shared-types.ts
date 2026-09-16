@@ -441,6 +441,26 @@ export type GatewayRequestContext = GatewayKernelContext &
     resolveGatewayContext?: GatewayContextResolver;
   };
 
+/**
+ * Server-owned timing carried with one in-process request.
+ *
+ * This object is created per dispatch and never comes from, or is serialized
+ * to, the client. The optional fields are intentionally mutable so admission
+ * stages can report their own monotonic boundaries without mutating the
+ * canonical GatewayRequestContext shared by other requests.
+ */
+export type GatewayRequestTiming = {
+  readonly receivedAtMs: number;
+  enterpriseProjectionStartedAtMs?: number;
+  enterpriseProjectionMs?: number;
+  authorizationStartedAtMs?: number;
+  authorizationMs?: number;
+  admissionStartedAtMs?: number;
+  admissionMs?: number;
+  queueWaitStartedAtMs?: number;
+  queueWaitMs?: number;
+};
+
 /** Full dispatch context for raw request frames before params are normalized. */
 export type GatewayRequestOptions = {
   req: RequestFrame;
@@ -451,6 +471,8 @@ export type GatewayRequestOptions = {
   methodRegistry?: GatewayMethodRegistryView;
   /** In-process caller lifetime; never serialized into a Gateway request frame. */
   signal?: AbortSignal;
+  /** Server-owned monotonic timing; never trusted from request params or sent on the wire. */
+  requestTiming?: GatewayRequestTiming;
 };
 
 /** Commit-time guard captured by the pre-dispatch session participation check. */
@@ -470,6 +492,8 @@ export type GatewayRequestHandlerOptions = {
   sessionMutationAuthorization?: SessionMutationAuthorization;
   /** In-process caller lifetime; absent for ordinary transport requests. */
   signal?: AbortSignal;
+  /** Server-owned monotonic timing; never trusted from request params or sent on the wire. */
+  requestTiming?: GatewayRequestTiming;
 };
 
 /** Single gateway method implementation. */

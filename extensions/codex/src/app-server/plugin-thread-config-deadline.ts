@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import {
   AgentHarnessPreflightError,
   type EmbeddedRunAttemptParams,
@@ -17,6 +18,7 @@ import {
 import { disableCodexPluginThreadConfig } from "./dynamic-tool-build.js";
 import {
   assertCodexPluginCapabilityGrants,
+  buildCodexGrantedMcpApprovalPatch,
   type CodexNativePluginGrant,
   type CodexNativePluginGrantsResolver,
 } from "./native-plugin-grants.js";
@@ -278,10 +280,17 @@ export function createCodexPluginThreadConfigStartupProvider(params: {
           params.scheduledRuntimeAuthority || nativePluginGrants
             ? async (builtConfig, request) => {
                 if (nativePluginGrants) {
-                  assertCodexPluginCapabilityGrants({
-                    resolver: nativePluginGrants,
-                    records: builtConfig.inventory?.records ?? [],
-                  });
+                  const grants = nativePluginGrants();
+                  const records = builtConfig.inventory?.records ?? [];
+                  assertCodexPluginCapabilityGrants({ resolver: () => grants, records });
+                  const approvalPatch = buildCodexGrantedMcpApprovalPatch({ grants, records });
+                  builtConfig = {
+                    ...builtConfig,
+                    configPatch: { ...builtConfig.configPatch, ...approvalPatch },
+                    fingerprint: createHash("sha256")
+                      .update(JSON.stringify([builtConfig.fingerprint, approvalPatch]))
+                      .digest("hex"),
+                  };
                 }
                 return params.scheduledRuntimeAuthority
                   ? intersectCodexPluginThreadConfigWithScheduledAuthority(

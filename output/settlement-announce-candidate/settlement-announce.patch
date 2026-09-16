@@ -1,0 +1,308 @@
+diff --git a/src/agents/subagents/announce/subagent-announce-output.test.ts b/src/agents/subagents/announce/subagent-announce-output.test.ts
+index 57837336813..66da993a027 100644
+--- a/src/agents/subagents/announce/subagent-announce-output.test.ts
++++ b/src/agents/subagents/announce/subagent-announce-output.test.ts
+@@ -7,6 +7,7 @@ import {
+   buildCompactAnnounceStatsLine,
+   buildChildCompletionFindings,
+   dedupeLatestChildCompletionRows,
++  readLatestSubagentOutputWithRetry,
+   readSubagentOutput,
+ } from "./subagent-announce-output.test-support.js";
+ 
+@@ -514,6 +515,43 @@ describe("readSubagentOutput", () => {
+     ).resolves.toBeUndefined();
+     expect(deps.callGateway).not.toHaveBeenCalled();
+   });
++
++  it("keeps retry reads on the private transcript after the first read is empty", async () => {
++    const deps = installOutputDeps({
++      messages: [
++        {
++          role: "assistant",
++          content: [{ type: "text", text: "stale visible output" }],
++        },
++      ],
++      transcriptMessages: [],
++    });
++    deps.readSessionMessagesAsync
++      .mockResolvedValueOnce([])
++      .mockResolvedValue([
++        {
++          role: "assistant",
++          stopReason: "stop",
++          content: [{ type: "text", text: "fresh recovered output" }],
++        },
++      ]);
++
++    await expect(
++      readLatestSubagentOutputWithRetry({
++        sessionKey: "agent:main:subagent:child",
++        maxWaitMs: 50,
++        outcome: { status: "error", error: "session completed before registry settled" },
++        sessionTarget: {
++          agentId: "main",
++          sessionId: "child-session",
++          sessionKey: "agent:main:subagent:child",
++          storePath: "/tmp/openclaw/agents/main/sessions/sessions.json",
++        },
++      }),
++    ).resolves.toBe("fresh recovered output");
++    expect(deps.readSessionMessagesAsync).toHaveBeenCalled();
++    expect(deps.callGateway).not.toHaveBeenCalled();
++  });
+ });
+ 
+ describe("buildChildCompletionFindings", () => {
+diff --git a/src/agents/subagents/announce/subagent-announce-output.ts b/src/agents/subagents/announce/subagent-announce-output.ts
+index a33bf4f81f6..7a07f8f994f 100644
+--- a/src/agents/subagents/announce/subagent-announce-output.ts
++++ b/src/agents/subagents/announce/subagent-announce-output.ts
+@@ -274,13 +274,17 @@ export async function readLatestSubagentOutputWithRetry(params: {
+   sessionKey: string;
+   maxWaitMs: number;
+   outcome?: SubagentRunOutcome;
++  sessionTarget?: SessionTranscriptRuntimeTarget;
+ }): Promise<string | undefined> {
+   return await readLatestSubagentOutputWithRetryUsing({
+     sessionKey: params.sessionKey,
+     maxWaitMs: params.maxWaitMs,
+     outcome: params.outcome,
+     retryIntervalMs: isFastTestMode() ? FAST_TEST_RETRY_INTERVAL_MS : 100,
+-    readSubagentOutput,
++    readSubagentOutput: (sessionKey, outcome) =>
++      readSubagentOutput(sessionKey, outcome, {
++        sessionTarget: params.sessionTarget,
++      }),
+   });
+ }
+ 
+@@ -288,11 +292,19 @@ export async function readSubagentTimeoutProgress(
+   sessionKey: string,
+   maxWaitMs: number,
+   outcome: SubagentRunOutcome,
++  options?: { sessionTarget?: SessionTranscriptRuntimeTarget },
+ ): Promise<string | undefined> {
+-  const initial = await readSubagentOutput(sessionKey, outcome);
++  const initial = await readSubagentOutput(sessionKey, outcome, {
++    sessionTarget: options?.sessionTarget,
++  });
+   const progress = initial?.trim()
+     ? initial
+-    : await readLatestSubagentOutputWithRetry({ sessionKey, maxWaitMs, outcome });
++    : await readLatestSubagentOutputWithRetry({
++        sessionKey,
++        maxWaitMs,
++        outcome,
++        sessionTarget: options?.sessionTarget,
++      });
+   return progress && !isAnnounceSkip(progress) && !isSilentReplyText(progress, SILENT_REPLY_TOKEN)
+     ? progress
+     : undefined;
+diff --git a/src/agents/subagents/announce/subagent-announce.ts b/src/agents/subagents/announce/subagent-announce.ts
+index e3a230caf7e..4c13bb10969 100644
+--- a/src/agents/subagents/announce/subagent-announce.ts
++++ b/src/agents/subagents/announce/subagent-announce.ts
+@@ -12,6 +12,7 @@ import {
+   stripLeadingSilentToken,
+   stripSilentToken,
+ } from "../../../auto-reply/tokens.js";
++import type { SessionTranscriptRuntimeTarget } from "../../../config/sessions/session-accessor.js";
+ import { logWarn } from "../../../logger.js";
+ import { defaultRuntime } from "../../../runtime.js";
+ import { isCronSessionKey } from "../../../sessions/session-key-utils.js";
+@@ -178,6 +179,8 @@ export async function runSubagentAnnounceFlow(params: {
+   endedAt?: number;
+   label?: string;
+   outcome?: SubagentRunOutcome;
++  /** Verified child transcript owner for post-terminal output capture. */
++  sessionTarget?: SessionTranscriptRuntimeTarget;
+   announceType?: SubagentAnnounceType;
+   expectsCompletionMessage?: boolean;
+   spawnMode?: SpawnSubagentMode;
+@@ -359,6 +362,7 @@ export async function runSubagentAnnounceFlow(params: {
+           params.childSessionKey,
+           params.timeoutMs,
+           outcome,
++          { sessionTarget: params.sessionTarget },
+         );
+         // Empty remains the authoritative terminal fact. Transcript text is a
+         // timeout-only progress hint and must never reclassify silence as output.
+@@ -368,7 +372,9 @@ export async function runSubagentAnnounceFlow(params: {
+       }
+       if (!params.terminalReply) {
+         if (childSessionEffectsAllowed() && !reply && allowFailedOutputCapture) {
+-          reply = await readSubagentOutput(params.childSessionKey, outcome);
++          reply = await readSubagentOutput(params.childSessionKey, outcome, {
++            sessionTarget: params.sessionTarget,
++          });
+         }
+ 
+         if (childSessionEffectsAllowed() && !reply?.trim() && allowFailedOutputCapture) {
+@@ -376,6 +382,7 @@ export async function runSubagentAnnounceFlow(params: {
+             sessionKey: params.childSessionKey,
+             maxWaitMs: params.timeoutMs,
+             outcome,
++            sessionTarget: params.sessionTarget,
+           });
+         }
+ 
+diff --git a/src/agents/subagents/registry/subagent-registry-lifecycle-announce-cleanup.ts b/src/agents/subagents/registry/subagent-registry-lifecycle-announce-cleanup.ts
+index 815afda6dd0..fc7e3cec726 100644
+--- a/src/agents/subagents/registry/subagent-registry-lifecycle-announce-cleanup.ts
++++ b/src/agents/subagents/registry/subagent-registry-lifecycle-announce-cleanup.ts
+@@ -40,6 +40,7 @@ import {
+   markPendingFinalDelivery,
+   maskLifecycleIdentifier,
+   recordAnnounceDeliveryResult,
++  resolveSubagentSessionTranscriptTarget,
+   safeMarkRequiredCompletionDeliveryBlocked,
+   safeSetSubagentTaskDeliveryStatus,
+ } from "./subagent-registry-lifecycle-delivery.js";
+@@ -506,6 +507,11 @@ export const startSubagentAnnounceCleanupFlow = (
+     });
+     return true;
+   }
++  const cleanupSessionTranscriptTarget = suppressSessionEffects
++    ? undefined
++    : resolveSubagentSessionTranscriptTarget(params, entry, {
++        sessionEntry: cleanupSessionEntry,
++      });
+   const pendingPayload = loadPendingFinalDeliveryPayload(entry);
+   const requesterOrigin = normalizeDeliveryContext(pendingPayload.requesterOrigin);
+   let latestDeliveryError = getDeliveryLastError(entry);
+@@ -554,6 +560,9 @@ export const startSubagentAnnounceCleanupFlow = (
+     endedAt: pendingPayload.endedAt,
+     label: pendingPayload.label,
+     outcome: pendingPayload.outcome,
++    ...(cleanupSessionTranscriptTarget
++      ? { sessionTarget: cleanupSessionTranscriptTarget }
++      : {}),
+     spawnMode: pendingPayload.spawnMode,
+     expectsCompletionMessage: pendingPayload.expectsCompletionMessage,
+     wakeOnDescendantSettle: pendingPayload.wakeOnDescendantSettle === true,
+diff --git a/src/agents/subagents/registry/subagent-registry-lifecycle-delivery.ts b/src/agents/subagents/registry/subagent-registry-lifecycle-delivery.ts
+index 14d895911de..a941ba87aac 100644
+--- a/src/agents/subagents/registry/subagent-registry-lifecycle-delivery.ts
++++ b/src/agents/subagents/registry/subagent-registry-lifecycle-delivery.ts
+@@ -335,28 +335,9 @@ export const freezeRunResultAtCompletion = async (
+   }
+   let resultText: string | null;
+   try {
+-    const transcriptTarget = entry.execution.transcriptTarget;
+-    const agentId =
+-      transcriptTarget?.agentId ?? resolveAgentIdFromSessionKey(entry.childSessionKey);
+-    const sessionKey = transcriptTarget?.sessionKey ?? entry.childSessionKey;
+-    const configuredStorePath = agentId
+-      ? (transcriptTarget?.storePath ??
+-        resolveSessionStorePathCore(params.getRuntimeConfig().session?.store, { agentId }))
+-      : undefined;
+-    const storePath = configuredStorePath
+-      ? resolveSessionStorePathForScope({
+-          agentId,
+-          sessionKey,
+-          storePath: configuredStorePath,
+-        })
+-      : undefined;
+-    const sessionId =
+-      transcriptTarget?.sessionId ??
+-      (agentId && storePath
+-        ? loadSessionEntryReadOnly({ agentId, sessionKey, storePath })?.sessionId
+-        : undefined);
+-    const sessionTarget: SessionTranscriptRuntimeTarget | undefined =
+-      agentId && sessionId && storePath ? { agentId, sessionId, sessionKey, storePath } : undefined;
++    const sessionTarget = resolveSubagentSessionTranscriptTarget(params, entry, {
++      allowReadOnlyFallback: true,
++    });
+     const captured = await params.captureSubagentCompletionReply(entry.childSessionKey, {
+       waitForReply: entry.expectsCompletionMessage === true,
+       outcome,
+@@ -383,6 +364,57 @@ export const freezeRunResultAtCompletion = async (
+   return true;
+ };
+ 
++/**
++ * Resolve the child transcript through the session owner that lifecycle already
++ * loaded.  A complete internal transcript target is authoritative for recovery
++ * sessions; ordinary child runs reuse the exact owner row supplied by cleanup.
++ * Returning undefined keeps the existing capture fallback for callers that do
++ * not have a verified session identity.
++ */
++export const resolveSubagentSessionTranscriptTarget = (
++  params: Pick<SubagentLifecycleOptions, "getRuntimeConfig">,
++  entry: SubagentRunRecord,
++  options?: {
++    allowReadOnlyFallback?: boolean;
++    sessionEntry?: { sessionId?: string };
++  },
++): SessionTranscriptRuntimeTarget | undefined => {
++  const transcriptTarget = entry.execution.transcriptTarget;
++  const agentId = transcriptTarget?.agentId ?? resolveAgentIdFromSessionKey(entry.childSessionKey);
++  const sessionKey = transcriptTarget?.sessionKey ?? entry.childSessionKey;
++  const configuredStorePath =
++    transcriptTarget?.storePath ??
++    resolveSessionStorePathCore(params.getRuntimeConfig().session?.store, { agentId });
++  const storePath = resolveSessionStorePathForScope({
++    agentId,
++    sessionKey,
++    storePath: configuredStorePath,
++  });
++  const sessionId =
++    transcriptTarget?.sessionId ??
++    (transcriptTarget
++      ? loadSessionEntryReadOnly({ agentId, sessionKey, storePath })?.sessionId
++      : options?.sessionEntry?.sessionId ??
++        (options?.allowReadOnlyFallback
++          ? loadSessionEntryReadOnly({ agentId, sessionKey, storePath })?.sessionId
++          : undefined));
++  if (
++    !agentId.trim() ||
++    !sessionKey.trim() ||
++    !storePath.trim() ||
++    typeof sessionId !== "string" ||
++    !sessionId.trim()
++  ) {
++    return undefined;
++  }
++  return {
++    agentId,
++    sessionId: sessionId.trim(),
++    sessionKey,
++    storePath,
++  };
++};
++
+ const listPendingCompletionRunsForSession = (
+   params: SubagentLifecycleOptions,
+   sessionKey: string,
+diff --git a/src/agents/subagents/registry/subagent-registry-lifecycle.test.ts b/src/agents/subagents/registry/subagent-registry-lifecycle.test.ts
+index a70256b5e86..f2a7d68e122 100644
+--- a/src/agents/subagents/registry/subagent-registry-lifecycle.test.ts
++++ b/src/agents/subagents/registry/subagent-registry-lifecycle.test.ts
+@@ -619,6 +619,26 @@ describe("subagent registry lifecycle hardening", () => {
+     expect(runSubagentAnnounceFlow).toHaveBeenCalledOnce();
+   });
+ 
++  it("passes the cleanup owner's child transcript target to announce capture", async () => {
++    const entry = createRunEntry({
++      endedAt: 4_000,
++      expectsCompletionMessage: true,
++      retainAttachmentsOnKeep: true,
++    });
++    const runSubagentAnnounceFlow = vi.fn(async () => "delivered" as const);
++    const controller = createLifecycleController({ entry, runSubagentAnnounceFlow });
++
++    expect(controller.startSubagentAnnounceCleanupFlow(entry.runId, entry)).toBe(true);
++    await waitForLifecycleState(() => expect(runSubagentAnnounceFlow).toHaveBeenCalledOnce());
++
++    expect(firstCallArg(runSubagentAnnounceFlow).sessionTarget).toEqual({
++      agentId: "main",
++      sessionId: "child-session-id",
++      sessionKey: entry.childSessionKey,
++      storePath: expect.any(String),
++    });
++  });
++
+   it("emits one progress end event at the canonical terminal transition", async () => {
+     const entry = createRunEntry({ expectsCompletionMessage: false });
+     const emitSubagentProgressEndedForRun = vi.fn(async () => {});

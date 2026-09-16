@@ -4,6 +4,8 @@
  * Infers child completion from persisted session entries when registry updates arrive late.
  */
 import { asFiniteNumber } from "@openclaw/normalization-core/number-coercion";
+import { truncateUtf16Safe } from "@openclaw/normalization-core/utf16-slice";
+import { renderUserFacingText } from "../../../agents/embedded-agent-helpers/user-facing-text.js";
 import { getRuntimeConfig } from "../../../config/config.js";
 import {
   resolveAgentIdFromSessionKey,
@@ -40,6 +42,8 @@ export type SubagentSessionCompletion = {
   reason: SubagentLifecycleEndedReason;
 };
 
+const MAX_PERSISTED_SESSION_ERROR_CHARS = 160;
+
 function finiteTimestamp(value: number | undefined): number | undefined {
   return asFiniteNumber(value);
 }
@@ -68,6 +72,16 @@ function freshSessionStartedAt(
     return undefined;
   }
   return notBeforeMs === undefined || startedAt >= notBeforeMs ? startedAt : undefined;
+}
+
+function normalizeSubagentSessionError(error: unknown): string | undefined {
+  if (typeof error !== "string") {
+    return undefined;
+  }
+  const normalized = renderUserFacingText(error, { errorContext: true })
+    .replace(/\s+/g, " ")
+    .trim();
+  return normalized ? truncateUtf16Safe(normalized, MAX_PERSISTED_SESSION_ERROR_CHARS) : undefined;
 }
 
 /** Load a child session entry using the agent-specific session store path. */
@@ -193,7 +207,12 @@ export function resolveCompletionFromSessionEntry(
     return {
       startedAt,
       endedAt,
-      outcome: { status: "error", error: "session completed before registry settled" },
+      outcome: {
+        status: "error",
+        error:
+          normalizeSubagentSessionError(sessionEntry?.lastRunError) ??
+          "subagent session failed before registry settled",
+      },
       reason: SUBAGENT_ENDED_REASON_ERROR,
     };
   }

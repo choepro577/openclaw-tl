@@ -1,7 +1,11 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { OpenClawConfig } from "../../config/types.openclaw.js";
+import { writePersistedInstalledPluginIndexSync } from "../../plugins/installed-plugin-index-store.js";
+import { loadInstalledPluginIndex } from "../../plugins/installed-plugin-index.js";
+import { clearPluginMetadataLifecycleCaches } from "../../plugins/plugin-metadata-lifecycle.js";
+import * as pluginMetadata from "../../plugins/plugin-metadata-snapshot.js";
 import { closeOpenClawStateDatabaseForTest } from "../../state/openclaw-state-db.js";
 import { withOpenClawTestState } from "../../test-utils/openclaw-test-state.js";
 import { createEnterpriseAccount } from "../accounts/account-store.js";
@@ -167,6 +171,80 @@ describe("Enterprise shared-agent capability resolver", () => {
       expect(resolved.skillsSnapshot.skillFilter).toEqual([]);
       expect(resolved.skillsSnapshot.skills).toEqual([]);
     });
+  });
+
+  it("reuses the workspace-owned metadata snapshot until its owner changes", async () => {
+    const resolveMetadata = vi.spyOn(pluginMetadata, "resolvePluginMetadataSnapshot");
+    try {
+      await withOpenClawTestState({ scenario: "minimal", applyEnv: true }, async (state) => {
+        writeSkill(state.workspaceDir, "first workspace");
+        const account = createEnterpriseAccount({
+          username: "shared-capability.metadata-owner",
+          displayName: "Shared Capability Metadata Owner",
+          passwordHash: "test-only-hash",
+          role: "employee",
+          mustChangePassword: false,
+          personalAgentEnabled: false,
+        });
+        replaceEnterpriseEntitlements(account.id, [
+          {
+            resourceType: "agent",
+            resourceId: sharedAgentResourceKey("specialist"),
+            effect: "allow",
+          },
+        ]);
+
+        const config = sharedConfig(state.workspaceDir);
+        writePersistedInstalledPluginIndexSync(
+          loadInstalledPluginIndex({
+            config,
+            env: process.env,
+            workspaceDir: state.workspaceDir,
+          }),
+          { stateDir: state.stateDir },
+        );
+        clearPluginMetadataLifecycleCaches();
+        resolveMetadata.mockClear();
+
+        expect(
+          resolveEnterpriseSharedAgentCapabilities({ config, account, agentId: "specialist" }),
+        ).toMatchObject({ allowed: true });
+        expect(resolveMetadata).toHaveBeenCalledTimes(1);
+
+        // The existing skill owner carries the exact plugin metadata snapshot into the watcher
+        // and loader, so a second capability read does not reopen manifest discovery.
+        expect(
+          resolveEnterpriseSharedAgentCapabilities({ config, account, agentId: "specialist" }),
+        ).toMatchObject({ allowed: true });
+        expect(resolveMetadata).toHaveBeenCalledTimes(1);
+
+        // Mutating the same config owner to another workspace must not reuse the prior snapshot.
+        const nextWorkspaceDir = path.join(state.workspaceDir, "next-workspace");
+        writeSkill(nextWorkspaceDir, "second workspace");
+        const specialist = config.agents?.entries?.specialist;
+        if (!specialist) {
+          throw new Error("specialist fixture missing");
+        }
+        specialist.workspace = nextWorkspaceDir;
+        expect(
+          resolveEnterpriseSharedAgentCapabilities({ config, account, agentId: "specialist" }),
+        ).toMatchObject({ allowed: true });
+        expect(resolveMetadata).toHaveBeenCalledTimes(2);
+        // A persisted inventory is a freshness fence, not a replacement for discovery in a
+        // different workspace. Passing it as an authoritative index would skip that discovery.
+        expect(resolveMetadata.mock.lastCall?.[0]).not.toHaveProperty("index");
+
+        // Plugin lifecycle retirement clears the retained owner, forcing a fresh compatible
+        // snapshot before the next read.
+        clearPluginMetadataLifecycleCaches();
+        expect(
+          resolveEnterpriseSharedAgentCapabilities({ config, account, agentId: "specialist" }),
+        ).toMatchObject({ allowed: true });
+        expect(resolveMetadata).toHaveBeenCalledTimes(3);
+      });
+    } finally {
+      resolveMetadata.mockRestore();
+    }
   });
 
   it("fails closed when the shared agent grant is revoked", async () => {

@@ -11,6 +11,7 @@ import { hasPendingFollowupQueueWork } from "../../auto-reply/reply/queue/state.
 import { createReplyDispatcher } from "../../auto-reply/reply/reply-dispatcher.js";
 import type { ReplyMessageInjectionAttempt } from "../../auto-reply/reply/reply-run-registry.js";
 import { readRecentSessionTranscriptActiveEvents } from "../../config/sessions/session-accessor.js";
+import { isEnterpriseAgentFirstExperimentEnabled } from "../../enterprise/delegation/delegation-agent-first.js";
 import {
   enterpriseDelegationConversationInputs,
   enterpriseDelegationConversationResults,
@@ -304,6 +305,7 @@ export function startChatDispatch(params: StartChatDispatchParams): void {
               conversationInputs,
               conversationResults,
               contextualPlanning: true,
+              agentFirst: isEnterpriseAgentFirstExperimentEnabled(),
             });
             const clarificationQuestion = resolveEnterpriseClarificationQuestion(session);
             if (clarificationQuestion) {

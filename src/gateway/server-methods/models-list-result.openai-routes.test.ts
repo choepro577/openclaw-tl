@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { createDeferred } from "../../../test/helpers/promise.js";
 import type { ModelCatalogEntry, ModelCatalogSnapshot } from "../../agents/model-catalog.types.js";
 import type { OpenClawConfig } from "../../config/types.openclaw.js";
 import { loadManifestMetadataSnapshot } from "../../plugins/manifest-contract-eligibility.js";
@@ -48,6 +49,56 @@ function emptyPreparedOwner(config: OpenClawConfig) {
 }
 
 describe("models.list OpenAI routes", () => {
+  it("keeps the in-flight prepared owner after the browse deadline", async () => {
+    const config = {
+      agents: {
+        defaults: {
+          model: "openai/gpt-5.6-luna",
+          models: { "openai/gpt-5.6-luna": {} },
+          modelPolicy: { allow: ["openai/*"] },
+        },
+        list: [{ id: "main", default: true }],
+      },
+    } as OpenClawConfig;
+    const entry = catalogEntry("gpt-5.6-luna", "openai-chatgpt-responses");
+    const pendingOwner = createDeferred<ReturnType<typeof emptyPreparedOwner>>();
+    const loadGatewayModelCatalogSnapshot = vi.fn(() => pendingOwner.promise);
+    const context = {
+      getRuntimeConfig: () => config,
+      loadGatewayModelCatalogSnapshot,
+      logGateway: { debug: vi.fn() },
+    } as unknown as GatewayRequestContext;
+    registerTestCatalogAccess(context);
+
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      const result = buildModelsListResult({
+        context,
+        agentId: "main",
+        params: { view: "configured", preparedOnly: true },
+      });
+
+      await vi.advanceTimersByTimeAsync(800);
+      pendingOwner.resolve({
+        ...emptyPreparedOwner(config),
+        entries: [entry],
+        routeVariants: [entry],
+      });
+
+      await expect(result).resolves.toMatchObject({
+        models: [
+          {
+            id: "gpt-5.6-luna",
+            provider: "openai",
+          },
+        ],
+      });
+      expect(loadGatewayModelCatalogSnapshot).toHaveBeenCalledOnce();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("does not reuse a preloaded catalog owned by another agent", async () => {
     const config = {
       agents: {

@@ -40,4 +40,17 @@ describe("sandbox config", () => {
       MAX_TIMER_TIMEOUT_MS,
     );
   });
+
+  it("enables the sandbox browser when policy grants the browser tool", () => {
+    const cfg: OpenClawConfig = {
+      agents: { defaults: { sandbox: { mode: "all" } } },
+      tools: { sandbox: { tools: { alsoAllow: ["browser"] } } },
+    };
+
+    expect(resolveSandboxConfigForAgent(cfg, "main").browser.enabled).toBe(true);
+    cfg.agents!.defaults!.sandbox!.browser = { enabled: false };
+    expect(resolveSandboxConfigForAgent(cfg, "main").browser.enabled).toBe(true);
+    cfg.tools!.sandbox!.tools = { deny: ["browser"] };
+    expect(resolveSandboxConfigForAgent(cfg, "main").browser.enabled).toBe(false);
+  });
 });

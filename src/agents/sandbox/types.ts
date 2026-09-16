@@ -98,6 +98,15 @@ export type SandboxContext = {
   enabled: boolean;
   backendId: SandboxBackendId;
   sessionKey: string;
+  /**
+   * Stable scope key for the active-turn lease. Context resolution holds the
+   * lifecycle lease only through provisioning; the runner must acquire this
+   * key and release it when the turn settles so prune cannot remove a live
+   * scope after setup completes.
+   */
+  lifecycleKey?: string;
+  /** Internal foreground handoff; consumed by the runner and released at turn settle. */
+  lifecycleActiveRelease?: () => void;
   workspaceDir: string;
   agentWorkspaceDir: string;
   skillsWorkspaceDir?: string;

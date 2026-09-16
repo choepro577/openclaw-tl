@@ -1,0 +1,92 @@
+- generic [ref=e45]:
+  - link "Skip to main content" [ref=e46] [cursor=pointer]:
+    - /url: "#enterprise-user-main"
+  - complementary "Enterprise User navigation" [ref=e49]:
+    - generic [ref=e50]:
+      - generic [ref=e52]:
+        - group [ref=e54]:
+          - generic "Switch active Agent" [ref=e55]:
+            - generic [aria-hidden] [ref=e56]: 💼
+            - generic [ref=e57]:
+              - generic [ref=e58]: Active Agent
+              - strong [ref=e59]: Personal Agent
+        - button "New chat" [ref=e63]
+        - navigation "User pages" [ref=e66]:
+          - button "Agents" [ref=e67]
+          - button "Automations" [ref=e73]
+          - button "Plugins" [ref=e79]
+          - generic "Organized chats" [ref=e86]:
+            - generic [ref=e87]:
+              - button "Projects" [expanded] [ref=e88]
+              - button "New Project" [ref=e91]
+            - generic [ref=e244]:
+              - generic [ref=e245]:
+                - button "Thiên Lý MAAP" [expanded] [ref=e246]
+                - button "New chat in Thiên Lý MAAP"
+                - generic:
+                  - button "Project actions"
+              - generic [ref=e252]:
+                - button "Bạn có thể làm gì?" [ref=e253]
+                - generic:
+                  - button "Chat actions"
+            - generic [ref=e258]:
+              - button "Recent 83" [expanded] [ref=e259]:
+                - generic [ref=e260]: Recent
+                - generic [ref=e261]: "83"
+              - generic [ref=e262]:
+                - generic [ref=e263]:
+                  - button "Tra cứu đơn nhập hàng nháp" [ref=e264]
+                  - generic:
+                    - button "Chat actions"
+                - generic [ref=e269]:
+                  - button "Tra cứu đơn nhập hàng nháp" [ref=e270]
+                  - generic:
+                    - button "Chat actions"
+                - generic [ref=e275]:
+                  - button "Tra cứu đơn nhập hàng nháp" [ref=e276]
+                  - generic:
+                    - button "Chat actions"
+                - generic [ref=e281]:
+                  - button "Tra cứu đơn nhập hàng nháp" [ref=e282]
+                  - generic:
+                    - button "Chat actions"
+                - generic [ref=e287]:
+                  - button "Kiểm tra đơn nhập hàng nháp" [ref=e288]
+                  - generic:
+                    - button "Chat actions"
+              - button "Show more" [ref=e293]
+      - group [ref=e95]:
+        - generic "Hiếu DZ" [ref=e96]:
+          - generic [aria-hidden] [ref=e97]: H
+  - main [ref=e99]:
+    - generic [ref=e309]:
+      - generic [ref=e310]:
+        - generic [ref=e311]: New session
+        - generic [ref=e314]:
+          - button "Show session files" [ref=e316]
+          - button "Show subagents" [ref=e321]
+          - button "Side panel" [ref=e326]
+      - generic [ref=e330]:
+        - log [ref=e331]:
+          - status [ref=e332]
+          - generic [ref=e375]:
+            - generic "Cốm" [ref=e376]: 🌱
+            - heading "Cốm" [level=2] [ref=e377]
+            - paragraph [ref=e378]: Type a message to start a conversation.
+            - generic [ref=e379]:
+              - button "What can you do?" [ref=e380]
+              - button "Summarize my recent sessions" [ref=e381]
+        - generic [ref=e351]:
+          - generic [ref=e352]:
+            - generic "Add attachment" [ref=e353]:
+              - button "Add attachment" [ref=e354]
+            - generic [ref=e356]:
+              - textbox "Message Cốm" [active] [ref=e382]
+              - status [ref=e358]
+              - status [ref=e359]
+            - button "Write a message to send." [disabled] [ref=e362]
+          - generic [ref=e368]:
+            - group [ref=e369]:
+              - 'generic "Chat model: Loading models…" [ref=e370]': Loading models…
+            - group [ref=e372]:
+              - 'generic "Chat thinking level: Off" [ref=e373]': "Off"

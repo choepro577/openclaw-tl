@@ -1,0 +1,115 @@
+{
+  "capturedAt": "2026-09-12T10:04:17.855014+00:00",
+  "browser": {
+    "family": "Chrome",
+    "mode": "existing user tab",
+    "browserId": "2",
+    "adminTabId": "1369525386",
+    "userTabId": "1369525389"
+  },
+  "gateway": {
+    "baseUrl": "http://127.0.0.1:18789",
+    "listenerPid": 59768
+  },
+  "admin": {
+    "url": "http://127.0.0.1:18789/admin/agents?type=shared&agent=purchase-order-skill&panel=delegation",
+    "agent": "Mua hàng",
+    "agentId": "purchase-order-skill",
+    "activePanel": "Chuyên môn & định tuyến",
+    "handlingModeInputCount": 0,
+    "radioInputCount": 0,
+    "removedLabels": {
+      "Cách delegation": 0,
+      "Tự động khi chắc chắn": 0,
+      "Luôn hỏi trước khi delegation": 0,
+      "Chỉ khi người dùng nêu tên Agent": 0
+    },
+    "simulator": {
+      "account": "Hiếu DZ (@hieu)",
+      "prompt": "Chỉ xem trước tạo PO cho tất cả chi nhánh hôm nay",
+      "result": "Sẽ delegation đến Mua hàng",
+      "decisionReason": "simulation_would_delegate",
+      "revisionPolicy": "3",
+      "noToolCallNotice": "Không tạo Agent hoặc gọi công cụ."
+    }
+  },
+  "user": {
+    "url": "http://127.0.0.1:18789/app/agents",
+    "account": "Hiếu DZ (@hieu)",
+    "agent": "Mua hàng",
+    "skill": "purchase-order-skill",
+    "status": "Sẵn sàng trò chuyện",
+    "permissionObservation": "Agent enterprise appears in the user Agent library and is ready to chat."
+  },
+  "businessWrites": {
+    "performed": false,
+    "reason": "Only instruction-reading and branch lookup chat requests were sent; no create, confirm, commit or replay of PO was performed."
+  },
+  "visualEvidence": "CUA screenshots emitted inline during this QA turn: Admin delegation panel and user Agent library card.",
+  "runtimePreview": {
+    "tabId": "1369525389",
+    "url": "http://127.0.0.1:18789/app/chat/purchase-order-skill/6ce5d99b",
+    "account": "Hiếu DZ",
+    "agent": "Mua hàng",
+    "skill": "purchase-order-skill",
+    "request": "Chỉ xem trước tạo PO cho tất cả chi nhánh hôm nay; không tạo, không ghi, chỉ trả về kế hoạch và dữ liệu cần thiết.",
+    "poLogin": "submitted_with_user_provided_account",
+    "outcome": "Không thể hoàn tất xem trước vì dịch vụ PO timeout khi tra cứu danh sách chi nhánh, sau 2 lần thử (mỗi lần 90 giây).",
+    "error": "skill_script timeout",
+    "writes": false,
+    "evidence": [
+      "AX tree shows no PO creation/write action and explicitly says Không tạo PO / Không ghi dữ liệu.",
+      "AX tree shows timeout after two retries while listing branches."
+    ],
+    "diagnosticInterpretation": "The quoted UI explanation is not proof of a PO service outage: login was submitted after the two 90-second dynamic-tool calls expired. A fresh prompt with timely login subsequently succeeded and returned 43 branches."
+  },
+  "screenshotLimit": "Native screencapture could not create image from display in this environment; CUA screenshot was inspected inline only.",
+  "freshReadOnlyAuthPreview": {
+    "tabId": "1369525389",
+    "url": "http://127.0.0.1:18789/app/chat/purchase-order-skill/3923c4a1",
+    "account": "Hiếu DZ",
+    "agent": "Mua hàng",
+    "skill": "purchase-order-skill",
+    "request": "Tra cuu danh sach chi nhanh de xem truoc PO; chi doc du lieu, khong tao, khong ghi.",
+    "loginChallenge": "Dialog appeared during fresh request; credentials entered immediately and submit succeeded.",
+    "outcome": "Đã tra cứu 43 chi nhánh (chỉ đọc), with branch list returned and run completed in 1 minute.",
+    "writes": false,
+    "evidence": [
+      "AX tree shows purchase-order-skill operating in read-only mode.",
+      "AX tree shows 43 branch entries and completion (713 tokens).",
+      "No PO create, confirm, or write action was invoked."
+    ]
+  },
+  "parentChild": {
+    "personalAgentUrl": "http://127.0.0.1:18789/app/chat/enterprise-personal-2ae2cbc2deecdb86fe86/dashboard/dfaa74d2-79ed-44e1-bcf3-cfbebd2f39d3?__openclawSessionKey=agent%3Aenterprise-personal-2ae2cbc2deecdb86fe86%3Adashboard%3Adfaa74d2-79ed-44e1-bcf3-cfbebd2f39d3",
+    "request": "Nhờ bộ phận Mua hàng đọc hướng dẫn của mình và cho biết cần dữ liệu gì để xem trước PO; không gọi API nghiệp vụ và không ghi dữ liệu.",
+    "result": "Auto handoff to Mua hàng; replied with required preview data and explicitly said no business API, no write, no confirmation.",
+    "writes": false,
+    "status": "completed"
+  },
+  "adminFinalReload": {
+    "tabId": "1369525386",
+    "url": "http://127.0.0.1:18789/admin/agents?type=shared&agent=purchase-order-skill&panel=delegation",
+    "reloadedAfterFinalUiBuild": true,
+    "delegationModeControlCount": 0,
+    "radioInputCount": 0,
+    "removedLabels": {
+      "Cách delegation": 0,
+      "Tự động khi chắc chắn": 0,
+      "Luôn hỏi trước khi delegation": 0,
+      "Chỉ khi người dùng nêu tên Agent": 0
+    },
+    "activationExclusionTextCount": 0,
+    "routerSimulatorVisible": true,
+    "axEvidence": "Admin AX tree shows Chuyên môn & định tuyến and Trình mô phỏng định tuyến, with no delegation-mode controls."
+  },
+  "finalState": {
+    "gateway": "127.0.0.1:18789 (kept running)",
+    "userTabVisible": "1369525389",
+    "adminTabVerified": "1369525386",
+    "businessWrites": false,
+    "screenshotArtifacts": "CUA screenshots were inspected inline; native screencapture could not create an image from the display in this environment.",
+    "gatewayPid": 59768
+  },
+  "lastVerifiedAt": "2026-09-12T10:21:58.080430+00:00"
+}

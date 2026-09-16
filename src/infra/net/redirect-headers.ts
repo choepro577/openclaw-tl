@@ -18,6 +18,21 @@ const CROSS_ORIGIN_REDIRECT_SAFE_HEADERS = new Set([
   "user-agent",
 ]);
 
+/** Removes body-specific headers when redirect handling changes a request to GET. */
+export function dropBodyHeaders(headers?: HeadersInit): HeadersInit | undefined {
+  if (!headers) {
+    return headers;
+  }
+  const nextHeaders = new Headers(normalizeHeadersInitForFetch(headers));
+  nextHeaders.delete("content-encoding");
+  nextHeaders.delete("content-language");
+  nextHeaders.delete("content-length");
+  nextHeaders.delete("content-location");
+  nextHeaders.delete("content-type");
+  nextHeaders.delete("transfer-encoding");
+  return nextHeaders;
+}
+
 /**
  * Keeps only headers that are safe to replay after a redirect crosses origins.
  * Authorization/cookie-like metadata must be dropped before the follow-up fetch.

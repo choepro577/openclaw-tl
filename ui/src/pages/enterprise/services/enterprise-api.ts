@@ -317,6 +317,136 @@ export async function loadAdminAgentPanel(
   );
 }
 
+export type EnterpriseDeveloperIntegration = {
+  id: string;
+  agentId: string;
+  name: string;
+  status: "active" | "disabled" | "revoked";
+  keyPrefix: string;
+  previousKeyExpiresAt: number | null;
+  webhookUrl: string | null;
+  uploadPolicy: "disabled" | "images" | "images_and_documents";
+  maxUploadBytes: number;
+  rateLimitPerMinute: number;
+  burstLimit: number;
+  maxSseConcurrency: number;
+  maxBackgroundConcurrency: number;
+  requestCount: number;
+  errorCount: number;
+  runningCount: number;
+  lastUsedAt: number | null;
+  lastWebhookAt: number | null;
+  lastWebhookStatus: string | null;
+  createdAt: number;
+  updatedAt: number;
+};
+
+export type EnterpriseDeveloperResponse = {
+  id: string;
+  integrationId: string;
+  agentId: string;
+  externalConversationId: string;
+  externalUserId: string | null;
+  previousResponseId: string | null;
+  background: boolean;
+  status: "queued" | "in_progress" | "completed" | "failed" | "incomplete";
+  request: Record<string, unknown>;
+  response: Record<string, unknown> | null;
+  usage: unknown;
+  error: unknown;
+  createdAt: number;
+  updatedAt: number;
+  expiresAt: number;
+};
+
+export type EnterpriseDeveloperPanel = {
+  agentId: string;
+  basePath: string;
+  integrations: EnterpriseDeveloperIntegration[];
+  responses: EnterpriseDeveloperResponse[];
+  pageInfo: { hasMore: boolean; nextBefore: number | null };
+  retentionDays: number;
+};
+
+function developerAdminPath(agentId: string, tail = ""): string {
+  return `/api/enterprise/admin/agents/shared/${encodeURIComponent(agentId)}/developer${tail}`;
+}
+
+export function loadAdminDeveloperPanel(
+  agentId: string,
+  signal?: AbortSignal,
+  filters: Record<string, string | number | undefined> = {},
+) {
+  return requestJson<EnterpriseDeveloperPanel>(
+    `${developerAdminPath(agentId, "/responses")}${queryString(filters)}`,
+    { signal },
+    "admin",
+  );
+}
+
+export function loadAdminDeveloperResponse(agentId: string, responseId: string) {
+  return requestJson<{
+    response: EnterpriseDeveloperResponse;
+    transcript: { messages: unknown[]; events: unknown[]; totalMessages: number };
+  }>(
+    developerAdminPath(agentId, `/responses/${encodeURIComponent(responseId)}`),
+    undefined,
+    "admin",
+  );
+}
+
+export function createAdminDeveloperIntegration(
+  agentId: string,
+  input: { name: string; webhookUrl: string | null; uploadPolicy: string; maxUploadBytes: number },
+) {
+  return requestJson<{
+    integration: EnterpriseDeveloperIntegration;
+    apiKey: string;
+    webhookSecret: string;
+  }>(
+    developerAdminPath(agentId, "/integrations"),
+    { method: "POST", body: JSON.stringify(input) },
+    "admin",
+  );
+}
+
+export function updateAdminDeveloperIntegration(
+  agentId: string,
+  integrationId: string,
+  input: Partial<
+    Pick<
+      EnterpriseDeveloperIntegration,
+      "name" | "webhookUrl" | "uploadPolicy" | "maxUploadBytes" | "status"
+    >
+  > & { revokePreviousKey?: boolean },
+) {
+  return requestJson<{ integration: EnterpriseDeveloperIntegration }>(
+    developerAdminPath(agentId, `/integrations/${encodeURIComponent(integrationId)}`),
+    { method: "PATCH", body: JSON.stringify(input) },
+    "admin",
+  );
+}
+
+export function rotateAdminDeveloperIntegration(
+  agentId: string,
+  integrationId: string,
+  overlapHours = 24,
+) {
+  return requestJson<{ integration: EnterpriseDeveloperIntegration; apiKey: string }>(
+    developerAdminPath(agentId, `/integrations/${encodeURIComponent(integrationId)}/rotate`),
+    { method: "POST", body: JSON.stringify({ overlapHours }) },
+    "admin",
+  );
+}
+
+export function testAdminDeveloperWebhook(agentId: string, integrationId: string) {
+  return requestJson<{ ok: boolean; status: number }>(
+    developerAdminPath(agentId, `/integrations/${encodeURIComponent(integrationId)}/test`),
+    { method: "POST", body: "{}" },
+    "admin",
+  );
+}
+
 export type EnterpriseSharedRelationshipProfile = {
   revision: number;
   agentAlias: string;

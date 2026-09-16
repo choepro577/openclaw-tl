@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { MAX_DATE_TIMESTAMP_MS } from "@openclaw/normalization-core/number-coercion";
 import { describe, expect, it, vi } from "vitest";
+import type { PluginMetadataSnapshot } from "../plugins/plugin-metadata-snapshot.types.js";
 import {
   resolveAgentCredentialMapFromStore,
   resolveUsableAgentCredentialModes,
@@ -13,9 +14,8 @@ import { discoverAuthStorage } from "./agent-model-discovery.js";
 import type { AuthProfileStore } from "./auth-profiles.js";
 import { writePersistedAuthProfileStoreRaw } from "./auth-profiles/sqlite.js";
 
-vi.mock("./model-auth-env-vars.js", () => ({
-  listProviderEnvAuthLookupKeys: () => ["mistral", "workspace-cloud"],
-  resolveProviderEnvAuthLookupMaps: () => ({
+const resolveProviderEnvAuthLookupMapsMock = vi.hoisted(() =>
+  vi.fn(() => ({
     aliasMap: {},
     envCandidateMap: {
       mistral: ["MISTRAL_API_KEY"],
@@ -23,13 +23,18 @@ vi.mock("./model-auth-env-vars.js", () => ({
     authEvidenceMap: {
       "workspace-cloud": [
         {
-          type: "local-file-with-env",
+          type: "local-file-with-env" as const,
           credentialMarker: "workspace-cloud-local-credentials",
           source: "workspace cloud credentials",
         },
       ],
     },
-  }),
+  })),
+);
+
+vi.mock("./model-auth-env-vars.js", () => ({
+  listProviderEnvAuthLookupKeys: () => ["mistral", "workspace-cloud"],
+  resolveProviderEnvAuthLookupMaps: resolveProviderEnvAuthLookupMapsMock,
 }));
 
 vi.mock("./model-auth-env.js", () => ({
@@ -409,6 +414,26 @@ describe("discoverAuthStorage", () => {
     expect(credentials["workspace-cloud"]).toEqual({
       type: "api_key",
       key: "workspace-cloud-local-credentials",
+    });
+  });
+
+  it("forwards a prepared metadata snapshot to env-backed auth lookup", () => {
+    resolveProviderEnvAuthLookupMapsMock.mockClear();
+    const metadataSnapshot = {} as PluginMetadataSnapshot;
+
+    addEnvBackedAgentCredentials(
+      {},
+      {
+        env: {},
+        metadataSnapshot,
+      },
+    );
+
+    expect(resolveProviderEnvAuthLookupMapsMock).toHaveBeenCalledWith({
+      config: undefined,
+      workspaceDir: undefined,
+      env: {},
+      metadataSnapshot,
     });
   });
 });

@@ -76,8 +76,8 @@ const copy = {
   ],
   presetBasicLabel: ["Quyền cơ bản", "Basic access"],
   presetBasicDescription: [
-    "Cấp 32 công cụ cơ bản, đồng bộ quyền sử dụng trong sandbox.",
-    "Grants 32 basic tools and synchronizes sandbox access.",
+    "Cấp 32 công cụ và chọn sẵn 15 skill ban đầu.",
+    "Grants 32 tools and preselects 15 initial skills.",
   ],
   presetStandardCodingLabel: ["Lập trình tiêu chuẩn", "Standard coding"],
   presetStandardCodingDescription: [

@@ -140,7 +140,7 @@ async function requestModels(
       view: "configured",
       agentId,
       ...(preparedOnly ? { preparedOnly: true } : {}),
-      ...(refresh ? { refresh: true } : {}),
+      ...(refresh && !preparedOnly ? { refresh: true } : {}),
     });
     return { models: result?.models ?? [], fresh: true };
   } catch (error) {

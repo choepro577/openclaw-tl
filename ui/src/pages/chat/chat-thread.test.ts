@@ -3714,6 +3714,29 @@ describe("buildCachedChatItems", () => {
     expect(canvasBlocksIn(groupAt(groups, 3))).toHaveLength(1);
   });
 
+  it("keeps a declared user link visible when generic tool cards are hidden", () => {
+    const url = "https://example.test/po?token=abcdefghijklmnopqrstuvwxyz0123456789";
+    const toolResult = chatMessage(
+      "toolResult",
+      [{ type: "text", text: JSON.stringify({ result: { data: url } }) }],
+      2_000,
+      {
+        toolName: "skill_script",
+        toolCallId: "call_link",
+        details: { result: { data: "***" }, __openclawUserVisibleUrlPaths: ["result.data"] },
+      },
+    );
+    const groups = messageGroups({
+      messages: [userMessage("Create", 1_000), toolResult],
+      showToolCalls: false,
+    });
+    expect(
+      groups
+        .flatMap((group) => group.messages)
+        .some((item) => toolCards.hasUserVisibleToolUrl(item.message)),
+    ).toBe(true);
+  });
+
   it("keeps a live App preview in the recovery turn after a system notice", () => {
     const items = buildCachedChatItems(
       createProps({

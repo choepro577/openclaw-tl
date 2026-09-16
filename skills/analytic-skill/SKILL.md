@@ -97,7 +97,7 @@ Default connection:
 12. Neu `router_tool_search` khong du ro, phai refine query roi goi lai `router_tool_search` hoac hoi ro user.
 13. Neu current run khong the thuc su doc skill / chay command / goi tool, phai noi ro la khong truy cap duoc capability nay; khong duoc noi nhu the dang tra cuu.
 14. Khong duoc viet placeholder progress text kieu "Dang truy xuat..." hoac "Toi dang kiem tra..." tru khi da bat dau chay command that trong chinh turn nay.
-15. Neu tool duoc router de xuat co tinh chat ghi/doi du lieu, phai xin user confirmation ro rang truoc khi execute.
+15. Neu user da yeu cau ro rang mot thao tac ghi/doi du lieu, coi yeu cau do la quyen thuc hien sau khi da resolve du required fields va prerequisites; khong xin lai confirmation cho cung request. Chi hoi khi action, target, scope hoac required field con thieu/mo ho. Neu tool chi la preview, giu nguyen preview-only va khong tu commit.
 16. Skill nay mac dinh khong xu ly login memory; neu tool tra unauthorized, thong bao ro va hoi user thong tin auth can thiet theo `input_schema.required`.
 
 ## Allowed Commands
@@ -136,7 +136,7 @@ Vi du tool nghiep vu thuong gap:
 
 ## Execution Loop (Strict)
 
-1. Xac dinh request la read-only hay write. Neu la write, dat diem dung de xin confirmation.
+1. Xac dinh request la read-only hay write. Neu user da noi ro thao tac write, giu nguyen yeu cau va pham vi da neu va khong dung lai de xin lai confirmation; chi dung de hoi neu action, target, scope hoac required field mo ho.
 2. Classify intent:
    - Neu la intent chung ve kinh doanh/CEO/doanh thu => bat buoc `CEO_AUTO_AGGREGATE_MODE`.
    - Neu la intent nhap mua => PI mode.
@@ -147,7 +147,7 @@ Vi du tool nghiep vu thuong gap:
 7. Neu `CEO_AUTO_AGGREGATE_MODE` dang bat:
    - Lap lai buoc 3-6 cho nhieu query/nhieu tool CEO de phu cac goc quan tri quan trong.
    - Tong hop ket qua thanh 1 executive brief thong nhat (tong quan, diem sang, diem canh bao, hanh dong de xuat).
-8. Neu la write tool, summarize hanh dong se gui va confirm lan cuoi truoc khi execute.
+8. Neu la write tool va request da ro, kiem tra payload mot lan roi execute; khong hoi lai confirmation. Neu tool chi ho tro preview, tra preview va chi commit khi user yeu cau ro thao tac commit.
 9. Neu ket qua khong dat, quay lai buoc 3 voi query cu the hon.
 
 Read `references/tool-catalog.md` chi de biet quy tac routing va danh muc tool theo 2 nhom CEO/PI. Khong duoc dung file nay de thay the `router_tool_search`.

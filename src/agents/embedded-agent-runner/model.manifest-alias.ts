@@ -14,7 +14,7 @@ import {
   loadPluginManifestRegistryCore,
   type PluginManifestRecord,
 } from "../../plugins/manifest-registry.js";
-import { staticModelIdMatches } from "./model.static-id.js";
+import { createStaticModelIdMatcher, type StaticModelIdMatcher } from "./model.static-id.js";
 
 function hasModelCatalogAliasTransportOverride(alias: ModelCatalogAlias): boolean {
   return Boolean(alias.api?.trim() || alias.baseUrl?.trim());
@@ -44,6 +44,7 @@ function hasConfiguredModelCatalogProviderEndpointSurface(params: {
   provider: string;
   modelId?: string;
   cfg?: OpenClawConfig;
+  matchesModelId: StaticModelIdMatcher;
 }): boolean {
   const provider = normalizeProviderId(params.provider);
   if (!provider) {
@@ -60,7 +61,7 @@ function hasConfiguredModelCatalogProviderEndpointSurface(params: {
   return config.models.some(
     (model) =>
       Boolean(model.baseUrl?.trim()) &&
-      staticModelIdMatches({
+      params.matchesModelId({
         candidateId: model.id,
         provider,
         modelId,
@@ -72,6 +73,7 @@ function resolveConfiguredModelCatalogProviderApi(params: {
   provider: string;
   modelId?: string;
   cfg?: OpenClawConfig;
+  matchesModelId: StaticModelIdMatcher;
 }): ModelCatalogAlias["api"] {
   const provider = normalizeProviderId(params.provider);
   const config = findConfiguredModelCatalogProviderConfig({ provider, cfg: params.cfg });
@@ -79,7 +81,7 @@ function resolveConfiguredModelCatalogProviderApi(params: {
   const model =
     provider && modelId && Array.isArray(config?.models)
       ? config.models.find((candidate) =>
-          staticModelIdMatches({ candidateId: candidate.id, provider, modelId }),
+          params.matchesModelId({ candidateId: candidate.id, provider, modelId }),
         )
       : undefined;
   return model?.api ?? config?.api;
@@ -112,6 +114,7 @@ type ManifestModelCatalogAliasPlugin = Pick<
   | "enabledByDefaultOnPlatforms"
   | "providers"
   | "modelCatalog"
+  | "modelIdNormalization"
 >;
 
 type ManifestModelCatalogProviderTransport = Readonly<Pick<ModelCatalogAlias, "api" | "baseUrl">>;
@@ -166,6 +169,7 @@ function resolveManifestAliasTargetApi(params: {
   plugin: ManifestModelCatalogAliasPlugin;
   provider: string;
   modelId?: string;
+  matchesModelId: StaticModelIdMatcher;
 }): ModelCatalogAlias["api"] {
   const providerCatalog = Object.entries(params.plugin.modelCatalog?.providers ?? {}).find(
     ([provider]) => normalizeProviderId(provider) === params.provider,
@@ -176,7 +180,7 @@ function resolveManifestAliasTargetApi(params: {
   const modelId = params.modelId?.trim();
   const model = modelId
     ? providerCatalog.models.find((candidate) =>
-        staticModelIdMatches({
+        params.matchesModelId({
           candidateId: candidate.id,
           provider: params.provider,
           modelId,
@@ -197,6 +201,7 @@ function resolveManifestModelCatalogProviderAlias(params: {
     return { kind: "none" };
   }
   const claims: ManifestModelCatalogProviderAliasClaim[] = [];
+  const matchesModelId = createStaticModelIdMatcher({ manifestPlugins: params.plugins });
   const plugins = listEligibleManifestModelCatalogAliasPlugins({
     cfg: params.cfg,
     plugins: params.plugins,
@@ -226,18 +231,21 @@ function resolveManifestModelCatalogProviderAlias(params: {
           provider,
           modelId: params.modelId,
           cfg: params.cfg,
+          matchesModelId,
         });
       const transportApi =
         resolveConfiguredModelCatalogProviderApi({
           provider,
           modelId: params.modelId,
           cfg: params.cfg,
+          matchesModelId,
         }) ??
         alias.api ??
         resolveManifestAliasTargetApi({
           plugin,
           provider: normalizedTarget,
           modelId: params.modelId,
+          matchesModelId,
         });
       const hasTransportOverride = hasModelCatalogAliasTransportOverride(alias);
       const retainsTransportAlias =
@@ -291,6 +299,7 @@ export function resolveManifestModelCatalogProviderAliasMetadata(params: {
   cfg?: OpenClawConfig;
   workspaceDir?: string;
   env?: NodeJS.ProcessEnv;
+  plugins?: readonly ManifestModelCatalogAliasPlugin[];
 }): ManifestModelCatalogProviderAliasMetadata {
   const provider = normalizeProviderId(params.provider);
   if (!provider) {
@@ -300,14 +309,15 @@ export function resolveManifestModelCatalogProviderAliasMetadata(params: {
   // Gateway plugin metadata is process-stable. Reuse its lifecycle-owned snapshot
   // so every model turn does not rediscover the same manifest alias table.
   const currentPlugins =
-    env === process.env
+    params.plugins ??
+    (env === process.env
       ? getCurrentPluginMetadataSnapshot({
           config: params.cfg,
           workspaceDir: params.workspaceDir,
           env,
           ...(params.cfg === undefined ? { requireDefaultDiscoveryContext: true } : {}),
         })?.plugins
-      : undefined;
+      : undefined);
   const plugins =
     currentPlugins ??
     loadPluginManifestRegistryCore({

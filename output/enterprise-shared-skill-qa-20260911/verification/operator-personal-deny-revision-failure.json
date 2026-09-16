@@ -1,0 +1,10 @@
+{
+  "childRunId": "ef50cbdb-921d-4d15-b76d-b776194c972e",
+  "childSessionId": "c71b4fcc-5308-4bfc-b818-dd9bcdbf9862",
+  "expectedProfileRevision": "14ea47b81a7f8d3b",
+  "actualProfileRevision": "8aba66161bab4c0f",
+  "error": "DELEGATION_CAPABILITY_CHANGED",
+  "firstObservedAt": "2026-09-11T23:29:46.842+07:00",
+  "noPolicyMutationDuringRun": true,
+  "source": "gateway structured log, liveAuthorityReason profileRevision comparison"
+}

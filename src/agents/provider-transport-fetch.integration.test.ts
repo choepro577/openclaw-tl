@@ -1,5 +1,9 @@
+import { existsSync, readFileSync } from "node:fs";
+import { mkdtemp, rm } from "node:fs/promises";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { getAiTransportHost } from "@openclaw/ai";
 import { createBoundaryAwareStreamFnForModel } from "@openclaw/ai/transports";
 import OpenAI from "openai";
@@ -24,12 +28,19 @@ import { makeProviderModelFixture } from "./test-helpers/provider-model-fixture.
 describe("guarded model fetch secret sentinel integration", () => {
   afterEach(() => {
     resetSecretRedactionRegistryForTest();
+    vi.unstubAllEnvs();
   });
 
   it("injects the real header only at local HTTP egress and redacts the resolved value", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "provider-egress-timing-"));
+    const timelinePath = join(directory, "timeline.jsonl");
+    vi.stubEnv("OPENCLAW_DIAGNOSTICS", "timeline");
+    vi.stubEnv("OPENCLAW_DIAGNOSTICS_TIMELINE_PATH", timelinePath);
     let receivedAuthorization: string | undefined;
+    let timelineAtIngress = "";
     const server = createServer((request, response) => {
       receivedAuthorization = request.headers.authorization;
+      timelineAtIngress = existsSync(timelinePath) ? readFileSync(timelinePath, "utf8") : "";
       response.writeHead(200, { "content-type": "application/json" });
       response.end('{"ok":true}');
     });
@@ -58,6 +69,11 @@ describe("guarded model fetch secret sentinel integration", () => {
       await response.text();
 
       expect(receivedAuthorization).toBe(`Bearer ${secret}`);
+      expect(timelineAtIngress).toContain('"name":"provider.http.submit"');
+      expect(timelineAtIngress).toContain('"monotonicMs":');
+      expect(timelineAtIngress).not.toContain(secret);
+      expect(timelineAtIngress).not.toContain(sentinel);
+      expect(timelineAtIngress).not.toContain(baseUrl);
       expect(redactSensitiveText(`upstream used ${secret}`, { mode: "off" })).toBe(
         "upstream used integr…cret",
       );
@@ -65,6 +81,7 @@ describe("guarded model fetch secret sentinel integration", () => {
       await new Promise<void>((resolve) => {
         server.close(() => resolve());
       });
+      await rm(directory, { recursive: true, force: true });
     }
   });
 });

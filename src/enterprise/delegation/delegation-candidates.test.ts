@@ -132,7 +132,7 @@ describe("enterprise delegation candidate read model", () => {
     );
   });
 
-  it("computes account, Personal Agent, profile, deny, and override blockers server-side", () => {
+  it("computes account, Personal Agent, profile, and deny blockers server-side", () => {
     const options = stateOptions();
     const key = sharedAgentResourceKey("contracts");
     const account = createEnterpriseAccount(
@@ -173,13 +173,14 @@ describe("enterprise delegation candidate read model", () => {
       },
       options,
     );
+    expect(override.override.mode).toBe("inherit");
     const afterOverride = getEnterpriseAccountById(account.id, options)!;
     expect(
       listEnterpriseDelegationCandidates(configWithProfile(), afterOverride, options)[0],
     ).toMatchObject({
       effective: true,
-      routable: false,
-      effectiveMode: "disabled",
+      routable: true,
+      effectiveMode: "auto_when_certain",
       overrideRevision: override.override.revision,
     });
 

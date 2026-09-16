@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { performance } from "node:perf_hooks";
 import { GatewayClientRequestError } from "../../packages/gateway-client/src/request-error.js";
 import type { ErrorShape } from "../../packages/gateway-protocol/src/schema/frames.js";
 import { createAbortError } from "../infra/abort-signal.js";
@@ -145,6 +146,7 @@ export async function dispatchGatewayRequestInProcessRaw(
   params: unknown,
   options: InProcessGatewayDispatchOptions,
 ): Promise<GatewayMethodDispatchResponse> {
+  const requestTiming = method === "chat.send" ? { receivedAtMs: performance.now() } : undefined;
   throwIfGatewayDispatchAborted(method, options.signal);
   let firstResponse: GatewayMethodDispatchResponse | undefined;
   let finalResponse: GatewayMethodDispatchResponse | undefined;
@@ -182,6 +184,7 @@ export async function dispatchGatewayRequestInProcessRaw(
     },
     context: options.context,
     methodRegistry: options.methodRegistry,
+    ...(requestTiming ? { requestTiming } : {}),
     ...(options.signal ? { signal: options.signal } : {}),
   })
     .then(() => {

@@ -41,6 +41,7 @@ describe("Enterprise Personal Agent bootstrap", () => {
     expect(first).not.toContain("sessions_yield");
     expect(first).toContain("including unverified pagination");
     expect(first).toContain("do not relabel a grade as a job title");
+    expect(first).not.toContain("agent-first routing facts");
     expect(first).toContain("A local routing outcome does not authorize an alternate source");
     expect(first).toContain("After cancellation, ambiguous assent must clarify the intended task");
     expect(first).not.toContain("host-owned execution");

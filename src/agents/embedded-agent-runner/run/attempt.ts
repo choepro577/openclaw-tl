@@ -73,6 +73,7 @@ export async function runEmbeddedAttempt(
     providerThinkingLevel,
     resolvedWorkspace,
     sandbox,
+    sandboxLifecycleRelease,
     sandboxSessionKey,
     sessionPermissionPolicy,
     sessionAgentId,
@@ -101,6 +102,7 @@ export async function runEmbeddedAttempt(
   let toolSearchCatalogRef: ToolSearchCatalogRef | undefined;
   let toolSearchCatalogApplied = false;
   let runCleanups: Array<(reason: string) => Promise<void>> = [];
+  const releaseSandboxActive = sandboxLifecycleRelease;
   const cleanupEmbeddedPrepResourcesAfterEarlyExit = async () => {
     if (toolSearchCatalogApplied) {
       clearToolSearchCatalog({
@@ -549,6 +551,9 @@ export async function runEmbeddedAttempt(
     }
     throw error;
   } finally {
+    // Release the sandbox only after the existing cleanup sequence settles.
+    // oxfmt-ignore
+    try {
     const cleanupTerminal = projectAgentRunAttemptTerminal(executionState.terminal);
     const cleanupReason =
       cleanupTerminal.timedOut ||
@@ -577,5 +582,10 @@ export async function runEmbeddedAttempt(
       terminal.promptError ?? new Error("run exited before diagnostic completion"),
     );
     restoreSkillEnv?.();
+    } finally {
+      // Release only after all attempt cleanup has settled. This covers normal
+      // completion, provider failure, cancellation, timeout, and setup errors.
+      releaseSandboxActive?.();
+    }
   }
 }

@@ -1,0 +1,75 @@
+{
+  "capturedAt": "2026-09-12T01:27:56.349113+00:00",
+  "label": "final-new-delegated-parent-deny",
+  "agentId": "enterprise-personal-2ae2cbc2deecdb86fe86",
+  "sessionId": "9e46ca35-18bb-48aa-994e-1fc452a358c4",
+  "sessionKey": "agent:enterprise-personal-2ae2cbc2deecdb86fe86:dashboard:0d8f8602-2cff-4c7c-9142-3b02fc810039",
+  "runIds": [
+    "788b9815-509d-4c08-998c-68eb8decfe11",
+    "announce:v1:agent:purchase-order-skill:subagent:3da3cf88-9968-4ef1-9e45-b5988592e9fa:ea70ed3d-5e46-4f02-9be6-9939fa92c2d9"
+  ],
+  "modelId": null,
+  "materializedCatalog": {
+    "toolCount": 27,
+    "toolNames": [
+      "apply_patch",
+      "ask_user",
+      "browser"
+    ]
+  },
+  "transcript": {
+    "eventCount": 9,
+    "eventTypes": {
+      "custom": 1,
+      "message": 6,
+      "session": 1,
+      "thinking_level_change": 1
+    },
+    "toolCalls": [
+      "enterprise_delegate",
+      "progress_card"
+    ],
+    "toolResults": [],
+    "toolErrorCount": 0,
+    "codes": []
+  },
+  "trajectory": {
+    "eventCount": 17,
+    "eventTypes": {
+      "context.compiled": 2,
+      "model.completed": 2,
+      "prompt.submitted": 2,
+      "provider.prompt.observed": 3,
+      "session.ended": 2,
+      "session.started": 2,
+      "trace.artifacts": 2,
+      "trace.metadata": 2
+    },
+    "toolCalls": [],
+    "toolResults": [],
+    "toolResultSuccess": [],
+    "codes": []
+  },
+  "taskRuns": [],
+  "skillOperations": [],
+  "acceptanceSignals": {
+    "hasMaterializedToolCatalog": true,
+    "hasToolCall": true,
+    "hasSkillScriptCall": false,
+    "hasRouterCall": false,
+    "hasAuthorizationError": false
+  },
+  "acceptance": {
+    "buildId": "2026.8.1-2d6f02d14f5e-2026-09-11T17-15-18.656Z",
+    "uiObserved": true,
+    "readOnly": true,
+    "personalToolPolicyRevision": 6,
+    "personalDeniedTools": [
+      "read",
+      "skill_script"
+    ],
+    "accountPolicyRevision": 22,
+    "todayDrafts": 0,
+    "totalDrafts": 10
+  }
+}

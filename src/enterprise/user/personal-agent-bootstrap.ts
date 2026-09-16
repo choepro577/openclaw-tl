@@ -3,6 +3,10 @@ import type { WorkspaceBootstrapFile } from "../../agents/workspace.js";
 import type { OpenClawConfig } from "../../config/types.openclaw.js";
 import { readGatewayRequestRuntimeMetadata } from "../../gateway/request-runtime-config.js";
 import { normalizeAgentId } from "../../routing/session-key.js";
+import {
+  buildEnterpriseDelegationAgentFirstPrompt,
+  readEnterpriseDelegationAgentFirstContext,
+} from "../delegation/delegation-agent-first.js";
 import { readEnterpriseDelegationDecisionRoutes } from "../delegation/delegation-router.js";
 import { ENTERPRISE_EVIDENCE_RESPONSE_GUIDANCE } from "../knowledge/response-guidance.js";
 import { listPersonalAgentKnowledge } from "./personal-agent-knowledge-store.js";
@@ -109,6 +113,21 @@ export function buildEnterpriseDelegationTurnPrompt(params: {
     normalizeAgentId(params.agentId) !== normalizeAgentId(delegation.personalAgentId)
   ) {
     return "";
+  }
+  if (params.sessionKey && params.runId) {
+    const agentFirstContext = readEnterpriseDelegationAgentFirstContext({
+      config: params.config,
+      sessionKey: params.sessionKey,
+      parentRunId: params.runId,
+    });
+    if (agentFirstContext) {
+      return [
+        delegationContent(params.config, params.agentId),
+        buildEnterpriseDelegationAgentFirstPrompt(agentFirstContext),
+      ]
+        .filter(Boolean)
+        .join("\n\n");
+    }
   }
   const currentRequest = delegation.request;
   const turn = delegation.turn;

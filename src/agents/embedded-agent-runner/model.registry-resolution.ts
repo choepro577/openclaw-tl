@@ -1,12 +1,16 @@
 import type { OpenClawConfig } from "../../config/types.openclaw.js";
 import type { ModelRegistry as CoreModelRegistry } from "../../llm/model-registry.js";
 import type { Model } from "../../llm/types.js";
+import type { PluginManifestRecord } from "../../plugins/manifest-registry.js";
 import type { PluginMetadataSnapshotOwnerMaps } from "../../plugins/plugin-metadata-snapshot.types.js";
 import type { ProviderRuntimeModel } from "../../plugins/provider-runtime-model.types.js";
 import { ensureAuthProfileStore, resolveAuthProfileOrder } from "../auth-profiles.js";
-import type { AuthProfileCredential } from "../auth-profiles/types.js";
+import type { AuthProfileCredential, AuthProfileStore } from "../auth-profiles/types.js";
 import { resolveAgentHarnessPolicy } from "../harness/policy.js";
-import { normalizeStaticProviderModelId } from "../model-ref-shared.js";
+import {
+  normalizeStaticProviderModelId,
+  type StaticProviderModelIdNormalizer,
+} from "../model-ref-shared.js";
 import { normalizeProviderId } from "../model-selection.js";
 import {
   shouldSuppressBuiltInModelCore,
@@ -61,6 +65,7 @@ export function resolveExplicitModelWithRegistry(params: {
   runtimeHooks?: ProviderRuntimeHooks;
   preparedInlineProviderModels?: readonly InlineModelEntry[];
   getStaticCatalogModel?: () => StaticCatalogFallbackModel | undefined;
+  normalizeModelId?: StaticProviderModelIdNormalizer;
 }): ExplicitModelResolution | undefined {
   const { provider, modelId, modelRegistry, cfg, agentDir, workspaceDir, runtimeHooks } = params;
   const providerMetadataOwners = getRegistryProviderMetadataOwners(modelRegistry);
@@ -113,6 +118,7 @@ export function resolveExplicitModelWithRegistry(params: {
           workspaceDir,
           preferDiscoveredTransport: true,
           staticCatalogModel,
+          ...(params.normalizeModelId ? { normalizeModelId: params.normalizeModelId } : {}),
         }),
         runtimeHooks,
       }),
@@ -171,6 +177,7 @@ export function resolveExplicitModelWithRegistry(params: {
           runtimeHooks,
           getStaticCatalogModel: params.getStaticCatalogModel,
           workspaceDir,
+          ...(params.normalizeModelId ? { normalizeModelId: params.normalizeModelId } : {}),
         }),
         runtimeHooks,
       }),
@@ -201,6 +208,8 @@ export function resolveDynamicModelAuthProfile(params: {
   modelId: string;
   cfg?: OpenClawConfig;
   agentDir?: string;
+  /** Auth facts already owned by the prepared model runtime, when available. */
+  authProfileStore?: AuthProfileStore;
   authProfileId?: string;
   authProfileMode?: AuthProfileCredential["type"] | "aws-sdk";
   preferredProfile?: string;
@@ -209,7 +218,9 @@ export function resolveDynamicModelAuthProfile(params: {
   authProfileMode?: AuthProfileCredential["type"] | "aws-sdk";
 } {
   const explicitProfileId = params.authProfileId?.trim() || undefined;
-  const store = ensureAuthProfileStore(params.agentDir, { allowKeychainPrompt: false });
+  const store =
+    params.authProfileStore ??
+    ensureAuthProfileStore(params.agentDir, { allowKeychainPrompt: false });
   if (explicitProfileId) {
     const credential = store.profiles[explicitProfileId];
     const configuredMode = params.cfg?.auth?.profiles?.[explicitProfileId]?.mode;
@@ -271,6 +282,7 @@ function resolvePluginDynamicModelWithRegistry(
     modelId,
     cfg,
     agentDir,
+    ...(params.authProfileStore ? { authProfileStore: params.authProfileStore } : {}),
     authProfileId: params.authProfileId,
     authProfileMode: params.authProfileMode,
     preferredProfile: params.preferredProfile,
@@ -316,6 +328,7 @@ function resolvePluginDynamicModelWithRegistry(
     workspaceDir,
     preferDiscoveredModelMetadata,
     getStaticCatalogModel: params.getStaticCatalogModel,
+    ...(params.normalizeModelId ? { normalizeModelId: params.normalizeModelId } : {}),
   });
   return normalizeResolvedModel({
     provider,
@@ -378,6 +391,8 @@ export function normalizeProviderModelRef(params: {
   modelId: string;
   cfg?: OpenClawConfig;
   workspaceDir?: string;
+  normalizeModelId?: StaticProviderModelIdNormalizer;
+  manifestPlugins?: readonly PluginManifestRecord[];
 }): {
   provider: string;
   model: string;
@@ -388,10 +403,11 @@ export function normalizeProviderModelRef(params: {
     modelId: params.modelId,
     cfg: params.cfg,
     workspaceDir: params.workspaceDir,
+    plugins: params.manifestPlugins,
   });
   return {
     provider: manifestAlias.provider,
-    model: normalizeStaticProviderModelId(
+    model: (params.normalizeModelId ?? normalizeStaticProviderModelId)(
       normalizeProviderId(manifestAlias.provider),
       params.modelId,
     ),
@@ -410,6 +426,8 @@ type ResolveModelWithRegistryParams = {
   authProfileId?: string;
   authProfileMode?: AuthProfileCredential["type"] | "aws-sdk";
   preferredProfile?: string;
+  authProfileStore?: AuthProfileStore;
+  normalizeModelId?: StaticProviderModelIdNormalizer;
   runtimeHooks?: ProviderRuntimeHooks;
   skipConfiguredFallback?: boolean;
 };

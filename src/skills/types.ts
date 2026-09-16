@@ -31,6 +31,7 @@ export type SkillScriptEntrypoint = {
       authExemptOperations?: string[];
       readOperations?: string[];
       writeOperations?: string[];
+      userVisibleUrlPaths?: Record<string, string[]>;
       unknownRisk: "approval";
     }
 );

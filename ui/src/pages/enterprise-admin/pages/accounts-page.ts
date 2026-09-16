@@ -24,7 +24,6 @@ import {
   loadAdminAccountDelegation,
   resetAdminAccountPassword,
   revokeAdminAccountSession,
-  saveAdminAccountDelegationOverride,
   updateAdminAccount,
   type EnterpriseAccount,
   type EnterpriseAccessPreset,
@@ -39,7 +38,6 @@ import { renderAccountCreateDialog } from "./account-create-dialog-view.ts";
 type AccountDetail = Awaited<ReturnType<typeof loadAdminAccount>>;
 type AccountDelegation = Awaited<ReturnType<typeof loadAdminAccountDelegation>>;
 type AccountDetailTab = "info" | "agents" | "sessions" | "advanced";
-type OverrideMode = "inherit" | "confirm_before_handoff" | "explicit_only" | "disabled";
 const d = (key: EnterpriseDelegationKey, params?: Record<string, string>) =>
   enterpriseDomainCopy(`enterpriseDelegation.${key}`, params);
 
@@ -56,12 +54,6 @@ function eventChecked(event: Event): boolean {
 
 function accountRole(value: FormDataEntryValue | null): "administrator" | "employee" {
   return value === "administrator" ? "administrator" : "employee";
-}
-
-function overrideMode(value: string): OverrideMode {
-  return value === "confirm_before_handoff" || value === "explicit_only" || value === "disabled"
-    ? value
-    : "inherit";
 }
 
 function accessPresetLabel(presetKey: string, presets: readonly EnterpriseAccessPreset[]): string {
@@ -98,8 +90,6 @@ export class EnterpriseAdminAccountsPage extends OpenClawLightDomElement {
   @state() private detailAgentQuery = "";
   @state() private assignmentDraft = new Map<string, boolean>();
   @state() private assignmentSource = new Map<string, boolean>();
-  @state() private overrideDraft = new Map<string, OverrideMode>();
-  @state() private overrideSource = new Map<string, OverrideMode>();
   @state() private detailLoading = false;
   @state() private saving = false;
   @state() private detailAccessPresetKey = "";
@@ -231,6 +221,22 @@ export class EnterpriseAdminAccountsPage extends OpenClawLightDomElement {
     this.createCatalogLoading = false;
   }
 
+  private setCreateAccessPreset(presetKey: string): void {
+    const previousSkillIds = new Set(
+      this.accessPresets.find((preset) => preset.key === this.createAccessPresetKey)
+        ?.initialSkillIds ?? [],
+    );
+    const nextSkillIds =
+      this.accessPresets.find((preset) => preset.key === presetKey)?.initialSkillIds ?? [];
+    this.createSelectedSkillKeys = [
+      ...new Set([
+        ...this.createSelectedSkillKeys.filter((resourceId) => !previousSkillIds.has(resourceId)),
+        ...nextSkillIds,
+      ]),
+    ];
+    this.createAccessPresetKey = presetKey;
+  }
+
   private toggleCreateSkill(resourceKey: string, selected: boolean): void {
     this.createSelectedSkillKeys = selected
       ? [...new Set([...this.createSelectedSkillKeys, resourceKey])]
@@ -259,11 +265,11 @@ export class EnterpriseAdminAccountsPage extends OpenClawLightDomElement {
       this.createPasswordMismatch = false;
       this.error = "";
       this.createPersonalAgentEnabled = this.createRole === "employee";
-      this.createAccessPresetKey = this.createRole === "employee" ? "basic@1" : "none";
       this.createDefaultAgentId = "";
       this.createSelectedAgentKeys = [];
       this.createAgentQuery = "";
       this.createSelectedSkillKeys = [];
+      this.setCreateAccessPreset(this.createRole === "employee" ? "basic@1" : "none");
       this.createSkillQuery = "";
       this.createStep = 2;
       return;
@@ -282,7 +288,7 @@ export class EnterpriseAdminAccountsPage extends OpenClawLightDomElement {
         personalAgentEnabled: data.get("personalAgentEnabled") === "on",
         defaultAgentId: String(data.get("defaultAgentId") ?? "").trim() || null,
         accessPresetKey: String(data.get("accessPresetKey") ?? "none"),
-        skillGrants: data.getAll("skillGrants").map(String),
+        skillGrants: this.createSelectedSkillKeys,
         agentGrants: data.getAll("agentGrants").map(String),
       });
       form.reset();
@@ -327,7 +333,7 @@ export class EnterpriseAdminAccountsPage extends OpenClawLightDomElement {
       if (catalog) {
         this.createSharedAgents = catalog.shared;
       }
-      this.initializeDelegationDrafts(detail, delegation);
+      this.initializeDelegationDrafts(detail);
     } catch (error) {
       this.error = errorMessage(error);
     } finally {
@@ -344,7 +350,7 @@ export class EnterpriseAdminAccountsPage extends OpenClawLightDomElement {
     this.drawerDirty = false;
   }
 
-  private initializeDelegationDrafts(detail: AccountDetail, delegation: AccountDelegation): void {
+  private initializeDelegationDrafts(detail: AccountDetail): void {
     const assignments = new Map<string, boolean>();
     for (const agent of this.createSharedAgents) {
       const entitlement = detail.entitlements.find(
@@ -355,22 +361,12 @@ export class EnterpriseAdminAccountsPage extends OpenClawLightDomElement {
         entitlement?.effect === "allow" && entitlement.resourceState === "active",
       );
     }
-    const overrides = new Map<string, OverrideMode>(
-      delegation.overrides.map((item) => [item.agentResourceKey, item.mode]),
-    );
     this.assignmentDraft = assignments;
     this.assignmentSource = new Map(assignments);
-    this.overrideDraft = overrides;
-    this.overrideSource = new Map(overrides);
   }
 
   private setAssignment(resourceKey: string, enabled: boolean): void {
     this.assignmentDraft = new Map(this.assignmentDraft).set(resourceKey, enabled);
-    this.drawerDirty = true;
-  }
-
-  private setOverride(resourceKey: string, mode: OverrideMode): void {
-    this.overrideDraft = new Map(this.overrideDraft).set(resourceKey, mode);
     this.drawerDirty = true;
   }
 
@@ -402,29 +398,13 @@ export class EnterpriseAdminAccountsPage extends OpenClawLightDomElement {
         });
         accountRevision = result.policyRevisions[accountId] ?? accountRevision;
       }
-      for (const [resourceKey, mode] of this.overrideDraft) {
-        if (mode === (this.overrideSource.get(resourceKey) ?? "inherit")) {
-          continue;
-        }
-        const current = this.accountDelegation.overrides.find(
-          (item) => item.agentResourceKey === resourceKey,
-        );
-        const result = await saveAdminAccountDelegationOverride({
-          accountId,
-          agentResourceKey: resourceKey,
-          mode,
-          baseRevision: current?.revision ?? 0,
-          baseAccountPolicyRevision: accountRevision,
-        });
-        accountRevision = result.accountPolicyRevision;
-      }
       const [detail, delegation] = await Promise.all([
         loadAdminAccount(accountId),
         loadAdminAccountDelegation(accountId),
       ]);
       this.selected = detail;
       this.accountDelegation = delegation;
-      this.initializeDelegationDrafts(detail, delegation);
+      this.initializeDelegationDrafts(detail);
       this.drawerDirty = false;
       await this.load();
     } catch (error) {
@@ -541,7 +521,7 @@ export class EnterpriseAdminAccountsPage extends OpenClawLightDomElement {
           this.createDefaultAgentId = "";
         }
       },
-      onAccessPresetChange: (presetKey) => (this.createAccessPresetKey = presetKey),
+      onAccessPresetChange: (presetKey) => this.setCreateAccessPreset(presetKey),
       onDefaultAgentChange: (agentId) => (this.createDefaultAgentId = agentId),
       onAgentQueryChange: (query) => (this.createAgentQuery = query),
       onAgentToggle: (resourceKey, selected) => this.toggleCreateAgent(resourceKey, selected),
@@ -688,9 +668,6 @@ export class EnterpriseAdminAccountsPage extends OpenClawLightDomElement {
         this.assignmentDraft.get(agent.resourceKey) !==
         this.assignmentSource.get(agent.resourceKey),
     );
-    const changedOverrides = [...this.overrideDraft].filter(
-      ([key, value]) => value !== (this.overrideSource.get(key) ?? "inherit"),
-    );
     const renderAgents = () => html`
       <section class="ea-stack">
         <div class="ea-delegation-summary">
@@ -730,10 +707,6 @@ export class EnterpriseAdminAccountsPage extends OpenClawLightDomElement {
           ${visibleAgents.map((agent) => {
             const candidate = candidateMap.get(agent.resourceKey);
             const assigned = this.assignmentDraft.get(agent.resourceKey) === true;
-            const storedOverride = this.accountDelegation?.overrides.find(
-              (item) => item.agentResourceKey === agent.resourceKey,
-            );
-            const mode = this.overrideDraft.get(agent.resourceKey) ?? "inherit";
             const readiness =
               agent.delegationReadiness !== "ready"
                 ? { label: d("notConfigured"), good: false }
@@ -742,16 +715,6 @@ export class EnterpriseAdminAccountsPage extends OpenClawLightDomElement {
                   : candidate?.effectiveMode === "disabled"
                     ? { label: d("disabled"), good: false }
                     : { label: d("ready"), good: true };
-            const baseMode = agent.delegationTarget?.handlingMode ?? "explicit_only";
-            const rank: Record<
-              "auto_when_certain" | "confirm_before_handoff" | "explicit_only" | "disabled",
-              number
-            > = {
-              auto_when_certain: 0,
-              confirm_before_handoff: 1,
-              explicit_only: 2,
-              disabled: 3,
-            };
             return html`
               <article class="ea-specialist-card ${assigned ? "is-assigned" : ""}">
                 <div class="ea-specialist-card__heading">
@@ -773,40 +736,6 @@ export class EnterpriseAdminAccountsPage extends OpenClawLightDomElement {
                       this.setAssignment(agent.resourceKey, eventChecked(event))}
                   />
                 </label>
-                ${!assigned && storedOverride && storedOverride.mode !== "inherit"
-                  ? html`<div class="ea-banner">
-                      ${d("restorePrevious", {
-                        mode:
-                          storedOverride.mode === "explicit_only"
-                            ? d("explicitOnly")
-                            : storedOverride.mode === "disabled"
-                              ? d("noAutomaticDelegation")
-                              : d("confirmBeforeHandoff"),
-                      })}
-                    </div>`
-                  : nothing}
-                <label class="ea-field">
-                  ${d("userSpecificMode")}
-                  <select
-                    class="ea-select"
-                    .value=${mode}
-                    ?disabled=${!assigned}
-                    @change=${(event: Event) =>
-                      this.setOverride(agent.resourceKey, overrideMode(eventValue(event)))}
-                  >
-                    <option value="inherit">${d("inheritAgentMode")}</option>
-                    <option
-                      value="confirm_before_handoff"
-                      ?disabled=${rank.confirm_before_handoff < rank[baseMode]}
-                    >
-                      ${d("confirmBeforeHandoff")}
-                    </option>
-                    <option value="explicit_only" ?disabled=${rank.explicit_only < rank[baseMode]}>
-                      ${d("explicitOnly")}
-                    </option>
-                    <option value="disabled">${d("noAutomaticDelegation")}</option>
-                  </select>
-                </label>
               </article>
             `;
           })}
@@ -823,23 +752,21 @@ export class EnterpriseAdminAccountsPage extends OpenClawLightDomElement {
                 changedAssignments.filter((agent) => !this.assignmentDraft.get(agent.resourceKey))
                   .length,
               ),
-              overrides: changedOverrides.length
-                ? d("overrideChanges", { count: String(changedOverrides.length) })
-                : "",
+              overrides: "",
             })}</span
           >
           <div class="ea-row-actions">
             <button
               class="ea-button"
               type="button"
-              @click=${() => this.initializeDelegationDrafts(detail, this.accountDelegation!)}
+              @click=${() => this.initializeDelegationDrafts(detail)}
             >
               ${d("cancel")}
             </button>
             <button
               class="ea-button ea-button--primary"
               type="button"
-              ?disabled=${this.saving || (!changedAssignments.length && !changedOverrides.length)}
+              ?disabled=${this.saving || !changedAssignments.length}
               @click=${() => void this.saveDelegation()}
             >
               ${this.saving ? d("saving") : d("saveChanges")}

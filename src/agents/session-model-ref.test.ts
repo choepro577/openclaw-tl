@@ -1,5 +1,7 @@
-import { describe, expect, test } from "vitest";
+import { beforeEach, describe, expect, test, vi } from "vitest";
 import type { OpenClawConfig } from "../config/types.openclaw.js";
+import * as metadataRuntime from "../plugins/plugin-metadata-snapshot.runtime.js";
+import type { PluginMetadataSnapshot } from "../plugins/plugin-metadata-snapshot.types.js";
 import { resolveSessionModelIdentityRef, resolveSessionModelRef } from "./session-model-ref.js";
 
 function modelConfig(primary: string, models?: Record<string, object>): OpenClawConfig {
@@ -12,6 +14,45 @@ function modelConfig(primary: string, models?: Record<string, object>): OpenClaw
 }
 
 describe("resolveSessionModelRef", () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  test("reuses the current metadata snapshot for persisted model normalization", () => {
+    const currentPluginMetadataSnapshotMock = vi.spyOn(
+      metadataRuntime,
+      "getCurrentPluginMetadataSnapshotRuntime",
+    );
+    currentPluginMetadataSnapshotMock.mockReturnValue({
+      plugins: [
+        {
+          modelIdNormalization: {
+            providers: {
+              demo: {
+                aliases: { "legacy-model": "modern-model" },
+              },
+            },
+          },
+        },
+      ],
+    } as PluginMetadataSnapshot);
+
+    const cfg = modelConfig("openai/gpt-5.5");
+    const resolved = resolveSessionModelRef(
+      cfg,
+      { providerOverride: "demo", modelOverride: "legacy-model" },
+      "main",
+    );
+
+    expect(resolved).toEqual({ provider: "demo", model: "modern-model" });
+    expect(currentPluginMetadataSnapshotMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        config: cfg,
+        allowWorkspaceScopedSnapshot: true,
+      }),
+    );
+  });
+
   test("prefers a complete explicit override over runtime identity and current defaults", () => {
     const resolved = resolveSessionModelRef(
       modelConfig("anthropic/claude-opus-4-6"),

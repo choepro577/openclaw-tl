@@ -1,3 +1,4 @@
+import { emitDiagnosticsTimelineEvent } from "../../infra/diagnostics-timeline.js";
 import { markOpenClawExecEnv } from "../../infra/openclaw-exec-env.js";
 /**
  * Low-level Docker command helpers for sandbox runtimes.
@@ -10,6 +11,7 @@ import { computeSandboxConfigHash } from "./config-hash.js";
 import { DEFAULT_SANDBOX_IMAGE, SANDBOX_DOCKER_CREATE_ARGS_EPOCH } from "./constants.js";
 import {
   DOCKER_SANDBOX_ENGINE,
+  containerStateWithConfigHash,
   execContainer,
   execContainerRaw,
   type ExecContainerRawOptions,
@@ -18,6 +20,7 @@ import {
   type SandboxContainerEngineTarget,
 } from "./container-engine.js";
 import { handleHotSandboxConfigMismatch } from "./current-config.js";
+import { hasSandboxActiveUsers } from "./lifecycle.js";
 import {
   assertPodmanSandboxTarget,
   bindPodmanSandboxEngine,
@@ -25,6 +28,7 @@ import {
   resolvePodmanSandboxContainerPrefix,
   resolvePodmanSandboxCreatePolicy,
   resolvePodmanSandboxRuntimeInfo,
+  recordedPodmanContainerState,
   type PodmanSandboxRuntimeInfo,
 } from "./podman-runtime.js";
 import { readRegistryEntry, removeRegistryEntry, updateRegistry } from "./registry.js";
@@ -78,6 +82,28 @@ const log = createSubsystemLogger("docker");
 
 const HOT_CONTAINER_WINDOW_MS = 5 * 60 * 1000;
 const sandboxContainerLifecycleQueue = new KeyedAsyncQueue();
+
+function emitSandboxLifecycleEvent(params: {
+  engine: SandboxContainerEngine;
+  cfg: SandboxConfig;
+  action: string;
+  rebuildReason: string;
+}): void {
+  emitDiagnosticsTimelineEvent(
+    {
+      type: "mark",
+      name: "sandbox.docker.lifecycle",
+      phase: "agent.prepare",
+      attributes: {
+        action: params.action,
+        rebuildReason: params.rebuildReason,
+        backend: params.engine.id,
+        scope: params.cfg.scope,
+      },
+    },
+    {},
+  );
+}
 
 type ExecDockerOptions = ExecDockerRawOptions;
 
@@ -240,37 +266,6 @@ export async function containerState(engine: SandboxContainerEngine, name: strin
     return { exists: false, running: false };
   }
   return { exists: true, running: result.stdout.trim() === "true" };
-}
-
-function isPodmanContainerNotFound(stderr: string): boolean {
-  // Target changes are destructive only after Podman confirms absence. Treat
-  // connection and authorization failures as unknown so the old runtime stays registered.
-  return (
-    /no such container/iu.test(stderr) ||
-    /no container with name or id .* found/iu.test(stderr) ||
-    /container .* does not exist/iu.test(stderr)
-  );
-}
-
-async function recordedPodmanContainerState(engine: SandboxContainerEngine, name: string) {
-  const result = await execContainer(engine, ["inspect", "-f", "{{.State.Running}}", name], {
-    allowFailure: true,
-  });
-  if (result.code === 0) {
-    return { exists: true, running: result.stdout.trim() === "true" };
-  }
-  if (isPodmanContainerNotFound(result.stderr)) {
-    return { exists: false, running: false };
-  }
-  const detail = result.stderr.trim();
-  throw Object.assign(
-    new Error(
-      detail
-        ? `Unable to inspect recorded Podman sandbox runtime ${name}: ${detail}`
-        : `Unable to inspect recorded Podman sandbox runtime ${name} (exit ${result.code})`,
-    ),
-    { code: result.code },
-  );
 }
 
 function normalizeDockerLimit(value?: string | number) {
@@ -534,13 +529,6 @@ async function createSandboxContainer(params: {
   }
 }
 
-async function readContainerConfigHash(
-  engine: SandboxContainerEngine,
-  containerName: string,
-): Promise<string | null> {
-  return await readContainerLabel(engine, containerName, "openclaw.configHash");
-}
-
 type EnsureSandboxContainerParams = {
   engine?: SandboxContainerEngine;
   podmanTarget?: SandboxContainerEngineTarget;
@@ -636,14 +624,13 @@ async function ensureSandboxContainerLifecycle(
         })
       : genericConfigHash;
   const now = Date.now();
-  const state = await containerState(engine, containerName);
+  const state = await containerStateWithConfigHash(engine, containerName);
   let hasContainer = state.exists;
   let running = state.running;
-  let currentHash: string | null = null;
+  let currentHash: string | null = state.configHash;
   let hashMismatch = false;
   const registryEntry = existingRegistryEntry ?? undefined;
   if (hasContainer) {
-    currentHash = await readContainerConfigHash(engine, containerName);
     if (!currentHash) {
       currentHash = registryEntry?.configHash ?? null;
     }
@@ -653,7 +640,16 @@ async function ensureSandboxContainerLifecycle(
       const isHot =
         running &&
         (typeof lastUsedAtMs !== "number" || now - lastUsedAtMs < HOT_CONTAINER_WINDOW_MS);
-      if (isHot) {
+      const hasActiveUsers = hasSandboxActiveUsers(params.scopeKey);
+      if (isHot || hasActiveUsers) {
+        emitSandboxLifecycleEvent({
+          engine,
+          cfg: params.cfg,
+          action: "reuse",
+          rebuildReason: hasActiveUsers
+            ? "config-hash-mismatch-active"
+            : "config-hash-mismatch-hot",
+        });
         handleHotSandboxConfigMismatch({
           containerName,
           scope: params.cfg.scope,
@@ -663,6 +659,12 @@ async function ensureSandboxContainerLifecycle(
             : {}),
         });
       } else {
+        emitSandboxLifecycleEvent({
+          engine,
+          cfg: params.cfg,
+          action: "recreate",
+          rebuildReason: "config-hash-mismatch-cold",
+        });
         await execContainer(engine, ["rm", "-f", containerName], { allowFailure: true });
         hasContainer = false;
         running = false;
@@ -670,6 +672,14 @@ async function ensureSandboxContainerLifecycle(
     }
   }
   if (!hasContainer) {
+    if (!hashMismatch) {
+      emitSandboxLifecycleEvent({
+        engine,
+        cfg: params.cfg,
+        action: "create",
+        rebuildReason: "container-missing",
+      });
+    }
     await createSandboxContainer({
       engine,
       name: containerName,
@@ -685,7 +695,20 @@ async function ensureSandboxContainerLifecycle(
       podmanRuntimeInfo,
     });
   } else if (!running) {
+    emitSandboxLifecycleEvent({
+      engine,
+      cfg: params.cfg,
+      action: "start",
+      rebuildReason: "container-stopped",
+    });
     await execContainer(engine, ["start", containerName]);
+  } else if (!hashMismatch) {
+    emitSandboxLifecycleEvent({
+      engine,
+      cfg: params.cfg,
+      action: "reuse",
+      rebuildReason: "config-hash-current",
+    });
   }
   await updateRegistry({
     containerName,

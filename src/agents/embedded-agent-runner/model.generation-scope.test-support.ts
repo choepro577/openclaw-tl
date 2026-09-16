@@ -7,6 +7,7 @@ import { clearPluginMetadataLifecycleCaches } from "../../plugins/plugin-metadat
 import type { ProviderRuntimeModel } from "../../plugins/provider-runtime-model.types.js";
 import { createEmptyPluginRegistry } from "../../plugins/registry-empty.js";
 import { resetPluginRuntimeStateForTest, setActivePluginRegistry } from "../../plugins/runtime.js";
+import { resolveLegacyInheritedAuthDir } from "../legacy-inherited-auth-dir.js";
 import type { PreparedModelRuntimeSnapshot } from "../prepared-model-runtime.js";
 import { AuthStorage, ModelRegistry } from "../sessions/index.js";
 
@@ -21,6 +22,7 @@ export function createModelGenerationFixture(params: {
   createStores?: PreparedModelRuntimeSnapshot["createStores"];
   label: string;
   modelId?: string;
+  modelIdNormalization?: PluginManifestRecord["modelIdNormalization"];
   prepareDynamicModel?: () => Promise<void>;
   provider?: string;
   requestProvider?: string;
@@ -50,6 +52,7 @@ export function createModelGenerationFixture(params: {
     rootDir: `/tmp/generation-plugin-${params.label}`,
     source: `/tmp/generation-plugin-${params.label}/index.js`,
     manifestPath: `/tmp/generation-plugin-${params.label}/openclaw.plugin.json`,
+    ...(params.modelIdNormalization ? { modelIdNormalization: params.modelIdNormalization } : {}),
     modelCatalog: {
       ...(requestProvider === provider ? {} : { aliases: { [requestProvider]: { provider } } }),
       ...(params.runtimeAugment === undefined ? {} : { runtimeAugment: params.runtimeAugment }),
@@ -108,6 +111,7 @@ export function createModelGenerationFixture(params: {
     });
   const preparedModelRuntime = {
     agentDir: "/tmp/openclaw-model-generation-agent",
+    inheritedAuthDir: resolveLegacyInheritedAuthDir(params.config),
     workspaceDir: GENERATION_WORKSPACE_DIR,
     activeProjectKeys: [],
     config: params.config,

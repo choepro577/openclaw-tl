@@ -121,6 +121,7 @@ export function patchChatSessionSettings(
     deferModelOverride?: boolean;
     ownsModelOverride?: () => boolean;
     reconcile?: (result: SessionsPatchResult) => Promise<void> | void;
+    shouldDispatch?: () => boolean;
   } = {},
 ): Promise<SessionsPatchResult | null> {
   const previous = getPendingChatPickerPatch(host, sessionKey, options.agentId);
@@ -132,6 +133,7 @@ export function patchChatSessionSettings(
       agentId: options.agentId,
       deferModelOverride: options.deferModelOverride,
       ownsModelOverride: options.ownsModelOverride,
+      shouldDispatch: options.shouldDispatch,
       waitFor: previous,
     });
     if (result) {

@@ -6,7 +6,18 @@ import { resolveAgentWorkspaceDir, listAgentEntries } from "../../agents/agent-s
 import type { AgentConfig } from "../../config/types.agents.js";
 import type { OpenClawConfig } from "../../config/types.openclaw.js";
 import type { AgentToolsConfig } from "../../config/types.tools.js";
+import { readPersistedInstalledPluginIndexSync } from "../../plugins/installed-plugin-index-store.js";
+import type { InstalledPluginIndex } from "../../plugins/installed-plugin-index.js";
+import { resolveInstalledManifestRegistryIndexFingerprint } from "../../plugins/manifest-registry-installed.js";
+import { registerPluginMetadataProcessMemoLifecycleClear } from "../../plugins/plugin-metadata-lifecycle.js";
+import {
+  isPluginMetadataSnapshotCompatible,
+  resolvePluginMetadataSnapshot,
+} from "../../plugins/plugin-metadata-snapshot.js";
+import type { PluginMetadataSnapshot } from "../../plugins/plugin-metadata-snapshot.types.js";
+import { getActivePluginRegistryVersion } from "../../plugins/runtime.js";
 import { normalizeAgentId } from "../../routing/session-key.js";
+import { getSkillsSnapshotVersion } from "../../skills/runtime/refresh-state.js";
 import { resolveReusableWorkspaceSkillSnapshot } from "../../skills/runtime/session-snapshot.js";
 import { fingerprintSkillSnapshotConfig } from "../../skills/runtime/snapshot-config-fingerprint.js";
 import type { SkillSnapshot } from "../../skills/types.js";
@@ -141,7 +152,41 @@ type SharedAgentSkillSnapshotCacheEntry = {
   skillFilterKey: string;
   snapshot: SkillSnapshot;
   skillContentsFingerprint: string;
+  /** Exact immutable plugin metadata owner used by watcher and skill discovery. */
+  pluginMetadataSnapshot: PluginMetadataSnapshot;
+  /** Existing plugin runtime generation fence for retained metadata. */
+  pluginRegistryVersion: number;
+  /** Existing workspace skill watcher generation fence for retained metadata. */
+  skillsVersion: number;
+  /** Persisted installed-plugin index fingerprint for a valid durable index. */
+  persistedPluginIndexFingerprint?: string;
 };
+
+type PersistedPluginIndexFence = {
+  index: InstalledPluginIndex;
+  fingerprint: string;
+};
+
+/**
+ * Read only the durable installed-plugin inventory needed to validate a retained
+ * metadata snapshot. A missing or unreadable durable index disables metadata
+ * reuse for this call instead of allowing an old plugin graph to authorize a
+ * request.
+ */
+function readPersistedPluginIndexFence(): PersistedPluginIndexFence | undefined {
+  try {
+    const index = readPersistedInstalledPluginIndexSync();
+    if (!index) {
+      return undefined;
+    }
+    return {
+      index,
+      fingerprint: resolveInstalledManifestRegistryIndexFingerprint(index),
+    };
+  } catch {
+    return undefined;
+  }
+}
 
 export type EnterpriseSharedAgentSkillSnapshot = {
   snapshot: SkillSnapshot;
@@ -173,10 +218,43 @@ export function resolveEnterpriseSharedAgentSkillSnapshot(params: {
     new Map<string, SharedAgentSkillSnapshotCacheEntry>();
   sharedAgentSkillSnapshotCache.set(params.config, snapshotCache);
   const cachedSnapshot = snapshotCache.get(agentId);
+  const pluginRegistryVersion = getActivePluginRegistryVersion();
+  const skillsVersion = getSkillsSnapshotVersion(workspaceDir);
+  const persistedPluginIndexFence = readPersistedPluginIndexFence();
+  const cachedPluginMetadataSnapshot = (() => {
+    if (
+      !cachedSnapshot ||
+      cachedSnapshot.workspaceDir !== workspaceDir ||
+      cachedSnapshot.pluginRegistryVersion !== pluginRegistryVersion ||
+      cachedSnapshot.skillsVersion !== skillsVersion ||
+      persistedPluginIndexFence === undefined ||
+      cachedSnapshot.persistedPluginIndexFingerprint !== persistedPluginIndexFence.fingerprint
+    ) {
+      return undefined;
+    }
+    return isPluginMetadataSnapshotCompatible({
+      snapshot: cachedSnapshot.pluginMetadataSnapshot,
+      config: params.config,
+      env: process.env,
+      workspaceDir,
+      index: persistedPluginIndexFence.index,
+    })
+      ? cachedSnapshot.pluginMetadataSnapshot
+      : undefined;
+  })();
+  const pluginMetadataSnapshot =
+    cachedPluginMetadataSnapshot ??
+    resolvePluginMetadataSnapshot({
+      config: params.config,
+      env: process.env,
+      workspaceDir,
+      ...(cachedSnapshot || persistedPluginIndexFence === undefined ? { allowCurrent: false } : {}),
+    });
   const cacheMatches =
     cachedSnapshot?.configFingerprint === configFingerprint &&
     cachedSnapshot.workspaceDir === workspaceDir &&
-    cachedSnapshot.skillFilterKey === skillFilterKey;
+    cachedSnapshot.skillFilterKey === skillFilterKey &&
+    cachedSnapshot.pluginMetadataSnapshot === pluginMetadataSnapshot;
   let existingSnapshot: SkillSnapshot | undefined;
   let skillContentsFingerprint: string | undefined;
   if (cacheMatches && cachedSnapshot) {
@@ -199,6 +277,7 @@ export function resolveEnterpriseSharedAgentSkillSnapshot(params: {
     agentId,
     ...(skillFilter === undefined ? {} : { skillFilter }),
     ...(existingSnapshot ? { existingSnapshot } : {}),
+    pluginMetadataSnapshot,
   });
   const snapshot = resolvedSnapshot.snapshot;
   if (!existingSnapshot || resolvedSnapshot.shouldRefresh || snapshot !== existingSnapshot) {
@@ -207,12 +286,22 @@ export function resolveEnterpriseSharedAgentSkillSnapshot(params: {
   if (!skillContentsFingerprint) {
     skillContentsFingerprint = fingerprintSkillContents(snapshot);
   }
+  // The watcher can publish a new version while resolving the snapshot. Capture
+  // the post-resolution fences so the next hot read can reuse this exact owner.
+  const resolvedSkillsVersion = getSkillsSnapshotVersion(workspaceDir);
+  const resolvedPluginRegistryVersion = getActivePluginRegistryVersion();
   snapshotCache.set(agentId, {
     configFingerprint,
     workspaceDir,
     skillFilterKey,
     snapshot,
     skillContentsFingerprint,
+    pluginMetadataSnapshot,
+    pluginRegistryVersion: resolvedPluginRegistryVersion,
+    skillsVersion: resolvedSkillsVersion,
+    ...(persistedPluginIndexFence
+      ? { persistedPluginIndexFingerprint: persistedPluginIndexFence.fingerprint }
+      : {}),
   });
   return { snapshot, skillContentsFingerprint };
 }
@@ -221,10 +310,16 @@ export function resolveEnterpriseSharedAgentSkillSnapshot(params: {
 // only reuses the expensive skill catalog scan while the config, agent
 // workspace/filter, watcher revision, and file-content fingerprint remain
 // stable. A WeakMap keeps projected config generations from accumulating.
-const sharedAgentSkillSnapshotCache = new WeakMap<
+let sharedAgentSkillSnapshotCache = new WeakMap<
   OpenClawConfig,
   Map<string, SharedAgentSkillSnapshotCacheEntry>
 >();
+
+// Plugin metadata lifecycle clears retire executable/discovery facts. Reset this owner cache at
+// the same boundary so a retained skill snapshot can never carry a retired plugin graph.
+registerPluginMetadataProcessMemoLifecycleClear(() => {
+  sharedAgentSkillSnapshotCache = new WeakMap();
+});
 
 function capabilityRevision(params: {
   account: EnterpriseAccount;

@@ -1,6 +1,6 @@
 ---
 name: cskh-skill
-description: Customer-service skill for routed order, booking, product, branch, member, and online-order support; router-first and preview-before-commit are mandatory except for pure public-ordering guidance that should send the ordering link directly.
+description: Customer-service skill for routed order, booking, product, branch, member, and online-order support; router-first and preview-before-commit are mandatory, while a clear write request authorizes the commit step after prerequisites are resolved. Pure public-ordering guidance should send the ordering link directly.
 ---
 
 # CSKH Skill
@@ -14,7 +14,7 @@ Use this skill for customer-service requests through `cskh-mcp-server`.
 
 1. Always call `router_tool_search` first, except for pure public-ordering guidance intents that only need the public ordering link and the standard short notes for delivery or takeaway/pickup.
 2. Only call tools returned by the router and execute prerequisites before the main tool.
-3. Any write action must run preview first and commit only with explicit approval using `confirm=true`.
+3. Any write action must run preview first. If the user clearly requested that named write and the preview is ready, commit with `confirm=true` in the same request flow; do not ask for a second conversational confirmation. Ask only when the action, target, scope, date/time, or required business data is missing or ambiguous.
 4. Do not list tools, inspect source code, or use another skill / external path to bypass this flow.
 5. Do not guess business data; if something is missing or unverified, ask one focused follow-up question.
 
@@ -192,7 +192,7 @@ Execute routed tool:
 2. Call `router_tool_search`.
 3. Read `results` and `prerequisites`.
 4. Run prerequisite tools first, then the main tool.
-5. For write tools, stop at preview and wait for explicit confirmation before commit.
+5. For write tools, run preview first. If the request clearly authorizes the named write and the preview is ready, commit with `confirm=true` without waiting for repeated confirmation. If the tool is preview-only, keep it preview-only and commit only when the user clearly requests the commit operation.
 6. Translate the verified result into customer-facing language without exposing internal mechanics.
 
 See `references/tool-catalog.md` for detailed flows and response policy.

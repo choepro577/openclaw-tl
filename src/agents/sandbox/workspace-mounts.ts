@@ -47,6 +47,24 @@ export function resolveMaterializedSandboxSkillsWorkspaceDir(rootDir: string): s
   return path.join(rootDir, ...MATERIALIZED_SANDBOX_SKILLS_WORKSPACE_PARTS);
 }
 
+/** Keep the mount source stable before provisioning and while refreshing its contents. */
+export async function ensureSandboxSkillsDirectory(targetSkillsDir: string): Promise<void> {
+  let stats: fs.Stats;
+  try {
+    stats = await fs.promises.lstat(targetSkillsDir);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+      throw error;
+    }
+    await fs.promises.mkdir(targetSkillsDir, { recursive: true });
+    return;
+  }
+  if (!stats.isDirectory() || stats.isSymbolicLink()) {
+    await fs.promises.rm(targetSkillsDir, { recursive: true, force: true });
+    await fs.promises.mkdir(targetSkillsDir, { recursive: true });
+  }
+}
+
 /** Returns true when a skill mount source exists inside the canonical mount root. */
 export function isExistingWorkspaceSkillMountSource(params: {
   rootDir: string;

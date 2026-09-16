@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { performance } from "node:perf_hooks";
 import { isFutureDateTimestampMs } from "@openclaw/normalization-core/number-coercion";
 import { ErrorCodes, errorShape } from "../../../packages/gateway-protocol/src/index.js";
 import { createAgentRunRestartAbortError } from "../../agents/run-termination.js";
@@ -44,7 +45,7 @@ import {
 import type { NormalizedChatSendRequest } from "./chat-send-request.js";
 import type { PreparedChatSendSession } from "./chat-send-session.js";
 import { normalizeOptionalChatText, normalizeUnknownChatText } from "./chat-text-normalization.js";
-import type { GatewayRequestHandlerOptions } from "./types.js";
+import type { GatewayRequestHandlerOptions, GatewayRequestTiming } from "./types.js";
 
 /** Reserve the session lifecycle and register the abortable run before attachment work. */
 export async function admitChatSend(params: {
@@ -54,6 +55,7 @@ export async function admitChatSend(params: {
   context: GatewayRequestHandlerOptions["context"];
   client: GatewayRequestHandlerOptions["client"];
   onAdmissionOwned?: () => Promise<boolean>;
+  requestTiming?: GatewayRequestTiming;
 }) {
   const { request, session, respond, context, client } = params;
   const { p, explicitOrigin, normalizedAttachments, turnKind } = request;
@@ -324,6 +326,10 @@ export async function admitChatSend(params: {
     });
   };
 
+  const queueWaitStartedAtMs = performance.now();
+  if (params.requestTiming) {
+    params.requestTiming.queueWaitStartedAtMs = queueWaitStartedAtMs;
+  }
   try {
     gatewayWorkAdmission = await beginSessionWorkAdmission({
       scope: storePath,
@@ -349,6 +355,10 @@ export async function admitChatSend(params: {
     }
     respond(false, undefined, errorShape(ErrorCodes.INVALID_REQUEST, formatForLog(err)));
     return { ok: false as const };
+  } finally {
+    if (params.requestTiming) {
+      params.requestTiming.queueWaitMs = performance.now() - queueWaitStartedAtMs;
+    }
   }
   clearPendingChatSendReservation();
   const activeRunAbort = admittedRunAbort;

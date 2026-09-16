@@ -45,24 +45,49 @@ export const BASIC_TOOL_IDS = [
   "x_search",
 ] as const;
 
+export const BASIC_INITIAL_SKILL_KEYS = [
+  "clawhub",
+  "diagram-maker",
+  "gifgrep",
+  "mcporter",
+  "nano-pdf",
+  "obsidian",
+  "skill-creator",
+  "summarize",
+  "taskflow",
+  "taskflow-inbox-triage",
+  "tmux",
+  "video-frames",
+  "weather",
+  "xurl",
+  "hr-skill",
+] as const;
+
+export const BASIC_INITIAL_SKILL_IDS = BASIC_INITIAL_SKILL_KEYS.map((skillKey) =>
+  globalSkillResourceKey("openclaw-bundled", skillKey),
+);
+
 export const ENTERPRISE_ACCESS_PRESETS = [
   {
     key: ENTERPRISE_ACCESS_PRESET_BASIC,
     label: "Quyền cơ bản",
-    description: "Cấp 32 công cụ cơ bản, đồng bộ quyền sử dụng trong sandbox.",
+    description: "Cấp 32 công cụ và chọn sẵn 15 skill ban đầu.",
     toolIds: [...BASIC_TOOL_IDS],
+    initialSkillIds: [...BASIC_INITIAL_SKILL_IDS],
   },
   {
     key: ENTERPRISE_ACCESS_PRESET_STANDARD_CODING,
     label: "Lập trình tiêu chuẩn",
     description: "Đọc, ghi, sửa file và chạy lệnh trong sandbox.",
     toolIds: [...STANDARD_CODING_TOOL_IDS],
+    initialSkillIds: [],
   },
   {
     key: ENTERPRISE_ACCESS_PRESET_NONE,
     label: "Không có preset",
     description: "Chỉ sử dụng các quyền được cấp riêng.",
     toolIds: [],
+    initialSkillIds: [],
   },
 ];
 
@@ -221,6 +246,13 @@ export function enterpriseRuntimeResourceId(
 
 export function accessPresetToolIds(presetKey: string): string[] {
   return [...(ENTERPRISE_ACCESS_PRESETS.find((preset) => preset.key === presetKey)?.toolIds ?? [])];
+}
+
+export function accessPresetInitialSkillIds(presetKey: string): string[] {
+  return [
+    ...(ENTERPRISE_ACCESS_PRESETS.find((preset) => preset.key === presetKey)?.initialSkillIds ??
+      []),
+  ];
 }
 
 export function normalizeEnterpriseAccessPresetKey(value: string): string {

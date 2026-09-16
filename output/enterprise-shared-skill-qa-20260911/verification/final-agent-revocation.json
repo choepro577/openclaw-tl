@@ -1,0 +1,9 @@
+{
+  "revokedAt": "2026-09-12T01:23:11.859Z",
+  "removed": "agent:shared:purchase-order-skill",
+  "beforeCount": 7,
+  "afterCount": 6,
+  "regrantedAt": "2026-09-12T01:23:52.586Z",
+  "restoredExactly": true,
+  "revokedRequestUi": "Enterprise policy denied this request."
+}

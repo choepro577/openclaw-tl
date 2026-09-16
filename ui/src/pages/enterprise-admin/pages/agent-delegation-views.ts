@@ -80,9 +80,6 @@ export type DelegationEventFilterDraft = {
   createdTo: string;
 };
 
-const previewRowKey = (accountId: string, resourceKey: string) =>
-  `${accountId}\u0000${resourceKey}`;
-
 const d = (key: EnterpriseDelegationKey, params?: Record<string, string>) =>
   enterpriseDomainCopy(`enterpriseDelegation.${key}`, params);
 
@@ -131,10 +128,6 @@ function eventValue(event: Event): string {
     : "";
 }
 
-function eventChecked(event: Event): boolean {
-  return event.currentTarget instanceof HTMLInputElement && event.currentTarget.checked;
-}
-
 function delegationRollout(value: string): EnterpriseDelegationPolicy["rollout"] {
   return value === "on" || value === "shadow" ? value : "off";
 }
@@ -156,7 +149,6 @@ export function renderDelegationDashboard(props: {
   eventNextCursor: string | null;
   eventFilters: DelegationEventFilterDraft;
   preview?: ActivationPreview;
-  previewExclusions: ReadonlySet<string>;
   previewQuery: string;
   previewPage: number;
   onPolicy: (patch: Partial<EnterpriseDelegationPolicy>) => void;
@@ -167,7 +159,6 @@ export function renderDelegationDashboard(props: {
   onPreview: () => void;
   onPreviewQuery: (value: string) => void;
   onPreviewPage: (page: number) => void;
-  onPreviewExclusion: (key: string, excluded: boolean) => void;
   onActivate: () => void;
   onEmergencyOff: () => void;
 }) {
@@ -199,10 +190,6 @@ export function renderDelegationDashboard(props: {
   const previewPageCount = Math.max(1, Math.ceil(matchingPreviewRows.length / 25));
   const previewPage = Math.min(props.previewPage, previewPageCount - 1);
   const visiblePreviewRows = matchingPreviewRows.slice(previewPage * 25, previewPage * 25 + 25);
-  const eligibleAfterExclusions = Math.max(
-    0,
-    (props.preview?.summary.eligible ?? 0) - props.previewExclusions.size,
-  );
   return html`
     <div class="ea-delegation-page ea-stack">
       <section class="ea-delegation-hero">
@@ -406,7 +393,7 @@ export function renderDelegationDashboard(props: {
                 ?disabled=${props.busy || !policy.routerModel}
                 @click=${props.onActivate}
               >
-                ${d("activateAssignments", { count: String(eligibleAfterExclusions) })}
+                ${d("activateAssignments", { count: String(props.preview.summary.eligible) })}
               </button>
             </div>
             <div class="ea-delegation-metrics">
@@ -442,8 +429,6 @@ export function renderDelegationDashboard(props: {
             </label>
             <div class="ea-preview-list" aria-label=${d("previewListLabel")}>
               ${visiblePreviewRows.map((row) => {
-                const key = previewRowKey(row.accountId, row.resourceKey);
-                const excluded = props.previewExclusions.has(key);
                 return html`<article class="ea-preview-row">
                   <div>
                     <strong>${row.displayName} (@${row.username})</strong>
@@ -452,16 +437,6 @@ export function renderDelegationDashboard(props: {
                       ? html`<small>${row.reasonCodes.join(", ")}</small>`
                       : nothing}
                   </div>
-                  <label class="ea-switch-row">
-                    <span>${row.eligible ? d("excludeFromActivation") : d("notEligible")}</span>
-                    <input
-                      type="checkbox"
-                      .checked=${excluded}
-                      ?disabled=${!row.eligible}
-                      @change=${(event: Event) =>
-                        props.onPreviewExclusion(key, eventChecked(event))}
-                    />
-                  </label>
                 </article>`;
               })}
               ${visiblePreviewRows.length === 0
@@ -775,27 +750,6 @@ export function renderDelegationProfileEditor(props: {
         ></textarea
         ><span id="ea-delegation-aliases-help" class="ea-muted">${d("aliasesHelp")}</span>
       </label>
-      <fieldset class="ea-fieldset">
-        <legend>${d("handoffMode")}</legend>
-        ${(
-          [
-            ["auto_when_certain", d("autoWhenCertain")],
-            ["confirm_before_handoff", d("confirmBeforeHandoff")],
-            ["explicit_only", d("explicitOnly")],
-          ] as const
-        ).map(
-          ([value, label]) =>
-            html`<label
-              ><input
-                type="radio"
-                name="handlingMode"
-                value=${value}
-                .checked=${props.profile.handlingMode === value}
-                @change=${() => props.onProfile({ handlingMode: value })}
-              />${label}</label
-            >`,
-        )}
-      </fieldset>
       <section class="ea-stack">
         <div class="ea-account-access-heading">
           <div>

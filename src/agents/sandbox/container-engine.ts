@@ -120,3 +120,25 @@ export async function execContainer(
     code: result.code,
   };
 }
+
+/** Reads running state and the OpenClaw config hash in one container inspect. */
+export async function containerStateWithConfigHash(
+  engine: SandboxContainerEngine,
+  name: string,
+): Promise<{ exists: boolean; running: boolean; configHash: string | null }> {
+  const result = await execContainer(
+    engine,
+    ["inspect", "-f", '{{.State.Running}}\t{{ index .Config.Labels "openclaw.configHash" }}', name],
+    { allowFailure: true },
+  );
+  if (result.code !== 0) {
+    return { exists: false, running: false, configHash: null };
+  }
+  const [runningValue = "", hashValue = ""] = result.stdout.trimEnd().split("\t", 2);
+  const configHash = hashValue.trim();
+  return {
+    exists: true,
+    running: runningValue.trim() === "true",
+    configHash: configHash && configHash !== "<no value>" ? configHash : null,
+  };
+}

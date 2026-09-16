@@ -1,3 +1,4 @@
+import { performance } from "node:perf_hooks";
 import {
   ErrorCodes,
   errorShape,
@@ -618,6 +619,12 @@ export async function handleGatewayRequest(
   opts: GatewayRequestOptions & { extraHandlers?: GatewayRequestHandlers },
 ): Promise<void> {
   const { req, respond, client, isWebchatConnect, context, signal } = opts;
+  // WebSocket callers stamp the request before Enterprise projection. Keep a
+  // server-owned fallback for in-process/HTTP callers that enter this shared
+  // dispatcher directly.
+  const requestTiming =
+    opts.requestTiming ??
+    (req.method === "chat.send" ? { receivedAtMs: performance.now() } : undefined);
   // Prefer the caller-attached registry when it owns the requested method so plugin dispatch
   // metadata newer than global runtime state still authorizes and dispatches correctly. When the
   // attached snapshot does not own the method, rebuild from the process-root registry so late
@@ -626,13 +633,33 @@ export async function handleGatewayRequest(
     opts.methodRegistry?.getHandler(req.method) !== undefined
       ? opts.methodRegistry
       : createRequestGatewayMethodRegistry(opts.extraHandlers);
-  const authorization = await authorizeGatewayRequestPreDispatch({
-    method: req.method,
-    requestParams: req.params,
-    client,
-    context,
-    methodRegistry,
-  });
+  const authorizationStartedAtMs =
+    requestTiming && req.method === "chat.send" ? performance.now() : undefined;
+  if (requestTiming && authorizationStartedAtMs !== undefined) {
+    requestTiming.authorizationStartedAtMs = authorizationStartedAtMs;
+  }
+  let authorization: Awaited<ReturnType<typeof authorizeGatewayRequestPreDispatch>>;
+  if (requestTiming && authorizationStartedAtMs !== undefined) {
+    try {
+      authorization = await authorizeGatewayRequestPreDispatch({
+        method: req.method,
+        requestParams: req.params,
+        client,
+        context,
+        methodRegistry,
+      });
+    } finally {
+      requestTiming.authorizationMs = performance.now() - authorizationStartedAtMs;
+    }
+  } else {
+    authorization = await authorizeGatewayRequestPreDispatch({
+      method: req.method,
+      requestParams: req.params,
+      client,
+      context,
+      methodRegistry,
+    });
+  }
   if (authorization.error) {
     respond(false, undefined, authorization.error);
     return;
@@ -654,6 +681,7 @@ export async function handleGatewayRequest(
       isWebchatConnect,
       respond,
       context,
+      ...(requestTiming ? { requestTiming } : {}),
       ...(signal ? { signal } : {}),
       ...(authorization.sessionMutationAuthorization
         ? { sessionMutationAuthorization: authorization.sessionMutationAuthorization }

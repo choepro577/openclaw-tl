@@ -3,6 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { isRecord } from "@openclaw/normalization-core/record-coerce";
 import { resolveSandboxPath } from "../../agents/sandbox-paths.js";
+import { ensureSandboxSkillsDirectory } from "../../agents/sandbox/workspace-mounts.js";
 import { canonicalizePath } from "../../agents/utils/paths.js";
 import type { OpenClawConfig } from "../../config/types.openclaw.js";
 import { sha256Hex } from "../../infra/crypto-digest.js";
@@ -112,24 +113,6 @@ function resolveSyncedSkillDestinationPath(params: {
   }).resolved;
 }
 
-async function ensureSyncedSkillsDirectory(targetSkillsDir: string): Promise<void> {
-  let stats: fs.Stats;
-  try {
-    stats = await fsp.lstat(targetSkillsDir);
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
-      throw error;
-    }
-    await fsp.mkdir(targetSkillsDir, { recursive: true });
-    return;
-  }
-
-  if (!stats.isDirectory() || stats.isSymbolicLink()) {
-    await fsp.rm(targetSkillsDir, { recursive: true, force: true });
-    await fsp.mkdir(targetSkillsDir, { recursive: true });
-  }
-}
-
 export async function syncWorkspaceSkills(params: {
   sourceWorkspaceDir: string;
   targetWorkspaceDir: string;
@@ -160,7 +143,7 @@ export async function syncWorkspaceSkills(params: {
       : undefined;
     const skillsVersion = getSkillsSnapshotVersion(skillRoots?.agentWorkspaceDir ?? sourceDir);
 
-    await ensureSyncedSkillsDirectory(targetSkillsDir);
+    await ensureSandboxSkillsDirectory(targetSkillsDir);
     const manifest = parseSyncedSkillsManifest(await tryReadJson<unknown>(manifestPath));
     const expectedManifestKey =
       skillsSnapshot?.version === skillsVersion

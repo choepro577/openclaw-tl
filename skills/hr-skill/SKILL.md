@@ -279,8 +279,8 @@ thanh bon nhom neu user khong yeu cau.
 7. Neu user yeu cau nhieu scope, goi router rieng cho tung scope va chia ket qua
    theo tieu de. Khong hoi user chon nhom nao khi y dinh da ro.
 
-Neu `USER.md` khong co `Enterprise username`, hoi user ma nhan vien hoac bao
-current session chua duoc gan dinh danh; khong suy ra tu ten hien thi.
+Chi hoi user ma nhan vien khi khoi trusted `Authenticated Enterprise account`
+thuc su vang mat; `USER.md` khong phai nguon dinh danh phien.
 
 ## Mandatory Rules
 
@@ -352,6 +352,7 @@ headers, or URLs containing credentials.
    `input_schema.properties[argument].tool_relate`, sau do chay tool chinh.
 6. Voi staff/title queries, ap dung `Staff and position lookup contract`: reset scope neu la toan he thong, fan-out exact title, lay het trang, dedupe `staff_id`, va kiem tra displayed count.
 7. Tong hop ket qua cho user chi tu HRM evidence. Ghi ro scope, so ban ghi unique, va partial/HQ-only neu co.
-8. Neu ket qua khong dat, quay lai buoc 2 voi query cu the hon nhung van giu HRM lam nguon. Neu loi van chuyen, phan loai loi va dung lai; khong doi sang Enterprise Knowledge.
+8. Chi refine router khi tool/schema chua ro hoac khong phu hop voi scope user yeu cau. Ket qua thanh cong rong va pagination da hoan tat (vi du `last_page: 1` o trang 1) la ket qua hop le: dung scope do, khong tu doi role, user_id hay khoang ngay de tim ket qua khac. Tiep tuc doc du cac scope user da yeu cau va cac trang con lai.
+9. Trong cung tac vu, dung lai ket qua cua cung operation va arguments da thanh cong; chi goi lai khi user yeu cau refresh/retry, scope thay doi, hoac co bang chung du lieu da thay doi. Khong coi cac scope tra cung task la task moi: dedupe theo task ID, giu nhan vai tro va neu ro overlap. Neu loi van chuyen, phan loai loi va dung lai; khong doi sang Enterprise Knowledge.
 
 Read `references/tool-catalog.md` chi de biet quy tac routing. Khong duoc dung file nay de thay the `router_tool_search`.

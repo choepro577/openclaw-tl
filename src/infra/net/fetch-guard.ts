@@ -5,10 +5,7 @@ import { logWarn } from "../../logger.js";
 import { buildTimeoutAbortSignal } from "../../utils/fetch-timeout.js";
 import { createAbortError } from "../abort-signal.js";
 import { toErrorObject } from "../errors.js";
-import {
-  normalizeHeadersInitForFetch,
-  normalizeRequestInitHeadersForFetch,
-} from "../fetch-headers.js";
+import { normalizeRequestInitHeadersForFetch } from "../fetch-headers.js";
 import {
   shouldUseConfiguredLocalOriginManagedProxyBypass,
   shouldResolveConfiguredLocalOriginManagedProxyBypass,
@@ -16,7 +13,10 @@ import {
 } from "./configured-local-origin-bypass.js";
 import { PinnedDispatcherPool, type PinnedDispatcherLease } from "./pinned-dispatcher-pool.js";
 import { shouldUseEnvHttpProxyForUrl } from "./proxy-env.js";
-import { retainSafeHeadersForCrossOriginRedirect as retainSafeRedirectHeaders } from "./redirect-headers.js";
+import {
+  dropBodyHeaders,
+  retainSafeHeadersForCrossOriginRedirect as retainSafeRedirectHeaders,
+} from "./redirect-headers.js";
 import {
   fetchWithRuntimeDispatcher,
   isMockedFetch,
@@ -100,6 +100,8 @@ export type GuardedFetchOptions = {
   auditContext?: string;
   /** Internal opt-in for reusing freshly revalidated, direct pinned dispatchers. */
   dispatcherPool?: PinnedDispatcherPool;
+  /** Payload-free synchronous observation after network preflight, once per HTTP attempt. */
+  onRequestStart?: (redirectCount: number) => void;
 };
 
 export type GuardedFetchResult = {
@@ -416,20 +418,6 @@ function restoreRedirectAuthorization(params: {
   return { ...params.init, headers };
 }
 
-function dropBodyHeaders(headers?: HeadersInit): HeadersInit | undefined {
-  if (!headers) {
-    return headers;
-  }
-  const nextHeaders = new Headers(normalizeHeadersInitForFetch(headers));
-  nextHeaders.delete("content-encoding");
-  nextHeaders.delete("content-language");
-  nextHeaders.delete("content-length");
-  nextHeaders.delete("content-location");
-  nextHeaders.delete("content-type");
-  nextHeaders.delete("transfer-encoding");
-  return nextHeaders;
-}
-
 function rewriteRedirectInitForMethod(params: {
   init?: RequestInit;
   status: number;
@@ -708,6 +696,11 @@ async function fetchWithSsrFGuardInternal(
       // because the default global fetch path will not honor per-request
       // dispatchers.
       const shouldUseRuntimeFetch = Boolean(dispatcher) && !supportsDispatcherInit;
+      try {
+        params.onRequestStart?.(redirectCount);
+      } catch {
+        // Timing observers cannot prevent an otherwise authorized network request.
+      }
       const response = shouldUseRuntimeFetch
         ? await fetchWithRuntimeDispatcher(parsedUrl.toString(), init)
         : await defaultFetch(parsedUrl.toString(), init);

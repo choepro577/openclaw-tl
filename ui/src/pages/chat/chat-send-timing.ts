@@ -225,9 +225,21 @@ export function chatSendAckServerTimingEventFields(ack: ChatSendAck): Record<str
     ...(typeof timing?.receivedToAckMs === "number"
       ? { serverReceivedToAckMs: timing.receivedToAckMs }
       : {}),
+    ...(typeof timing?.receivedToNormalizeMs === "number"
+      ? { serverReceivedToNormalizeMs: timing.receivedToNormalizeMs }
+      : {}),
+    ...(typeof timing?.normalizeMs === "number" ? { serverNormalizeMs: timing.normalizeMs } : {}),
+    ...(typeof timing?.enterpriseProjectionMs === "number"
+      ? { serverEnterpriseProjectionMs: timing.enterpriseProjectionMs }
+      : {}),
+    ...(typeof timing?.authorizationMs === "number"
+      ? { serverAuthorizationMs: timing.authorizationMs }
+      : {}),
     ...(typeof timing?.loadSessionMs === "number"
       ? { serverLoadSessionMs: timing.loadSessionMs }
       : {}),
+    ...(typeof timing?.admissionMs === "number" ? { serverAdmissionMs: timing.admissionMs } : {}),
+    ...(typeof timing?.queueWaitMs === "number" ? { serverQueueWaitMs: timing.queueWaitMs } : {}),
     ...(typeof timing?.prepareAttachmentsMs === "number"
       ? { serverPrepareAttachmentsMs: timing.prepareAttachmentsMs }
       : {}),

@@ -304,20 +304,6 @@ export function resolveEnterpriseSkillScript(params: {
   };
 }
 
-export function skillScriptRisk(params: {
-  snapshot?: SkillSnapshot;
-  skillKey: string;
-  entrypointName: string;
-  operation?: string;
-}): "read" | "approval" {
-  const resolved = resolveEnterpriseSkillScript(params);
-  if (resolved.entrypoint.kind === "fixed") {
-    return resolved.entrypoint.risk === "read" ? "read" : "approval";
-  }
-  const operation = params.operation?.trim();
-  return operation && resolved.entrypoint.readOperations?.includes(operation) ? "read" : "approval";
-}
-
 function assertNoSecrets(value: unknown, depth = 0): void {
   if (depth > 16) {
     throw new EnterpriseSkillScriptError("SKILL_ARGUMENTS_INVALID", 400);
@@ -452,21 +438,47 @@ function authFailure(value: unknown): boolean {
   ].some((needle) => text.includes(needle));
 }
 
-function scrubSecrets(value: unknown, token: string): unknown {
+function isUserVisibleHttpUrl(value: string): boolean {
+  try {
+    const parsed = new URL(value);
+    return (
+      (parsed.protocol === "http:" || parsed.protocol === "https:") &&
+      !parsed.username &&
+      !parsed.password
+    );
+  } catch {
+    return false;
+  }
+}
+
+function scrubSecrets(
+  value: unknown,
+  token: string,
+  userVisibleUrlPaths = new Set<string>(),
+  pathParts: string[] = [],
+): unknown {
   if (typeof value === "string") {
+    if (userVisibleUrlPaths.has(pathParts.join(".")) && isUserVisibleHttpUrl(value)) {
+      return value;
+    }
     return token && value.includes(token) ? value.replaceAll(token, "<redacted>") : value;
   }
   if (Array.isArray(value)) {
-    return value.map((child) => scrubSecrets(child, token));
+    return value.map((child) => scrubSecrets(child, token, userVisibleUrlPaths, pathParts));
   }
   if (!isRecord(value)) {
     return value;
   }
   return Object.fromEntries(
-    Object.entries(value).map(([key, child]) => [
-      key,
-      SECRET_KEY_PATTERN.test(key) ? "<redacted>" : scrubSecrets(child, token),
-    ]),
+    Object.entries(value).map(([key, child]) => {
+      const childPath = [...pathParts, key];
+      return [
+        key,
+        SECRET_KEY_PATTERN.test(key) && !userVisibleUrlPaths.has(childPath.join("."))
+          ? "<redacted>"
+          : scrubSecrets(child, token, userVisibleUrlPaths, childPath),
+      ];
+    }),
   );
 }
 
@@ -657,7 +669,11 @@ export async function runEnterpriseSkillScript(params: {
       throw new EnterpriseSkillScriptError("SKILL_AUTH_REQUIRED", 401);
     }
     outcome = "success";
-    return params.login === true ? parsed : scrubSecrets(parsed, token);
+    const userVisibleUrlPaths =
+      resolved.entrypoint.kind === "operation" && operation
+        ? new Set(resolved.entrypoint.userVisibleUrlPaths?.[operation] ?? [])
+        : undefined;
+    return params.login === true ? parsed : scrubSecrets(parsed, token, userVisibleUrlPaths);
   } finally {
     appendEnterpriseAuditEvent({
       actorAccountId: params.accountId,

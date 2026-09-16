@@ -456,6 +456,95 @@ CREATE TABLE IF NOT EXISTS enterprise_extension_idempotency (
 CREATE INDEX IF NOT EXISTS idx_enterprise_extension_idempotency_expiry
   ON enterprise_extension_idempotency(expires_at);
 
+CREATE TABLE IF NOT EXISTS enterprise_agent_integrations (
+  id TEXT NOT NULL PRIMARY KEY,
+  agent_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'disabled', 'revoked')),
+  key_prefix TEXT NOT NULL UNIQUE,
+  key_hash TEXT NOT NULL UNIQUE,
+  previous_key_prefix TEXT,
+  previous_key_hash TEXT,
+  previous_key_expires_at INTEGER,
+  webhook_url TEXT,
+  webhook_secret_iv TEXT NOT NULL,
+  webhook_secret_auth_tag TEXT NOT NULL,
+  webhook_secret_ciphertext TEXT NOT NULL,
+  upload_policy TEXT NOT NULL DEFAULT 'disabled'
+    CHECK (upload_policy IN ('disabled', 'images', 'images_and_documents')),
+  max_upload_bytes INTEGER NOT NULL DEFAULT 10485760
+    CHECK (max_upload_bytes BETWEEN 1048576 AND 20971520),
+  rate_limit_per_minute INTEGER NOT NULL DEFAULT 60 CHECK (rate_limit_per_minute > 0),
+  burst_limit INTEGER NOT NULL DEFAULT 20 CHECK (burst_limit > 0),
+  max_sse_concurrency INTEGER NOT NULL DEFAULT 10 CHECK (max_sse_concurrency > 0),
+  max_background_concurrency INTEGER NOT NULL DEFAULT 5 CHECK (max_background_concurrency > 0),
+  request_count INTEGER NOT NULL DEFAULT 0 CHECK (request_count >= 0),
+  error_count INTEGER NOT NULL DEFAULT 0 CHECK (error_count >= 0),
+  running_count INTEGER NOT NULL DEFAULT 0 CHECK (running_count >= 0),
+  last_used_at INTEGER,
+  last_webhook_at INTEGER,
+  last_webhook_status TEXT,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL,
+  revoked_at INTEGER
+) STRICT;
+
+CREATE INDEX IF NOT EXISTS idx_enterprise_agent_integrations_agent
+  ON enterprise_agent_integrations(agent_id, status, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS enterprise_developer_responses (
+  id TEXT NOT NULL PRIMARY KEY,
+  integration_id TEXT NOT NULL,
+  agent_id TEXT NOT NULL,
+  external_conversation_id TEXT NOT NULL,
+  external_user_id TEXT,
+  session_key TEXT NOT NULL,
+  previous_response_id TEXT,
+  idempotency_key TEXT,
+  background INTEGER NOT NULL DEFAULT 0 CHECK (background IN (0, 1)),
+  status TEXT NOT NULL CHECK (status IN ('queued', 'in_progress', 'completed', 'failed', 'incomplete')),
+  request_json TEXT NOT NULL,
+  response_json TEXT,
+  usage_json TEXT,
+  error_json TEXT,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL,
+  expires_at INTEGER NOT NULL,
+  FOREIGN KEY (integration_id) REFERENCES enterprise_agent_integrations(id) ON DELETE CASCADE,
+  FOREIGN KEY (previous_response_id) REFERENCES enterprise_developer_responses(id) ON DELETE SET NULL
+) STRICT;
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_enterprise_developer_responses_idempotency
+  ON enterprise_developer_responses(integration_id, idempotency_key)
+  WHERE idempotency_key IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_enterprise_developer_responses_active_conversation
+  ON enterprise_developer_responses(integration_id, external_conversation_id)
+  WHERE status IN ('queued', 'in_progress');
+CREATE INDEX IF NOT EXISTS idx_enterprise_developer_responses_conversation
+  ON enterprise_developer_responses(integration_id, external_conversation_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_enterprise_developer_responses_expiry
+  ON enterprise_developer_responses(expires_at);
+
+CREATE TABLE IF NOT EXISTS enterprise_developer_webhook_deliveries (
+  event_id TEXT NOT NULL PRIMARY KEY,
+  response_id TEXT NOT NULL,
+  integration_id TEXT NOT NULL,
+  event_type TEXT NOT NULL CHECK (event_type IN ('response.completed', 'response.failed', 'response.incomplete')),
+  payload_json TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'delivered', 'permanent_failure')),
+  attempt_count INTEGER NOT NULL DEFAULT 0 CHECK (attempt_count >= 0),
+  next_attempt_at INTEGER NOT NULL,
+  last_error TEXT,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL,
+  delivered_at INTEGER,
+  FOREIGN KEY (response_id) REFERENCES enterprise_developer_responses(id) ON DELETE CASCADE,
+  FOREIGN KEY (integration_id) REFERENCES enterprise_agent_integrations(id) ON DELETE CASCADE
+) STRICT;
+
+CREATE INDEX IF NOT EXISTS idx_enterprise_developer_webhooks_due
+  ON enterprise_developer_webhook_deliveries(status, next_attempt_at);
+
 `;
 
 const ENTERPRISE_KNOWLEDGE_SCHEMA_SQL = `

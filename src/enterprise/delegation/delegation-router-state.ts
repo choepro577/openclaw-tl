@@ -196,6 +196,13 @@ export function readEnterpriseDelegationDecisionRoutes(
 
 export function consumeEnterpriseDelegationDecision(params: {
   decisionId: string;
+  /**
+   * Optional model-tool assignment projection. When present, validate the
+   * complete target set before marking the decision consumed, in this same
+   * synchronous transition. Omitting it preserves the existing state-only
+   * consumer contract.
+   */
+  assignmentAgentIds?: readonly string[];
   accountId: string;
   personalAgentId: string;
   sessionKey: string;
@@ -211,6 +218,20 @@ export function consumeEnterpriseDelegationDecision(params: {
     return lookup;
   }
   const decision = lookup.decision;
+  if (params.assignmentAgentIds !== undefined) {
+    const requestedIds = params.assignmentAgentIds.map((agentId) => normalizeAgentId(agentId));
+    const requestedSet = new Set(requestedIds);
+    const approvedIds = decision.routes.map((route) => normalizeAgentId(route.agentId));
+    const approvedSet = new Set(approvedIds);
+    if (
+      requestedIds.length !== requestedSet.size ||
+      approvedIds.length !== approvedSet.size ||
+      requestedSet.size !== approvedSet.size ||
+      [...approvedSet].some((agentId) => !requestedSet.has(agentId))
+    ) {
+      return { ok: false, reasonCode: "assignment_set_mismatch" };
+    }
+  }
   decision.consumedAt = Date.now();
   return { ok: true, decision };
 }

@@ -2,7 +2,10 @@
 import { normalizeOptionalString } from "@openclaw/normalization-core/string-coerce";
 import type { SessionEntry } from "../config/sessions/types.js";
 import type { OpenClawConfig } from "../config/types.openclaw.js";
+import { getCurrentPluginMetadataSnapshotRuntime } from "../plugins/plugin-metadata-snapshot.runtime.js";
+import { getActivePluginRegistryWorkspaceDirFromStateCore } from "../plugins/runtime-workspace-state.js";
 import { DEFAULT_MODEL, DEFAULT_PROVIDER } from "./defaults.js";
+import type { ModelManifestNormalizationContext } from "./model-ref-shared.js";
 import {
   inferUniqueProviderFromConfiguredModels,
   normalizeStoredOverrideModel,
@@ -16,12 +19,34 @@ type SessionModelEntry =
   | SessionEntry
   | Pick<SessionEntry, "model" | "modelProvider" | "modelOverride" | "providerOverride">;
 
+type SessionModelRefOptions = {
+  allowPluginNormalization?: boolean;
+} & ModelManifestNormalizationContext;
+
+function resolveSessionManifestPlugins(
+  cfg: OpenClawConfig,
+  options?: SessionModelRefOptions,
+): ModelManifestNormalizationContext["manifestPlugins"] {
+  if (options?.manifestPlugins !== undefined) {
+    return options.manifestPlugins;
+  }
+  // Gateway startup publishes this snapshot before chat requests. Reuse it for
+  // persisted model parsing so a session read does not rescan plugin manifests.
+  return getCurrentPluginMetadataSnapshotRuntime({
+    config: cfg,
+    env: process.env,
+    workspaceDir: getActivePluginRegistryWorkspaceDirFromStateCore(),
+    allowWorkspaceScopedSnapshot: true,
+  })?.plugins;
+}
+
 export function resolveSessionModelRef(
   cfg: OpenClawConfig,
   entry?: SessionModelEntry,
   agentId?: string,
-  options?: { allowPluginNormalization?: boolean },
+  options?: SessionModelRefOptions,
 ): { provider: string; model: string } {
+  const manifestPlugins = resolveSessionManifestPlugins(cfg, options);
   const normalizedOverride = normalizeStoredOverrideModel({
     providerOverride: entry?.providerOverride,
     modelOverride: entry?.modelOverride,
@@ -32,6 +57,7 @@ export function resolveSessionModelRef(
       overrideProvider: normalizedOverride.providerOverride,
       overrideModel: normalizedOverride.modelOverride,
       allowPluginNormalization: options?.allowPluginNormalization,
+      manifestPlugins,
     })!;
   }
   const runtimeProvider = normalizeOptionalString(entry?.modelProvider);
@@ -42,12 +68,14 @@ export function resolveSessionModelRef(
         cfg,
         agentId,
         allowPluginNormalization: options?.allowPluginNormalization,
+        manifestPlugins,
       })
     : resolveConfiguredModelRef({
         cfg,
         defaultProvider: DEFAULT_PROVIDER,
         defaultModel: DEFAULT_MODEL,
         allowPluginNormalization: options?.allowPluginNormalization,
+        manifestPlugins,
       });
 
   const persisted = resolvePersistedSelectedModelRef({
@@ -60,6 +88,7 @@ export function resolveSessionModelRef(
     overrideProvider: normalizedOverride.providerOverride,
     overrideModel: normalizedOverride.modelOverride,
     allowPluginNormalization: options?.allowPluginNormalization,
+    manifestPlugins,
   });
   return persisted ?? resolved;
 }
@@ -69,7 +98,7 @@ export function resolveSessionModelIdentityRef(
   entry?: SessionModelEntry,
   agentId?: string,
   fallbackModelRef?: string,
-  options?: { allowPluginNormalization?: boolean },
+  options?: SessionModelRefOptions,
 ): { provider?: string; model: string } {
   const runtimeModel = entry?.model?.trim();
   const runtimeProvider = entry?.modelProvider?.trim();
@@ -77,10 +106,12 @@ export function resolveSessionModelIdentityRef(
     if (runtimeProvider) {
       return { provider: runtimeProvider, model: runtimeModel };
     }
+    const manifestPlugins = resolveSessionManifestPlugins(cfg, options);
     const inferredProvider = inferUniqueProviderFromConfiguredModels({
       cfg,
       model: runtimeModel,
       agentId,
+      manifestPlugins,
     });
     if (inferredProvider) {
       return { provider: inferredProvider, model: runtimeModel };
@@ -88,6 +119,7 @@ export function resolveSessionModelIdentityRef(
     if (runtimeModel.includes("/")) {
       const parsedRuntime = parseModelRef(runtimeModel, DEFAULT_PROVIDER, {
         allowPluginNormalization: options?.allowPluginNormalization,
+        manifestPlugins,
       });
       if (parsedRuntime) {
         return { provider: parsedRuntime.provider, model: parsedRuntime.model };
@@ -98,8 +130,10 @@ export function resolveSessionModelIdentityRef(
   }
   const fallbackRef = fallbackModelRef?.trim();
   if (fallbackRef) {
+    const manifestPlugins = resolveSessionManifestPlugins(cfg, options);
     const parsedFallback = parseModelRef(fallbackRef, DEFAULT_PROVIDER, {
       allowPluginNormalization: options?.allowPluginNormalization,
+      manifestPlugins,
     });
     if (parsedFallback) {
       return { provider: parsedFallback.provider, model: parsedFallback.model };
@@ -114,8 +148,6 @@ export function resolveSessionModelIdentityRef(
     }
     return { model: fallbackRef };
   }
-  const resolved = resolveSessionModelRef(cfg, entry, agentId, {
-    allowPluginNormalization: options?.allowPluginNormalization,
-  });
+  const resolved = resolveSessionModelRef(cfg, entry, agentId, options);
   return { provider: resolved.provider, model: resolved.model };
 }

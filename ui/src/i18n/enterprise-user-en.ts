@@ -495,7 +495,7 @@ export const enterpriseUserEn = {
   sharedUserAddressDescription: "For example: Alex, Mr. Minh, chị Lan, or bạn.",
   plugins: "Plugins",
   pluginsDescription:
-    "Install Skills for one Agent or discover native plugins; plugins that need access send a request to Admin.",
+    "Install Skills for Personal Agent or discover native plugins; plugins that need access send a request to Admin.",
   pluginsInstalled: "Installed",
   pluginsDiscover: "Discover",
   pluginsRequests: "Requests",

@@ -1,0 +1,12 @@
+{
+  "agent": "purchase-order-skill",
+  "beforeSkills": [
+    "purchase-order-skill",
+    "qa-shared-acceptance-skill"
+  ],
+  "afterSkills": [
+    "purchase-order-skill"
+  ],
+  "action": "remove",
+  "purpose": "Verify existing session loses removed skill at next turn"
+}

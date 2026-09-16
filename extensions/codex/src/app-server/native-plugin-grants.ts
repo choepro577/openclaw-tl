@@ -6,7 +6,12 @@ import {
 import { parseCodexPluginMarketplaceId } from "../plugin-marketplace-discovery.js";
 import type { CodexAppServerClient } from "./client.js";
 import { isJsonObject } from "./protocol.js";
-import type { CodexListMcpServerStatusResponse, CodexMcpServerStatus, v2 } from "./protocol.js";
+import type {
+  CodexListMcpServerStatusResponse,
+  CodexMcpServerStatus,
+  JsonObject,
+  v2,
+} from "./protocol.js";
 
 /** Exact enterprise grant returned by the active account/agent policy. */
 export type CodexNativePluginGrant = Readonly<{
@@ -466,6 +471,44 @@ export function assertCodexPluginCapabilityGrants(params: {
       throw new Error(`${CODEX_NATIVE_PLUGIN_ACTION_DENIED_MESSAGE} [capability_digest_mismatch]`);
     }
   }
+}
+
+/** Use Codex's native policy for granted business MCPs, including plugin-loaded servers. */
+export function buildCodexGrantedMcpApprovalPatch(params: {
+  grants: readonly CodexNativePluginGrant[];
+  records: Parameters<typeof assertCodexPluginCapabilityGrants>[0]["records"];
+}): JsonObject {
+  const plugins: JsonObject = {};
+  for (const { policy, detail } of params.records) {
+    if (
+      !policy.enabled ||
+      !detail ||
+      detail.apps.length > 0 ||
+      (detail.appTemplates?.length ?? 0) > 0 ||
+      detail.mcpServers.includes(CODEX_APPS_MCP_SERVER) ||
+      !params.grants.some(
+        (grant) =>
+          grant.pluginName === policy.pluginName &&
+          sameCodexMarketplace(grant.marketplaceName, policy.marketplaceName),
+      )
+    ) {
+      continue;
+    }
+    const servers = detail.mcpServers.filter((name) => name !== CODEX_APPS_MCP_SERVER);
+    if (servers.length > 0) {
+      plugins[codexNativePluginGrantKey(policy)] = {
+        mcp_servers: Object.fromEntries(
+          servers.map((name) => [
+            name,
+            {
+              default_tools_approval_mode: "approve",
+            },
+          ]),
+        ),
+      };
+    }
+  }
+  return Object.keys(plugins).length > 0 ? { plugins } : {};
 }
 
 function sameCodexMarketplace(left: string, right: string): boolean {

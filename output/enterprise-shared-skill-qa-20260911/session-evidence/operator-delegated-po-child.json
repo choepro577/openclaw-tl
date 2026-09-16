@@ -1,0 +1,179 @@
+{
+  "capturedAt": "2026-09-11T15:18:09.257767+00:00",
+  "label": "operator-delegated-po-child",
+  "agentId": "purchase-order-skill",
+  "sessionId": "71cd67f3-e59b-44c2-a7fd-fe7c236b69f8",
+  "sessionKey": "agent:purchase-order-skill:subagent:cd14837d-d4f4-4265-bd20-3891ea756c49",
+  "runIds": [
+    "9555e241-8ec8-470e-8966-f5c48a1a222f"
+  ],
+  "modelId": null,
+  "materializedCatalog": {
+    "toolCount": 2,
+    "toolNames": [
+      "read",
+      "skill_script"
+    ]
+  },
+  "transcript": {
+    "eventCount": 18,
+    "eventTypes": {
+      "message": 17,
+      "session": 1
+    },
+    "toolCalls": [
+      "read",
+      "skill_script",
+      "skill_script",
+      "skill_script",
+      "skill_script",
+      "skill_script",
+      "skill_script"
+    ],
+    "toolResults": [
+      "read",
+      "skill_script",
+      "skill_script",
+      "skill_script",
+      "skill_script",
+      "skill_script",
+      "skill_script"
+    ],
+    "toolErrorCount": 0,
+    "codes": [
+      "CN01",
+      "CN02",
+      "CN042",
+      "CN043",
+      "CN044",
+      "CN045",
+      "CN046",
+      "CN05",
+      "CN06",
+      "CN07",
+      "CN08",
+      "CN09",
+      "CN10",
+      "CN11",
+      "CN12",
+      "CN13",
+      "CN15",
+      "CN16",
+      "CN18",
+      "CN19",
+      "CN20",
+      "CN21",
+      "CN22",
+      "CN23",
+      "CN24",
+      "CN25",
+      "CN26",
+      "CN27",
+      "CN28",
+      "CN29",
+      "CN30",
+      "CN31",
+      "CN32",
+      "CN33",
+      "CN34",
+      "CN35",
+      "CN36",
+      "CN37",
+      "CN38",
+      "CN39",
+      "CN40",
+      "CN41",
+      "SKILL_ROUTER_REQUIRED",
+      "TL01"
+    ]
+  },
+  "trajectory": {
+    "eventCount": 19,
+    "eventTypes": {
+      "context.compiled": 1,
+      "model.completed": 1,
+      "prompt.submitted": 1,
+      "session.ended": 1,
+      "session.started": 1,
+      "tool.call": 7,
+      "tool.result": 7
+    },
+    "toolCalls": [
+      "read",
+      "skill_script",
+      "skill_script",
+      "skill_script",
+      "skill_script",
+      "skill_script",
+      "skill_script"
+    ],
+    "toolResults": [
+      "read",
+      "skill_script",
+      "skill_script",
+      "skill_script",
+      "skill_script",
+      "skill_script",
+      "skill_script"
+    ],
+    "toolResultSuccess": [
+      true,
+      true,
+      true,
+      true,
+      false,
+      true,
+      true
+    ],
+    "codes": []
+  },
+  "taskRuns": [
+    {
+      "runId": "9555e241-8ec8-470e-8966-f5c48a1a222f",
+      "status": "succeeded",
+      "deliveryStatus": "delivered",
+      "toolUseCount": 7,
+      "lastToolName": "skill_script",
+      "errorClass": null
+    }
+  ],
+  "skillOperations": [
+    {
+      "skill": "purchase-order-skill",
+      "entrypoint": "call",
+      "operation": "router_tool_search"
+    },
+    {
+      "skill": "purchase-order-skill",
+      "entrypoint": "call",
+      "operation": "router_tool_search"
+    },
+    {
+      "skill": "purchase-order-skill",
+      "entrypoint": "call",
+      "operation": "search_po_sites"
+    },
+    {
+      "skill": "purchase-order-skill",
+      "entrypoint": "call",
+      "operation": "get_po_draft_list"
+    },
+    {
+      "skill": "purchase-order-skill",
+      "entrypoint": "call",
+      "operation": "router_tool_search"
+    },
+    {
+      "skill": "purchase-order-skill",
+      "entrypoint": "call",
+      "operation": "get_po_draft_list"
+    }
+  ],
+  "acceptanceSignals": {
+    "hasMaterializedToolCatalog": true,
+    "hasToolCall": true,
+    "hasSkillScriptCall": true,
+    "hasRouterCall": true,
+    "hasAuthorizationError": false
+  }
+}

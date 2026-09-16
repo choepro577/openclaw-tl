@@ -1,0 +1,37 @@
+{
+  "capturedAt": "2026-09-11T15:09:31.079293+00:00",
+  "label": "operator-direct-po-in-progress",
+  "agentId": "purchase-order-skill",
+  "sessionId": "9904b634-4f30-450f-af7f-32704d2e8a45",
+  "sessionKey": null,
+  "runIds": [],
+  "modelId": null,
+  "materializedCatalog": {},
+  "transcript": {
+    "eventCount": 2,
+    "eventTypes": {
+      "message": 1,
+      "session": 1
+    },
+    "toolCalls": [],
+    "toolResults": [],
+    "toolErrorCount": 0,
+    "codes": []
+  },
+  "trajectory": {
+    "eventCount": 0,
+    "eventTypes": {},
+    "toolCalls": [],
+    "toolResults": [],
+    "toolResultSuccess": [],
+    "codes": []
+  },
+  "taskRuns": [],
+  "acceptanceSignals": {
+    "hasMaterializedToolCatalog": false,
+    "hasToolCall": false,
+    "hasSkillScriptCall": false,
+    "hasRouterCall": false,
+    "hasAuthorizationError": false
+  }
+}

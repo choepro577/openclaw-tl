@@ -9,13 +9,14 @@ import type { EmbeddedRunAttemptParams } from "./types.js";
 
 const resolveProviderRuntimePluginHandle = vi.hoisted(() => vi.fn());
 const resolveSandboxContext = vi.hoisted(() => vi.fn(async () => null));
+const acquireSandboxActiveLease = vi.hoisted(() => vi.fn(async () => () => undefined));
 
 vi.mock("../../../plugins/provider-hook-runtime.js", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../../plugins/provider-hook-runtime.js")>()),
   resolveProviderRuntimePluginHandle,
 }));
 
-vi.mock("../../sandbox.js", () => ({ resolveSandboxContext }));
+vi.mock("../../sandbox.js", () => ({ acquireSandboxActiveLease, resolveSandboxContext }));
 
 import {
   installEmbeddedAttemptContextGuards,
@@ -147,6 +148,38 @@ describe("prepareEmbeddedAttemptSetup", () => {
     } as unknown as EmbeddedRunAttemptParams);
 
     expect(resolveSandboxContext).toHaveBeenCalledWith(expect.objectContaining({ skillsSnapshot }));
+  });
+
+  it("reuses a sandbox already admitted by plugin dispatch", async () => {
+    const workspaceDir = await fs.mkdtemp(
+      path.join(os.tmpdir(), "openclaw-attempt-admitted-sandbox-"),
+    );
+    const releaseSandbox = vi.fn();
+    const sandbox = {
+      enabled: true,
+      lifecycleActiveRelease: releaseSandbox,
+      lifecycleKey: "session:admitted-sandbox",
+      workspaceAccess: "rw",
+      workspaceDir,
+    } as never;
+
+    try {
+      const setup = await resolveAttemptWorkspaceSandbox({
+        config: {},
+        sessionId: "session-admitted-sandbox",
+        sessionKey: "agent:main:admitted-sandbox",
+        workspaceDir,
+        sandbox,
+        holdSandboxLease: true,
+      });
+
+      expect(resolveSandboxContext).not.toHaveBeenCalled();
+      expect(setup.sandbox).toBe(sandbox);
+      expect(setup.sandboxLifecycleRelease).toBe(releaseSandbox);
+    } finally {
+      releaseSandbox();
+      await fs.rm(workspaceDir, { recursive: true, force: true });
+    }
   });
 
   it.each(["ro", "rw"] as const)(

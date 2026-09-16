@@ -37,6 +37,9 @@ export type ProviderModelIdNormalizationOptions = {
   manifestPlugins?: readonly ManifestModelIdNormalizationRecord[];
 };
 
+/** Normalizes model ids against one immutable provider/plugin policy generation. */
+export type StaticProviderModelIdNormalizer = (provider: string, model: string) => string;
+
 type ManifestModelIdNormalizationProvider = {
   aliases?: Record<string, string>;
   stripPrefixes?: string[];
@@ -105,7 +108,7 @@ export function normalizeStaticProviderModelId(
  */
 export function createStaticProviderModelIdNormalizer(
   options: ProviderModelIdNormalizationOptions = {},
-): (provider: string, model: string) => string {
+): StaticProviderModelIdNormalizer {
   if (options.allowManifestNormalization === false) {
     return (provider, model) =>
       normalizeBuiltInProviderModelId(normalizeProviderId(provider), model);

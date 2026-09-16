@@ -94,7 +94,7 @@ async function spawnDockerProcess(commandAndArgs: string[]) {
   if (command !== "docker" && command !== "podman") {
     code = 1;
     stderr = `unexpected command: ${command}`;
-  } else if (args[0] === "inspect" && args[1] === "-f" && args[2] === "{{.State.Running}}") {
+  } else if (args[0] === "inspect" && args[1] === "-f" && args[2]?.includes("{{.State.Running}}")) {
     if (spawnState.inspectError) {
       code = 125;
       stderr = spawnState.inspectError;
@@ -102,7 +102,10 @@ async function spawnDockerProcess(commandAndArgs: string[]) {
       code = 1;
       stderr = "No such object";
     } else {
-      stdout = spawnState.inspectRunning ? "true\n" : "false\n";
+      const running = spawnState.inspectRunning ? "true" : "false";
+      stdout = args[2]?.includes("\t")
+        ? `${running}\t${spawnState.labelHash || "<no value>"}\n`
+        : `${running}\n`;
     }
   } else if (
     args[0] === "inspect" &&
@@ -296,6 +299,11 @@ describe("ensureSandboxContainer config-hash recreation", () => {
     expect(second).toBe(first);
     expect(spawnState.calls.filter((call) => call.args[0] === "create")).toHaveLength(1);
     expect(spawnState.calls.filter((call) => call.args[0] === "start")).toHaveLength(1);
+    expect(
+      spawnState.calls.filter(
+        (call) => call.args[0] === "inspect" && call.args[2]?.includes("{{.State.Running}}"),
+      ),
+    ).toHaveLength(2);
     expect(registryMocks.updateRegistry).toHaveBeenCalledTimes(2);
   });
 

@@ -17,6 +17,36 @@ export type EnterprisePortalAudience = "admin" | "user";
 const MAX_TRACKED_SESSION_TOUCHES = 10_000;
 const lastSessionTouchAt = new Map<string, number>();
 
+export type EnterpriseSessionRevocationEvent = {
+  accountId?: string;
+  sessionId?: string;
+  reason: string;
+};
+
+const sessionRevocationListeners = new Set<(event: EnterpriseSessionRevocationEvent) => void>();
+
+/**
+ * Lets process-local consumers retire work that was scheduled for a revoked
+ * session. Listeners are observers only: revocation has already committed and
+ * must never depend on a prewarm task succeeding.
+ */
+export function registerEnterpriseSessionRevocationListener(
+  listener: (event: EnterpriseSessionRevocationEvent) => void,
+): () => void {
+  sessionRevocationListeners.add(listener);
+  return () => sessionRevocationListeners.delete(listener);
+}
+
+function notifyEnterpriseSessionRevocation(event: EnterpriseSessionRevocationEvent): void {
+  for (const listener of sessionRevocationListeners) {
+    try {
+      listener(event);
+    } catch {
+      // Best-effort lifecycle observer; never turn a committed revoke into an error.
+    }
+  }
+}
+
 type SessionRow = {
   id: string;
   account_id: string;
@@ -151,6 +181,7 @@ export function revokeEnterpriseSession(
     options,
     { operationLabel: "enterprise.sessions.revoke" },
   );
+  notifyEnterpriseSessionRevocation({ sessionId, reason });
 }
 
 export function revokeEnterpriseAccountSessions(
@@ -169,6 +200,7 @@ export function revokeEnterpriseAccountSessions(
     options,
     { operationLabel: "enterprise.sessions.revoke-account" },
   );
+  notifyEnterpriseSessionRevocation({ accountId, reason });
 }
 
 export function revokeEnterpriseStoredSession(
@@ -189,6 +221,9 @@ export function revokeEnterpriseStoredSession(
     options,
     { operationLabel: "enterprise.sessions.revoke-stored" },
   );
+  // The stored id is hashed at rest and is not the portal session id. Retire
+  // all account prewarms so no revoked stored session can retain resources.
+  notifyEnterpriseSessionRevocation({ accountId, reason });
 }
 
 export function listEnterpriseAccountSessions(

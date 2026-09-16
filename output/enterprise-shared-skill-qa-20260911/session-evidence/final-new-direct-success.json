@@ -1,0 +1,164 @@
+{
+  "capturedAt": "2026-09-12T01:23:10.833965+00:00",
+  "label": "final-new-direct-success",
+  "agentId": "purchase-order-skill",
+  "sessionId": "d88a4963-c920-4d9a-bb59-3fbe2d328f6b",
+  "sessionKey": "agent:purchase-order-skill:dashboard:742c2033-5065-4fb8-99f6-df4936310558",
+  "runIds": [
+    "785361dd-31db-4967-990a-84ec5ae307aa"
+  ],
+  "modelId": null,
+  "materializedCatalog": {
+    "toolCount": 3,
+    "toolNames": [
+      "read",
+      "session_status",
+      "skill_script"
+    ]
+  },
+  "transcript": {
+    "eventCount": 15,
+    "eventTypes": {
+      "message": 14,
+      "session": 1
+    },
+    "toolCalls": [
+      "read",
+      "skill_script",
+      "skill_script",
+      "skill_script",
+      "skill_script"
+    ],
+    "toolResults": [
+      "read",
+      "skill_script",
+      "skill_script",
+      "skill_script",
+      "skill_script"
+    ],
+    "toolErrorCount": 0,
+    "codes": [
+      "CN01",
+      "CN02",
+      "CN042",
+      "CN043",
+      "CN044",
+      "CN045",
+      "CN046",
+      "CN05",
+      "CN06",
+      "CN07",
+      "CN08",
+      "CN09",
+      "CN10",
+      "CN11",
+      "CN12",
+      "CN13",
+      "CN15",
+      "CN16",
+      "CN18",
+      "CN19",
+      "CN20",
+      "CN21",
+      "CN22",
+      "CN23",
+      "CN24",
+      "CN25",
+      "CN26",
+      "CN27",
+      "CN28",
+      "CN29",
+      "CN30",
+      "CN31",
+      "CN32",
+      "CN33",
+      "CN34",
+      "CN35",
+      "CN36",
+      "CN37",
+      "CN38",
+      "CN39",
+      "CN40",
+      "CN41",
+      "TL01"
+    ]
+  },
+  "trajectory": {
+    "eventCount": 15,
+    "eventTypes": {
+      "context.compiled": 1,
+      "model.completed": 1,
+      "prompt.submitted": 1,
+      "session.ended": 1,
+      "session.started": 1,
+      "tool.call": 5,
+      "tool.result": 5
+    },
+    "toolCalls": [
+      "read",
+      "skill_script",
+      "skill_script",
+      "skill_script",
+      "skill_script"
+    ],
+    "toolResults": [
+      "read",
+      "skill_script",
+      "skill_script",
+      "skill_script",
+      "skill_script"
+    ],
+    "toolResultSuccess": [
+      true,
+      true,
+      true,
+      true,
+      true
+    ],
+    "codes": []
+  },
+  "taskRuns": [],
+  "skillOperations": [
+    {
+      "skill": "purchase-order-skill",
+      "entrypoint": "call",
+      "operation": "router_tool_search"
+    },
+    {
+      "skill": "purchase-order-skill",
+      "entrypoint": "call",
+      "operation": "router_tool_search"
+    },
+    {
+      "skill": "purchase-order-skill",
+      "entrypoint": "call",
+      "operation": "search_po_sites"
+    },
+    {
+      "skill": "purchase-order-skill",
+      "entrypoint": "call",
+      "operation": "get_po_draft_list"
+    }
+  ],
+  "acceptanceSignals": {
+    "hasMaterializedToolCatalog": true,
+    "hasToolCall": true,
+    "hasSkillScriptCall": true,
+    "hasRouterCall": true,
+    "hasAuthorizationError": false
+  },
+  "acceptance": {
+    "buildId": "2026.8.1-2d6f02d14f5e-2026-09-11T17-15-18.656Z",
+    "uiObserved": true,
+    "readOnly": true,
+    "date": "2026-09-12",
+    "todayDrafts": 0,
+    "totalDrafts": 10,
+    "personalToolPolicyRevision": 6,
+    "personalDeniedTools": [
+      "read",
+      "skill_script"
+    ],
+    "sameSessionAfterRegrant": false
+  }
+}

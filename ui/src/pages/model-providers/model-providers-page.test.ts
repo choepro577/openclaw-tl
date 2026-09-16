@@ -34,10 +34,6 @@ type ModelProvidersPageTestElement = HTMLElement & {
   selectedAgentId: string;
 };
 
-type AgentSelectElement = HTMLElement & {
-  onSelect: (value: string) => void;
-};
-
 function deferred<T>() {
   let resolve!: (value: T) => void;
   const promise = new Promise<T>((resolvePromise) => {
@@ -438,15 +434,12 @@ describe("ModelProvidersPage agent scope", () => {
     );
   });
 
-  it("switches application ownership from the concrete agent picker", async () => {
-    const { agentSelection, context } = createHarness("main");
+  it("does not expose per-agent model setup", async () => {
+    const { context } = createHarness("main");
     const page = appendPage(context);
-    await waitForFast(() => expect(page.querySelector("openclaw-agent-select")).not.toBeNull());
+    await page.updateComplete;
 
-    page.querySelector<AgentSelectElement>("openclaw-agent-select")?.onSelect("writer");
-
-    expect(agentSelection.set).toHaveBeenCalledWith("writer");
-    expect(agentSelection.setScope).not.toHaveBeenCalled();
+    expect(page.querySelector("openclaw-agent-select")).toBeNull();
   });
 
   it("links the page subtitle to the model providers guide", async () => {
@@ -607,7 +600,7 @@ describe("ModelProvidersPage agent scope", () => {
     });
   });
 
-  it("keeps a replacement agent's default-model draft after a global model write", async () => {
+  it("ignores application agent changes while saving global default models", async () => {
     const { agentSelection, context, notifySelection, runtimeConfig } = createHarness("main");
     const gate = deferred<void>();
     runtimeConfig.ensureLoaded.mockImplementationOnce(async () => gate.promise);
@@ -625,16 +618,16 @@ describe("ModelProvidersPage agent scope", () => {
     agentSelection.state.selectedId = "writer";
     agentSelection.state.scopeId = "writer";
     notifySelection();
-    await vi.waitFor(() => expect(page.selectedAgentId).toBe("writer"));
+    expect(page.selectedAgentId).toBe("main");
     gate.resolve();
     await saving;
 
     expect(runtimeConfig.patch).toHaveBeenCalledOnce();
-    expect(page.defaultsDraft).toBe(selection);
-    expect(page.messages.defaults).toBeUndefined();
+    expect(page.defaultsDraft).toBeNull();
+    expect(page.messages.defaults).toEqual({ kind: "success", text: "Default models saved." });
   });
 
-  it("keeps global provider writes without clearing a replacement agent's credential draft", async () => {
+  it("keeps a newer credential draft while ignoring application agent changes", async () => {
     const { agentSelection, context, notifySelection, runtimeConfig } = createHarness("main");
     const gate = deferred<void>();
     runtimeConfig.ensureLoaded.mockImplementationOnce(async () => gate.promise);
@@ -648,7 +641,7 @@ describe("ModelProvidersPage agent scope", () => {
     agentSelection.state.selectedId = "writer";
     agentSelection.state.scopeId = "writer";
     notifySelection();
-    await vi.waitFor(() => expect(page.selectedAgentId).toBe("writer"));
+    expect(page.selectedAgentId).toBe("main");
     page.keyEditorProvider = "anthropic";
     page.keyDraft = "writer-agent-unsaved-key";
     gate.resolve();
@@ -662,10 +655,10 @@ describe("ModelProvidersPage agent scope", () => {
     );
     expect(page.keyEditorProvider).toBe("anthropic");
     expect(page.keyDraft).toBe("writer-agent-unsaved-key");
-    expect(page.messages.openai).toBeUndefined();
+    expect(page.messages.openai).toEqual({ kind: "success", text: "Secret saved." });
   });
 
-  it("keeps a replacement agent's matching add-provider draft after a global write", async () => {
+  it("finishes a global provider write after the application agent changes", async () => {
     const { agentSelection, context, notifySelection, runtimeConfig } = createHarness("main");
     const gate = deferred<void>();
     runtimeConfig.ensureLoaded.mockImplementationOnce(async () => gate.promise);
@@ -680,7 +673,7 @@ describe("ModelProvidersPage agent scope", () => {
     agentSelection.state.selectedId = "writer";
     agentSelection.state.scopeId = "writer";
     notifySelection();
-    await vi.waitFor(() => expect(page.selectedAgentId).toBe("writer"));
+    expect(page.selectedAgentId).toBe("main");
     page.addProviderOpen = true;
     page.addProviderId = "anthropic";
     page.addProviderKey = "shared-provider-key";
@@ -688,13 +681,16 @@ describe("ModelProvidersPage agent scope", () => {
     await adding;
 
     expect(runtimeConfig.patch).toHaveBeenCalledOnce();
-    expect(page.addProviderOpen).toBe(true);
-    expect(page.addProviderId).toBe("anthropic");
-    expect(page.addProviderKey).toBe("shared-provider-key");
-    expect(page.messages.add).toBeUndefined();
+    expect(page.addProviderOpen).toBe(false);
+    expect(page.addProviderId).toBe("");
+    expect(page.addProviderKey).toBe("");
+    expect(page.messages.anthropic).toEqual({
+      kind: "success",
+      text: "Provider anthropic added.",
+    });
   });
 
-  it("stops queued agent-scoped logouts after the selected agent changes", async () => {
+  it("keeps queued credential logouts pinned to the default owner", async () => {
     const { agentSelection, context, notifySelection, request } = createHarness("main");
     const page = appendPage(context);
     await waitForFast(() => expect(page.data?.config).toEqual({}));
@@ -716,7 +712,7 @@ describe("ModelProvidersPage agent scope", () => {
     agentSelection.state.selectedId = "writer";
     agentSelection.state.scopeId = "writer";
     notifySelection();
-    await vi.waitFor(() => expect(page.selectedAgentId).toBe("writer"));
+    expect(page.selectedAgentId).toBe("main");
     agentSelection.state.selectedId = "main";
     agentSelection.state.scopeId = "main";
     notifySelection();
@@ -724,10 +720,10 @@ describe("ModelProvidersPage agent scope", () => {
     firstLogout.resolve({});
     await loggingOut;
 
-    expect(request.mock.calls.filter(([method]) => method === "models.authLogout")).toHaveLength(1);
+    expect(request.mock.calls.filter(([method]) => method === "models.authLogout")).toHaveLength(2);
   });
 
-  it("stops queued agent-scoped logouts when route data changes the selected agent", async () => {
+  it("ignores non-default route ownership during queued credential logouts", async () => {
     const { agentSelection, context, request, snapshot } = createHarness("main");
     const page = appendPage(context);
     await waitForFast(() => expect(page.data?.config).toEqual({}));
@@ -755,18 +751,14 @@ describe("ModelProvidersPage agent scope", () => {
       agentId: "writer",
     };
     await page.updateComplete;
-    expect(page.selectedAgentId).toBe("writer");
-    expect(page.busy).toEqual({});
-    expect(page.pendingLogoutProvider).toBeNull();
-    expect(page.messages).toEqual({});
-    expect(page.probeResults).toEqual({});
+    expect(page.selectedAgentId).toBe("main");
     firstLogout.resolve({});
     await loggingOut;
 
-    expect(request.mock.calls.filter(([method]) => method === "models.authLogout")).toHaveLength(1);
+    expect(request.mock.calls.filter(([method]) => method === "models.authLogout")).toHaveLength(2);
   });
 
-  it("reloads credential status when the agent selector changes", async () => {
+  it("does not change credential ownership with application agent selection", async () => {
     const { agentSelection, context, notifySelection, request } = createHarness("main");
     const page = appendPage(context);
 
@@ -784,18 +776,13 @@ describe("ModelProvidersPage agent scope", () => {
     agentSelection.state.scopeId = "writer";
     notifySelection();
 
-    await waitForFast(() =>
-      expect(request).toHaveBeenCalledWith(
-        "models.authStatus",
-        { agentId: "writer" },
-        { signal: expect.any(AbortSignal) },
-      ),
-    );
-    expect(request.mock.calls.filter(([method]) => method === "models.authStatus")).toHaveLength(1);
-    expect(page.busy).toEqual({});
+    await page.updateComplete;
+    expect(page.selectedAgentId).toBe("main");
+    expect(request.mock.calls.filter(([method]) => method === "models.authStatus")).toHaveLength(0);
+    expect(page.busy).toEqual({ "logout:openai": true });
   });
 
-  it("keeps the concrete selected owner after another page widens scope to all agents", async () => {
+  it("uses the configured default owner regardless of another page's selection", async () => {
     const { agentSelection, context, request } = createHarness("writer");
     agentSelection.state.scopeId = null;
 
@@ -804,27 +791,28 @@ describe("ModelProvidersPage agent scope", () => {
     await waitForFast(() =>
       expect(request).toHaveBeenCalledWith(
         "models.authStatus",
-        { agentId: "writer" },
+        { agentId: "main" },
         { signal: expect.any(AbortSignal) },
       ),
     );
-    expect(page.selectedAgentId).toBe("writer");
+    expect(page.selectedAgentId).toBe("main");
   });
 
-  it("does not request model data before a concrete agent is selected", async () => {
+  it("loads model data from the default owner without an application selection", async () => {
     const { agentSelection, context, request } = createHarness("main");
     agentSelection.state.selectedId = null;
     agentSelection.state.scopeId = null;
 
     const page = appendPage(context);
-    await page.updateComplete;
-
-    expect(page.selectedAgentId).toBe("");
-    expect(
-      request.mock.calls.filter(
-        ([method]) => method === "models.authStatus" || method === "models.list",
+    await waitForFast(() =>
+      expect(request).toHaveBeenCalledWith(
+        "models.authStatus",
+        { agentId: "main" },
+        { signal: expect.any(AbortSignal) },
       ),
-    ).toEqual([]);
+    );
+
+    expect(page.selectedAgentId).toBe("main");
   });
 
   it("shows a roster failure without automatically retrying it", async () => {
@@ -846,7 +834,7 @@ describe("ModelProvidersPage agent scope", () => {
     expect(context.agents.refreshList).toHaveBeenCalledOnce();
   });
 
-  it("recovers when the agent changes while a refresh is in flight", async () => {
+  it("keeps an in-flight refresh on the default owner", async () => {
     const { agentSelection, context, notifySelection, request, deferNextAuthStatus } =
       createHarness("main");
     const release = deferNextAuthStatus();
@@ -859,24 +847,16 @@ describe("ModelProvidersPage agent scope", () => {
         { signal: expect.any(AbortSignal) },
       ),
     );
-    // Invalidate the in-flight refresh mid-await; the stale completion must
-    // clear `refreshing` so the new agent's load can proceed.
     agentSelection.state.selectedId = "writer";
     agentSelection.state.scopeId = "writer";
     notifySelection();
     release();
 
-    await waitForFast(() =>
-      expect(request).toHaveBeenCalledWith(
-        "models.authStatus",
-        { agentId: "writer" },
-        { signal: expect.any(AbortSignal) },
-      ),
-    );
+    expect(page.selectedAgentId).toBe("main");
     await waitForFast(() => expect(page.data?.updatedAt).toEqual(expect.any(Number)));
   });
 
-  it("discards stale route data when selection changes during preload", async () => {
+  it("discards route data loaded for a non-default owner", async () => {
     const { context, request, snapshot } = createHarness("writer");
     const staleData = { ...EMPTY_MODEL_PROVIDERS_DATA, updatedAt: 1 };
     const page = document.createElement(
@@ -888,22 +868,22 @@ describe("ModelProvidersPage agent scope", () => {
       gatewaySnapshot: snapshot,
       data: staleData,
       client: snapshot.client,
-      agentId: "main",
+      agentId: "writer",
     };
     document.body.append(page);
 
     await waitForFast(() =>
       expect(request).toHaveBeenCalledWith(
         "models.authStatus",
-        { agentId: "writer" },
+        { agentId: "main" },
         { signal: expect.any(AbortSignal) },
       ),
     );
-    expect(page.selectedAgentId).toBe("writer");
+    expect(page.selectedAgentId).toBe("main");
     expect(page.data).not.toBe(staleData);
   });
 
-  it("probes credentials in the selected agent scope", async () => {
+  it("probes credentials in the configured default owner scope", async () => {
     const { context, request } = createHarness("writer");
     const page = appendPage(context);
     await waitForFast(() => expect(page.data?.config).toEqual({}));
@@ -913,11 +893,11 @@ describe("ModelProvidersPage agent scope", () => {
 
     expect(request).toHaveBeenCalledWith("models.probe", {
       provider: "openai",
-      agentId: "writer",
+      agentId: "main",
     });
   });
 
-  it("stops queued provider probes after switching away from and back to the selected agent", async () => {
+  it("keeps queued provider probes pinned to the default owner", async () => {
     const { agentSelection, context, notifySelection, request } = createHarness("main");
     const page = appendPage(context);
     await waitForFast(() => expect(page.data?.config).toEqual({}));
@@ -935,7 +915,7 @@ describe("ModelProvidersPage agent scope", () => {
     agentSelection.state.selectedId = "writer";
     agentSelection.state.scopeId = "writer";
     notifySelection();
-    await vi.waitFor(() => expect(page.selectedAgentId).toBe("writer"));
+    expect(page.selectedAgentId).toBe("main");
     agentSelection.state.selectedId = "main";
     agentSelection.state.scopeId = "main";
     notifySelection();
@@ -943,12 +923,11 @@ describe("ModelProvidersPage agent scope", () => {
     firstProbe.resolve({ provider: "anthropic", status: "ok", results: [] });
     await probing;
 
-    expect(request.mock.calls.filter(([method]) => method === "models.probe")).toHaveLength(1);
-    expect(page.probeResults).toEqual({});
+    expect(request.mock.calls.filter(([method]) => method === "models.probe")).toHaveLength(2);
     expect(page.busy).toEqual({});
   });
 
-  it("discards an in-flight probe result after the selected agent changes", async () => {
+  it("keeps an in-flight default-owner probe after application selection changes", async () => {
     const { agentSelection, context, notifySelection, request } = createHarness("main");
     const page = appendPage(context);
     await waitForFast(() => expect(page.data?.config).toEqual({}));
@@ -965,11 +944,11 @@ describe("ModelProvidersPage agent scope", () => {
     agentSelection.state.selectedId = "writer";
     agentSelection.state.scopeId = "writer";
     notifySelection();
-    await vi.waitFor(() => expect(page.selectedAgentId).toBe("writer"));
+    expect(page.selectedAgentId).toBe("main");
     pending.resolve({ provider: "openai", status: "ok", results: [] });
     await probing;
 
-    expect(page.probeResults).toEqual({});
+    expect(page.probeResults.openai).toEqual({ provider: "openai", status: "ok", results: [] });
     expect(page.busy).toEqual({});
   });
 });

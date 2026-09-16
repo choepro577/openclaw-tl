@@ -1,0 +1,410 @@
+diff --git a/src/agents/subagents/announce/subagent-announce.requester-settle-wake.ts b/src/agents/subagents/announce/subagent-announce.requester-settle-wake.ts
+index b81e90a1d3e..45ae9c8dd1b 100644
+--- a/src/agents/subagents/announce/subagent-announce.requester-settle-wake.ts
++++ b/src/agents/subagents/announce/subagent-announce.requester-settle-wake.ts
+@@ -8,6 +8,7 @@ import { isRecord } from "@openclaw/normalization-core/record-coerce";
+ import { SILENT_REPLY_TOKEN } from "../../../auto-reply/tokens.js";
+ import { getRuntimeConfig } from "../../../config/config.js";
+ import { resolveSessionStorePathCore } from "../../../config/sessions.js";
++import type { GatewayContextResolver } from "../../../gateway/server-methods/types.js";
+ import { logWarn } from "../../../logger.js";
+ import {
+   getGatewayContextResolver,
+@@ -55,6 +56,48 @@ const REQUESTER_SETTLE_WAKE_RETRY_DELAYS_MS = [30_000, 120_000] as const;
+ const REQUESTER_SETTLE_WAKE_EXTERNAL_TURN_TAIL_EVENTS = 128;
+ const activeRequesterSettleWakeBatches = new Set<string>();
+ 
++type RequesterDeliveryContextResolution = {
++  resolveGatewayContext?: GatewayContextResolver;
++  unavailableReason?: string;
++};
++
++async function resolveRequesterDeliveryGatewayContext(params: {
++  requesterAgentId?: string;
++  resolveGatewayContext?: GatewayContextResolver;
++}): Promise<RequesterDeliveryContextResolution> {
++  const requesterAgentId = params.requesterAgentId?.trim();
++  // Shared and legacy requesters keep their existing resolver. There is no
++  // durable account owner for those keys, so guessing an Enterprise account
++  // here would widen the delivery authority after a restart.
++  if (!requesterAgentId?.startsWith("enterprise-personal-")) {
++    return { resolveGatewayContext: params.resolveGatewayContext };
++  }
++  const context = params.resolveGatewayContext?.();
++  if (!context) {
++    return { unavailableReason: "gateway context unavailable" };
++  }
++  try {
++    // Keep Enterprise policy out of the normal child-settle module graph. This
++    // branch runs only for a Personal Agent requester after registry restore.
++    const { projectEnterpriseBackgroundAgentContext } =
++      await import("../../../enterprise/isolation/enterprise-gateway-policy.js");
++    const projectedContext = projectEnterpriseBackgroundAgentContext({
++      context,
++      agentId: requesterAgentId,
++    });
++    if (!projectedContext) {
++      return {
++        unavailableReason: "Enterprise requester account or Agent entitlement unavailable",
++      };
++    }
++    return { resolveGatewayContext: () => projectedContext };
++  } catch {
++    // An unavailable projection is retryable while the Gateway is restoring;
++    // never fall back to the host roster for an Enterprise Personal Agent key.
++    return { unavailableReason: "Enterprise requester projection unavailable" };
++  }
++}
++
+ type LatestExternalUserTurn = {
+   found: boolean;
+   idempotencyKey?: string;
+@@ -564,6 +607,15 @@ export async function maybeWakeRequesterAfterAllChildrenSettled(params: {
+ 
+     let delivery: Awaited<ReturnType<typeof deliverSubagentAnnouncement>>;
+     try {
++      const baseDeliveryContextResolver =
++        getSharedGatewayContextResolver(settledBatch) ?? entryGatewayContextResolver;
++      const deliveryContext = await resolveRequesterDeliveryGatewayContext({
++        requesterAgentId,
++        resolveGatewayContext: baseDeliveryContextResolver,
++      });
++      if (deliveryContext.unavailableReason) {
++        throw new Error(deliveryContext.unavailableReason);
++      }
+       delivery = await deliverSubagentAnnouncement({
+         requesterSessionKey,
+         requesterAgentId,
+@@ -585,8 +637,7 @@ export async function maybeWakeRequesterAfterAllChildrenSettled(params: {
+           attemptIndex === 0 ? wakeKeyBase : `${wakeKeyBase}:retry-${attemptIndex}`,
+         ),
+         signal: params.signal,
+-        resolveGatewayContext:
+-          getSharedGatewayContextResolver(settledBatch) ?? entryGatewayContextResolver,
++        resolveGatewayContext: deliveryContext.resolveGatewayContext,
+       });
+     } catch (error) {
+       // A transport exception can arrive after gateway admission. Replay the
+diff --git a/src/enterprise/isolation/enterprise-background-projection.test.ts b/src/enterprise/isolation/enterprise-background-projection.test.ts
+new file mode 100644
+index 00000000000..fc750f06b7e
+--- /dev/null
++++ b/src/enterprise/isolation/enterprise-background-projection.test.ts
+@@ -0,0 +1,85 @@
++import { afterEach, describe, expect, it } from "vitest";
++import type { OpenClawConfig } from "../../config/types.openclaw.js";
++import { readGatewayRequestRuntimeMetadata } from "../../gateway/request-runtime-config.js";
++import type { GatewayRequestContext } from "../../gateway/server-methods/types.js";
++import { closeOpenClawStateDatabaseForTest } from "../../state/openclaw-state-db.js";
++import { withOpenClawTestState } from "../../test-utils/openclaw-test-state.js";
++import { createEnterpriseAccount, updateEnterpriseAccount } from "../accounts/account-store.js";
++import { hashEnterprisePassword } from "../auth/password.js";
++import { resolveEnterprisePersonalAgentId } from "../personal-agent/personal-agent-config.js";
++import { projectEnterpriseBackgroundAgentContext } from "./enterprise-gateway-policy.js";
++
++afterEach(() => {
++  closeOpenClawStateDatabaseForTest();
++});
++
++describe("Enterprise background requester projection", () => {
++  it("rebuilds the current personal projection without retaining a bearer session", async () => {
++    await withOpenClawTestState({ scenario: "minimal", applyEnv: true }, async (state) => {
++      const account = createEnterpriseAccount({
++        username: "background.recovery",
++        displayName: "Background Recovery",
++        passwordHash: await hashEnterprisePassword("enterprise-password"),
++        role: "employee",
++        mustChangePassword: false,
++      });
++      const config: OpenClawConfig = {
++        enterprise: { enabled: true, personalAgent: { templateAgentId: "main" } },
++        gateway: { auth: { mode: "accounts" } },
++        agents: { entries: { main: { workspace: state.workspaceDir } } },
++      };
++      const personalAgentId = resolveEnterprisePersonalAgentId(config, account);
++      const context = { getRuntimeConfig: () => config } as GatewayRequestContext;
++
++      const projected = projectEnterpriseBackgroundAgentContext({
++        context,
++        agentId: personalAgentId,
++      });
++
++      expect(projected).toBeDefined();
++      if (!projected) {
++        throw new Error("expected an account-owned Enterprise projection");
++      }
++      const projectedConfig = projected.getRuntimeConfig();
++      const metadata = readGatewayRequestRuntimeMetadata(projectedConfig);
++      expect(projected.resolveGatewayContext?.()).toBe(projected);
++      expect(projectedConfig.agents?.entries?.[personalAgentId]).toBeDefined();
++      expect(metadata?.enterpriseUser).toEqual({
++        accountId: account.id,
++        username: account.username,
++        displayName: account.displayName,
++        personalAgentId,
++        personalAgentTemplateId: "main",
++      });
++      expect(metadata?.enterpriseUser?.sessionId).toBeUndefined();
++      expect(metadata?.enterpriseDelegation?.accountId).toBe(account.id);
++    });
++  });
++
++  it("fails closed when the durable account projection is no longer usable", async () => {
++    await withOpenClawTestState({ scenario: "minimal", applyEnv: true }, async (state) => {
++      const account = createEnterpriseAccount({
++        username: "background.revoked",
++        displayName: "Background Revoked",
++        passwordHash: await hashEnterprisePassword("enterprise-password"),
++        role: "employee",
++        mustChangePassword: false,
++      });
++      const config: OpenClawConfig = {
++        enterprise: { enabled: true },
++        gateway: { auth: { mode: "accounts" } },
++        agents: { entries: { main: { workspace: state.workspaceDir } } },
++      };
++      const personalAgentId = resolveEnterprisePersonalAgentId(config, account);
++      const context = { getRuntimeConfig: () => config } as GatewayRequestContext;
++
++      expect(
++        projectEnterpriseBackgroundAgentContext({ context, agentId: personalAgentId }),
++      ).toBeDefined();
++      updateEnterpriseAccount(account.id, { enabled: false });
++      expect(
++        projectEnterpriseBackgroundAgentContext({ context, agentId: personalAgentId }),
++      ).toBeUndefined();
++    });
++  });
++});
+diff --git a/src/enterprise/isolation/enterprise-gateway-policy.ts b/src/enterprise/isolation/enterprise-gateway-policy.ts
+index d564157bab4..e1e84571675 100644
+--- a/src/enterprise/isolation/enterprise-gateway-policy.ts
++++ b/src/enterprise/isolation/enterprise-gateway-policy.ts
+@@ -5,11 +5,17 @@ import { isToolAllowedByPolicyName } from "../../agents/tool-policy-match.js";
+ import type { AgentConfig, AgentEntryConfig } from "../../config/types.agents.js";
+ import type { OpenClawConfig } from "../../config/types.openclaw.js";
+ import type { AgentToolsConfig, ToolAllowDenyPolicyConfig } from "../../config/types.tools.js";
+-import { markGatewayRequestScopedRuntimeConfig } from "../../gateway/request-runtime-config.js";
++import {
++  markGatewayRequestScopedRuntimeConfig,
++  type GatewayRequestRuntimeMetadata,
++} from "../../gateway/request-runtime-config.js";
+ import type { GatewayClient, GatewayRequestContext } from "../../gateway/server-methods/types.js";
+ import { normalizeAgentId, parseAgentSessionKey } from "../../routing/session-key.js";
+ import { isReservedSystemAgentId } from "../../system-agent/agent-id.js";
+-import { getEnterpriseAccountByProfileId } from "../accounts/account-store.js";
++import {
++  getEnterpriseAccountByProfileId,
++  listEnterpriseAccounts,
++} from "../accounts/account-store.js";
+ import { readEnterpriseAccountToolPolicy } from "../accounts/account-tool-policy-store.js";
+ import type { EnterpriseAccount } from "../accounts/account-types.js";
+ import { getActiveEnterpriseSession } from "../auth/session-store.js";
+@@ -746,6 +752,207 @@ function contextWithConfig(
+   return scopedContext;
+ }
+ 
++type EnterpriseUserRuntimeMetadataParams = {
++  config: OpenClawConfig;
++  context: GatewayRequestContext;
++  account: EnterpriseAccount;
++  personalAgentId: string;
++  delegationCandidates: readonly EnterpriseDelegationCandidate[];
++  /** Live portal sessions keep Knowledge and session auth checks enabled. */
++  enterpriseSessionId?: string;
++};
++
++function buildEnterpriseUserRuntimeMetadata(
++  params: EnterpriseUserRuntimeMetadataParams,
++): GatewayRequestRuntimeMetadata {
++  const knowledgeAuthorities = new Map<
++    string,
++    ReturnType<typeof createEnterpriseKnowledgeAuthority>
++  >();
++  const user = {
++    accountId: params.account.id,
++    ...(params.enterpriseSessionId ? { sessionId: params.enterpriseSessionId } : {}),
++    username: params.account.username,
++    displayName: params.account.displayName,
++    personalAgentId: params.personalAgentId,
++    personalAgentTemplateId: resolveEnterprisePersonalAgentTemplateId(
++      params.config,
++      params.account,
++    ),
++  };
++  const delegationCandidates = params.delegationCandidates.map((candidate) => ({
++    agentId: candidate.agentId,
++    name: candidate.name,
++    description: candidate.description,
++    assigned: candidate.assigned,
++    effective: candidate.effective,
++    routable: candidate.routable,
++    effectiveMode: candidate.effectiveMode,
++    reasonCodes: candidate.reasonCodes,
++    profileRevision: candidate.profileRevision,
++  }));
++  const currentAccount = () => {
++    const account = getEnterpriseAccountByProfileId(params.account.profileId);
++    if (!account?.enabled || account.mustChangePassword) {
++      return undefined;
++    }
++    if (params.enterpriseSessionId) {
++      const currentSession = getActiveEnterpriseSession(params.enterpriseSessionId, {}, "user");
++      if (!currentSession || currentSession.accountId !== account.id) {
++        return undefined;
++      }
++    }
++    return account;
++  };
++
++  const metadata: GatewayRequestRuntimeMetadata = {
++    // The background recovery path has no bearer session to validate. Account
++    // state and the current Agent entitlement remain authoritative for every
++    // use-time grant, matching the account-owned automation boundary.
++    nativePluginGrants: (agentId, harnessPluginId) => {
++      const account = currentAccount();
++      const normalizedAgentId = normalizeAgentId(agentId);
++      if (
++        harnessPluginId !== "codex" ||
++        !account ||
++        !resolveEnterpriseAllowedAgentIds(params.config, account, { userAudience: true }).has(
++          normalizedAgentId,
++        )
++      ) {
++        return [];
++      }
++      return listActiveEnterpriseCodexPluginGrants(account.id, normalizedAgentId);
++    },
++    enterpriseUser: user,
++    enterpriseCapabilities: {
++      resolve: (agentId) => {
++        const account = currentAccount();
++        if (!account) {
++          return {
++            allowed: false as const,
++            accountId: params.account.id,
++            agentId: normalizeAgentId(agentId),
++            reason: "account_disabled" as const,
++          };
++        }
++        return resolveEnterpriseSharedAgentCapabilities({
++          config: params.context.getRuntimeConfig(),
++          account,
++          agentId,
++        });
++      },
++    },
++    enterpriseDelegation: {
++      accountId: params.account.id,
++      personalAgentId: params.personalAgentId,
++      specialists: delegationCandidates,
++      resolveSpecialist: (agentId) => {
++        const account = currentAccount();
++        if (!account) {
++          return undefined;
++        }
++        const candidate = listEnterpriseDelegationCandidates(
++          params.context.getRuntimeConfig(),
++          account,
++        ).find((item) => normalizeAgentId(item.agentId) === normalizeAgentId(agentId));
++        return candidate
++          ? {
++              agentId: candidate.agentId,
++              name: candidate.name,
++              description: candidate.description,
++              assigned: candidate.assigned,
++              effective: candidate.effective,
++              routable: candidate.routable,
++              effectiveMode: candidate.effectiveMode,
++              reasonCodes: candidate.reasonCodes,
++              profileRevision: candidate.profileRevision,
++            }
++          : undefined;
++      },
++      resolveExplicitAgentIds: (prompt) =>
++        explicitlyMentionedEnterpriseAgentIds(params.config, prompt),
++    },
++  };
++
++  // Knowledge authority is deliberately only restored for a live portal
++  // session. Its contract requires the raw session bearer and must never be
++  // reconstructed from the hashed database row after a process restart.
++  if (params.enterpriseSessionId) {
++    metadata.enterpriseKnowledge = {
++      createAuthority(agentId: string) {
++        const normalizedAgentId = normalizeAgentId(agentId);
++        const normalizedPersonalAgentId = normalizeAgentId(params.personalAgentId);
++        const agentResourceKey =
++          normalizedAgentId === normalizedPersonalAgentId
++            ? personalAgentResourceKey(params.account.id)
++            : sharedAgentResourceKey(normalizedAgentId);
++        let authority = knowledgeAuthorities.get(agentResourceKey);
++        if (!authority) {
++          authority = createEnterpriseKnowledgeAuthority({
++            accountId: params.account.id,
++            sessionId: params.enterpriseSessionId!,
++            agentResourceKey,
++            config: params.config,
++          });
++          knowledgeAuthorities.set(agentResourceKey, authority);
++        }
++        return authority;
++      },
++    };
++  }
++  return metadata;
++}
++
++/**
++ * Rebuilds the account-owned Enterprise projection used by durable completion
++ * delivery after a Gateway restart. The resolver itself is process-local, so
++ * only the non-secret account identity is recovered from the deterministic
++ * Personal Agent id; the current account and entitlement are checked again.
++ */
++export function projectEnterpriseBackgroundAgentContext(params: {
++  context: GatewayRequestContext;
++  agentId: string;
++}): GatewayRequestContext | undefined {
++  const config = params.context.getRuntimeConfig();
++  if (!isEnterpriseEnabled(config) || config.gateway?.auth?.mode !== "accounts") {
++    return undefined;
++  }
++  const agentId = normalizeAgentId(params.agentId);
++  const account = listEnterpriseAccounts().find(
++    (candidate) =>
++      candidate.enabled &&
++      !candidate.mustChangePassword &&
++      candidate.personalAgentEnabled &&
++      normalizeAgentId(resolveEnterprisePersonalAgentId(config, candidate)) === agentId,
++  );
++  if (!account) {
++    return undefined;
++  }
++  const allowedAgents = resolveEnterpriseAllowedAgentIds(config, account, { userAudience: true });
++  if (!allowedAgents.has(agentId)) {
++    return undefined;
++  }
++  const personalAgentId = resolveEnterprisePersonalAgentId(config, account);
++  const delegationCandidates = listEnterpriseDelegationCandidates(config, account);
++  const projectedConfig = projectEnterpriseRuntimeConfig(config, account, {
++    userAudience: true,
++    delegationCandidates,
++  });
++  return contextWithConfig(
++    params.context,
++    markGatewayRequestScopedRuntimeConfig(
++      projectedConfig,
++      buildEnterpriseUserRuntimeMetadata({
++        config,
++        context: params.context,
++        account,
++        personalAgentId,
++        delegationCandidates,
++      }),
++    ),
++  );
++}
++
+ export function prepareEnterpriseGatewayRequest(params: {
+   client: GatewayClient;
+   context: GatewayRequestContext;

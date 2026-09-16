@@ -2,21 +2,18 @@
 import type { OpenClawConfig } from "../../config/types.openclaw.js";
 import { readGatewayRequestRuntimeMetadata } from "../../gateway/request-runtime-config.js";
 import { createSubsystemLogger } from "../../logging/subsystem.js";
-import { PluginApprovalResolutions, type PluginApprovalResolution } from "../../plugins/types.js";
 import { normalizeAgentId } from "../../routing/session-key.js";
 import { resolveGlobalSingleton } from "../../shared/global-singleton.js";
-import type { SkillSnapshot } from "../../skills/types.js";
 import type { OpenClawStateDatabaseOptions } from "../../state/openclaw-state-db.js";
 import { getEnterpriseAccountById } from "../accounts/account-store.js";
 import { resolveEnterpriseSharedAgentCapabilities } from "../isolation/enterprise-agent-capabilities.js";
 import { cancelEnterpriseSkillAuthForChild } from "../skill-runtime/skill-auth-request.js";
-import { skillScriptRisk } from "../skill-runtime/skill-script-runtime.js";
+import { resolveEnterpriseSkillScript } from "../skill-runtime/skill-script-runtime.js";
 import { listEnterpriseDelegationCandidates } from "./delegation-candidates.js";
 import { readEnterpriseDelegationPolicy } from "./delegation-store.js";
 
 const log = createSubsystemLogger("enterprise/delegation-guard");
 const SKILL_SCRIPT_TOOL = "skill_script";
-const APPROVAL_TIMEOUT_MS = 2 * 60_000;
 
 export type DelegationChildAuthority = {
   childSessionKey: string;
@@ -184,17 +181,6 @@ function resolveDirectEnterpriseSharedCapability(params: {
     : undefined;
 }
 
-function approvalDescription(params: { toolName: string; agentName?: string }): {
-  title: string;
-  description: string;
-} {
-  const owner = params.agentName?.trim() || "Shared Agent";
-  return {
-    title: `Xác nhận thao tác của ${owner}`,
-    description: `Công cụ ${params.toolName} yêu cầu xác nhận trước khi thực hiện thao tác có thể thay đổi dữ liệu hoặc chưa được phân loại là chỉ đọc.`,
-  };
-}
-
 function liveAuthorityReason(
   authority: DelegationChildAuthority,
   config: OpenClawConfig,
@@ -263,14 +249,7 @@ export function validateEnterpriseDelegationChildAuthority(params: {
 export type EnterpriseDelegationToolGuardDecision =
   | { kind: "not_delegated_child" }
   | { kind: "allow" }
-  | { kind: "block"; reason: string }
-  | {
-      kind: "require_approval";
-      title: string;
-      description: string;
-      timeoutMs: number;
-      allowedDecisions: Array<"allow-once" | "deny">;
-    };
+  | { kind: "block"; reason: string };
 
 export function evaluateEnterpriseDelegationToolCall(params: {
   config?: OpenClawConfig;
@@ -279,9 +258,6 @@ export function evaluateEnterpriseDelegationToolCall(params: {
   childAgentId?: string;
   toolName: string;
   toolParams?: Record<string, unknown>;
-  toolCallId?: string;
-  skillsSnapshot?: SkillSnapshot;
-  approvalResolution?: PluginApprovalResolution;
 }): EnterpriseDelegationToolGuardDecision {
   const authority = resolveAuthority(params);
   if (!params.config) {
@@ -332,13 +308,11 @@ export function evaluateEnterpriseDelegationToolCall(params: {
     if (!skillKey || !entrypointName) {
       return { kind: "block", reason: "SKILL_ENTRYPOINT_INVALID" };
     }
-    let risk: "read" | "approval";
     try {
-      risk = skillScriptRisk({
+      resolveEnterpriseSkillScript({
         snapshot: capability.skillsSnapshot,
         skillKey,
         entrypointName,
-        ...(typeof toolParams.operation === "string" ? { operation: toolParams.operation } : {}),
       });
     } catch (error) {
       const code =
@@ -347,29 +321,8 @@ export function evaluateEnterpriseDelegationToolCall(params: {
           : "SKILL_ENTRYPOINT_INVALID";
       return { kind: "block", reason: code };
     }
-    if (risk === "read") {
-      return { kind: "allow" };
-    }
-
-    if (params.approvalResolution === PluginApprovalResolutions.ALLOW_ONCE) {
-      return { kind: "allow" };
-    }
-    if (params.approvalResolution) {
-      return { kind: "block", reason: "delegation_approval_denied" };
-    }
-    const approval = approvalDescription({
-      toolName: normalizedTool,
-      agentName: authority?.childAgentName ?? params.childAgentId,
-    });
-    return {
-      kind: "require_approval",
-      ...approval,
-      timeoutMs: APPROVAL_TIMEOUT_MS,
-      allowedDecisions: ["allow-once", "deny"],
-    };
   }
-  // Existing tool owners, trusted policies, and harness capability checks own
-  // approval for non-script tools. This guard only establishes that the live
-  // Shared Agent capability is still valid for the call.
+  // Business intent is resolved conversationally by the agent. This boundary
+  // validates live access; write classification must not create a second consent gate.
   return { kind: "allow" };
 }

@@ -37,6 +37,8 @@ Set `enabled: false` (or omit it) to disable.
 
 ## Security boundary (important)
 
+For an external business system that must call one shared Agent with a scoped credential, use the [Enterprise Developer API](./enterprise-developer-api.md). Never expose the Gateway operator bearer token or a Developer API key in browser code.
+
 Treat this endpoint as **full operator access** to the gateway instance:
 
 - A valid Gateway token/password for this endpoint is equivalent to an owner/operator credential, not a narrow per-user scope.

@@ -26,6 +26,8 @@ type DiagnosticsTimelineEvent = {
   type: DiagnosticsTimelineEventType;
   name: string;
   timestamp?: string;
+  /** Process-local monotonic clock value used to reconstruct overlapping spans. */
+  monotonicMs?: number;
   runId?: string;
   envName?: string;
   pid?: number;
@@ -52,11 +54,15 @@ type DiagnosticsTimelineEvent = {
 
 type DiagnosticsTimelineSpanOptions = {
   phase?: string;
+  runId?: string;
   parentSpanId?: string;
   attributes?: DiagnosticsTimelineAttributes;
   config?: OpenClawConfig;
   env?: NodeJS.ProcessEnv;
   omitErrorMessage?: boolean;
+  /** Monotonic start/end values for completed work replayed after config becomes available. */
+  startedAtMs?: number;
+  endedAtMs?: number;
 };
 
 type DiagnosticsTimelineOptions = {
@@ -70,6 +76,9 @@ type ActiveDiagnosticsTimelineSpan = {
   phase?: string;
   spanId: string;
   parentSpanId?: string;
+  runId?: string;
+  config?: OpenClawConfig;
+  env?: NodeJS.ProcessEnv;
   attributes?: DiagnosticsTimelineAttributes;
 };
 
@@ -87,9 +96,14 @@ const activeDiagnosticsTimelineSpan = new AsyncLocalStorage<ActiveDiagnosticsTim
 function resolveDiagnosticsTimelineOptions(
   options: DiagnosticsTimelineOptions = {},
 ): Required<Pick<DiagnosticsTimelineOptions, "env">> & Pick<DiagnosticsTimelineOptions, "config"> {
+  const activeSpan = activeDiagnosticsTimelineSpan.getStore();
   return {
-    env: options.env ?? process.env,
-    ...(options.config ? { config: options.config } : {}),
+    env: options.env ?? activeSpan?.env ?? process.env,
+    ...(options.config
+      ? { config: options.config }
+      : activeSpan?.config
+        ? { config: activeSpan.config }
+        : {}),
   };
 }
 
@@ -110,6 +124,12 @@ function normalizeNumber(value: number | undefined): number | undefined {
     return undefined;
   }
   return Math.max(0, Math.round(value * 1000) / 1000);
+}
+
+/** Converts a process-local monotonic value to the closest wall-clock timestamp. */
+function timestampForMonotonic(monotonicMs: number, nowMonotonicMs = performance.now()): string {
+  const elapsedMs = Math.max(0, nowMonotonicMs - monotonicMs);
+  return new Date(Date.now() - elapsedMs).toISOString();
 }
 
 function normalizeAttributes(
@@ -137,8 +157,15 @@ function serializeTimelineEvent(event: DiagnosticsTimelineEvent, env: NodeJS.Pro
   const normalized = {
     schemaVersion: OPENCLAW_DIAGNOSTICS_TIMELINE_SCHEMA_VERSION,
     type: event.type,
-    timestamp: event.timestamp ?? new Date().toISOString(),
+    timestamp:
+      event.timestamp ??
+      (typeof event.monotonicMs === "number"
+        ? timestampForMonotonic(event.monotonicMs)
+        : new Date().toISOString()),
     name: event.name,
+    ...(typeof event.monotonicMs === "number"
+      ? { monotonicMs: normalizeNumber(event.monotonicMs) }
+      : {}),
     ...(env.OPENCLAW_DIAGNOSTICS_RUN_ID ? { runId: env.OPENCLAW_DIAGNOSTICS_RUN_ID } : {}),
     ...(env.OPENCLAW_DIAGNOSTICS_ENV ? { envName: env.OPENCLAW_DIAGNOSTICS_ENV } : {}),
     pid: process.pid,
@@ -212,10 +239,24 @@ export function emitCompletedDiagnosticsTimelineSpan(
     return;
   }
   const spanId = randomUUID();
+  const nowMonotonicMs = performance.now();
+  const startedAtMs =
+    typeof options.startedAtMs === "number" && Number.isFinite(options.startedAtMs)
+      ? options.startedAtMs
+      : nowMonotonicMs;
+  const endedAtMs =
+    typeof options.endedAtMs === "number" && Number.isFinite(options.endedAtMs)
+      ? options.endedAtMs
+      : options.startedAtMs !== undefined
+        ? startedAtMs + Math.max(0, durationMs)
+        : nowMonotonicMs;
   emitDiagnosticsTimelineEvent(
     {
       type: "span.start",
       name,
+      timestamp: timestampForMonotonic(startedAtMs, nowMonotonicMs),
+      monotonicMs: startedAtMs,
+      runId: options.runId,
       phase: options.phase,
       spanId,
       parentSpanId: options.parentSpanId,
@@ -227,6 +268,9 @@ export function emitCompletedDiagnosticsTimelineSpan(
     {
       type: "span.end",
       name,
+      timestamp: timestampForMonotonic(endedAtMs, nowMonotonicMs),
+      monotonicMs: endedAtMs,
+      runId: options.runId,
       phase: options.phase,
       spanId,
       parentSpanId: options.parentSpanId,
@@ -246,19 +290,25 @@ function startDiagnosticsTimelineSpan(
   name: string,
   options: DiagnosticsTimelineSpanOptions,
 ): StartedDiagnosticsTimelineSpan | undefined {
-  const env = options.env ?? process.env;
-  if (!isDiagnosticsTimelineEnabled({ config: options.config, env })) {
+  const activeSpan = getActiveDiagnosticsTimelineSpan();
+  const env = options.env ?? activeSpan?.env ?? process.env;
+  const config = options.config ?? activeSpan?.config;
+  if (!isDiagnosticsTimelineEnabled({ config, env })) {
     return undefined;
   }
-  const activeSpan = getActiveDiagnosticsTimelineSpan();
   const phase = options.phase ?? activeSpan?.phase;
+  const runId =
+    options.runId ??
+    activeSpan?.runId ??
+    (typeof options.attributes?.runId === "string" ? options.attributes.runId : undefined);
   const parentSpanId = options.parentSpanId ?? activeSpan?.spanId;
   const span: StartedDiagnosticsTimelineSpan = {
     name,
     env,
-    ...(options.config ? { config: options.config } : {}),
+    ...(config ? { config } : {}),
     spanId: randomUUID(),
     startedAt: performance.now(),
+    ...(runId ? { runId } : {}),
     ...(phase ? { phase } : {}),
     ...(parentSpanId ? { parentSpanId } : {}),
     ...(options.attributes ? { attributes: options.attributes } : {}),
@@ -268,6 +318,9 @@ function startDiagnosticsTimelineSpan(
     {
       type: "span.start",
       name: span.name,
+      timestamp: timestampForMonotonic(span.startedAt),
+      monotonicMs: span.startedAt,
+      runId: span.runId,
       phase: span.phase,
       spanId: span.spanId,
       parentSpanId: span.parentSpanId,
@@ -284,6 +337,9 @@ function runInDiagnosticsTimelineSpan<T>(span: StartedDiagnosticsTimelineSpan, r
       name: span.name,
       ...(span.phase ? { phase: span.phase } : {}),
       spanId: span.spanId,
+      ...(span.runId ? { runId: span.runId } : {}),
+      ...(span.config ? { config: span.config } : {}),
+      ...(span.env ? { env: span.env } : {}),
       ...(span.parentSpanId ? { parentSpanId: span.parentSpanId } : {}),
       ...(span.attributes ? { attributes: span.attributes } : {}),
     },
@@ -292,14 +348,18 @@ function runInDiagnosticsTimelineSpan<T>(span: StartedDiagnosticsTimelineSpan, r
 }
 
 function emitFinishedDiagnosticsTimelineSpan(span: StartedDiagnosticsTimelineSpan): void {
+  const endedAtMs = performance.now();
   emitDiagnosticsTimelineEvent(
     {
       type: "span.end",
       name: span.name,
+      timestamp: timestampForMonotonic(endedAtMs),
+      monotonicMs: endedAtMs,
+      runId: span.runId,
       phase: span.phase,
       spanId: span.spanId,
       parentSpanId: span.parentSpanId,
-      durationMs: performance.now() - span.startedAt,
+      durationMs: endedAtMs - span.startedAt,
       attributes: span.attributes,
     },
     { config: span.config, env: span.env },
@@ -310,14 +370,18 @@ function emitFailedDiagnosticsTimelineSpan(
   span: StartedDiagnosticsTimelineSpan,
   error: unknown,
 ): void {
+  const endedAtMs = performance.now();
   emitDiagnosticsTimelineEvent(
     {
       type: "span.error",
       name: span.name,
+      timestamp: timestampForMonotonic(endedAtMs),
+      monotonicMs: endedAtMs,
+      runId: span.runId,
       phase: span.phase,
       spanId: span.spanId,
       parentSpanId: span.parentSpanId,
-      durationMs: performance.now() - span.startedAt,
+      durationMs: endedAtMs - span.startedAt,
       attributes: span.attributes,
       errorName: error instanceof Error ? error.name : typeof error,
       ...(span.omitErrorMessage

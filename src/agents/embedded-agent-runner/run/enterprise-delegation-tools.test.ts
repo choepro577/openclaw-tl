@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { rememberEnterpriseDelegationAgentFirstContext } from "../../../enterprise/delegation/delegation-agent-first.js";
 import {
   markGatewayRequestScopedRuntimeConfig,
   readGatewayRequestRuntimeMetadata,
@@ -69,7 +70,30 @@ beforeEach(() => {
       ? { ok: false, reasonCode: "decision_replayed" }
       : { ok: true, routes: approvedRoutes },
   );
-  mocks.prepare.mockImplementation(async ({ config, proposedAssignments, prompt, parentRunId }) => {
+  mocks.consume.mockImplementation(
+    ({
+      decisionId,
+      assignmentAgentIds,
+    }: {
+      decisionId: string;
+      assignmentAgentIds?: readonly string[];
+    }) => {
+      const routes =
+        decisionId === "approved"
+          ? [{ agentId: "finance", agentName: "Finance", task: "canonical cash review" }]
+          : approvedRoutes;
+      if (
+        assignmentAgentIds &&
+        (assignmentAgentIds.length !== routes.length ||
+          assignmentAgentIds.some((agentId) => !routes.some((route) => route.agentId === agentId)))
+      ) {
+        return { ok: false, reasonCode: "assignment_set_mismatch" };
+      }
+      consumed = true;
+      return { ok: true, decision: { routes } };
+    },
+  );
+  mocks.prepare.mockImplementation(async ({ config, proposedAssignments }) => {
     readGatewayRequestRuntimeMetadata(config)!.enterpriseDelegation!.turn = {
       outcome: "delegate",
       decisionId: "verified",
@@ -84,13 +108,6 @@ beforeEach(() => {
       task: `canonical ${item.agentId} task`,
     }));
     consumed = false;
-    mocks.consume.mockImplementation(() => {
-      consumed = true;
-      return {
-        ok: true,
-        decision: { prompt, parentRunId, routes: approvedRoutes },
-      };
-    });
   });
   mocks.execute.mockImplementation(async ({ decision }) => ({
     reasonCode: "delegate_started",
@@ -129,6 +146,49 @@ async function fixture() {
   } as EmbeddedRunAttemptParams;
   return { params, close: admission.close };
 }
+
+function seedAgentFirstContext(params: EmbeddedRunAttemptParams): void {
+  rememberEnterpriseDelegationAgentFirstContext(params.config!, {
+    accountId: "account",
+    personalAgentId: "personal",
+    sessionKey: params.sessionKey!,
+    parentRunId: params.runId,
+    prompt: params.prompt,
+    conversationInputs: [],
+    conversationResults: [],
+    previousDelegationContext: [],
+    candidates: [],
+    policy: {
+      maxDelegatesPerTurn: 3,
+      autoThreshold: 0.9,
+      clarifyThreshold: 0.7,
+      minimumMargin: 0.15,
+      revision: 1,
+    },
+    explicitAgentIds: [],
+  });
+}
+
+function structuredRoute(agentId: string, task: string) {
+  return {
+    outcome: "delegate" as const,
+    handling: "specialist" as const,
+    confidence: 0.98,
+    secondConfidence: 0.1,
+    independent: true,
+    question: "",
+    routes: [
+      {
+        agentId,
+        task,
+        missingRequiredInputIds: [],
+        resolvedRequiredInputs: [],
+        knowledgeQueries: [],
+      },
+    ],
+  };
+}
+
 describe("admitted dynamic Enterprise delegation", () => {
   it("reuses the server-approved route and leaves the decision untouched on an agent-set mismatch", async () => {
     const { params } = await fixture();
@@ -159,7 +219,12 @@ describe("admitted dynamic Enterprise delegation", () => {
       instruction: expect.stringContaining("exact approved agentIds"),
     });
     expect(mocks.prepare).not.toHaveBeenCalled();
-    expect(mocks.consume).not.toHaveBeenCalled();
+    expect(mocks.consume).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({
+        decisionId: "approved",
+        assignmentAgentIds: ["contracts"],
+      }),
+    );
     expect(mocks.execute).not.toHaveBeenCalled();
   });
 
@@ -201,6 +266,76 @@ describe("admitted dynamic Enterprise delegation", () => {
         }),
       }),
     );
+  });
+
+  it("reduces a Personal-Agent structured route without a second router model call", async () => {
+    const { params } = await fixture();
+    seedAgentFirstContext(params);
+    const routing = structuredRoute("finance", "Assess the supplied cash runway");
+
+    await withEnterpriseDelegationTools(params, async () =>
+      getEnterpriseDelegationRuntime()!.execute(
+        "agent-first",
+        [{ agentId: "finance", task: "Model wording" }],
+        routing,
+      ),
+    );
+
+    expect(mocks.prepare).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({
+        agentFirst: false,
+        agentFirstDecision: routing,
+        proposedAssignments: [{ agentId: "finance", task: "Model wording" }],
+      }),
+    );
+    expect(mocks.consume).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ assignmentAgentIds: ["finance"] }),
+    );
+    expect(mocks.execute).toHaveBeenCalledOnce();
+  });
+
+  it.each([
+    ["missing", undefined],
+    ["invalid", { outcome: "delegate" }],
+  ])(
+    "uses at most one legacy fallback before launch when routing is %s",
+    async (_label, routing) => {
+      const { params } = await fixture();
+      seedAgentFirstContext(params);
+      const assignments = [{ agentId: "finance", task: "Assess cash runway" }];
+
+      await withEnterpriseDelegationTools(params, async () => {
+        const runtime = getEnterpriseDelegationRuntime()!;
+        await runtime.execute("fallback", assignments, routing);
+        await runtime.execute("fallback-replay", assignments, routing);
+      });
+
+      expect(mocks.prepare).toHaveBeenCalledOnce();
+      expect(mocks.prepare.mock.calls[0]![0]).toMatchObject({
+        agentFirst: false,
+        proposedAssignments: assignments,
+      });
+      expect(mocks.execute).toHaveBeenCalledOnce();
+    },
+  );
+
+  it("does not spend a legacy fallback after an agent-first launch", async () => {
+    const { params } = await fixture();
+    seedAgentFirstContext(params);
+    const assignments = [{ agentId: "finance", task: "Assess cash runway" }];
+
+    await withEnterpriseDelegationTools(params, async () => {
+      const runtime = getEnterpriseDelegationRuntime()!;
+      await runtime.execute("first", assignments, structuredRoute("finance", assignments[0]!.task));
+      const followup = await runtime.execute("after-launch", assignments);
+      expect(followup.details).toMatchObject({
+        status: "blocked",
+        reasonCode: "structured_routing_required",
+      });
+    });
+
+    expect(mocks.prepare).toHaveBeenCalledOnce();
+    expect(mocks.execute).toHaveBeenCalledOnce();
   });
 
   it("dispatches a batch once, accepts a distinct follow-up, and fences retained calls", async () => {

@@ -1,0 +1,44 @@
+{
+  "user": "hieu",
+  "role": "employee",
+  "enabled": 1,
+  "personalEnabled": 1,
+  "policyRevision": 15,
+  "grants": [
+    {
+      "type": "agent",
+      "resource": "agent:shared:main",
+      "effect": "allow"
+    },
+    {
+      "type": "agent",
+      "resource": "agent:shared:enterprise-contract-specialist",
+      "effect": "allow"
+    },
+    {
+      "type": "agent",
+      "resource": "agent:shared:enterprise-finance-specialist",
+      "effect": "allow"
+    },
+    {
+      "type": "agent",
+      "resource": "agent:shared:enterprise-hr-specialist",
+      "effect": "allow"
+    },
+    {
+      "type": "agent",
+      "resource": "agent:shared:hrm",
+      "effect": "allow"
+    },
+    {
+      "type": "agent",
+      "resource": "agent:shared:purchase-order-skill",
+      "effect": "allow"
+    },
+    {
+      "type": "skill",
+      "resource": "skill:agent:hrm:openclaw-bundled:hr-skill",
+      "effect": "allow"
+    }
+  ]
+}

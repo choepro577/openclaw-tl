@@ -16,6 +16,7 @@ import {
   SANDBOX_BROWSER_SECURITY_HASH_EPOCH,
   SANDBOX_DOCKER_CREATE_ARGS_EPOCH,
 } from "./constants.js";
+import { acquireSandboxActiveLease } from "./lifecycle.js";
 import { collectDockerFlagValues, findDockerArgsCall } from "./test-args.js";
 import type { SandboxConfig } from "./types.js";
 import { SANDBOX_MOUNT_FORMAT_VERSION } from "./workspace-mounts.js";
@@ -993,6 +994,26 @@ describe("ensureSandboxBrowser create args", () => {
       { allowFailure: true },
     );
     requireDockerCreateArgs();
+  });
+
+  it("does not remove a browser container missing relay auth during an active turn", async () => {
+    dockerMocks.dockerContainerState.mockResolvedValue({ exists: true, running: true });
+    dockerMocks.readDockerContainerEnvVar.mockResolvedValue(null);
+    const releaseActive = await acquireSandboxActiveLease("session:test");
+
+    try {
+      await expect(
+        ensureTestSandboxBrowser({
+          scopeKey: "session:test",
+          workspaceDir: "/tmp/workspace",
+          agentWorkspaceDir: "/tmp/workspace",
+          cfg: buildConfig(false),
+        }),
+      ).rejects.toThrow("while an active turn is using it");
+      expect(findDockerArgsCall(dockerMocks.execDocker.mock.calls, "rm")).toBeUndefined();
+    } finally {
+      releaseActive();
+    }
   });
 
   it("retains a stale container and cached bridge until bridge cleanup can retry", async () => {

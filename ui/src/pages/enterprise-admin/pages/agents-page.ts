@@ -17,6 +17,7 @@ import "../../../styles/agents.css";
 import "../../../styles/settings.css";
 import {
   createAdminSharedAgent,
+  createAdminDeveloperIntegration,
   activateAdminDelegation,
   deleteAdminSharedAgent,
   draftAdminAgentDelegationProfile,
@@ -26,6 +27,8 @@ import {
   loadAdminAgentFile,
   loadAdminAgentPanel,
   loadAdminAgentDelegationProfile,
+  loadAdminDeveloperPanel,
+  loadAdminDeveloperResponse,
   loadAdminDelegationOverview,
   loadAdminDelegationSettings,
   loadAdminConfig,
@@ -33,13 +36,16 @@ import {
   mutateAdminAgentCron,
   previewAdminDelegationActivation,
   runAdminAgentMemoryAction,
+  rotateAdminDeveloperIntegration,
   saveAdminAgentFile,
   saveAdminAgentDelegationProfile,
   saveAdminDelegationSettings,
   simulateAdminAgentDelegation,
+  testAdminDeveloperWebhook,
   saveAdminSharedRelationshipFile,
   updateAdminAgentSkills,
   updateAdminAgentTools,
+  updateAdminDeveloperIntegration,
   updateAdminSharedRelationship,
   updateAdminSharedAgent,
   type EnterpriseAgentFile,
@@ -47,6 +53,8 @@ import {
   type EnterpriseDelegationEvent,
   type EnterpriseDelegationPolicy,
   type EnterpriseDelegationProfile,
+  type EnterpriseDeveloperIntegration,
+  type EnterpriseDeveloperPanel,
   type EnterprisePersonalAgent,
   type EnterpriseSharedRelationshipItem,
   type EnterpriseSharedRelationshipProfile,
@@ -74,6 +82,7 @@ import {
   renderDelegationProfileEditor,
   type DelegationEventFilterDraft,
 } from "./agent-delegation-views.ts";
+import { renderAgentDeveloperPanel, type DeveloperSecretReveal } from "./agent-developer-views.ts";
 import {
   renderAgentFilesPanel,
   renderAgentSkillsPanel,
@@ -103,7 +112,8 @@ type DrawerTab =
   | "channels"
   | "cron"
   | "memory"
-  | "delegation";
+  | "delegation"
+  | "developer";
 type SelectedAgent = AdminSelectedAgent;
 type DelegationOverview = Awaited<ReturnType<typeof loadAdminDelegationOverview>>;
 type DelegationPreview = Awaited<ReturnType<typeof previewAdminDelegationActivation>>;
@@ -175,6 +185,7 @@ function drawerTabs(): Array<{ id: DrawerTab; label: string }> {
     { id: "channels", label: eaa("Channels") },
     { id: "cron", label: eaa("Cron") },
     { id: "memory", label: eaa("Memory") },
+    { id: "developer", label: "Developer" },
   ];
 }
 
@@ -193,6 +204,18 @@ export class EnterpriseAdminAgentsPage extends OpenClawLightDomElement {
   @state() private panelData?: Record<string, unknown>;
   @state() private panelSaving = false;
   @state() private panelError = "";
+  @state() private developerPanel?: EnterpriseDeveloperPanel;
+  @state() private developerReveal?: DeveloperSecretReveal;
+  @state() private developerNotice = "";
+  @state() private developerResponseDetail?: Awaited<ReturnType<typeof loadAdminDeveloperResponse>>;
+  @state() private developerFilters = {
+    integrationId: "",
+    externalConversationId: "",
+    externalUserId: "",
+    status: "",
+    after: "",
+    before: "",
+  };
   @state() private query = "";
   @state() private activeFile?: EnterpriseAgentFile;
   @state() private fileDraft = "";
@@ -227,7 +250,6 @@ export class EnterpriseAdminAgentsPage extends OpenClawLightDomElement {
     createdTo: "",
   };
   @state() private delegationPreview?: DelegationPreview;
-  @state() private delegationPreviewExclusions = new Set<string>();
   @state() private delegationPreviewQuery = "";
   @state() private delegationPreviewPage = 0;
   @state() private delegationAccounts: EnterpriseAccount[] = [];
@@ -282,7 +304,11 @@ export class EnterpriseAdminAgentsPage extends OpenClawLightDomElement {
         (item) => item.accountId === agentId || item.instanceId === agentId,
       );
       this.selected = value ? { kind: "personal", value } : undefined;
-      if (this.drawerTab === "relationships") {
+      if (
+        this.drawerTab === "relationships" ||
+        this.drawerTab === "delegation" ||
+        this.drawerTab === "developer"
+      ) {
         this.drawerTab = "overview";
       }
     } else {
@@ -522,7 +548,6 @@ export class EnterpriseAdminAgentsPage extends OpenClawLightDomElement {
     this.error = "";
     try {
       this.delegationPreview = await previewAdminDelegationActivation();
-      this.delegationPreviewExclusions = new Set();
       this.delegationPreviewQuery = "";
       this.delegationPreviewPage = 0;
     } catch (error) {
@@ -539,12 +564,7 @@ export class EnterpriseAdminAgentsPage extends OpenClawLightDomElement {
     if (
       !showNativeConfirm(
         d("confirmActivation", {
-          count: String(
-            Math.max(
-              0,
-              this.delegationPreview.summary.eligible - this.delegationPreviewExclusions.size,
-            ),
-          ),
+          count: String(this.delegationPreview.summary.eligible),
         }),
       )
     ) {
@@ -552,16 +572,8 @@ export class EnterpriseAdminAgentsPage extends OpenClawLightDomElement {
     }
     this.delegationBusy = true;
     try {
-      const exclusions = [...this.delegationPreviewExclusions].map((key) => {
-        const separator = key.indexOf("\u0000");
-        return {
-          accountId: key.slice(0, separator),
-          agentResourceKey: key.slice(separator + 1),
-        };
-      });
-      await activateAdminDelegation(this.delegationPreview.previewToken, exclusions);
+      await activateAdminDelegation(this.delegationPreview.previewToken);
       this.delegationPreview = undefined;
-      this.delegationPreviewExclusions = new Set();
       await this.loadDelegationDashboard();
     } catch (error) {
       this.error = errorMessage(error);
@@ -665,6 +677,7 @@ export class EnterpriseAdminAgentsPage extends OpenClawLightDomElement {
     this.panelEpoch += 1;
     this.panelAbort?.abort();
     this.selected = undefined;
+    this.developerReveal = undefined;
     const search = new URLSearchParams(globalThis.location.search);
     search.delete("type");
     search.delete("agent");
@@ -682,6 +695,7 @@ export class EnterpriseAdminAgentsPage extends OpenClawLightDomElement {
       return;
     }
     this.drawerTab = tab;
+    this.developerReveal = undefined;
     const search = new URLSearchParams(globalThis.location.search);
     search.set("panel", tab);
     globalThis.history.pushState(
@@ -714,6 +728,8 @@ export class EnterpriseAdminAgentsPage extends OpenClawLightDomElement {
     this.profileConflict = undefined;
     this.profileAiSuggested = false;
     this.simulationResult = undefined;
+    this.developerPanel = undefined;
+    this.developerResponseDetail = undefined;
     try {
       const id =
         this.selected.kind === "shared"
@@ -722,17 +738,24 @@ export class EnterpriseAdminAgentsPage extends OpenClawLightDomElement {
       const data =
         this.drawerTab === "delegation" && this.selected.kind === "shared"
           ? await loadAdminAgentDelegationProfile(id, controller.signal)
-          : await loadAdminAgentPanel(
-              this.selected.kind,
-              id,
-              this.drawerTab === "delegation" ? "overview" : this.drawerTab,
-              controller.signal,
-            );
+          : this.drawerTab === "developer" && this.selected.kind === "shared"
+            ? await loadAdminDeveloperPanel(id, controller.signal, this.developerFilters)
+            : await loadAdminAgentPanel(
+                this.selected.kind,
+                id,
+                this.drawerTab === "delegation" || this.drawerTab === "developer"
+                  ? "overview"
+                  : this.drawerTab,
+                controller.signal,
+              );
       if (epoch === this.panelEpoch && !controller.signal.aborted) {
         if (!isRecord(data)) {
           throw new Error("AGENT_PANEL_RESPONSE_INVALID");
         }
         this.panelData = data;
+        if (this.drawerTab === "developer") {
+          this.developerPanel = data as EnterpriseDeveloperPanel;
+        }
         this.initializePanelDraft(data);
         if (this.drawerTab === "files") {
           await this.openFirstFile(data, epoch, controller.signal);
@@ -1545,6 +1568,223 @@ export class EnterpriseAdminAgentsPage extends OpenClawLightDomElement {
     }
   }
 
+  private developerAgentId(): string | undefined {
+    return this.selected?.kind === "shared" ? this.selected.value.agentId : undefined;
+  }
+
+  private async createDeveloperIntegration(event: SubmitEvent): Promise<void> {
+    event.preventDefault();
+    const agentId = this.developerAgentId();
+    if (!agentId || this.panelSaving) {
+      return;
+    }
+    const form = event.currentTarget as HTMLFormElement;
+    const data = new FormData(form);
+    this.panelSaving = true;
+    this.panelError = "";
+    this.developerNotice = "";
+    try {
+      const result = await createAdminDeveloperIntegration(agentId, {
+        name: String(data.get("name") ?? ""),
+        webhookUrl: String(data.get("webhookUrl") ?? "").trim() || null,
+        uploadPolicy: String(data.get("uploadPolicy") ?? "disabled"),
+        maxUploadBytes: Number(data.get("maxUploadMb") ?? 10) * 1024 * 1024,
+      });
+      this.developerReveal = {
+        apiKey: result.apiKey,
+        webhookSecret: result.webhookSecret,
+      };
+      form.reset();
+      await this.loadPanel();
+    } catch (error) {
+      this.panelError = errorMessage(error);
+    } finally {
+      this.panelSaving = false;
+    }
+  }
+
+  private async saveDeveloperIntegration(
+    integration: EnterpriseDeveloperIntegration,
+    event: SubmitEvent,
+  ): Promise<void> {
+    event.preventDefault();
+    const agentId = this.developerAgentId();
+    if (!agentId || this.panelSaving) {
+      return;
+    }
+    const data = new FormData(event.currentTarget as HTMLFormElement);
+    this.panelSaving = true;
+    this.panelError = "";
+    this.developerNotice = "";
+    try {
+      await updateAdminDeveloperIntegration(agentId, integration.id, {
+        name: String(data.get("name") ?? ""),
+        webhookUrl: String(data.get("webhookUrl") ?? "").trim() || null,
+        uploadPolicy: String(
+          data.get("uploadPolicy") ?? "disabled",
+        ) as EnterpriseDeveloperIntegration["uploadPolicy"],
+        maxUploadBytes: Number(data.get("maxUploadMb") ?? 10) * 1024 * 1024,
+      });
+      this.developerNotice = "Đã lưu Integration.";
+      await this.loadPanel();
+    } catch (error) {
+      this.panelError = errorMessage(error);
+    } finally {
+      this.panelSaving = false;
+    }
+  }
+
+  private async rotateDeveloperIntegration(
+    integration: EnterpriseDeveloperIntegration,
+  ): Promise<void> {
+    const agentId = this.developerAgentId();
+    if (
+      !agentId ||
+      this.panelSaving ||
+      !showNativeConfirm("Rotate API key? Key cũ còn hiệu lực tối đa 24 giờ.")
+    ) {
+      return;
+    }
+    this.panelSaving = true;
+    this.panelError = "";
+    try {
+      const result = await rotateAdminDeveloperIntegration(agentId, integration.id);
+      this.developerReveal = { apiKey: result.apiKey };
+      await this.loadPanel();
+    } catch (error) {
+      this.panelError = errorMessage(error);
+    } finally {
+      this.panelSaving = false;
+    }
+  }
+
+  private async testDeveloperWebhook(integration: EnterpriseDeveloperIntegration): Promise<void> {
+    const agentId = this.developerAgentId();
+    if (!agentId || this.panelSaving) {
+      return;
+    }
+    this.panelSaving = true;
+    this.panelError = "";
+    this.developerNotice = "";
+    try {
+      const result = await testAdminDeveloperWebhook(agentId, integration.id);
+      this.developerNotice = result.ok
+        ? `Webhook phản hồi HTTP ${result.status}.`
+        : `Webhook test thất bại với HTTP ${result.status}.`;
+      await this.loadPanel();
+    } catch (error) {
+      this.panelError = errorMessage(error);
+    } finally {
+      this.panelSaving = false;
+    }
+  }
+
+  private async revokePreviousDeveloperKey(
+    integration: EnterpriseDeveloperIntegration,
+  ): Promise<void> {
+    const agentId = this.developerAgentId();
+    if (!agentId || this.panelSaving || !showNativeConfirm("Thu hồi API key cũ ngay bây giờ?")) {
+      return;
+    }
+    this.panelSaving = true;
+    this.panelError = "";
+    try {
+      await updateAdminDeveloperIntegration(agentId, integration.id, {
+        revokePreviousKey: true,
+      });
+      this.developerNotice = "API key cũ đã bị thu hồi.";
+      await this.loadPanel();
+    } catch (error) {
+      this.panelError = errorMessage(error);
+    } finally {
+      this.panelSaving = false;
+    }
+  }
+
+  private async setDeveloperIntegrationStatus(
+    integration: EnterpriseDeveloperIntegration,
+    status: "active" | "disabled" | "revoked",
+  ): Promise<void> {
+    const agentId = this.developerAgentId();
+    if (!agentId || this.panelSaving) {
+      return;
+    }
+    if (
+      status === "revoked" &&
+      !showNativeConfirm("Thu hồi vĩnh viễn Integration và dừng API key này?")
+    ) {
+      return;
+    }
+    this.panelSaving = true;
+    this.panelError = "";
+    try {
+      await updateAdminDeveloperIntegration(agentId, integration.id, { status });
+      await this.loadPanel();
+    } catch (error) {
+      this.panelError = errorMessage(error);
+    } finally {
+      this.panelSaving = false;
+    }
+  }
+
+  private async openDeveloperResponse(responseId: string): Promise<void> {
+    const agentId = this.developerAgentId();
+    if (!agentId || this.panelSaving) {
+      return;
+    }
+    this.panelSaving = true;
+    this.panelError = "";
+    try {
+      this.developerResponseDetail = await loadAdminDeveloperResponse(agentId, responseId);
+    } catch (error) {
+      this.panelError = errorMessage(error);
+    } finally {
+      this.panelSaving = false;
+    }
+  }
+
+  private async filterDeveloperResponses(event: SubmitEvent): Promise<void> {
+    event.preventDefault();
+    const data = new FormData(event.currentTarget as HTMLFormElement);
+    const toMillis = (value: FormDataEntryValue | null) => {
+      const raw = String(value ?? "");
+      return raw ? String(new Date(`${raw}T00:00:00`).getTime()) : "";
+    };
+    const before = toMillis(data.get("before"));
+    this.developerFilters = {
+      integrationId: String(data.get("integrationId") ?? ""),
+      externalConversationId: String(data.get("externalConversationId") ?? "").trim(),
+      externalUserId: String(data.get("externalUserId") ?? "").trim(),
+      status: String(data.get("status") ?? ""),
+      after: toMillis(data.get("after")),
+      before: before ? String(Number(before) + 24 * 60 * 60 * 1000) : "",
+    };
+    await this.loadPanel();
+  }
+
+  private async loadMoreDeveloperResponses(): Promise<void> {
+    const agentId = this.developerAgentId();
+    const cursor = this.developerPanel?.pageInfo.nextBefore;
+    if (!agentId || !cursor || this.panelSaving) {
+      return;
+    }
+    this.panelSaving = true;
+    try {
+      const next = await loadAdminDeveloperPanel(agentId, undefined, {
+        ...this.developerFilters,
+        before: cursor,
+      });
+      this.developerPanel = {
+        ...next,
+        responses: [...(this.developerPanel?.responses ?? []), ...next.responses],
+      };
+    } catch (error) {
+      this.panelError = errorMessage(error);
+    } finally {
+      this.panelSaving = false;
+    }
+  }
+
   private renderPanel(selected: SelectedAgent) {
     if (this.panelLoading) {
       const panel = drawerTabs().find((tab) => tab.id === this.drawerTab)?.label ?? ea("Agent");
@@ -1552,6 +1792,32 @@ export class EnterpriseAdminAgentsPage extends OpenClawLightDomElement {
     }
     if (this.drawerTab === "overview") {
       return this.renderOverview(selected);
+    }
+    if (this.drawerTab === "developer" && selected.kind === "shared" && this.developerPanel) {
+      const pathname = globalThis.location.pathname;
+      const adminIndex = pathname.indexOf("/admin");
+      const basePath = adminIndex >= 0 ? pathname.slice(0, adminIndex) : "";
+      return renderAgentDeveloperPanel({
+        panel: this.developerPanel,
+        origin: `${globalThis.location.origin}${basePath}`,
+        busy: this.panelSaving,
+        error: this.panelError,
+        notice: this.developerNotice,
+        reveal: this.developerReveal,
+        responseDetail: this.developerResponseDetail,
+        onCopy: (value) => void copyToClipboard(value),
+        onDismissReveal: () => (this.developerReveal = undefined),
+        onCreate: (event) => void this.createDeveloperIntegration(event),
+        onSave: (integration, event) => void this.saveDeveloperIntegration(integration, event),
+        onRotate: (integration) => void this.rotateDeveloperIntegration(integration),
+        onRevokePreviousKey: (integration) => void this.revokePreviousDeveloperKey(integration),
+        onTest: (integration) => void this.testDeveloperWebhook(integration),
+        onStatus: (integration, status) =>
+          void this.setDeveloperIntegrationStatus(integration, status),
+        onOpenResponse: (response) => void this.openDeveloperResponse(response.id),
+        onFilter: (event) => void this.filterDeveloperResponses(event),
+        onLoadMore: () => void this.loadMoreDeveloperResponses(),
+      });
     }
     if (
       this.drawerTab === "delegation" &&
@@ -1764,7 +2030,9 @@ export class EnterpriseAdminAgentsPage extends OpenClawLightDomElement {
                 .filter(
                   (tab) =>
                     selected.kind === "shared" ||
-                    (tab.id !== "relationships" && tab.id !== "delegation"),
+                    (tab.id !== "relationships" &&
+                      tab.id !== "delegation" &&
+                      tab.id !== "developer"),
                 )
                 .map((tab) => ({
                   value: tab.id,
@@ -1821,7 +2089,6 @@ export class EnterpriseAdminAgentsPage extends OpenClawLightDomElement {
       eventNextCursor: this.delegationEventNextCursor,
       eventFilters: this.delegationEventFilters,
       preview: this.delegationPreview,
-      previewExclusions: this.delegationPreviewExclusions,
       previewQuery: this.delegationPreviewQuery,
       previewPage: this.delegationPreviewPage,
       onPolicy: (patch) => {
@@ -1846,15 +2113,6 @@ export class EnterpriseAdminAgentsPage extends OpenClawLightDomElement {
         this.delegationPreviewPage = 0;
       },
       onPreviewPage: (page) => (this.delegationPreviewPage = Math.max(0, page)),
-      onPreviewExclusion: (key, excluded) => {
-        const next = new Set(this.delegationPreviewExclusions);
-        if (excluded) {
-          next.add(key);
-        } else {
-          next.delete(key);
-        }
-        this.delegationPreviewExclusions = next;
-      },
       onActivate: () => void this.activateDelegation(),
       onEmergencyOff: () => void this.emergencyDisableDelegation(),
     });

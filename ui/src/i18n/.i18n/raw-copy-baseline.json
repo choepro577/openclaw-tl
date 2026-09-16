@@ -493,6 +493,433 @@
     },
     {
       "count": 1,
+      "kind": "html-attribute",
+      "name": "placeholder",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-developer-views.ts",
+      "text": "CSKH Production"
+    },
+    {
+      "count": 2,
+      "kind": "html-attribute",
+      "name": "placeholder",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-developer-views.ts",
+      "text": "https://cskh.example.com/webhooks/openclaw"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-developer-views.ts",
+      "text": "Agent ID / model"
+    },
+    {
+      "count": 2,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-developer-views.ts",
+      "text": "Ảnh + tài liệu"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-developer-views.ts",
+      "text": "API key:"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-developer-views.ts",
+      "text": "Base URL"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-developer-views.ts",
+      "text": "Browser → Backend CSKH → OpenClaw → Backend CSKH → Browser"
+    },
+    {
+      "count": 2,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-developer-views.ts",
+      "text": "Chỉ ảnh"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-developer-views.ts",
+      "text": "completed"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-developer-views.ts",
+      "text": "Conversation / user"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-developer-views.ts",
+      "text": "Conversation ID"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-developer-views.ts",
+      "text": "Đã lưu"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-developer-views.ts",
+      "text": "đang chạy"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-developer-views.ts",
+      "text": "Đến ngày"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-developer-views.ts",
+      "text": "Dùng gần nhất:"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-developer-views.ts",
+      "text": "Dung lượng/request (MB)"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-developer-views.ts",
+      "text": "External user ID"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-developer-views.ts",
+      "text": "failed"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-developer-views.ts",
+      "text": "Hướng dẫn nhanh"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-developer-views.ts",
+      "text": "in_progress"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-developer-views.ts",
+      "text": "incomplete"
+    },
+    {
+      "count": 2,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-developer-views.ts",
+      "text": "Integration"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-developer-views.ts",
+      "text": "Integrations"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-developer-views.ts",
+      "text": "Không đặt API key trong JavaScript của trình duyệt. Trình duyệt chỉ gọi backend CSKH; backend mới giữ key và gọi OpenClaw."
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-developer-views.ts",
+      "text": "Kích hoạt"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-developer-views.ts",
+      "text": "Lọc transcript"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-developer-views.ts",
+      "text": "lỗi ·"
+    },
+    {
+      "count": 2,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-developer-views.ts",
+      "text": "Lưu"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-developer-views.ts",
+      "text": "message · gồm tool call/result từ transcript runtime."
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-developer-views.ts",
+      "text": "Mỗi môi trường có key, webhook, upload policy và hạn mức độc lập."
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-developer-views.ts",
+      "text": "ngày; không hiển thị secret hoặc session key."
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-developer-views.ts",
+      "text": "Nội dung trả lời"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-developer-views.ts",
+      "text": "ocdev_"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-developer-views.ts",
+      "text": "queued"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-developer-views.ts",
+      "text": "request ·"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-developer-views.ts",
+      "text": "Rotate key"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-developer-views.ts",
+      "text": "Sao chép"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-developer-views.ts",
+      "text": "Sao chép API key"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-developer-views.ts",
+      "text": "Secret chỉ hiển thị một lần — hãy lưu vào secret manager của backend CSKH."
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-developer-views.ts",
+      "text": "Sử dụng"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-developer-views.ts",
+      "text": "Tải thêm"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-developer-views.ts",
+      "text": "Tạo Integration"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-developer-views.ts",
+      "text": "Tạo:"
+    },
+    {
+      "count": 2,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-developer-views.ts",
+      "text": "Tắt"
+    },
+    {
+      "count": 2,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-developer-views.ts",
+      "text": "Tất cả"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-developer-views.ts",
+      "text": "Tên"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-developer-views.ts",
+      "text": "Tên / key"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-developer-views.ts",
+      "text": "Test webhook"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-developer-views.ts",
+      "text": "Thao tác"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-developer-views.ts",
+      "text": "Thời gian"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-developer-views.ts",
+      "text": "Thu hồi"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-developer-views.ts",
+      "text": "Thu hồi key cũ"
+    },
+    {
+      "count": 2,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-developer-views.ts",
+      "text": "Trạng thái"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-developer-views.ts",
+      "text": "Transcript"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-developer-views.ts",
+      "text": "Từ ngày"
+    },
+    {
+      "count": 2,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-developer-views.ts",
+      "text": "Upload"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-developer-views.ts",
+      "text": "Vô hiệu hóa"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-developer-views.ts",
+      "text": "Webhook"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-developer-views.ts",
+      "text": "Webhook secret:"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-developer-views.ts",
+      "text": "Webhook URL"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/pages/enterprise-admin/pages/agent-developer-views.ts",
+      "text": "Xem đầy đủ"
+    },
+    {
+      "count": 1,
       "kind": "html-text",
       "name": "text",
       "path": "ui/src/pages/enterprise-admin/pages/agent-files-policy-views.ts",
@@ -504,6 +931,13 @@
       "name": "placeholder",
       "path": "ui/src/pages/enterprise-admin/pages/agent-runtime-views.ts",
       "text": "Asia/Ho_Chi_Minh"
+    },
+    {
+      "count": 1,
+      "kind": "object-property",
+      "name": "label",
+      "path": "ui/src/pages/enterprise-admin/pages/agents-page.ts",
+      "text": "Developer"
     },
     {
       "count": 1,

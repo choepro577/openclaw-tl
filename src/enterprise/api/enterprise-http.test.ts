@@ -8,7 +8,11 @@ import type { OpenClawConfig } from "../../config/types.openclaw.js";
 import type { GatewayRequestContext } from "../../gateway/server-methods/types.js";
 import { closeOpenClawStateDatabaseForTest } from "../../state/openclaw-state-db.js";
 import { withOpenClawTestState } from "../../test-utils/openclaw-test-state.js";
-import { createEnterpriseAccount, updateEnterpriseAccount } from "../accounts/account-store.js";
+import {
+  createEnterpriseAccount,
+  getEnterpriseAccountById,
+  updateEnterpriseAccount,
+} from "../accounts/account-store.js";
 import { ENTERPRISE_ADMIN_AUTH_COOKIE, ENTERPRISE_USER_AUTH_COOKIE } from "../auth/cookie.js";
 import { hashEnterprisePassword } from "../auth/password.js";
 import {
@@ -353,7 +357,11 @@ describe("Enterprise HTTP API", () => {
         expect(bootstrapBody).toMatchObject({
           schemaVersion: 2,
           defaultAgentKey: "personal",
-          agents: [{ key: "personal", kind: "personal" }],
+          agents: [
+            { key: "personal", kind: "personal" },
+            // The catalog advertises requestable agents without granting chat access.
+            { kind: "shared", access: { allowed: false }, actions: { canChat: false } },
+          ],
         });
         expect(JSON.stringify(bootstrapBody)).not.toMatch(
           /accountId|profileId|runtimeAgentId|workspace|provider|resourceKey|toolId|skillId/u,
@@ -1111,7 +1119,7 @@ describe("Enterprise HTTP API", () => {
     });
   });
 
-  it("secures delegation settings, rejects looser overrides, and blocks unknown grants", async () => {
+  it("secures delegation settings, normalizes legacy overrides, and blocks unknown grants", async () => {
     await withOpenClawTestState({ scenario: "minimal", applyEnv: true }, async () => {
       createEnterpriseAccount({
         username: "delegation.api.admin",
@@ -1265,10 +1273,10 @@ describe("Enterprise HTTP API", () => {
             },
           },
         );
-        expect(looser.status).toBe(400);
-        await expect(looser.json()).resolves.toMatchObject({
-          code: "DELEGATION_OVERRIDE_CANNOT_LOOSEN",
-        });
+        expect(looser.status).toBe(200);
+        await expect(looser.json()).resolves.toMatchObject({ override: { mode: "inherit" } });
+
+        const afterLegacyOverride = getEnterpriseAccountById(employee.id)!;
 
         const disabled = await apiRequest(
           baseUrl,
@@ -1280,12 +1288,13 @@ describe("Enterprise HTTP API", () => {
             body: {
               agentResourceKey: sharedAgentResourceKey("contracts"),
               mode: "disabled",
-              baseRevision: 0,
-              baseAccountPolicyRevision: employee.policyRevision,
+              baseRevision: 1,
+              baseAccountPolicyRevision: afterLegacyOverride.policyRevision,
             },
           },
         );
         expect(disabled.status).toBe(200);
+        await expect(disabled.json()).resolves.toMatchObject({ override: { mode: "inherit" } });
 
         const unknownGrant = await apiRequest(baseUrl, "/api/enterprise/admin/access/changes", {
           method: "POST",
@@ -1300,7 +1309,9 @@ describe("Enterprise HTTP API", () => {
                 effect: "allow",
               },
             ],
-            baseRevisions: { [employee.id]: employee.policyRevision + 1 },
+            baseRevisions: {
+              [employee.id]: getEnterpriseAccountById(employee.id)!.policyRevision,
+            },
           },
         });
         expect(unknownGrant.status).toBe(400);
@@ -1335,11 +1346,21 @@ it("serves preset metadata and applies/reapplies basic through the authenticated
       const cookie = cookieFrom(login);
       const listing = await apiRequest(baseUrl, "/api/enterprise/admin/accounts", { cookie });
       const catalog = (await listing.json()) as {
-        accessPresets: Array<{ key: string; toolIds: string[] }>;
+        accessPresets: Array<{ key: string; toolIds: string[]; initialSkillIds: string[] }>;
       };
       expect(
         catalog.accessPresets.find((preset) => preset.key === "basic@1")?.toolIds,
       ).toHaveLength(32);
+      const basicInitialSkills = catalog.accessPresets.find(
+        (preset) => preset.key === "basic@1",
+      )?.initialSkillIds;
+      expect(basicInitialSkills).toHaveLength(15);
+      expect(basicInitialSkills).toEqual(
+        expect.arrayContaining([
+          "skill:global:openclaw-bundled:hr-skill",
+          "skill:global:openclaw-bundled:xurl",
+        ]),
+      );
       const response = await apiRequest(baseUrl, "/api/enterprise/admin/accounts", {
         method: "POST",
         cookie,
@@ -1356,6 +1377,16 @@ it("serves preset metadata and applies/reapplies basic through the authenticated
         account: { id: string; accessPresetKey: string; policyRevision: number };
       };
       expect(account.accessPresetKey).toBe("basic@1");
+      const initialSkillGrants = listEnterpriseEntitlements(account.id).filter(
+        (entitlement) => entitlement.resourceType === "skill" && entitlement.effect === "allow",
+      );
+      expect(initialSkillGrants).toHaveLength(15);
+      expect(initialSkillGrants.map((entitlement) => entitlement.resourceId)).toEqual(
+        expect.arrayContaining([
+          "skill:global:openclaw-bundled:hr-skill",
+          "skill:global:openclaw-bundled:xurl",
+        ]),
+      );
       const { readEnterpriseAccountToolPolicy, writeEnterpriseAccountToolPolicy } =
         await import("../accounts/account-tool-policy-store.js");
       writeEnterpriseAccountToolPolicy(account.id, 0, {

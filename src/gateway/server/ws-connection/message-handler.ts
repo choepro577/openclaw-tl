@@ -1,4 +1,5 @@
 // WebSocket message handler validates frames, dispatches gateway RPCs, manages pairing, and reports responses.
+import { performance } from "node:perf_hooks";
 import { rawDataToString } from "@openclaw/gateway-client/websocket-data";
 import type { RawData } from "ws";
 import {
@@ -166,6 +167,10 @@ export function attachGatewayWsMessageHandler(params: GatewayWsMessageHandlerPar
   };
 
   const handleMessage = async (data: RawData) => {
+    // Capture arrival before decoding/parsing so the chat waterfall includes
+    // WebSocket framing and JSON validation. This is server-owned and is passed
+    // only through the in-process dispatcher call.
+    const receivedAtMs = performance.now();
     if (isClosed()) {
       return;
     }
@@ -376,7 +381,7 @@ export function attachGatewayWsMessageHandler(params: GatewayWsMessageHandlerPar
         await attachAuthenticatedGatewayConnect(phaseContext, deviceAuthorized);
         return;
       }
-      await authenticatedRequestDispatcher.dispatch(parsed, client);
+      await authenticatedRequestDispatcher.dispatch(parsed, client, receivedAtMs);
     } catch (err) {
       await releasePendingNodePairingCleanup();
       logGateway.error(`parse/handle error: ${String(err)}`);

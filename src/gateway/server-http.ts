@@ -231,7 +231,6 @@ export function createGatewayHttpServer(opts: {
   const httpServer: HttpServer = opts.tlsOptions
     ? createHttpsServer(opts.tlsOptions, handleServerRequest)
     : createHttpServer(handleServerRequest);
-
   async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     setDefaultSecurityHeaders(res, {
       strictTransportSecurity: strictTransportSecurityHeader,

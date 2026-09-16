@@ -1,0 +1,6 @@
+{
+  "findings": [],
+  "overall_correctness": "patch is correct",
+  "overall_explanation": "No P0-severity defect is demonstrated by the provided change bundle. Under the specified threshold, the patch is therefore considered correct; this does not claim completion of the pending live validation or final build.",
+  "overall_confidence": 0.94
+}

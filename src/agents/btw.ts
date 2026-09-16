@@ -982,27 +982,31 @@ export async function runBtwSideQuestion(
           ? resolvedAttempt.auth.apiKey?.trim()
           : undefined;
       const sideRunId = params.authorityRunId;
+      const placementSandbox = await resolveSessionPlacementSandbox({
+        agentId: sessionAgentId,
+        config: params.cfg,
+        sessionId,
+        sessionKey: params.sessionKey,
+        workspaceDir,
+      });
       const sandbox =
-        (await resolveSessionPlacementSandbox({
-          agentId: sessionAgentId,
-          config: params.cfg,
-          sessionId,
-          sessionKey: params.sessionKey,
-          workspaceDir,
-        })) ??
+        placementSandbox ??
         (await resolveSandboxContext({
           config: params.cfg,
           sessionKey: params.sandboxSessionKey ?? params.sessionKey ?? sessionId,
           workspaceDir,
+          signal: params.opts?.abortSignal,
+          holdActiveLease: true,
         }));
-      const preparedRunAdmission = prepareSystemAgentRunAdmission(
-        params.cfg,
-        sideRunId,
-        sessionAgentId,
-        "btw.side-question",
-      );
-      const admittedRunContext = await preparedRunAdmission.admit("plugin-harness");
+      let preparedRunAdmission: ReturnType<typeof prepareSystemAgentRunAdmission> | undefined;
       try {
+        preparedRunAdmission = prepareSystemAgentRunAdmission(
+          params.cfg,
+          sideRunId,
+          sessionAgentId,
+          "btw.side-question",
+        );
+        const admittedRunContext = await preparedRunAdmission.admit("plugin-harness");
         const { model: _sideModel, authorityRunId: _authorityRunId, ...hostAttempt } = params;
         const host = createAgentHarnessHostCapabilities({
           attempt: {
@@ -1069,7 +1073,13 @@ export async function runBtwSideQuestion(
         }
         return { kind: "handled", payload: { text: result.text } };
       } finally {
-        preparedRunAdmission.close();
+        try {
+          preparedRunAdmission?.close();
+        } finally {
+          if (!placementSandbox) {
+            sandbox?.lifecycleActiveRelease?.();
+          }
+        }
       }
     };
     if (harness.runSideQuestion) {

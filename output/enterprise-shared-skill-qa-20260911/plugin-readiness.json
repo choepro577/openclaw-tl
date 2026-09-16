@@ -1,0 +1,75 @@
+{
+  "capturedAt": "2026-09-11T14:38:13.213Z",
+  "activeNativePluginGrants": [
+    {
+      "id": "c73367a6-47bb-4fcb-8015-d46f565b8e26",
+      "account": "hieu",
+      "scope": "account",
+      "agentKey": null,
+      "runtimeAgentId": null,
+      "pluginId": "diffs",
+      "exactVersion": "2026.8.1",
+      "state": "active",
+      "revision": 27
+    }
+  ],
+  "activeCodexPluginGrants": [
+    {
+      "id": "3fd48563-b19e-40fe-818b-1db4a5a58cdb",
+      "account": "hieu",
+      "scope": "account",
+      "agentKey": "personal",
+      "runtimeAgentId": "enterprise-personal-2ae2cbc2deecdb86fe86",
+      "pluginName": "gmail",
+      "marketplaceName": "openai-curated-remote",
+      "authRequired": 0,
+      "ready": 1,
+      "state": "active",
+      "revision": 6
+    }
+  ],
+  "activeSharedPluginGrantCounts": {
+    "native": 0,
+    "codex": 0
+  },
+  "sharedAgentUserCounts": [
+    {
+      "resource_id": "agent:shared:hrm",
+      "users": 2
+    },
+    {
+      "resource_id": "agent:shared:purchase-order-skill",
+      "users": 2
+    }
+  ],
+  "acceptancePlan": [
+    {
+      "case": "same-shared-agent-two-users",
+      "users": [
+        "hieu",
+        "tl00275"
+      ],
+      "agent": "agent:shared:purchase-order-skill",
+      "expected": "same shared-agent skill/tool surface; no private plugin promotion"
+    },
+    {
+      "case": "private-native-plugin-exclusion",
+      "account": "hieu",
+      "plugin": "diffs",
+      "scope": "account",
+      "expected": "visible only through its account scope; absent from shared purchase-order projection"
+    },
+    {
+      "case": "private-codex-plugin-exclusion",
+      "account": "hieu",
+      "plugin": "gmail",
+      "scope": "account",
+      "agentKey": "personal",
+      "expected": "visible only to hieu personal runtime; absent from shared purchase-order projection"
+    },
+    {
+      "case": "explicit-shared-plugin-grant",
+      "expected": "admin approval creates scope=shared_agent row and a capability revision before shared sessions expose it"
+    }
+  ]
+}

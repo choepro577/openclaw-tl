@@ -26,7 +26,8 @@ Sau do goi mot tool xuat hien trong `results`:
 
 Khong truyen `password` hoac `authorization`. Gateway so huu phien dang nhap
 PO, tu chen token vao upstream request va redacted secret truoc khi tra ket qua
-cho agent.
+cho agent. Ngoại lệ duy nhất là URL user-facing được khai báo tại
+`userVisibleUrlPaths`; URL đó giữ nguyên mọi query parameter.
 
 ## Routing rules
 
@@ -69,12 +70,22 @@ bất kỳ trường nào và không được biến thành tra cứu nháp.
 4. Giữ `getFrom: 1` và `sDate` đã chuẩn hóa nếu schema/router hiện tại hỗ trợ.
 5. Không dùng request list rỗng để kết luận không thể tạo. Không dùng draft list
    lịch sử làm kết quả tạo mới.
-6. Chỉ trả link nguyên văn từ `create_po_draft.result.data`; nếu field vắng mặt
-   thì báo không có link. Cấm ghép hoặc đoán URL.
+6. Chỉ trả link nguyên văn từ `create_po_draft.result.data`, không xóa hoặc che
+   query parameter kể cả `token`; nếu field vắng mặt thì báo không có link. Cấm
+   ghép hoặc đoán URL.
 
-## Write gate
+## Write policy
 
-Can xac nhan ro rang truoc cac mutation tool, gom:
+Yêu cầu ghi rõ ràng trong request hiện tại là quyền thực hiện mutation tool sau
+khi đã resolve đủ trường nghiệp vụ và prerequisite. Không hỏi lại xác nhận cho
+cùng request và không tạo thêm plugin approval riêng cho cùng thao tác. Nếu user
+tiếp tục đúng request sau auth, retry hoặc delegation thì giữ nguyên receipt và
+thực hiện tiếp.
+
+Chỉ hỏi khi action, target, scope, ngày hoặc trường `required` còn thiếu/mơ hồ.
+Không tự chuyển một yêu cầu ghi thành preview/read và không suy đoán payload.
+
+Các mutation tool gồm:
 
 - `create_po_draft`
 - `update_po_draft`
@@ -82,7 +93,10 @@ Can xac nhan ro rang truoc cac mutation tool, gom:
 - `delete_po_product`
 - `confirm_po`
 
-Tom tat target va payload nghiep vu truoc khi xin xac nhan.
+Tóm tắt target và payload để kiểm tra nội bộ trước khi gọi. `confirm_po` là
+thao tác nghiệp vụ riêng; request tạo PO nháp không tự cấp quyền gọi
+`confirm_po`. Nếu tool/backend chỉ hỗ trợ preview, giữ preview-only và chỉ commit
+khi user yêu cầu rõ thao tác commit.
 
 ## Common families
 

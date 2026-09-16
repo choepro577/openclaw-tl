@@ -14,6 +14,7 @@ const resolveHookModelSelectionMock = vi.hoisted(() =>
     modelId,
   })),
 );
+const resolveSandboxContextMock = vi.hoisted(() => vi.fn());
 
 const emptyModelRegistry = {
   find: vi.fn((_provider: string, _modelId: string) => null),
@@ -148,7 +149,7 @@ vi.mock("../provider-request-config.js", () => ({
 }));
 
 vi.mock("../sandbox.js", () => ({
-  resolveSandboxContext: vi.fn(async () => undefined),
+  resolveSandboxContext: (...args: unknown[]) => resolveSandboxContextMock(...args),
 }));
 
 vi.mock("./compaction-runtime-context.js", () => ({
@@ -180,6 +181,7 @@ describe("embedded model resolution consistency", () => {
       provider,
       modelId,
     }));
+    resolveSandboxContextMock.mockReset().mockResolvedValue(undefined);
   });
 
   it("resolves an explicit alias configured only on the selected agent", () => {
@@ -255,6 +257,86 @@ describe("embedded model resolution consistency", () => {
       provider: PROVIDER,
       id: STATIC_MODEL_ID,
     });
+  });
+
+  it("releases its sandbox lease when preparation fails after sandbox acquisition", async () => {
+    const config = {
+      agents: {
+        defaults: {
+          model: { primary: `${PROVIDER}/${STATIC_MODEL_ID}` },
+        },
+      },
+    };
+    const preparedModelRuntime = createPreparedModelRuntime(config);
+    const releaseSandbox = vi.fn();
+    resolveSandboxContextMock.mockResolvedValue({
+      enabled: true,
+      workspaceAccess: "rw",
+      workspaceDir: "/tmp/openclaw-sandbox",
+      lifecycleActiveRelease: releaseSandbox,
+    });
+
+    await expect(
+      prepareDirectCompactionAttempt({
+        config,
+        provider: PROVIDER,
+        model: STATIC_MODEL_ID,
+        agentId: "main",
+        sessionId: "compact-preparation-error",
+        sessionKey: "agent:main:compact-preparation-error",
+        sessionFile: "agent:main:compact-preparation-error",
+        workspaceDir: preparedModelRuntime.workspaceDir,
+        cwd: "/tmp/openclaw-different-cwd",
+        abortSignal: new AbortController().signal,
+        preparedModelRuntime: preparedModelRuntime as never,
+      }),
+    ).rejects.toThrow("cwd override is not supported");
+
+    expect(resolveSandboxContextMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        holdActiveLease: true,
+        signal: expect.any(AbortSignal),
+      }),
+    );
+    expect(releaseSandbox).toHaveBeenCalledOnce();
+  });
+
+  it("does not release a sandbox borrowed from the enclosing compaction run", async () => {
+    const config = {
+      agents: {
+        defaults: {
+          model: { primary: `${PROVIDER}/${STATIC_MODEL_ID}` },
+        },
+      },
+    };
+    const preparedModelRuntime = createPreparedModelRuntime(config);
+    const releaseSandbox = vi.fn();
+    const borrowedSandbox = {
+      enabled: true,
+      workspaceAccess: "rw",
+      workspaceDir: "/tmp/openclaw-sandbox",
+      lifecycleActiveRelease: releaseSandbox,
+    };
+
+    const compaction = await prepareDirectCompactionAttempt({
+      config,
+      provider: PROVIDER,
+      model: STATIC_MODEL_ID,
+      agentId: "main",
+      sessionId: "compact-borrowed-sandbox",
+      sessionKey: "agent:main:compact-borrowed-sandbox",
+      sessionFile: "agent:main:compact-borrowed-sandbox",
+      workspaceDir: preparedModelRuntime.workspaceDir,
+      sandbox: borrowedSandbox,
+      preparedModelRuntime: preparedModelRuntime as never,
+    } as never);
+
+    if (!compaction.ok) {
+      throw new Error(`manual compaction failed: ${compaction.result.reason}`);
+    }
+    expect(compaction.value.releaseSandbox).toBeUndefined();
+    expect(releaseSandbox).not.toHaveBeenCalled();
+    expect(resolveSandboxContextMock).not.toHaveBeenCalled();
   });
 
   it("resolves route-bound thinking compatibility for the final model", () => {

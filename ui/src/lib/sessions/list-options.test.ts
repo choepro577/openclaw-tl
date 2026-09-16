@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { GatewayBrowserClient } from "../../api/gateway.ts";
 import type { SessionsListResult } from "../../api/types.ts";
 import { createSessionCapability } from "./index.ts";
+import type { SessionPatchOptions } from "./patch.ts";
 
 function sessionsResult(sessions: SessionsListResult["sessions"], ts: number): SessionsListResult {
   return {
@@ -601,6 +602,35 @@ describe("session list replacement options", () => {
       expect(call[1]).toMatchObject({ expectedSessionId: expect.stringMatching(/^id:/) });
       expect(call[2]).toEqual({ timeoutMs: 10 * 60_000 });
     }
+    sessions.dispose();
+  });
+
+  it("does not dispatch a queued session patch after newer input supersedes it", async () => {
+    const key = "agent:main:rapid-effort";
+    const firstPatch = deferred<unknown>();
+    const request = vi.fn(async (method: string) => {
+      if (method !== "sessions.patch") {
+        throw new Error(`Unexpected request: ${method}`);
+      }
+      return request.mock.calls.filter(([calledMethod]) => calledMethod === "sessions.patch")
+        .length === 1
+        ? await firstPatch.promise
+        : { ok: true, path: "", key, entry: {} };
+    });
+    const sessions = createSessions({ request } as unknown as GatewayBrowserClient, key);
+
+    const first = sessions.patch(key, { thinkingLevel: "high" }, { deferListRefresh: true });
+    const secondOptions: SessionPatchOptions = {
+      deferListRefresh: true,
+      waitFor: first,
+      shouldDispatch: () => false,
+    };
+    const superseded = sessions.patch(key, { thinkingLevel: "low" }, secondOptions);
+
+    firstPatch.resolve({ ok: true, path: "", key, entry: {} });
+    await expect(first).resolves.toMatchObject({ ok: true, key });
+    await expect(superseded).resolves.toBeNull();
+    expect(request).toHaveBeenCalledTimes(1);
     sessions.dispose();
   });
 

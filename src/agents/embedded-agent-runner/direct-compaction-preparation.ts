@@ -317,62 +317,75 @@ export async function prepareDirectCompactionAttempt(
           execOverrides: params.execOverrides,
           sessionKey: sandboxSessionKey,
           workspaceDir: resolvedWorkspace,
+          signal: params.abortSignal,
+          holdActiveLease: true,
         })
       : placementParams.sandbox;
-  const effectiveWorkspace = sandbox?.enabled
-    ? sandbox.workspaceAccess === "rw"
-      ? resolvedWorkspace
-      : sandbox.workspaceDir
-    : resolvedWorkspace;
-  const requestedCwd = params.cwd ? resolveUserPath(params.cwd) : undefined;
-  if (sandbox?.enabled && requestedCwd && requestedCwd !== resolvedWorkspace) {
-    throw new Error(
-      "cwd override is not supported for sandboxed embedded compaction runs; omit cwd or use the agent workspace as cwd",
-    );
-  }
-  const effectiveCwd = sandbox?.enabled ? effectiveWorkspace : (requestedCwd ?? effectiveWorkspace);
-  await fs.mkdir(effectiveWorkspace, { recursive: true });
-  const isSqliteSessionTranscript = true;
-  const { sessionAgentId: effectiveSkillAgentId } = earlyAgentIds;
+  // A supplied sandbox belongs to the enclosing run; only release our own lease.
+  const releaseSandbox =
+    placementParams.sandbox === undefined ? sandbox?.lifecycleActiveRelease : undefined;
+  try {
+    const effectiveWorkspace = sandbox?.enabled
+      ? sandbox.workspaceAccess === "rw"
+        ? resolvedWorkspace
+        : sandbox.workspaceDir
+      : resolvedWorkspace;
+    const requestedCwd = params.cwd ? resolveUserPath(params.cwd) : undefined;
+    if (sandbox?.enabled && requestedCwd && requestedCwd !== resolvedWorkspace) {
+      throw new Error(
+        "cwd override is not supported for sandboxed embedded compaction runs; omit cwd or use the agent workspace as cwd",
+      );
+    }
+    const effectiveCwd = sandbox?.enabled
+      ? effectiveWorkspace
+      : (requestedCwd ?? effectiveWorkspace);
+    await fs.mkdir(effectiveWorkspace, { recursive: true });
+    const isSqliteSessionTranscript = true;
+    const { sessionAgentId: effectiveSkillAgentId } = earlyAgentIds;
 
-  return {
-    ok: true as const,
-    value: {
-      params,
-      startedAt,
-      diagId,
-      trigger,
-      attempt,
-      maxAttempts,
-      runId,
-      compactionModelCallTrace,
-      diagnosticCompactionRunId,
-      nextDiagnosticModelCallId: () =>
-        `${diagnosticCompactionRunId}:model:${(diagnosticModelCallSeq += 1)}`,
-      earlyAgentIds,
-      agentDir,
-      provider,
-      contextConfigProvider,
-      modelId,
-      preparedHarnessRuntime,
-      thinkLevel,
-      attemptedThinking,
-      fail,
-      authStorage,
-      modelRegistry,
-      runtimeModel,
-      apiKeyInfo,
-      resolvedRuntimeAuthPlan,
-      hasRuntimeAuthExchange,
-      resolvedWorkspace,
-      sandboxSessionKey,
-      sandbox,
-      effectiveWorkspace,
-      effectiveCwd,
-      isSqliteSessionTranscript,
-      effectiveSkillAgentId,
-    },
-  };
+    return {
+      ok: true as const,
+      value: {
+        params,
+        startedAt,
+        diagId,
+        trigger,
+        attempt,
+        maxAttempts,
+        runId,
+        compactionModelCallTrace,
+        diagnosticCompactionRunId,
+        nextDiagnosticModelCallId: () =>
+          `${diagnosticCompactionRunId}:model:${(diagnosticModelCallSeq += 1)}`,
+        earlyAgentIds,
+        agentDir,
+        provider,
+        contextConfigProvider,
+        modelId,
+        preparedHarnessRuntime,
+        thinkLevel,
+        attemptedThinking,
+        fail,
+        authStorage,
+        modelRegistry,
+        runtimeModel,
+        apiKeyInfo,
+        resolvedRuntimeAuthPlan,
+        hasRuntimeAuthExchange,
+        resolvedWorkspace,
+        sandboxSessionKey,
+        sandbox,
+        releaseSandbox,
+        effectiveWorkspace,
+        effectiveCwd,
+        isSqliteSessionTranscript,
+        effectiveSkillAgentId,
+      },
+    };
+  } catch (preparationError) {
+    releaseSandbox?.();
+    throw preparationError;
+  }
 }
 
 export type DirectCompactionPreparation = Extract<

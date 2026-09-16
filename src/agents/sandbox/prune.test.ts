@@ -5,6 +5,7 @@ import type { SandboxConfig } from "./types.js";
 
 let maybePruneSandboxes: typeof import("./prune.js").maybePruneSandboxes;
 let BROWSER_BRIDGES: typeof import("./browser-bridges.js").BROWSER_BRIDGES;
+let acquireSandboxLifecycleLease: typeof import("./lifecycle.js").acquireSandboxLifecycleLease;
 
 const configMocks = vi.hoisted(() => ({
   getRuntimeConfig: vi.fn(),
@@ -134,6 +135,7 @@ describe("maybePruneSandboxes", () => {
     ({ BROWSER_BRIDGES } = await import("./browser-bridges.js"));
     BROWSER_BRIDGES.clear();
     ({ maybePruneSandboxes } = await import("./prune.js"));
+    ({ acquireSandboxLifecycleLease } = await import("./lifecycle.js"));
   });
 
   it("removes the registry entry after runtime removal succeeds", async () => {
@@ -156,8 +158,34 @@ describe("maybePruneSandboxes", () => {
     );
   });
 
+  it("skips a runtime while its foreground lifecycle lease is active", async () => {
+    const release = await acquireSandboxLifecycleLease("scope:active");
+    registryMocks.readBrowserRegistry.mockResolvedValue({ entries: [] });
+    registryMocks.readRegistry.mockResolvedValue({
+      entries: [
+        {
+          containerName: "sandbox-active",
+          backendId: "docker",
+          sessionKey: "scope:active",
+          createdAtMs: Date.now() - 4 * 60 * 60 * 1000,
+          lastUsedAtMs: Date.now() - 2 * 60 * 60 * 1000,
+          image: "openclaw-sandbox:bookworm-slim",
+        },
+      ],
+    });
+
+    try {
+      await maybePruneSandboxes(buildPruneConfig());
+
+      expect(backendMocks.removeRuntime).not.toHaveBeenCalled();
+      expect(registryMocks.removeRegistryEntry).not.toHaveBeenCalled();
+    } finally {
+      release();
+    }
+  });
+
   it("prunes entries with out-of-range registry timestamps", async () => {
-    registryMocks.readRegistry.mockResolvedValueOnce({
+    registryMocks.readRegistry.mockResolvedValue({
       entries: [
         {
           containerName: "sandbox-out-of-range",

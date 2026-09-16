@@ -34,13 +34,13 @@ type ChatSendInternalOptions = {
 };
 
 async function handleChatSendWithOptions(
-  { params, respond, context, client }: GatewayRequestHandlerOptions,
+  { params, respond, context, client, requestTiming }: GatewayRequestHandlerOptions,
   onAdmissionOwned?: () => Promise<boolean>,
   externalAuthorityAdmission?: ChatSendExternalAuthorityAdmission,
   options?: ChatSendInternalOptions,
 ): Promise<void> {
   const setup = await prepareAndAdmitChatSend(
-    { params, respond, context, client },
+    { params, respond, context, client, requestTiming },
     onAdmissionOwned,
     options,
   );
@@ -48,7 +48,7 @@ async function handleChatSendWithOptions(
     return;
   }
   const { normalizedRequest, preparedSession, admitted } = setup;
-  const { chatSendReceivedAtMs, clientInfo, p, systemInputProvenance, reconnectResumeRequested } =
+  const { chatSendReceivedAtMs, p, systemInputProvenance, reconnectResumeRequested } =
     normalizedRequest.value;
   const {
     clientRunId,
@@ -228,17 +228,38 @@ async function handleChatSendWithOptions(
       return;
     }
     messageInjectionAttempt = preAckInjection.attempt;
-    const serverTiming = shouldIncludeChatSendAckServerTiming(clientInfo)
+    const ackReadyAtMs = performance.now();
+    const serverTiming = shouldIncludeChatSendAckServerTiming(client)
       ? {
-          receivedToAckMs: roundedChatSendTimingMs(performance.now() - chatSendReceivedAtMs),
+          receivedToAckMs: roundedChatSendTimingMs(ackReadyAtMs - chatSendReceivedAtMs),
+          receivedToNormalizeMs: roundedChatSendTimingMs(
+            normalizedRequest.value.chatSendNormalizeStartedAtMs - chatSendReceivedAtMs,
+          ),
+          normalizeMs: roundedChatSendTimingMs(normalizedRequest.value.chatSendNormalizeMs),
+          ...(requestTiming?.enterpriseProjectionMs !== undefined
+            ? {
+                enterpriseProjectionMs: roundedChatSendTimingMs(
+                  requestTiming.enterpriseProjectionMs,
+                ),
+              }
+            : {}),
+          ...(requestTiming?.authorizationMs !== undefined
+            ? { authorizationMs: roundedChatSendTimingMs(requestTiming.authorizationMs) }
+            : {}),
           loadSessionMs: sessionLoadMs,
+          ...(requestTiming?.admissionMs !== undefined
+            ? { admissionMs: roundedChatSendTimingMs(requestTiming.admissionMs) }
+            : {}),
+          ...(requestTiming?.queueWaitMs !== undefined
+            ? { queueWaitMs: roundedChatSendTimingMs(requestTiming.queueWaitMs) }
+            : {}),
           ...(prepareAttachmentsMs !== undefined ? { prepareAttachmentsMs } : {}),
         }
       : undefined;
     const chatSendTiming: ChatRunTiming | undefined =
       serverTiming && typeof client?.connId === "string" && client.connId.trim()
         ? {
-            ackedAtMs: performance.now(),
+            ackedAtMs: ackReadyAtMs,
             connId: client.connId.trim(),
             receivedAtMs: chatSendReceivedAtMs,
           }
@@ -260,6 +281,7 @@ async function handleChatSendWithOptions(
         type: "mark",
         name: "gateway.chat_send.ack_ready",
         phase: "agent-turn",
+        runId: clientRunId,
         attributes: {
           ...chatSendTraceAttributes,
           ackStatus: ackPayload.status,

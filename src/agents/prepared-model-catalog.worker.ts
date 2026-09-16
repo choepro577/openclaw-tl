@@ -145,6 +145,7 @@ export async function runPreparedModelCatalogWorkerRequest(
         resolveAmbientAgentCredentialsForDiscovery({
           config: value.input.config,
           env: value.input.env,
+          metadataSnapshot: prepared.pluginGeneration.pluginMetadataSnapshot,
           ...(value.input.workspaceDir ? { workspaceDir: value.input.workspaceDir } : {}),
         }),
     );

@@ -615,6 +615,7 @@ async function checkGatewayHttpRequestAuthWith(
     ok: true,
     requestAuth: {
       ...authResult,
+      authMethod: authResult.method,
       // Shared-secret bearer auth proves possession of the gateway secret, but it
       // does not prove a narrower per-request operator identity. HTTP endpoints
       // must opt in explicitly if they want to treat that shared-secret path as a

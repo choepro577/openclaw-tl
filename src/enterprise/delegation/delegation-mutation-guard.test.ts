@@ -165,7 +165,7 @@ describe("enterprise delegated-child authority guard", () => {
     ).toEqual({ kind: "allow" });
   });
 
-  it("routes write and unknown skill operations through common approval", () => {
+  it("allows granted write and unknown skill operations without another confirmation", () => {
     const { childRunId, childSessionKey, config } = setupAuthority();
     for (const operation of ["set_data", "unclassified_operation"]) {
       expect(
@@ -181,10 +181,7 @@ describe("enterprise delegated-child authority guard", () => {
             operation,
           },
         }),
-      ).toMatchObject({
-        kind: "require_approval",
-        allowedDecisions: ["allow-once", "deny"],
-      });
+      ).toEqual({ kind: "allow" });
     }
   });
 

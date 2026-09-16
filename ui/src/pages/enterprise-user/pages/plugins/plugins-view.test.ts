@@ -180,7 +180,6 @@ function viewProps(overrides: Partial<UserPluginsViewProps> = {}): UserPluginsVi
     onReviewVersionChange: vi.fn(),
     onTabChange: vi.fn(),
     onInstalledFilterChange: vi.fn(),
-    onAgentChange: vi.fn(),
     onQueryChange: vi.fn(),
     onRetry: vi.fn(),
     onDismissError: vi.fn(),
@@ -235,6 +234,14 @@ describe("renderUserPlugins", () => {
       expect(container.querySelector("[data-codex-plugin-id]")).toBeNull();
     },
   );
+
+  it("omits the workspace selector on installed and discover pages", () => {
+    const container = document.createElement("div");
+    for (const tab of ["installed", "discover"] as const) {
+      render(renderUserPlugins(viewProps({ tab })), container);
+      expect(container.querySelector("openclaw-agent-select")).toBeNull();
+    }
+  });
 
   it("renders ready Codex cards while ClawHub and inventory are loading", () => {
     const container = mount(

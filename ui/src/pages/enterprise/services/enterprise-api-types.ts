@@ -9,6 +9,7 @@ export type EnterpriseAccessPreset = {
   label: string;
   description: string;
   toolIds: string[];
+  initialSkillIds: string[];
 };
 
 export type EnterpriseAccount = {

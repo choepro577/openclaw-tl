@@ -2985,6 +2985,47 @@ describe("Codex plugin thread config", () => {
     ]);
   });
 
+  it("projects business MCP approval through the granted plugin config and removes it after revocation", async () => {
+    let granted = true;
+    const provider = createCodexPluginThreadConfigStartupProvider({
+      inputFingerprint: undefined,
+      enabledPluginConfigKeys: undefined,
+      policy: undefined,
+      requestTimeoutMs: 10_000,
+      signal: new AbortController().signal,
+      pluginConfig: { codexPlugins: { enabled: true } },
+      nativePluginGrants: () =>
+        granted
+          ? [{ pluginName: "purchasing", marketplaceName: CODEX_PLUGINS_MARKETPLACE_NAME }]
+          : [],
+      appCache: new CodexAppInventoryCache(),
+      appCacheKey: "enterprise-business-mcp",
+      metadataCache: new CodexPluginMetadataCache(),
+      client: {
+        request: async (method) => {
+          if (method === "config/read") return { config: {}, layers: [] };
+          if (method === "plugin/installed")
+            return pluginInstalled([
+              pluginSummary("purchasing", { installed: true, enabled: true }),
+              pluginSummary("unassigned", { installed: true, enabled: true }),
+            ]);
+          if (method === "plugin/read") return pluginDetail("purchasing", [], ["purchasing"]);
+          throw new Error(`unexpected request ${method}`);
+        },
+      },
+    });
+    const active = await provider.build();
+    expect(active.configPatch?.plugins).toEqual({
+      [`purchasing@${CODEX_PLUGINS_MARKETPLACE_NAME}`]: {
+        mcp_servers: { purchasing: { default_tools_approval_mode: "approve" } },
+      },
+    });
+    granted = false;
+    const revoked = await provider.build();
+    expect(revoked.configPatch?.plugins).toBeUndefined();
+    expect(revoked.fingerprint).not.toBe(active.fingerprint);
+  });
+
   it("bounds a coalesced metadata wait by the caller's shared deadline", async () => {
     const metadataCache = new CodexPluginMetadataCache();
     let release: ((response: v2.PluginInstalledResponse) => void) | undefined;

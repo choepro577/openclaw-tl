@@ -1,0 +1,8 @@
+{
+  "beforeRevision": 5,
+  "testRevision": 6,
+  "addedDenies": [
+    "read",
+    "skill_script"
+  ]
+}

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { shouldIncludeChatSendAckServerTiming } from "./chat-server-timing.js";
 import {
   gatewayClientSenderFields,
   gatewayClientSessionCreator,
@@ -38,5 +39,22 @@ describe("gateway client identity", () => {
 
     expect(gatewayClientSenderFields(client)).toEqual({});
     expect(gatewayClientSessionCreator(client)).toBeUndefined();
+  });
+
+  it("allows server timing for an attested Enterprise user portal connection", () => {
+    const portalClient = {
+      connect: { client: { id: "webchat-ui", mode: "webchat" } },
+      authenticatedUserProfile: { profileId: "profile-1" },
+      internal: {
+        enterpriseSession: {
+          audience: "user",
+          accountId: "account-1",
+          accountRole: "member",
+        },
+      },
+    } as unknown as GatewayClient;
+
+    expect(shouldIncludeChatSendAckServerTiming(portalClient)).toBe(true);
+    expect(shouldIncludeChatSendAckServerTiming({ id: "webchat-ui", mode: "webchat" })).toBe(false);
   });
 });

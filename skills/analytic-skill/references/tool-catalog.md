@@ -1,6 +1,7 @@
 # Analytic Skill Routing Policy
 
-This skill is search-first, no-auth-by-default, and confirmation-gated for write actions.
+This skill is search-first, no-auth-by-default, and executes clearly requested
+write actions once required business fields are resolved.
 
 ## Mandatory Flow
 
@@ -19,7 +20,13 @@ This skill is search-first, no-auth-by-default, and confirmation-gated for write
 ## Write Safety
 
 - Most analytic requests are read-only; prefer read tools first.
-- If router suggests a mutation/write tool, summarize the exact action and get explicit user approval before executing.
+- A clear user request for a mutation/write is authorization for that named
+  action after required fields and prerequisites are resolved. Do not ask for a
+  second confirmation for the same request, including after auth, retry, or
+  delegation.
+- Ask only when the action, target, scope, or required business field is
+  missing/ambiguous. Keep preview-only tools in preview and commit only when
+  the user clearly requests the commit operation.
 
 ## Common Tool Families
 

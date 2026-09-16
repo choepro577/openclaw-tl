@@ -10,7 +10,7 @@ import { applyAuthHeaderOverride, applyLocalNoAuthHeaderOverride } from "../../m
 import { appendProgressCardSystemPrompt } from "../../progress-card-system-prompt.js";
 import type { AgentRunSessionTarget } from "../../run-session-target.js";
 import type { AgentRuntimePlan } from "../../runtime-plan/types.js";
-import { resolveSandboxContext } from "../../sandbox/context.js";
+import { resolveSandboxContext } from "../../sandbox.js";
 import { resolveSessionPermissionExecMode } from "../../session-permission-exec-mode.js";
 import { resolveSessionPlacementSandbox } from "../../session-placement-admission.js";
 import { createToolTerminalObserver } from "../../tool-terminal-outcome.js";
@@ -190,6 +190,9 @@ export async function dispatchEmbeddedRunAttempt(input: {
   };
 
   let cancellationRequested = false;
+  let pluginSandbox: EmbeddedRunAttemptParams["sandbox"] | undefined;
+  let pluginSandboxResolvedForPrompt = false;
+  let releaseSandboxActive: (() => void) | undefined;
   const preparedExecApprovalContinuation = prepareExecApprovalContinuationForAttempt({
     prompt: runtime.prompt,
     transcriptPrompt: params.transcriptPrompt,
@@ -200,6 +203,10 @@ export async function dispatchEmbeddedRunAttempt(input: {
     modelMaxTokens: runtime.model.maxTokens,
     userTurnTranscriptRecorder: params.userTurnTranscriptRecorder,
   });
+  // This wrapper owns a handoff lease across the whole dispatch body; keep
+  // the surrounding diff stable while the lease is released on every exit.
+  // oxfmt-ignore
+  try {
   const promptMedia = control.pluginHarnessOwnsTransport
     ? await (async () => {
         const workspace = await resolveAttemptWorkspaceSandbox({
@@ -208,17 +215,27 @@ export async function dispatchEmbeddedRunAttempt(input: {
           sessionId: runtime.sessionId,
           sessionKey: runtime.sessionKey,
           workspaceDir: runtime.workspaceDir,
+          holdSandboxLease: true,
         });
-        return await prepareEmbeddedAttemptPromptExecution({
-          attempt: { ...params, model: runtime.model },
-          mediaOwnerAgentId: workspace.sessionAgentId,
-          effectiveFsWorkspaceOnly: workspace.effectiveFsWorkspaceOnly,
-          effectiveWorkspace: workspace.effectiveWorkspace,
-          prompt: "",
-          sandbox: workspace.sandbox,
-          skipPromptSubmission: false,
-          pluginHarness: true,
-        });
+        pluginSandbox = workspace.sandbox;
+        releaseSandboxActive = workspace.sandbox?.lifecycleActiveRelease;
+        pluginSandboxResolvedForPrompt = true;
+        try {
+          return await prepareEmbeddedAttemptPromptExecution({
+            attempt: { ...params, model: runtime.model },
+            mediaOwnerAgentId: workspace.sessionAgentId,
+            effectiveFsWorkspaceOnly: workspace.effectiveFsWorkspaceOnly,
+            effectiveWorkspace: workspace.effectiveWorkspace,
+            prompt: "",
+            sandbox: workspace.sandbox,
+            skipPromptSubmission: false,
+            pluginHarness: true,
+          });
+        } catch (error) {
+          releaseSandboxActive?.();
+          releaseSandboxActive = undefined;
+          throw error;
+        }
       })()
     : { images: params.images, imageOrder: params.imageOrder, media: params.media };
   // Plugin harnesses own their tool materialization, so the host cannot attest
@@ -231,21 +248,39 @@ export async function dispatchEmbeddedRunAttempt(input: {
           finalize: params.finalizePromptForResolvedTools,
         })
       : undefined;
-  const pluginSandbox = control.pluginHarnessOwnsTransport
-    ? ((await resolveSessionPlacementSandbox({
-        agentId: runtime.agentId,
-        config: params.config,
-        sessionId: runtime.sessionId,
-        sessionKey: runtime.sessionKey,
-        workspaceDir: runtime.workspaceDir,
-      })) ??
-      (await resolveSandboxContext({
-        config: params.config,
-        sessionKey: params.sandboxSessionKey ?? runtime.sessionKey ?? runtime.sessionId,
-        workspaceDir: runtime.workspaceDir,
-        skillsSnapshot: params.skillsSnapshot,
-      })))
-    : undefined;
+  if (control.pluginHarnessOwnsTransport) {
+    // Placement remains authoritative for plugin harnesses. When it has no
+    // override, prompt/media preparation already resolved this exact sandbox;
+    // only a path that skipped prompt preparation needs a second lookup.
+    const placementSandbox = await resolveSessionPlacementSandbox({
+      agentId: runtime.agentId,
+      config: params.config,
+      sessionId: runtime.sessionId,
+      sessionKey: runtime.sessionKey,
+      workspaceDir: runtime.workspaceDir,
+    });
+    if (placementSandbox) {
+      // The prompt path may have prepared a local fallback sandbox before
+      // placement admission finished. It is no longer the chosen runtime.
+      releaseSandboxActive?.();
+      releaseSandboxActive = undefined;
+    }
+    pluginSandbox =
+      placementSandbox ??
+      (pluginSandboxResolvedForPrompt
+        ? pluginSandbox
+        : await resolveSandboxContext({
+            config: params.config,
+            sessionKey: params.sandboxSessionKey ?? runtime.sessionKey ?? runtime.sessionId,
+            signal: params.abortSignal,
+            workspaceDir: runtime.workspaceDir,
+            skillsSnapshot: params.skillsSnapshot,
+            holdActiveLease: true,
+          }));
+    if (!placementSandbox && !releaseSandboxActive) {
+      releaseSandboxActive = pluginSandbox?.lifecycleActiveRelease;
+    }
+  }
   if (!params.admittedRunContext) {
     throw new Error("embedded attempt reached dispatch without an admitted run context");
   }
@@ -288,7 +323,7 @@ export async function dispatchEmbeddedRunAttempt(input: {
   const attemptParams: EmbeddedRunAttemptParams = {
     admittedRunContext: params.admittedRunContext,
     contextEngineAgentId: runtime.contextEngineAgentId,
-    ...(control.pluginHarnessOwnsTransport ? { sandbox: pluginSandbox } : {}),
+    ...(control.pluginHarnessOwnsTransport ? { sandbox: pluginSandbox ?? null } : {}),
     operation: "attempt",
     sessionId: runtime.sessionId,
     sessionKey: runtime.sessionKey,
@@ -561,6 +596,8 @@ export async function dispatchEmbeddedRunAttempt(input: {
       stopLaneProgressHeartbeat();
       parentAbortSignal?.removeEventListener?.("abort", relayParentAbort);
       control.clearPostCompactionAbortController(attemptAbortController);
+      releaseSandboxActive?.();
+      releaseSandboxActive = undefined;
     });
 
   const postCompactionAbortError = control.getPostCompactionAbortError();
@@ -568,4 +605,11 @@ export async function dispatchEmbeddedRunAttempt(input: {
     throw postCompactionAbortError;
   }
   return { rawAttempt, cancellationRequested, preparedAttempt: attemptParams };
+  } catch (error) {
+    // Placement, prompt, policy, or attempt setup may fail before the backend
+    // promise is created. Keep the handoff lease from outliving that failure.
+    releaseSandboxActive?.();
+    releaseSandboxActive = undefined;
+    throw error;
+  }
 }

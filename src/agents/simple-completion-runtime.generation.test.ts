@@ -243,7 +243,7 @@ it("keeps a synthetic account projection when preparing a router completion", as
   );
 });
 
-it("acquires the canonical manifest-derived utility model selection", async () => {
+it("acquires the canonical utility model without preparing its primary scope first", async () => {
   const metadataSnapshot = {
     plugins: [
       {
@@ -280,7 +280,7 @@ it("acquires the canonical manifest-derived utility model selection", async () =
     mocks.resolvePluginMetadataSnapshot.mock.calls.filter(
       ([params]) => (params as { pluginIdScope?: unknown } | undefined)?.pluginIdScope,
     ),
-  ).toHaveLength(2);
+  ).toHaveLength(1);
   expect(mocks.acquireRuntimeLease).toHaveBeenCalledWith(
     expect.objectContaining({
       runtimePluginSelections: [

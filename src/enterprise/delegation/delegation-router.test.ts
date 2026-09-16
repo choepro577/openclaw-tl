@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { OpenClawConfig } from "../../config/types.openclaw.js";
 import {
+  inheritGatewayRequestScopedRuntimeConfig,
   markGatewayRequestScopedRuntimeConfig,
   readGatewayRequestRuntimeMetadata,
 } from "../../gateway/request-runtime-config.js";
@@ -11,6 +12,8 @@ import { closeOpenClawStateDatabaseForTest } from "../../state/openclaw-state-db
 import { createEnterpriseAccount, getEnterpriseAccountById } from "../accounts/account-store.js";
 import { applyEnterpriseAccessChanges } from "../entitlements/entitlement-store.js";
 import { sharedAgentResourceKey } from "../entitlements/resource-keys.js";
+import { readEnterpriseDelegationAgentFirstContext } from "./delegation-agent-first.js";
+import { pendingClarifications } from "./delegation-router-state.js";
 import {
   consumeEnterpriseDelegationDecision,
   invalidateEnterpriseDelegationRouterRuntimeState,
@@ -59,6 +62,11 @@ function routerResponse(overrides: Record<string, unknown> = {}) {
       },
     ],
   };
+}
+
+function routerDecision(overrides: Record<string, unknown> = {}) {
+  const response = routerResponse(overrides);
+  return JSON.parse(response.content[0].text) as Record<string, unknown>;
 }
 
 beforeEach(() => {
@@ -188,6 +196,124 @@ afterEach(() => {
 });
 
 describe("enterprise delegation router", () => {
+  it("prepares agent-first facts without spending a router model call", async () => {
+    const options = stateOptions();
+    const account = createEmployee(options, "agent-first.employee", ["finance"]);
+    activePolicy(options);
+    const config = configFor(account.id);
+
+    await prepareEnterpriseDelegationTurn({
+      config,
+      agentId: `personal-${account.id}`,
+      sessionKey: "session-agent-first",
+      parentRunId: "run-agent-first",
+      prompt: "Hãy xem giúp tôi tình hình dòng tiền cửa hàng mới.",
+      agentFirst: true,
+      stateOptions: options,
+    });
+
+    expect(completion.prepare).not.toHaveBeenCalled();
+    expect(completion.complete).not.toHaveBeenCalled();
+    expect(readGatewayRequestRuntimeMetadata(config)?.enterpriseDelegation?.turn).toBeUndefined();
+    expect(
+      readEnterpriseDelegationAgentFirstContext({
+        config,
+        sessionKey: "session-agent-first",
+        parentRunId: "run-agent-first",
+      }),
+    ).toMatchObject({
+      accountId: account.id,
+      personalAgentId: `personal-${account.id}`,
+      prompt: "Hãy xem giúp tôi tình hình dòng tiền cửa hàng mới.",
+    });
+    const derivedConfig = inheritGatewayRequestScopedRuntimeConfig(config, { ...config });
+    expect(
+      readEnterpriseDelegationAgentFirstContext({
+        config: derivedConfig,
+        sessionKey: "session-agent-first",
+        parentRunId: "run-agent-first",
+      }),
+    ).toBeDefined();
+  });
+
+  it.each([
+    {
+      kind: "cancel",
+      continuation: "cancel",
+      answer: "Hủy việc đó giúp tôi.",
+      outcome: "local",
+      reasonCode: "handoff_cancelled",
+      pendingAfter: false,
+      routeOverrides: { handoffConsent: "denied", outcome: "local", routes: [] },
+    },
+    {
+      kind: "revise",
+      continuation: "revise",
+      answer: "Đổi sang đánh giá dòng tiền quý này.",
+      outcome: "delegate",
+      reasonCode: "route_ready",
+      pendingAfter: false,
+      routeOverrides: {},
+    },
+    {
+      kind: "clarify",
+      continuation: "unclear",
+      answer: "Tôi chưa chắc.",
+      outcome: "clarify",
+      reasonCode: "pending_clarification_unresolved",
+      pendingAfter: true,
+      routeOverrides: { outcome: "clarify", question: "Bạn muốn đánh giá phần nào?" },
+    },
+  ])(
+    "keeps pending $kind lifecycle changes server-owned when agent-first is enabled",
+    async ({ continuation, answer, outcome, reasonCode, pendingAfter, routeOverrides }) => {
+      const options = stateOptions();
+      const account = createEmployee(options, `agent-first-pending-${continuation}`, ["finance"]);
+      activePolicy(options);
+      const config = configFor(account.id);
+      const sessionKey = `session-agent-first-pending-${continuation}`;
+      const financeRoute = [
+        { agentId: "finance", task: "Review the cash flow", missingRequiredInputIds: [] },
+      ];
+
+      await prepareEnterpriseDelegationTurn({
+        config,
+        agentId: `personal-${account.id}`,
+        sessionKey,
+        parentRunId: "run-agent-first-pending-1",
+        prompt: "Hãy xem giúp tôi tình hình dòng tiền cửa hàng mới.",
+        agentFirst: true,
+        agentFirstDecision: routerDecision({
+          outcome: "clarify",
+          question: "Bạn muốn đánh giá phần nào?",
+          routes: financeRoute,
+        }),
+        stateOptions: options,
+      });
+      expect(pendingClarifications.has(`${account.id}\0${sessionKey}`)).toBe(true);
+
+      completion.complete.mockResolvedValueOnce(
+        routerResponse({ continuation, routes: financeRoute, ...routeOverrides }),
+      );
+      await prepareEnterpriseDelegationTurn({
+        config,
+        agentId: `personal-${account.id}`,
+        sessionKey,
+        parentRunId: "run-agent-first-pending-2",
+        prompt: answer,
+        agentFirst: true,
+        stateOptions: options,
+      });
+
+      expect(completion.complete).toHaveBeenCalledTimes(1);
+      expect(readGatewayRequestRuntimeMetadata(config)?.enterpriseDelegation?.turn).toMatchObject({
+        outcome,
+        reasonCode,
+      });
+      expect(pendingClarifications.has(`${account.id}\0${sessionKey}`)).toBe(pendingAfter);
+    },
+  );
+
   it("routes an explicitly named assigned Agent without a second handoff confirmation", async () => {
     const options = stateOptions();
     const account = createEmployee(options, "explicit.employee", ["contracts"]);
@@ -401,7 +527,7 @@ describe("enterprise delegation router", () => {
     });
   });
 
-  it("semantically verifies a rule match and respects confirm-before-handoff and shadow mode", async () => {
+  it("routes a clear rule match regardless of the legacy handoff mode and respects shadow mode", async () => {
     const confirmOptions = stateOptions();
     const confirmAccount = createEmployee(confirmOptions, "confirm.employee", ["contracts"]);
     activePolicy(confirmOptions);
@@ -419,9 +545,9 @@ describe("enterprise delegation router", () => {
     expect(
       readGatewayRequestRuntimeMetadata(confirmConfig)?.enterpriseDelegation?.turn,
     ).toMatchObject({
-      outcome: "clarify",
+      outcome: "delegate",
       source: "rule",
-      reasonCode: "handoff_confirmation_required",
+      reasonCode: "route_ready",
     });
 
     closeOpenClawStateDatabaseForTest();
@@ -572,6 +698,42 @@ describe("enterprise delegation router", () => {
       ],
     });
     expect(consumeEnterpriseDelegationDecision(base)).toMatchObject({ ok: true });
+  });
+
+  it("validates the assignment set before consuming the decision in one state transition", async () => {
+    const options = stateOptions();
+    const account = createEmployee(options, "decision.atomic", ["contracts"]);
+    activePolicy(options);
+    const config = configFor(account.id);
+    await prepareEnterpriseDelegationTurn({
+      config,
+      agentId: `personal-${account.id}`,
+      sessionKey: "session-atomic",
+      parentRunId: "run-atomic",
+      prompt: "Gọi Agent Hợp đồng",
+      stateOptions: options,
+    });
+    const decisionId = requireDecisionId(config);
+    const base = {
+      decisionId,
+      accountId: account.id,
+      personalAgentId: `personal-${account.id}`,
+      sessionKey: "session-atomic",
+      parentRunId: "run-atomic",
+      config,
+      stateOptions: options,
+    };
+
+    expect(
+      consumeEnterpriseDelegationDecision({ ...base, assignmentAgentIds: ["finance"] }),
+    ).toEqual({ ok: false, reasonCode: "assignment_set_mismatch" });
+    expect(
+      consumeEnterpriseDelegationDecision({ ...base, assignmentAgentIds: ["CONTRACTS"] }),
+    ).toMatchObject({ ok: true });
+    expect(consumeEnterpriseDelegationDecision(base)).toEqual({
+      ok: false,
+      reasonCode: "decision_replayed",
+    });
   });
 
   it("expires an unused decision after its five-minute lifetime", async () => {

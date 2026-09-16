@@ -1,0 +1,12 @@
+{
+  "sourceManifestMatches": true,
+  "user": "hieu",
+  "role": "employee",
+  "personalEnabled": true,
+  "accountPolicyRevision": 23,
+  "grantCount": 7,
+  "poSkills": [
+    "purchase-order-skill"
+  ],
+  "markerRemoved": true
+}

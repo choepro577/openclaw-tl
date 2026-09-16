@@ -1,0 +1,108 @@
+{
+  "capturedFrom": "isolated-copied-state",
+  "stateRoot": "/var/folders/m4/71w5wnxs0tjd2cdkbcc7846m0000gn/T/openclaw-shared-skill-qa.5cQB4i",
+  "ordinaryEmployeeCandidates": [
+    {
+      "username": "hieu",
+      "displayName": "Hiếu DZ",
+      "role": "employee",
+      "enabled": true,
+      "personalAgentEnabled": true,
+      "accessPreset": "basic@1",
+      "policyRevision": 15,
+      "entitlements": [
+        {
+          "type": "agent",
+          "id": "agent:shared:enterprise-contract-specialist",
+          "state": "active",
+          "effect": "allow"
+        },
+        {
+          "type": "agent",
+          "id": "agent:shared:enterprise-finance-specialist",
+          "state": "active",
+          "effect": "allow"
+        },
+        {
+          "type": "agent",
+          "id": "agent:shared:enterprise-hr-specialist",
+          "state": "active",
+          "effect": "allow"
+        },
+        {
+          "type": "agent",
+          "id": "agent:shared:hrm",
+          "state": "active",
+          "effect": "allow"
+        },
+        {
+          "type": "agent",
+          "id": "agent:shared:main",
+          "state": "active",
+          "effect": "allow"
+        },
+        {
+          "type": "agent",
+          "id": "agent:shared:purchase-order-skill",
+          "state": "active",
+          "effect": "allow"
+        },
+        {
+          "type": "skill",
+          "id": "skill:agent:hrm:openclaw-bundled:hr-skill",
+          "state": "active",
+          "effect": "allow"
+        }
+      ],
+      "sharedAgentEntitlements": [
+        "agent:shared:enterprise-contract-specialist",
+        "agent:shared:enterprise-finance-specialist",
+        "agent:shared:enterprise-hr-specialist",
+        "agent:shared:hrm",
+        "agent:shared:main",
+        "agent:shared:purchase-order-skill"
+      ]
+    },
+    {
+      "username": "tl00275",
+      "displayName": "Nguyễn Đức Hiếu",
+      "role": "employee",
+      "enabled": true,
+      "personalAgentEnabled": true,
+      "accessPreset": "basic@1",
+      "policyRevision": 5,
+      "entitlements": [
+        {
+          "type": "agent",
+          "id": "agent:shared:enterprise-contract-specialist",
+          "state": "active",
+          "effect": "allow"
+        },
+        {
+          "type": "agent",
+          "id": "agent:shared:hrm",
+          "state": "active",
+          "effect": "allow"
+        },
+        {
+          "type": "agent",
+          "id": "agent:shared:purchase-order-skill",
+          "state": "active",
+          "effect": "allow"
+        },
+        {
+          "type": "skill",
+          "id": "skill:global:openclaw-bundled:hr-skill",
+          "state": "active",
+          "effect": "allow"
+        }
+      ],
+      "sharedAgentEntitlements": [
+        "agent:shared:enterprise-contract-specialist",
+        "agent:shared:hrm",
+        "agent:shared:purchase-order-skill"
+      ]
+    }
+  ],
+  "selectionGuidance": "Use hieu or tl00275; both are enabled employees. Do not use admin."
+}

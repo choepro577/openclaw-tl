@@ -304,7 +304,7 @@ describe("enterprise delegation AI router", () => {
     });
   });
 
-  it("allows a recheck without history to receive a fresh source-aware router assessment", async () => {
+  it("allows a recheck without history to receive one fresh source-aware router assessment", async () => {
     const options = stateOptions();
     const account = createEmployee(options, ["finance"]);
     activePolicy(options);
@@ -315,7 +315,6 @@ describe("enterprise delegation AI router", () => {
       routes: [{ agentId: "finance", task: "Recheck the current finance records" }],
     });
     queueCompletion(response);
-    queueCompletion(response);
     await prepareEnterpriseDelegationTurn({
       config,
       agentId: `personal-${account.id}`,
@@ -324,7 +323,7 @@ describe("enterprise delegation AI router", () => {
       prompt: "Bạn có chắc không?",
       stateOptions: options,
     });
-    expect(completionMocks.complete).toHaveBeenCalledTimes(2);
+    expect(completionMocks.complete).toHaveBeenCalledTimes(1);
     expect(readGatewayRequestRuntimeMetadata(config)?.enterpriseDelegation?.turn).toMatchObject({
       outcome: "delegate",
       source: "ai",
@@ -332,7 +331,7 @@ describe("enterprise delegation AI router", () => {
     });
   });
 
-  it("admits an exact retry for explicit-only specialists without re-prompting the model", async () => {
+  it("admits an exact retry for a legacy explicit-only specialist without a model pass", async () => {
     const options = stateOptions();
     const account = createEmployee(options, ["finance"]);
     activePolicy(options);
@@ -357,7 +356,7 @@ describe("enterprise delegation AI router", () => {
     });
   });
 
-  it("sends scope expansion and recheck follow-ups through the source-aware router", async () => {
+  it("sends scope expansion and recheck follow-ups through one source-aware router pass", async () => {
     const options = stateOptions();
     const account = createEmployee(options, ["finance"]);
     activePolicy(options);
@@ -368,7 +367,6 @@ describe("enterprise delegation AI router", () => {
       secondConfidence: 0.01,
       routes: [{ agentId: "finance", task: "Recheck the all-system live records" }],
     });
-    queueCompletion(response);
     queueCompletion(response);
     await prepareEnterpriseDelegationTurn({
       config,
@@ -383,12 +381,26 @@ describe("enterprise delegation AI router", () => {
     });
     const turn = readGatewayRequestRuntimeMetadata(config)?.enterpriseDelegation?.turn;
     expect(turn?.outcome).toBe("delegate");
-    expect(completionMocks.complete).toHaveBeenCalledTimes(2);
-    expect(completionMocks.complete.mock.calls[0]![0].context.systemPrompt).toContain(
-      "live-system record retrieval request",
+    expect(completionMocks.complete).toHaveBeenCalledTimes(1);
+    const systemPrompt = completionMocks.complete.mock.calls[0]![0].context.systemPrompt;
+    expect(systemPrompt).toContain(
+      "a fresh authoritative operational lookup governed by the data ownership rule below",
     );
-    expect(completionMocks.complete.mock.calls[0]![0].context.systemPrompt).toContain(
+    expect(systemPrompt).toContain(
+      "A summary or straightforward recalculation of completed work stays local; a request to fetch, refresh or verify current records follows the data ownership rule below",
+    );
+    expect(systemPrompt).toContain(
+      "Only a substantive unresolved question, an affirmative named-specialist request, or a fresh lookup governed by the data ownership rule below can justify a new route",
+    );
+    expect(systemPrompt).toContain(
+      "Data ownership rule: a request to fetch, refresh or verify current operational records",
+    );
+    expect(systemPrompt).toContain(
       "Enterprise Knowledge is for published policy/document evidence",
+    );
+    expect(systemPrompt).not.toContain("route only material unresolved specialist judgment");
+    expect(systemPrompt).not.toContain(
+      "Only a substantive unresolved question can justify a new route",
     );
     const payload = JSON.parse(
       completionMocks.complete.mock.calls[0]![0].context.messages[0].content,
@@ -400,7 +412,7 @@ describe("enterprise delegation AI router", () => {
     expect(payload.prompt).toContain("toàn hệ thống");
   });
 
-  it("reuses prior approved or explicit consent only for an unchanged retry task", async () => {
+  it("reuses the newest unchanged retry task regardless of legacy handoff mode", async () => {
     const options = stateOptions();
     const account = createEmployee(options, ["finance"]);
     activePolicy(options);
@@ -439,8 +451,8 @@ describe("enterprise delegation AI router", () => {
     });
     expect(readGatewayRequestRuntimeMetadata(nextConfig)?.enterpriseDelegation?.turn).toMatchObject(
       {
-        outcome: "clarify",
-        reasonCode: "handoff_confirmation_required",
+        outcome: "delegate",
+        reasonCode: "route_ready",
       },
     );
 
@@ -469,7 +481,7 @@ describe("enterprise delegation AI router", () => {
     ).toMatchObject({ outcome: "delegate", reasonCode: "route_ready" });
   });
 
-  it("grounds a follow-up in prior user facts in both passes without renewing old consent", async () => {
+  it("grounds a follow-up in prior user facts in one router pass", async () => {
     const options = stateOptions();
     const account = createEmployee(options, ["contracts"]);
     activePolicy(options);
@@ -496,7 +508,6 @@ describe("enterprise delegation AI router", () => {
       ],
     });
     queueCompletion(response);
-    queueCompletion(response);
     await prepareEnterpriseDelegationTurn({
       config,
       agentId: `personal-${account.id}`,
@@ -509,7 +520,7 @@ describe("enterprise delegation AI router", () => {
     });
     const turn = readGatewayRequestRuntimeMetadata(config)?.enterpriseDelegation?.turn;
     expect(turn?.outcome).toBe("delegate");
-    expect(completionMocks.complete).toHaveBeenCalledTimes(2);
+    expect(completionMocks.complete).toHaveBeenCalledTimes(1);
     for (const [call] of completionMocks.complete.mock.calls) {
       expect(JSON.parse(call.context.messages[0].content).conversationInputs).toEqual(
         conversationInputs,
@@ -600,12 +611,12 @@ describe("enterprise delegation AI router", () => {
       stateOptions: options,
     });
     expect(readGatewayRequestRuntimeMetadata(config)?.enterpriseDelegation?.turn).toMatchObject({
-      outcome: "clarify",
-      reasonCode: "handoff_confirmation_required",
+      outcome: "delegate",
+      reasonCode: "route_ready",
     });
   });
 
-  it("limits follow-up planning and verification to the proposed specialist", async () => {
+  it("limits follow-up planning to the proposed specialist in one pass", async () => {
     const options = stateOptions();
     const account = createEmployee(options, ["contracts", "finance"]);
     activePolicy(options);
@@ -614,7 +625,6 @@ describe("enterprise delegation AI router", () => {
       { agentId: "finance", task: "Evaluate the downside scenario after the contract review" },
     ];
     const response = routerJson({ confidence: 0.98, secondConfidence: 0, routes: assignments });
-    queueCompletion(response);
     queueCompletion(response);
     await prepareEnterpriseDelegationTurn({
       config,
@@ -626,7 +636,7 @@ describe("enterprise delegation AI router", () => {
       proposedAssignments: assignments,
       stateOptions: options,
     });
-    expect(completionMocks.complete).toHaveBeenCalledTimes(2);
+    expect(completionMocks.complete).toHaveBeenCalledTimes(1);
     for (const [request] of completionMocks.complete.mock.calls) {
       const payload = JSON.parse(request.context.messages[0].content);
       expect(payload.candidates.map((candidate: { agentId: string }) => candidate.agentId)).toEqual(
@@ -671,7 +681,7 @@ describe("enterprise delegation AI router", () => {
     },
   );
 
-  it("retains bounded hybrid retrieval needs with the verified assignment", async () => {
+  it("retains bounded hybrid retrieval needs with the routed assignment", async () => {
     const options = stateOptions();
     const account = createEmployee(options, ["contracts"]);
     activePolicy(options);
@@ -688,7 +698,6 @@ describe("enterprise delegation AI router", () => {
         },
       ],
     });
-    queueCompletion(decision);
     queueCompletion(decision);
     const turn = await prepareTurn({
       config,
@@ -789,7 +798,7 @@ describe("enterprise delegation AI router", () => {
     ).toMatchObject({ outcome: "local", reasonCode: "router_unavailable" });
   });
 
-  it("accepts the exact confidence and margin boundary only after verifier agreement", async () => {
+  it("accepts the exact confidence and margin boundary in the single router pass", async () => {
     const options = stateOptions();
     const account = createEmployee(options, ["contracts"]);
     activePolicy(options);
@@ -800,12 +809,11 @@ describe("enterprise delegation AI router", () => {
       routes: [{ agentId: "contracts", task: "Đánh giá rủi ro hợp đồng" }],
     });
     queueCompletion(decision);
-    queueCompletion(decision);
 
     expect(
       await prepareTurn({ config, accountId: account.id, options, prompt: "Tôi cần tư vấn" }),
     ).toMatchObject({ outcome: "delegate", source: "ai", reasonCode: "route_ready" });
-    expect(completionMocks.complete).toHaveBeenCalledTimes(2);
+    expect(completionMocks.complete).toHaveBeenCalledTimes(1);
   });
 
   it("asks instead of spawning when the margin is below the threshold", async () => {
@@ -827,45 +835,7 @@ describe("enterprise delegation AI router", () => {
     expect(completionMocks.complete).toHaveBeenCalledTimes(1);
   });
 
-  it.each([
-    { verification: { confidence: 0.89 }, reasonCode: "router_verifier_low_confidence" },
-    { verification: { secondConfidence: 0.751 }, reasonCode: "router_verifier_low_margin" },
-    { verification: { independent: false }, reasonCode: "router_verifier_dependent_tasks" },
-    {
-      verification: { outcome: "clarify" as const },
-      reasonCode: "router_verifier_outcome_disagreed",
-    },
-    {
-      verification: {
-        routes: [
-          { agentId: "finance", task: "Budget", missingRequiredInputIds: ["amount"] },
-          { agentId: "hr", task: "Checklist" },
-        ],
-      },
-      reasonCode: "router_verifier_input_unknown_missing_id",
-    },
-  ])("rejects unsafe verifier agreement: $reasonCode", async ({ verification, reasonCode }) => {
-    const options = stateOptions();
-    const account = createEmployee(options, ["finance", "hr"]);
-    activePolicy(options);
-    const config = configFor(account.id, ["finance", "hr"]);
-    const routes = [
-      { agentId: "finance", task: "Budget" },
-      { agentId: "hr", task: "Checklist" },
-    ];
-    queueCompletion(routerJson({ routes }));
-    queueCompletion(routerJson({ routes, ...verification }));
-    expect(
-      await prepareTurn({
-        config,
-        accountId: account.id,
-        options,
-        prompt: "Gọi Agent Tài chính và Agent Nhân sự cho hai phần độc lập",
-      }),
-    ).toMatchObject({ outcome: "clarify", reasonCode });
-  });
-
-  it("keeps the original task separate from the untrusted verifier proposal and preserves explicit consent", async () => {
+  it("routes from one untrusted candidate assessment without a second consent pass", async () => {
     const options = stateOptions();
     const account = createEmployee(options, ["finance", "hr"]);
     activePolicy(options);
@@ -880,32 +850,22 @@ describe("enterprise delegation AI router", () => {
       ],
     });
     queueCompletion(decision);
-    queueCompletion(decision);
     const prompt = "Gọi Agent Tài chính và Agent Nhân sự cho hai phần độc lập";
     expect(await prepareTurn({ config, accountId: account.id, options, prompt })).toMatchObject({
       outcome: "delegate",
       source: "explicit",
     });
-    const verification = completionMocks.complete.mock.calls[1]![0];
-    expect(JSON.parse(verification.context.messages[0].content)).toMatchObject({
+    expect(completionMocks.complete).toHaveBeenCalledTimes(1);
+    const request = completionMocks.complete.mock.calls[0]![0];
+    expect(JSON.parse(request.context.messages[0].content)).toMatchObject({
       prompt,
-      proposedDecision: JSON.parse(decision),
     });
-    expect(verification.context.systemPrompt).toContain("already handoff consent");
-    expect(verification.context.systemPrompt).toContain("Independently verify");
-  });
-
-  it("asks when router and verifier select different Agents", async () => {
-    const options = stateOptions();
-    const account = createEmployee(options, ["contracts", "finance"]);
-    activePolicy(options);
-    const config = configFor(account.id, ["contracts", "finance"]);
-    queueCompletion(routerJson({ routes: [{ agentId: "contracts", task: "Đánh giá hợp đồng" }] }));
-    queueCompletion(routerJson({ routes: [{ agentId: "finance", task: "Đánh giá tài chính" }] }));
-
-    expect(
-      await prepareTurn({ config, accountId: account.id, options, prompt: "Tôi cần tư vấn" }),
-    ).toMatchObject({ outcome: "clarify", reasonCode: "router_verifier_target_disagreed" });
+    expect(request.context.messages[0].content).not.toContain("proposedDecision");
+    expect(request.context.systemPrompt).toContain(
+      "A clear current request for a suitable permitted specialist is sufficient to route",
+    );
+    expect(request.context.systemPrompt).not.toContain("separate approval");
+    expect(request.context.systemPrompt).not.toContain("explicit_only");
   });
 
   it.each([
@@ -1036,7 +996,6 @@ describe("enterprise delegation AI router", () => {
     const config = configFor(account.id, [...agentIds, "security"]);
     const routes = agentIds.map((agentId) => ({ agentId, task: `Phần việc ${agentId}` }));
     queueCompletion(routerJson({ routes }));
-    queueCompletion(routerJson({ routes }));
 
     expect(
       await prepareTurn({
@@ -1063,22 +1022,22 @@ describe("enterprise delegation AI router", () => {
         prompt: "Gọi Agent Hợp đồng, Agent Tài chính, Agent Nhân sự và Agent Bảo mật cho bốn phần",
       }),
     ).toMatchObject({ outcome: "clarify", reasonCode: "router_agent_limit" });
-    expect(completionMocks.complete).toHaveBeenCalledTimes(3);
+    expect(completionMocks.complete).toHaveBeenCalledTimes(2);
   });
 
-  it("enforces implicit handling modes and negative examples on model output", async () => {
+  it("routes clear model output regardless of legacy handling mode and honors negative examples", async () => {
     const cases = [
       {
         overrides: { contracts: { handlingMode: "explicit_only" as const } },
         prompt: "Tôi cần tư vấn",
-        reasonCode: "router_mode_disallowed",
-        outcome: "clarify",
+        reasonCode: "route_ready",
+        outcome: "delegate",
       },
       {
         overrides: { contracts: { handlingMode: "confirm_before_handoff" as const } },
         prompt: "Tôi cần tư vấn",
-        reasonCode: "handoff_confirmation_required",
-        outcome: "clarify",
+        reasonCode: "route_ready",
+        outcome: "delegate",
       },
       {
         overrides: { contracts: { avoidWhen: ["không cần chuyên gia"] } },
@@ -1171,15 +1130,6 @@ describe("enterprise delegation AI router", () => {
       ],
     },
     {
-      label: "unnamed explicit-only specialist alongside Finance",
-      maxDelegates: 3,
-      reasonCode: "router_mode_disallowed",
-      routes: [
-        { agentId: "finance", task: "Đánh giá ngân sách" },
-        { agentId: "hr", task: "Đánh giá nhân sự" },
-      ],
-    },
-    {
       label: "handoff limit exceeded alongside Finance",
       maxDelegates: 1,
       reasonCode: "router_agent_limit",
@@ -1246,13 +1196,13 @@ describe("enterprise delegation AI router", () => {
   });
 
   it.each([
-    { prompt: "Nhân viên mới cần làm gì trong tuần đầu?", expectedIds: ["finance"] },
+    { prompt: "Nhân viên mới cần làm gì trong tuần đầu?", expectedIds: ["finance", "hr"] },
     {
       prompt: "Gọi Agent Nhân sự giúp mình xem lại kế hoạch tuyển dụng.",
       expectedIds: ["finance", "hr"],
     },
   ])(
-    "offers explicit-only candidates only when named: $prompt",
+    "includes permitted candidates regardless of legacy handling mode: $prompt",
     async ({ prompt, expectedIds }) => {
       const options = stateOptions();
       const account = createEmployee(options, ["finance", "hr"]);

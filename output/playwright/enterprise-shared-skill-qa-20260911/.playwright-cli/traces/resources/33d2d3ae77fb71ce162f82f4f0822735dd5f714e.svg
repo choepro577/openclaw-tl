@@ -1,0 +1,56 @@
+<svg viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="maap-logo-title">
+  <title id="maap-logo-title">MAAP</title>
+  <defs>
+    <linearGradient id="maap-surface" x1="18" y1="12" x2="103" y2="108" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#1E293B" />
+      <stop offset="1" stop-color="#0F172A" />
+    </linearGradient>
+    <linearGradient id="maap-network" x1="25" y1="22" x2="97" y2="96" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FF7079" />
+      <stop offset="0.5" stop-color="#F35B68" />
+      <stop offset="1" stop-color="#00D5C0" />
+    </linearGradient>
+    <filter id="maap-glow" x="-30%" y="-30%" width="160%" height="160%" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="2.4" result="blur" />
+      <feMerge>
+        <feMergeNode in="blur" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+  </defs>
+
+  <rect x="4" y="4" width="112" height="112" rx="28" fill="url(#maap-surface)" />
+  <path
+    d="M60 22L91 40V78L60 98L29 78V40L60 22Z"
+    stroke="url(#maap-network)"
+    stroke-width="3"
+    stroke-linejoin="round"
+    opacity="0.85"
+  />
+  <path
+    d="M60 60L60 22M60 60L91 40M60 60L91 78M60 60L60 98M60 60L29 78M60 60L29 40"
+    stroke="url(#maap-network)"
+    stroke-width="3"
+    stroke-linecap="round"
+    opacity="0.92"
+  />
+  <path
+    d="M29 40L60 60L91 40M29 78L60 60L91 78"
+    stroke="#F8FAFC"
+    stroke-width="1.25"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+    opacity="0.34"
+  />
+
+  <g filter="url(#maap-glow)">
+    <circle cx="60" cy="60" r="10" fill="#0F172A" stroke="#00D5C0" stroke-width="3" />
+    <circle cx="60" cy="60" r="4" fill="#F8FAFC" />
+    <circle cx="60" cy="22" r="5.5" fill="#FF7079" />
+    <circle cx="91" cy="40" r="5.5" fill="#F35B68" />
+    <circle cx="91" cy="78" r="5.5" fill="#D968B8" />
+    <circle cx="60" cy="98" r="5.5" fill="#00D5C0" />
+    <circle cx="29" cy="78" r="5.5" fill="#22C9B8" />
+    <circle cx="29" cy="40" r="5.5" fill="#FF7079" />
+  </g>
+</svg>

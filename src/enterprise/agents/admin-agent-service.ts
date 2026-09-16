@@ -659,7 +659,7 @@ export async function updateEnterpriseAgentDelegationProfile(
     delegationTarget: {
       status: input.profile.status,
       aliases: [...new Set(input.profile.aliases.map((value) => value.trim()).filter(Boolean))],
-      handlingMode: input.profile.handlingMode,
+      handlingMode: "auto_when_certain",
       useWhen: [...new Set(input.profile.useWhen.map((value) => value.trim()).filter(Boolean))],
       avoidWhen: [...new Set(input.profile.avoidWhen.map((value) => value.trim()).filter(Boolean))],
       requiredInputs,

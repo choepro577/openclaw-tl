@@ -286,8 +286,8 @@ function setChatError(host: ChatModelSettingsHost, error: string | null, request
 
 // Immediate-apply pickers can overlap patches for the same session. Mirror the
 // pendingModelPatches token guard in sessions/index.ts: only the latest patch
-// may re-assert or roll back the optimistic row, so a slow earlier request
-// cannot clobber a newer selection.
+// may dispatch, re-assert, or roll back the optimistic row, so a slow earlier
+// request cannot clobber a newer selection.
 const chatFastModePatchTokens = new WeakMap<object, Map<string, symbol>>();
 const chatThinkingPatchTokens = new WeakMap<object, Map<string, symbol>>();
 const chatContextWindowPatchTokens = new WeakMap<object, Map<string, symbol>>();
@@ -314,6 +314,20 @@ function isCurrentChatSettingsPatch(
   token: symbol,
 ): boolean {
   return store.get(host)?.get(sessionKey) === token;
+}
+
+function dispatchCurrentChatSettingsPatch(
+  store: WeakMap<object, Map<string, symbol>>,
+  host: object,
+  sessionKey: string,
+  token: symbol,
+  reassert: () => void,
+): boolean {
+  if (!isCurrentChatSettingsPatch(store, host, sessionKey, token)) {
+    return false;
+  }
+  reassert();
+  return true;
 }
 
 function patchSessionRow(
@@ -380,7 +394,18 @@ export function switchChatFastMode(
         },
         {
           ...scopedAgentParamsForSession(host, targetSessionKey),
-          reconcile: async () => refreshCurrentChatSessionList(host),
+          shouldDispatch: () =>
+            dispatchCurrentChatSettingsPatch(
+              chatFastModePatchTokens,
+              host,
+              targetSessionKey,
+              token,
+              () =>
+                patchSessionRow(host, targetSessionKey, {
+                  fastMode: next,
+                  effectiveFastMode: next,
+                }),
+            ),
         },
       );
       if (!patched) {
@@ -393,7 +418,9 @@ export function switchChatFastMode(
       return true;
     } catch (err) {
       rollback();
-      setChatError(host, `Failed to set speed: ${formatUiError(err)}`, true);
+      if (isCurrentChatSettingsPatch(chatFastModePatchTokens, host, targetSessionKey, token)) {
+        setChatError(host, `Failed to set speed: ${formatUiError(err)}`, true);
+      }
       return false;
     }
   })();
@@ -447,9 +474,6 @@ export async function switchChatModel(
         {
           ...scopedAgentParamsForSession(host, targetSessionKey),
           ownsModelOverride,
-          reconcile: async () => {
-            await refreshCurrentChatSessionList(host);
-          },
         },
       );
       if (!patched) {
@@ -520,7 +544,19 @@ export function switchChatThinkingLevel(
         },
         {
           ...scopedAgentParamsForSession(host, targetSessionKey),
-          reconcile: async () => refreshCurrentChatSessionList(host),
+          shouldDispatch: () =>
+            dispatchCurrentChatSettingsPatch(
+              chatThinkingPatchTokens,
+              host,
+              targetSessionKey,
+              token,
+              () => {
+                patchSessionRow(host, targetSessionKey, { thinkingLevel: normalizedNext });
+                if (host.sessionKey === targetSessionKey) {
+                  host.chatThinkingLevel = normalizedNext ?? null;
+                }
+              },
+            ),
         },
       );
       if (!patched) {
@@ -536,7 +572,9 @@ export function switchChatThinkingLevel(
       return true;
     } catch (err) {
       rollback();
-      setChatError(host, `Failed to set thinking level: ${formatUiError(err)}`, true);
+      if (isCurrentChatSettingsPatch(chatThinkingPatchTokens, host, targetSessionKey, token)) {
+        setChatError(host, `Failed to set thinking level: ${formatUiError(err)}`, true);
+      }
       return false;
     }
   })();
@@ -575,7 +613,14 @@ export function switchChatContextWindow(
         { contextWindow: next ?? null },
         {
           ...scopedAgentParamsForSession(host, targetSessionKey),
-          reconcile: async () => refreshCurrentChatSessionList(host),
+          shouldDispatch: () =>
+            dispatchCurrentChatSettingsPatch(
+              chatContextWindowPatchTokens,
+              host,
+              targetSessionKey,
+              token,
+              () => patchSessionRow(host, targetSessionKey, { contextWindow: next }),
+            ),
         },
       );
       if (!patched) {
@@ -585,7 +630,9 @@ export function switchChatContextWindow(
       return true;
     } catch (err) {
       rollback();
-      setChatError(host, `Failed to set context window: ${formatUiError(err)}`, true);
+      if (isCurrentChatSettingsPatch(chatContextWindowPatchTokens, host, targetSessionKey, token)) {
+        setChatError(host, `Failed to set context window: ${formatUiError(err)}`, true);
+      }
       return false;
     }
   })();

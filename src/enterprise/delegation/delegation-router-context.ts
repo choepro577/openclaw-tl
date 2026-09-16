@@ -598,9 +598,6 @@ export function deterministicMatch(
   candidates: readonly EnterpriseDelegationCandidate[],
 ): EnterpriseDelegationCandidate | undefined {
   const matches = candidates.filter((candidate) => {
-    if (candidate.effectiveMode === "explicit_only") {
-      return false;
-    }
     const profile = candidate.profile;
     if (!profile || profile.avoidWhen.some((example) => containsPhrase(prompt, example))) {
       return false;

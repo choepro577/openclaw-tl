@@ -93,7 +93,19 @@ import { createAssistantOutputItem, createFunctionCallOutputItem } from "./openr
 import { authorizeGatewaySessionCreation } from "./operator-role-policy.js";
 import type { GatewayContextResolver } from "./server-methods/types.js";
 
-type OpenResponsesHttpOptions = {
+export type PreAuthorizedOpenResponsesRequest = {
+  body: unknown;
+  agentId: string;
+  sessionKey: string;
+  authSubject: string;
+  responseId?: string;
+  messageChannel?: string;
+  senderIsOwner: false;
+  suppressHttpResponse?: boolean;
+  onTerminalResponse?: (response: ResponseResource) => void;
+};
+
+export type OpenResponsesHttpOptions = {
   auth: ResolvedGatewayAuth;
   maxBodyBytes?: number;
   config?: GatewayHttpResponsesConfig;
@@ -101,6 +113,7 @@ type OpenResponsesHttpOptions = {
   allowRealIpFallback?: boolean;
   rateLimiter?: AuthRateLimiter;
   resolveGatewayContext?: GatewayContextResolver;
+  preAuthorized?: PreAuthorizedOpenResponsesRequest;
 };
 
 const DEFAULT_BODY_BYTES = 20 * 1024 * 1024;
@@ -445,40 +458,54 @@ export async function handleOpenResponsesHttpRequest(
   res: ServerResponse,
   opts: OpenResponsesHttpOptions,
 ): Promise<boolean> {
+  const preAuthorized = opts.preAuthorized;
   const limits = resolveResponsesLimits(opts.config);
   const maxBodyBytes =
     opts.maxBodyBytes ??
     Math.max(limits.maxBodyBytes, limits.files.maxBytes * 2, limits.images.maxBytes * 2);
-  const handled = await handleGatewayPostJsonEndpoint(req, res, {
-    pathname: "/v1/responses",
-    requiredOperatorMethod: "chat.send",
-    // Compat HTTP uses a different scope model from generic HTTP helpers:
-    // shared-secret bearer auth is treated as full operator access here.
-    resolveOperatorScopes: resolveOpenAiCompatibleHttpOperatorScopes,
-    auth: opts.auth,
-    trustedProxies: opts.trustedProxies,
-    allowRealIpFallback: opts.allowRealIpFallback,
-    rateLimiter: opts.rateLimiter,
-    maxBodyBytes,
-  });
-  if (handled === false) {
-    return false;
+  const handled = preAuthorized
+    ? null
+    : await handleGatewayPostJsonEndpoint(req, res, {
+        pathname: "/v1/responses",
+        requiredOperatorMethod: "chat.send",
+        // Compat HTTP uses a different scope model from generic HTTP helpers:
+        // shared-secret bearer auth is treated as full operator access here.
+        resolveOperatorScopes: resolveOpenAiCompatibleHttpOperatorScopes,
+        auth: opts.auth,
+        trustedProxies: opts.trustedProxies,
+        allowRealIpFallback: opts.allowRealIpFallback,
+        rateLimiter: opts.rateLimiter,
+        maxBodyBytes,
+      });
+  if (!preAuthorized) {
+    if (handled === false) {
+      return false;
+    }
+    if (!handled) {
+      return true;
+    }
+    const modelOverrideAuth = authorizeOpenAiCompatibleHttpModelOverride(req, handled.requestAuth);
+    if (!modelOverrideAuth.allowed) {
+      sendMissingScopeForbidden(res, modelOverrideAuth.missingScope);
+      return true;
+    }
   }
-  if (!handled) {
-    return true;
-  }
-  const modelOverrideAuth = authorizeOpenAiCompatibleHttpModelOverride(req, handled.requestAuth);
-  if (!modelOverrideAuth.allowed) {
-    sendMissingScopeForbidden(res, modelOverrideAuth.missingScope);
-    return true;
-  }
-  const senderIsOwner = resolveOpenAiCompatibleHttpSenderIsOwner(req, handled.requestAuth);
+  const requestAuth = preAuthorized || !handled ? undefined : handled.requestAuth;
+  const requestBody = preAuthorized?.body ?? (!handled ? undefined : handled.body);
+  const sendResponse = (status: number, body: unknown) => {
+    if (!preAuthorized?.suppressHttpResponse) {
+      sendJson(res, status, body);
+    }
+  };
+  const senderIsOwner = preAuthorized
+    ? preAuthorized.senderIsOwner
+    : resolveOpenAiCompatibleHttpSenderIsOwner(req, requestAuth!);
   // Validate request body with Zod
-  const parseResult = CreateResponseBodySchema.safeParse(handled.body);
+  const parseResult = CreateResponseBodySchema.safeParse(requestBody);
   if (!parseResult.success) {
     const issue = parseResult.error.issues[0];
     const message = issue ? `${issue.path.join(".")}: ${issue.message}` : "Invalid request body";
-    sendJson(res, 400, {
+    sendResponse(400, {
       error: { message, type: "invalid_request_error" },
     });
     return true;
@@ -488,42 +515,66 @@ export async function handleOpenResponsesHttpRequest(
   const stream = Boolean(payload.stream);
   const model = payload.model;
   const user = payload.user;
+  const responseId = preAuthorized?.responseId ?? `resp_${randomUUID()}`;
+  const notifyPreAuthorizedFailure = (
+    message: string,
+    status: "failed" | "incomplete" = "failed",
+  ) => {
+    preAuthorized?.onTerminalResponse?.(
+      createResponseResource({
+        id: responseId,
+        model,
+        status,
+        output: [],
+        error: {
+          code: status === "incomplete" ? "client_disconnected" : "invalid_request_error",
+          message,
+        },
+      }),
+    );
+  };
   let agentId: string;
   try {
-    agentId = resolveAgentIdForRequest({ req, model });
+    agentId = preAuthorized?.agentId ?? resolveAgentIdForRequest({ req, model });
+    if (preAuthorized && model !== preAuthorized.agentId) {
+      sendResponse(403, {
+        error: { message: "model is not allowed for this API key", type: "forbidden" },
+      });
+      return true;
+    }
   } catch (err) {
     if (
       isAgentSelectionRequiredError(err) ||
       isInvalidGatewayModelError(err) ||
       isUnknownGatewayAgentError(err)
     ) {
-      sendJson(res, 400, {
+      sendResponse(400, {
         error: { message: err.message, type: "invalid_request_error" },
       });
       return true;
     }
     throw err;
   }
-  const creationAuth = authorizeGatewaySessionCreation({
-    cfg: getRuntimeConfig(),
-    ...(senderIsOwner && !handled.requestAuth.authenticatedUserProfile
-      ? { actor: { kind: "system" as const } }
-      : { profileId: handled.requestAuth.authenticatedUserProfile?.profileId }),
-    agentId,
-  });
+  const creationAuth = preAuthorized
+    ? null
+    : authorizeGatewaySessionCreation({
+        cfg: getRuntimeConfig(),
+        ...(senderIsOwner && !requestAuth!.authenticatedUserProfile
+          ? { actor: { kind: "system" as const } }
+          : { profileId: requestAuth!.authenticatedUserProfile?.profileId }),
+        agentId,
+      });
   if (creationAuth) {
-    sendJson(res, 403, {
+    sendResponse(403, {
       error: { message: creationAuth.message, type: "forbidden" },
     });
     return true;
   }
-  const { modelOverride, errorMessage: modelError } = await resolveOpenAiCompatModelOverride({
-    req,
-    agentId,
-    model,
-  });
+  const { modelOverride, errorMessage: modelError } = preAuthorized
+    ? { modelOverride: undefined, errorMessage: undefined }
+    : await resolveOpenAiCompatModelOverride({ req, agentId, model });
   if (modelError) {
-    sendJson(res, 400, {
+    sendResponse(400, {
       error: { message: modelError, type: "invalid_request_error" },
     });
     return true;
@@ -619,7 +670,8 @@ export async function handleOpenResponsesHttpRequest(
     }
   } catch (err) {
     logWarn(`openresponses: request parsing failed: ${String(err)}`);
-    sendJson(res, 400, {
+    notifyPreAuthorizedFailure("invalid request");
+    sendResponse(400, {
       error: { message: "invalid request", type: "invalid_request_error" },
     });
     return true;
@@ -639,21 +691,27 @@ export async function handleOpenResponsesHttpRequest(
     toolChoiceConstraint = toolChoiceResult.constraint;
   } catch (err) {
     logWarn(`openresponses: tool configuration failed: ${String(err)}`);
-    sendJson(res, 400, {
+    sendResponse(400, {
       error: { message: "invalid tool configuration", type: "invalid_request_error" },
     });
     return true;
   }
   let resolved: ReturnType<typeof resolveGatewayRequestContext>;
   try {
-    resolved = resolveGatewayRequestContext({
-      req,
-      model,
-      user,
-      sessionPrefix: "openresponses",
-      defaultMessageChannel: "webchat",
-      useMessageChannelHeader: true,
-    });
+    resolved = preAuthorized
+      ? {
+          agentId: preAuthorized.agentId,
+          sessionKey: preAuthorized.sessionKey,
+          messageChannel: preAuthorized.messageChannel ?? "webchat",
+        }
+      : resolveGatewayRequestContext({
+          req,
+          model,
+          user,
+          sessionPrefix: "openresponses",
+          defaultMessageChannel: "webchat",
+          useMessageChannelHeader: true,
+        });
   } catch (err) {
     if (
       isAgentSelectionRequiredError(err) ||
@@ -661,35 +719,41 @@ export async function handleOpenResponsesHttpRequest(
       isInvalidGatewayModelError(err) ||
       isGatewaySessionKeyOverrideError(err)
     ) {
-      sendJson(res, 400, {
+      sendResponse(400, {
         error: { message: err.message, type: "invalid_request_error" },
       });
       return true;
     }
     throw err;
   }
-  const responseSessionScope = createResponseSessionScope({
-    req,
-    auth: opts.auth,
-    requestAuth: handled.requestAuth,
-    agentId: resolved.agentId,
-  });
+  const responseSessionScope = preAuthorized
+    ? normalizeResponseSessionScope({
+        authSubject: preAuthorized.authSubject,
+        agentId: preAuthorized.agentId,
+      })
+    : createResponseSessionScope({
+        req,
+        auth: opts.auth,
+        requestAuth: requestAuth!,
+        agentId: resolved.agentId,
+      });
   // Resolve session key: reuse previous_response_id only when it matches the
   // same auth-subject/agent/requested-session scope as the current request.
-  const previousSessionKey = lookupResponseSession(
-    payload.previous_response_id,
-    responseSessionScope,
-  );
-  const sessionKey = previousSessionKey ?? resolved.sessionKey;
+  const previousSessionKey = preAuthorized
+    ? undefined
+    : lookupResponseSession(payload.previous_response_id, responseSessionScope);
+  const sessionKey = preAuthorized?.sessionKey ?? previousSessionKey ?? resolved.sessionKey;
   const messageChannel = resolved.messageChannel;
-  const sessionAuth = authorizeOpenAiCompatibleHttpSession({
-    agentId: resolved.agentId,
-    sessionKey,
-    requestAuth: handled.requestAuth,
-    senderIsOwner,
-  });
+  const sessionAuth = preAuthorized
+    ? { allowed: true as const }
+    : authorizeOpenAiCompatibleHttpSession({
+        agentId: resolved.agentId,
+        sessionKey,
+        requestAuth: requestAuth!,
+        senderIsOwner,
+      });
   if (!sessionAuth.allowed) {
-    sendJson(res, 403, { error: { message: sessionAuth.message, type: "forbidden" } });
+    sendResponse(403, { error: { message: sessionAuth.message, type: "forbidden" } });
     return true;
   }
 
@@ -707,7 +771,7 @@ export async function handleOpenResponsesHttpRequest(
     .join("\n\n");
 
   if (!prompt.message) {
-    sendJson(res, 400, {
+    sendResponse(400, {
       error: {
         message: "Missing user message in `input`.",
         type: "invalid_request_error",
@@ -716,9 +780,14 @@ export async function handleOpenResponsesHttpRequest(
     return true;
   }
 
-  const responseId = `resp_${randomUUID()}`;
-  const rememberResponseSession = () =>
-    storeResponseSession(responseId, sessionKey, responseSessionScope);
+  const rememberResponseSession = (response?: ResponseResource) => {
+    if (!preAuthorized) {
+      storeResponseSession(responseId, sessionKey, responseSessionScope);
+    }
+    if (response) {
+      preAuthorized?.onTerminalResponse?.(response);
+    }
+  };
   const outputItemId = `msg_${randomUUID()}`;
   const deps = createDefaultDeps();
   const abortController = new AbortController();
@@ -737,7 +806,11 @@ export async function handleOpenResponsesHttpRequest(
       : undefined;
 
   if (!stream) {
-    const stopWatchingDisconnect = watchClientDisconnect(req, res, abortController);
+    const stopWatchingDisconnect = preAuthorized?.suppressHttpResponse
+      ? () => {}
+      : watchClientDisconnect(req, res, abortController, () =>
+          notifyPreAuthorizedFailure("Client disconnected before completion.", "incomplete"),
+        );
     try {
       const result = await runResponsesAgentCommand({
         message: prompt.message,
@@ -785,8 +858,8 @@ export async function handleOpenResponsesHttpRequest(
           },
           usage,
         });
-        rememberResponseSession();
-        sendJson(res, 502, failed);
+        rememberResponseSession(failed);
+        sendResponse(502, failed);
         return true;
       }
 
@@ -825,8 +898,8 @@ export async function handleOpenResponsesHttpRequest(
           output,
           usage,
         });
-        rememberResponseSession();
-        sendJson(res, 200, response);
+        rememberResponseSession(response);
+        sendResponse(200, response);
         return true;
       }
 
@@ -845,8 +918,8 @@ export async function handleOpenResponsesHttpRequest(
         usage,
       });
 
-      rememberResponseSession();
-      sendJson(res, 200, response);
+      rememberResponseSession(response);
+      sendResponse(200, response);
     } catch (err) {
       if (abortController.signal.aborted) {
         return true;
@@ -860,7 +933,8 @@ export async function handleOpenResponsesHttpRequest(
           output: [],
           error: { code: "invalid_request_error", message: "invalid tool configuration" },
         });
-        sendJson(res, 400, response);
+        rememberResponseSession(response);
+        sendResponse(400, response);
         return true;
       }
       const response = createResponseResource({
@@ -882,12 +956,12 @@ export async function handleOpenResponsesHttpRequest(
             message: mapped.error.message,
           },
         });
-        rememberResponseSession();
-        sendJson(res, mapped.status, mappedResponse);
+        rememberResponseSession(mappedResponse);
+        sendResponse(mapped.status, mappedResponse);
         return true;
       }
-      rememberResponseSession();
-      sendJson(res, 500, response);
+      rememberResponseSession(response);
+      sendResponse(500, response);
     } finally {
       stopWatchingDisconnect();
     }
@@ -989,7 +1063,7 @@ export async function handleOpenResponsesHttpRequest(
           : {}),
       });
 
-      rememberResponseSession();
+      rememberResponseSession(finalResponse);
       writeSseEvent(res, {
         type: finalizeRequested.status === "failed" ? "response.failed" : "response.completed",
         response: finalResponse,
@@ -1021,6 +1095,7 @@ export async function handleOpenResponsesHttpRequest(
     closed = true;
     stopWatchingDisconnect();
     unsubscribe();
+    rememberResponseSession(response);
     writeSseEvent(res, { type: "response.failed", response });
     writeDone(res);
     res.end();
@@ -1031,7 +1106,6 @@ export async function handleOpenResponsesHttpRequest(
     if (!usage) {
       return;
     }
-    rememberResponseSession();
     finalizeFailedResponse(
       createResponseResource({
         id: responseId,
@@ -1188,6 +1262,7 @@ export async function handleOpenResponsesHttpRequest(
   stopWatchingDisconnect = watchClientDisconnect(req, res, abortController, () => {
     closed = true;
     unsubscribe();
+    notifyPreAuthorizedFailure("Client disconnected before completion.", "incomplete");
     releaseStreamRootWork();
   });
 
@@ -1215,7 +1290,6 @@ export async function handleOpenResponsesHttpRequest(
 
       if (isFailedOpenAiAgentRun(result)) {
         terminalLifecyclePhase = "error";
-        rememberResponseSession();
         finalizeFailedResponse(
           createResponseResource({
             id: responseId,
@@ -1265,8 +1339,8 @@ export async function handleOpenResponsesHttpRequest(
         closed = true;
         stopWatchingDisconnect();
         unsubscribe();
-        rememberResponseSession();
         writeSseEvent(res, { type: "response.failed", response: failed });
+        rememberResponseSession(failed);
         writeDone(res);
         res.end();
         return;
@@ -1367,7 +1441,7 @@ export async function handleOpenResponsesHttpRequest(
         closed = true;
         stopWatchingDisconnect();
         unsubscribe();
-        rememberResponseSession();
+        rememberResponseSession(completedResponse);
         writeSseEvent(res, { type: "response.completed", response: completedResponse });
         writeDone(res);
         res.end();
@@ -1438,11 +1512,9 @@ export async function handleOpenResponsesHttpRequest(
           },
           usage: finalUsage,
         });
-        rememberResponseSession();
         finalizeFailedResponse(mappedResponse);
         return;
       }
-      rememberResponseSession();
       finalizeFailedResponse(errorResponse);
     } finally {
       releaseAgentRootWork?.();

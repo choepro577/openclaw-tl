@@ -1,0 +1,134 @@
+[
+  {
+    "path": "nghiem-thu-ban-cuoi.md",
+    "sha256": "ab56ad85960b69ce0131ee9100eaf0d8394e945d55e17508b3290b463fb72c1f"
+  },
+  {
+    "path": "screenshots/final-agent-revoked.png",
+    "sha256": "8b816d9ec48b6bb67f5ce855c4173adc52e2a2c28df285056edd1435001b64f7"
+  },
+  {
+    "path": "screenshots/final-delegated-hr-success.png",
+    "sha256": "fb93121545441f4317d146d6e935ac259125b4d970ac46b9bc91d8decffc3081"
+  },
+  {
+    "path": "screenshots/final-new-delegated-deny-success.png",
+    "sha256": "3e8dbfb18721bc3f99d94daef11cb3bf2a0b8a9831d8ba43e7c558098e5d5439"
+  },
+  {
+    "path": "screenshots/final-new-direct-success.png",
+    "sha256": "415cd0ce76e2e4232aa392f621372e91dacd5b7f62b19c4f4237edd9d720cd5f"
+  },
+  {
+    "path": "screenshots/final-original-parent-success.png",
+    "sha256": "4ae433e91414751430c47c4185cb4b2e1356132b77a103b670d187c42a8ca9fd"
+  },
+  {
+    "path": "screenshots/final-regrant-success.png",
+    "sha256": "0d8f3d10a1a30c21d0eecb10fd46e2aa7d195da1288b5f40031ade340199e81c"
+  },
+  {
+    "path": "screenshots/final-skill-revision.png",
+    "sha256": "8e409fdb8b2c1bdf897040a8c593cf72c2f94b111c547e3624aae9899a223b72"
+  },
+  {
+    "path": "session-evidence/final-delegated-hr-child.json",
+    "sha256": "3b85e5413d9b5bac838ec54f353c2a925d2d8099267ed4c261386c825755ff23"
+  },
+  {
+    "path": "session-evidence/final-marker-added.json",
+    "sha256": "c651c018ba552a228e542b402b9e630c411a8bd0e726da97e1bbc2b8c0590ebc"
+  },
+  {
+    "path": "session-evidence/final-marker-removed.json",
+    "sha256": "3caa82c21a4958876fa5538b920084e90e006561c10da6f2e5f79f67d1e8d6a9"
+  },
+  {
+    "path": "session-evidence/final-new-delegated-child-deny.json",
+    "sha256": "ceb037b9fc68c1d46e9e9637a1717b5fd95cbf153b985c174ad4af1559fc296e"
+  },
+  {
+    "path": "session-evidence/final-new-delegated-parent-deny.json",
+    "sha256": "d1cf7c5cb19494866fa2fa4ea7d5afdde2e099cbe58e1ba74a68739db46a367e"
+  },
+  {
+    "path": "session-evidence/final-new-direct-success.json",
+    "sha256": "c025365b75cd09e0dc447ade5fb74e23b41460a3ff9b97bd25ef1a104830a628"
+  },
+  {
+    "path": "session-evidence/final-original-parent-child.json",
+    "sha256": "f364300852f6f6163cd85e241d70c633f03790d0449546548903654672674f1c"
+  },
+  {
+    "path": "session-evidence/final-original-parent.json",
+    "sha256": "e3eacaa04b847fb7ea8d6f89ab46e636d754686603ad63c00e94d648f73fa7a1"
+  },
+  {
+    "path": "session-evidence/final-regrant-same-session.json",
+    "sha256": "7863300886d2f431d2f6dfc37b4ac43b8d24c2ff854588520e5a3a9ff8eb6511"
+  },
+  {
+    "path": "verification/final-agent-revocation.json",
+    "sha256": "6ceeec8996246d45aa162a950a39224bf694eae9eb40ea4797b7b3bbe21677a2"
+  },
+  {
+    "path": "verification/final-autoreview.json",
+    "sha256": "43c2508f44823e64d7d723d9f0eba00eb630f37290632804854554fc90512daa"
+  },
+  {
+    "path": "verification/final-backup.json",
+    "sha256": "14f764d9628944aee1252dabfcd73431e42e4028410f44e3af52375739bb3196"
+  },
+  {
+    "path": "verification/final-build-info.json",
+    "sha256": "4d34af3009efd72e2901197d56dd90c3f12fb8628da3cb1f17c13d98e3a7e866"
+  },
+  {
+    "path": "verification/final-catalog-boundaries.json",
+    "sha256": "0ea0ee047cc7acb5b189f1c68a246fec2a60e2e4d7c47c6c9fb58074e106e062"
+  },
+  {
+    "path": "verification/final-marker-assignment.json",
+    "sha256": "78d298a2cff31fdf37ddfc92731d3eadc79c9c2b15c340e8b18a0b0f0a9cae18"
+  },
+  {
+    "path": "verification/final-marker-cleanup.json",
+    "sha256": "8598fc5aeafe598b716e19289668aa920e088b75611a9b127e03486badcd6c0c"
+  },
+  {
+    "path": "verification/final-marker-removal.json",
+    "sha256": "bbf0fa68f6055938be58ab2a9690f097c83428d34991bb556ae8361d86093baf"
+  },
+  {
+    "path": "verification/final-marker-tool-proof.json",
+    "sha256": "00f194ba254cd690b1f3466915eae944eb395515284373ea09eac1d04c229770"
+  },
+  {
+    "path": "verification/final-personal-deny-test.json",
+    "sha256": "9839f7ba412f538c2851e5bcc460616525a66f4234e855585e8f7970747958fd"
+  },
+  {
+    "path": "verification/final-personal-policy-restored.json",
+    "sha256": "9bb4c860ffc287afbabbdd2be0c7917140f99422e91684e7561b33305f19217e"
+  },
+  {
+    "path": "verification/final-readonly-audit.json",
+    "sha256": "42d60f7e4683926a2465687a1df3bd4e15d71d2d171258456a72c2a29f81b1b0"
+  },
+  {
+    "path": "verification/final-restoration-check.json",
+    "sha256": "7a2ab183f77999f96c8b0945660b717d2d20743b25efa31d3e43fb84e2689c7f"
+  },
+  {
+    "path": "verification/final-runtime.json",
+    "sha256": "37a918d22f20e1d0046793950a52beb6e95a405a0a74f432e1e791bf6559adba"
+  },
+  {
+    "path": "verification/final-source-manifest.json",
+    "sha256": "905808c0578e355df06b64dd0377c6fe2be2ba310bb1a534d21a8b171a103ead"
+  },
+  {
+    "path": "verification/final-verification-status.json",
+    "sha256": "ddc675d2ef09a5e180b836a3bd6786658144c940102be034497f32da3863ad68"
+  }
+]

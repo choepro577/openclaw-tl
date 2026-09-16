@@ -55,6 +55,7 @@ const diagDebugMock = vi.fn();
 const ensureSelectedAgentHarnessPluginMock = vi.fn();
 const createAgentHarnessHostCapabilitiesMock = vi.fn();
 const closeAgentHarnessHostCapabilitiesMock = vi.fn();
+const resolveSandboxContextMock = vi.hoisted(() => vi.fn());
 const agentHarnessHostCapabilitiesMock: AgentHarnessHostCapabilities = Object.freeze({
   kind: "agent-harness-host-capability",
   version: 1,
@@ -234,6 +235,10 @@ vi.mock("./cli-runner/execute.runtime.js", () => ({
 vi.mock("./harness/runtime-plugin.js", () => ({
   ensureSelectedAgentHarnessPlugin: (...args: unknown[]) =>
     ensureSelectedAgentHarnessPluginMock(...args),
+}));
+
+vi.mock("./sandbox/context.js", () => ({
+  resolveSandboxContext: (...args: unknown[]) => resolveSandboxContextMock(...args),
 }));
 
 // Selection and host-capability owner suites execute the embedded runner and capability surface.
@@ -716,6 +721,7 @@ describe("runBtwSideQuestion", () => {
     ensureSelectedAgentHarnessPluginMock.mockReset();
     createAgentHarnessHostCapabilitiesMock.mockReset();
     closeAgentHarnessHostCapabilitiesMock.mockReset();
+    resolveSandboxContextMock.mockReset().mockResolvedValue(undefined);
     listSessionEntriesCoreMock.mockReset();
     listSessionEntriesCoreMock.mockReturnValue([]);
     loadSessionEntryMock.mockReset();
@@ -993,6 +999,11 @@ describe("runBtwSideQuestion", () => {
     const codexSideQuestionMock = registerCodexSideQuestionHarness({
       supports,
     });
+    const releaseSandbox = vi.fn();
+    resolveSandboxContextMock.mockResolvedValue({
+      enabled: false,
+      lifecycleActiveRelease: releaseSandbox,
+    });
     resolveModelWithRegistryMock.mockReturnValue({
       provider: "openai",
       id: "gpt-5.5",
@@ -1092,6 +1103,13 @@ describe("runBtwSideQuestion", () => {
       }),
     );
     expect(closeAgentHarnessHostCapabilitiesMock).toHaveBeenCalledOnce();
+    expect(releaseSandbox).toHaveBeenCalledOnce();
+    expect(resolveSandboxContextMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        holdActiveLease: true,
+        signal: undefined,
+      }),
+    );
     expect(resolveModelAsyncMock).toHaveBeenCalledWith(
       "openai",
       "gpt-5.5",
@@ -1403,6 +1421,11 @@ describe("runBtwSideQuestion", () => {
   });
 
   it("uses registry ownership and closes host capabilities when a BTW hook rejects", async () => {
+    const releaseSandbox = vi.fn();
+    resolveSandboxContextMock.mockResolvedValue({
+      enabled: false,
+      lifecycleActiveRelease: releaseSandbox,
+    });
     registerAgentHarness(
       {
         id: "spoofed",
@@ -1421,6 +1444,30 @@ describe("runBtwSideQuestion", () => {
       expect.objectContaining({ pluginId: "actual-owner" }),
     );
     expect(closeAgentHarnessHostCapabilitiesMock).toHaveBeenCalledOnce();
+    expect(releaseSandbox).toHaveBeenCalledOnce();
+  });
+
+  it("releases the sandbox lease when harness capability preparation fails", async () => {
+    const releaseSandbox = vi.fn();
+    resolveSandboxContextMock.mockResolvedValue({
+      enabled: false,
+      lifecycleActiveRelease: releaseSandbox,
+    });
+    registerAgentHarness({
+      id: "prep-failure",
+      label: "Preparation failure harness",
+      supports: () => ({ supported: true, priority: 100 }),
+      runAttempt: vi.fn(),
+      runSideQuestion: vi.fn(),
+    });
+    createAgentHarnessHostCapabilitiesMock.mockImplementationOnce(() => {
+      throw new Error("host capability preparation failed");
+    });
+
+    await expect(runSideQuestion()).rejects.toThrow("host capability preparation failed");
+
+    expect(closeAgentHarnessHostCapabilitiesMock).not.toHaveBeenCalled();
+    expect(releaseSandbox).toHaveBeenCalledOnce();
   });
 
   it("reselects the Codex hook after resolving legacy openai-codex route state", async () => {

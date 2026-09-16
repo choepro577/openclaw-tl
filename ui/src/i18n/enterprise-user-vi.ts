@@ -501,7 +501,7 @@ export const enterpriseUserVi: Record<EnterpriseUserCopyKey, string> = {
   sharedUserAddressDescription: "Ví dụ: Hieu, anh Minh, chị Lan hoặc bạn.",
   plugins: "Plugin",
   pluginsDescription:
-    "Cài Skill cho từng Agent hoặc khám phá plugin native; các plugin cần quyền sẽ gửi yêu cầu tới Admin.",
+    "Cài Skill cho Personal Agent hoặc khám phá plugin native; các plugin cần quyền sẽ gửi yêu cầu tới Admin.",
   pluginsInstalled: "Đã cài",
   pluginsDiscover: "Khám phá",
   pluginsRequests: "Yêu cầu",

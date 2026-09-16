@@ -1,7 +1,7 @@
 // Persisted model metadata normalization without loading the broader selection runtime.
 import { normalizeOptionalString } from "@openclaw/normalization-core/string-coerce";
 import { DEFAULT_PROVIDER } from "./defaults.js";
-import type { ModelRef } from "./model-ref-shared.js";
+import type { ModelManifestNormalizationContext, ModelRef } from "./model-ref-shared.js";
 import { parseModelRef } from "./model-selection-normalize.js";
 
 function normalizePersistedDefaultProvider(value: unknown): string {
@@ -14,6 +14,7 @@ export function resolvePersistedOverrideModelRef(params: {
   overrideModel?: unknown;
   allowManifestNormalization?: boolean;
   allowPluginNormalization?: boolean;
+  manifestPlugins?: ModelManifestNormalizationContext["manifestPlugins"];
 }): ModelRef | null {
   const defaultProvider = normalizePersistedDefaultProvider(params.defaultProvider);
   const overrideProvider = normalizeOptionalString(params.overrideProvider);
@@ -26,6 +27,7 @@ export function resolvePersistedOverrideModelRef(params: {
     parseModelRef(encodedOverride, defaultProvider, {
       allowManifestNormalization: params.allowManifestNormalization,
       allowPluginNormalization: params.allowPluginNormalization,
+      manifestPlugins: params.manifestPlugins,
     }) ?? {
       provider: overrideProvider || defaultProvider,
       model: overrideModel,

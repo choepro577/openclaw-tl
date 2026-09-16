@@ -1,0 +1,63 @@
+{
+  "capturedAt": "2026-09-11T14:32:52.183Z",
+  "username": "hieu",
+  "accountId": "68264167-a2d8-48b1-a00a-d31a06a7fd92",
+  "passwordFileMode": "600",
+  "passwordLength": 43,
+  "loginVerified": true,
+  "entitlementBefore": {
+    "counts": {
+      "agent": 6,
+      "skill": 1,
+      "tool": 0
+    },
+    "skillResourceIds": [
+      "skill:agent:hrm:openclaw-bundled:hr-skill"
+    ]
+  },
+  "entitlementAfter": {
+    "counts": {
+      "agent": 6,
+      "skill": 0,
+      "tool": 0
+    },
+    "skillResourceIds": []
+  },
+  "policyRevisionBefore": 15,
+  "policyRevisionAfter": 16,
+  "businessIdentity": {
+    "thienlyBindingCount": 0,
+    "enterpriseSkillTokenCount": 0,
+    "enterpriseSkillTokenMetadata": [],
+    "nativePluginGrants": [
+      {
+        "scope": "account",
+        "agent_key": null,
+        "runtime_agent_id": null,
+        "plugin_id": "diffs",
+        "state": "active",
+        "revision": 27
+      },
+      {
+        "scope": "account",
+        "agent_key": null,
+        "runtime_agent_id": null,
+        "plugin_id": "test-echo",
+        "state": "revoked",
+        "revision": 3
+      }
+    ],
+    "codexPluginGrants": [
+      {
+        "agent_key": "personal",
+        "runtime_agent_id": "enterprise-personal-2ae2cbc2deecdb86fe86",
+        "plugin_name": "gmail",
+        "marketplace_name": "openai-curated-remote",
+        "auth_required": 0,
+        "ready": 1,
+        "state": "active",
+        "revision": 6
+      }
+    ]
+  }
+}

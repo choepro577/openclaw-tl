@@ -45,6 +45,7 @@ import {
   readDockerPort,
   resolveDockerEnvPolicyEpoch,
 } from "./docker.js";
+import { hasSandboxActiveUsers } from "./lifecycle.js";
 import {
   buildNoVncObserverTokenUrl,
   consumeNoVncObserverToken,
@@ -326,6 +327,11 @@ async function ensureSandboxBrowserContainer(
     cdpAuthToken =
       (await readDockerContainerEnvVar(containerName, CDP_AUTH_TOKEN_ENV_KEY)) ?? undefined;
     if (!cdpAuthToken) {
+      if (hasSandboxActiveUsers(params.scopeKey)) {
+        throw new Error(
+          `Sandbox browser container ${containerName} lacks the current CDP relay auth contract while an active turn is using it; defer recreation until that turn finishes.`,
+        );
+      }
       defaultRuntime.log(
         `Removing stale sandbox browser container ${containerName} because it lacks the current CDP relay auth contract; it will be recreated.`,
       );
@@ -349,7 +355,8 @@ async function ensureSandboxBrowserContainer(
       const lastUsedAtMs = registryEntry?.lastUsedAtMs;
       const isHot =
         running && (typeof lastUsedAtMs !== "number" || now - lastUsedAtMs < HOT_BROWSER_WINDOW_MS);
-      if (isHot) {
+      const hasActiveUsers = hasSandboxActiveUsers(params.scopeKey);
+      if (isHot || hasActiveUsers) {
         const hint = (() => {
           if (params.cfg.scope === "session") {
             return `openclaw sandbox recreate --browser --session ${params.scopeKey}`;
@@ -361,7 +368,7 @@ async function ensureSandboxBrowserContainer(
           return "openclaw sandbox recreate --browser --all";
         })();
         defaultRuntime.log(
-          `Sandbox browser config changed for ${containerName} (recently used). Recreate to apply: ${hint}`,
+          `Sandbox browser config changed for ${containerName} (${hasActiveUsers ? "actively in use" : "recently used"}). Recreate to apply: ${hint}`,
         );
       } else {
         await stopExistingForContainer();
@@ -504,6 +511,11 @@ async function ensureSandboxBrowserContainer(
     evaluateMatches,
   );
   if (existing && !canReuse) {
+    if (hasSandboxActiveUsers(params.scopeKey)) {
+      throw new Error(
+        `Sandbox browser bridge for ${containerName} cannot be replaced while an active turn is using it; defer bridge recreation until that turn finishes.`,
+      );
+    }
     await stopCachedBrowserBridge(params.scopeKey, existing);
   }
 
@@ -526,6 +538,11 @@ async function ensureSandboxBrowserContainer(
             timeoutMs: params.cfg.browser.autoStartTimeoutMs,
           });
           if (!ok) {
+            if (hasSandboxActiveUsers(params.scopeKey)) {
+              throw new Error(
+                `Sandbox browser CDP did not become reachable on 127.0.0.1:${mappedCdp} within ${params.cfg.browser.autoStartTimeoutMs}ms while an active turn is using the container; the runtime was retained for that turn.`,
+              );
+            }
             await execDocker(["rm", "-f", containerName], { allowFailure: true });
             throw new Error(
               `Sandbox browser CDP did not become reachable on 127.0.0.1:${mappedCdp} within ${params.cfg.browser.autoStartTimeoutMs}ms. The hung container has been forcefully removed.`,

@@ -1,0 +1,64 @@
+{
+  "status": "ok",
+  "source": "current-source",
+  "capturedAt": "2026-09-11T15:50:07.577Z",
+  "pid": 92063,
+  "runtimeSnapshotPinned": true,
+  "accountFound": true,
+  "accountEnabled": true,
+  "accountMustChangePassword": false,
+  "agentEntryCount": 6,
+  "workspaceCheck": {
+    "performed": true,
+    "missingCount": 0,
+    "projectSkipped": false
+  },
+  "roster": {
+    "samplesMs": [
+      1573.29,
+      512.38,
+      499.49
+    ],
+    "candidateCounts": [
+      6,
+      6,
+      6
+    ],
+    "skillScannerEvidence": "canonical snapshot helper"
+  },
+  "projection": {
+    "samplesMs": [
+      923.36,
+      930.88,
+      948.56
+    ],
+    "entryCounts": [
+      6,
+      6,
+      6
+    ]
+  },
+  "prepare": {
+    "available": true,
+    "fixture": true,
+    "samplesMs": [
+      378.42,
+      222.62
+    ],
+    "allowed": [
+      true,
+      true
+    ],
+    "reasons": [
+      null,
+      null
+    ]
+  },
+  "liveGrantFence": {
+    "performed": true,
+    "beforeAllowed": true,
+    "afterAllowed": false,
+    "afterReason": "agent_not_granted",
+    "passed": true
+  }
+}

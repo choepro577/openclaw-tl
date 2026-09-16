@@ -1,5 +1,6 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { OpenClawConfig } from "../../config/types.openclaw.js";
+import { ENTERPRISE_AGENT_FIRST_EXPERIMENT_ENV } from "../../enterprise/delegation/delegation-agent-first.js";
 import {
   markGatewayRequestScopedRuntimeConfig,
   readGatewayRequestRuntimeMetadata,
@@ -8,6 +9,8 @@ import { applyToolAvailabilityDescriptions } from "../agent-tools.deferred-follo
 import { withEnterpriseDelegationRuntime } from "../enterprise-delegation-runtime.js";
 import { jsonResult } from "./common.js";
 import { createEnterpriseDelegationTools } from "./enterprise-delegation-tools.js";
+
+afterEach(() => vi.unstubAllEnvs());
 
 function scopedConfig(params?: { effective?: boolean; withDecision?: boolean }): OpenClawConfig {
   return markGatewayRequestScopedRuntimeConfig(
@@ -47,6 +50,76 @@ function scopedConfig(params?: { effective?: boolean; withDecision?: boolean }):
 }
 
 describe("Enterprise delegation discovery tools", () => {
+  it("keeps the default tool contract free of agent-first routing fields", async () => {
+    vi.stubEnv(ENTERPRISE_AGENT_FIRST_EXPERIMENT_ENV, "");
+    await withEnterpriseDelegationRuntime(
+      {
+        agentId: "personal",
+        sessionKey: "parent-session",
+        runId: "parent-run",
+        assertActive: () => {},
+        execute: vi.fn(),
+      },
+      async () => {
+        const tool = createEnterpriseDelegationTools({
+          config: scopedConfig(),
+          agentId: "personal",
+          runSessionKey: "parent-session",
+          runId: "parent-run",
+        }).find((item) => item.name === "enterprise_delegate");
+
+        expect(tool).toBeDefined();
+        expect(JSON.stringify(tool?.parameters)).not.toContain('"routing"');
+        expect(JSON.stringify(tool?.parameters)).toContain('"minItems":1');
+        expect(tool?.description).not.toContain("structured routing object");
+      },
+    );
+  });
+
+  it("allows an opted-in empty assignment lifecycle decision", async () => {
+    vi.stubEnv(ENTERPRISE_AGENT_FIRST_EXPERIMENT_ENV, "1");
+    const execute = vi.fn().mockResolvedValue(jsonResult({ status: "local" }));
+    await withEnterpriseDelegationRuntime(
+      {
+        agentId: "personal",
+        sessionKey: "parent-session",
+        runId: "parent-run",
+        assertActive: () => {},
+        execute,
+      },
+      async () => {
+        const tool = createEnterpriseDelegationTools({
+          config: scopedConfig(),
+          agentId: "personal",
+          runSessionKey: "parent-session",
+          runId: "parent-run",
+        }).find((item) => item.name === "enterprise_delegate");
+        expect(tool).toBeDefined();
+        expect(JSON.stringify(tool?.parameters)).toContain('"routing"');
+        expect(JSON.stringify(tool?.parameters)).toContain('"minItems":0');
+        await tool!.execute("cancel", {
+          assignments: [],
+          routing: {
+            outcome: "local",
+            handling: "direct",
+            continuation: "cancel",
+            handoffConsent: "denied",
+            confidence: 1,
+            secondConfidence: 0,
+            independent: false,
+            question: "",
+            routes: [],
+          },
+        });
+        expect(execute).toHaveBeenCalledWith(
+          "cancel",
+          [],
+          expect.objectContaining({ continuation: "cancel", handoffConsent: "denied" }),
+        );
+      },
+    );
+  });
+
   it("exposes dynamic assignments only to the matching admitted Personal Agent and checks targets", async () => {
     const execute = vi.fn().mockResolvedValue(jsonResult({ status: "accepted" }));
     let active = true;

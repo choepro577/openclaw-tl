@@ -1,0 +1,106 @@
+- generic [ref=f1e7]:
+  - link "Skip to main content" [ref=f1e8] [cursor=pointer]:
+    - /url: "#enterprise-user-main"
+  - complementary "Enterprise User navigation" [ref=f1e11]:
+    - generic [ref=f1e12]:
+      - generic [ref=f1e14]:
+        - group [ref=f1e16]:
+          - generic "Switch active Agent" [ref=f1e17]:
+            - generic [aria-hidden] [ref=f1e18]: 💼
+            - generic [ref=f1e19]:
+              - generic [ref=f1e20]: Active Agent
+              - strong [ref=f1e21]: Personal Agent
+        - button "New chat" [ref=f1e25]
+        - navigation "User pages" [ref=f1e28]:
+          - button "Agents" [ref=f1e29]
+          - button "Automations" [ref=f1e51]
+          - button "Plugins" [ref=f1e57]
+          - generic "Organized chats" [ref=f1e36]:
+            - generic [ref=f1e37]:
+              - button "Projects" [expanded] [ref=f1e38]
+              - button "New Project" [ref=f1e41]
+            - generic [ref=f1e145]:
+              - generic [ref=f1e146]:
+                - button "Thiên Lý MAAP" [expanded] [ref=f1e147]
+                - button "New chat in Thiên Lý MAAP"
+                - generic:
+                  - button "Project actions"
+              - generic [ref=f1e153]:
+                - button "Bạn có thể làm gì?" [ref=f1e154]
+                - generic:
+                  - button "Chat actions"
+            - generic [ref=f1e159]:
+              - button "Recent 84" [expanded] [ref=f1e160]:
+                - generic [ref=f1e161]: Recent
+                - generic [ref=f1e162]: "84"
+              - generic [ref=f1e163]:
+                - generic [ref=f1e164]:
+                  - button "New session" [ref=f1e165]
+                  - generic:
+                    - button "Chat actions"
+                - generic [ref=f1e170]:
+                  - button "Tra cứu đơn nhập hàng nháp" [ref=f1e171]
+                  - generic:
+                    - button "Chat actions"
+                - generic [ref=f1e176]:
+                  - button "Tra cứu đơn nhập hàng nháp" [ref=f1e177]
+                  - generic:
+                    - button "Chat actions"
+                - generic [ref=f1e182]:
+                  - button "Tra cứu đơn nhập hàng nháp" [ref=f1e183]
+                  - generic:
+                    - button "Chat actions"
+                - generic [ref=f1e188]:
+                  - button "Tra cứu đơn nhập hàng nháp" [ref=f1e189]
+                  - generic:
+                    - button "Chat actions"
+              - button "Show more" [ref=f1e194]
+      - group [ref=f1e45]:
+        - generic "Hiếu DZ" [ref=f1e63]:
+          - generic [aria-hidden] [ref=f1e47]: H
+  - main [ref=f1e49]:
+    - generic [ref=f1e79]:
+      - generic [ref=f1e80]:
+        - generic [ref=f1e81]: New session
+        - generic [ref=f1e84]:
+          - button "Show session files" [ref=f1e86]
+          - button "Show subagents" [ref=f1e91]
+          - button "Side panel" [ref=f1e96]
+      - generic [ref=f1e100]:
+        - log [ref=f1e101]:
+          - status [ref=f1e102]
+          - generic [ref=f1e195]:
+            - generic "Cốm" [ref=f1e196]: 🌱
+            - heading "Cốm" [level=2] [ref=f1e197]
+            - paragraph [ref=f1e198]: Type a message to start a conversation.
+            - generic [ref=f1e199]:
+              - generic [ref=f1e200]: Recent chats
+              - button "Tra cứu đơn nhập hàng nháp 2h ago" [ref=f1e201]:
+                - generic [ref=f1e202]: Tra cứu đơn nhập hàng nháp
+                - generic [ref=f1e203]: 2h ago
+              - button "Tra cứu đơn nhập hàng nháp 2h ago" [ref=f1e204]:
+                - generic [ref=f1e205]: Tra cứu đơn nhập hàng nháp
+                - generic [ref=f1e206]: 2h ago
+              - button "Tra cứu đơn nhập hàng nháp 2h ago" [ref=f1e207]:
+                - generic [ref=f1e208]: Tra cứu đơn nhập hàng nháp
+                - generic [ref=f1e209]: 2h ago
+              - button "Tra cứu đơn nhập hàng nháp 2h ago" [ref=f1e210]:
+                - generic [ref=f1e211]: Tra cứu đơn nhập hàng nháp
+                - generic [ref=f1e212]: 2h ago
+              - button "Kiểm tra đơn nhập hàng nháp 3h ago" [ref=f1e213]:
+                - generic [ref=f1e214]: Kiểm tra đơn nhập hàng nháp
+                - generic [ref=f1e215]: 3h ago
+        - generic [ref=f1e121]:
+          - generic [ref=f1e122]:
+            - generic "Add attachment" [ref=f1e123]:
+              - button "Add attachment" [ref=f1e124]
+            - generic [ref=f1e126]:
+              - textbox "Message Cốm" [ref=f1e216]
+              - status [ref=f1e128]
+              - status [ref=f1e129]
+            - button "Write a message to send." [disabled] [ref=f1e132]
+          - generic [ref=f1e138]:
+            - group [ref=f1e139]:
+              - 'generic "Chat model: GPT-5.6 Sol" [ref=f1e217]': GPT-5.6 Sol
+            - group [ref=f1e142]:
+              - 'generic "Chat thinking level: Medium" [ref=f1e218]': Medium

@@ -60,12 +60,31 @@ const codingPreset: EnterpriseAccessPreset = {
   description:
     "Đọc, ghi, sửa file và chạy lệnh trong sandbox.; áp dụng bản vá và chạy lệnh trong workspace.",
   toolIds: ["read", "write", "edit", "apply_patch", "exec", "process"],
+  initialSkillIds: [],
 };
+
+const basicInitialSkillIds = [
+  "skill:global:openclaw-bundled:clawhub",
+  "skill:global:openclaw-bundled:diagram-maker",
+  "skill:global:openclaw-bundled:gifgrep",
+  "skill:global:openclaw-bundled:mcporter",
+  "skill:global:openclaw-bundled:nano-pdf",
+  "skill:global:openclaw-bundled:obsidian",
+  "skill:global:openclaw-bundled:skill-creator",
+  "skill:global:openclaw-bundled:summarize",
+  "skill:global:openclaw-bundled:taskflow",
+  "skill:global:openclaw-bundled:taskflow-inbox-triage",
+  "skill:global:openclaw-bundled:tmux",
+  "skill:global:openclaw-bundled:video-frames",
+  "skill:global:openclaw-bundled:weather",
+  "skill:global:openclaw-bundled:xurl",
+  "skill:global:openclaw-bundled:hr-skill",
+];
 
 const basicPreset: EnterpriseAccessPreset = {
   key: "basic@1",
   label: "Quyền cơ bản",
-  description: "Cấp 32 công cụ cơ bản, đồng bộ quyền sử dụng trong sandbox.",
+  description: "Cấp 32 công cụ và chọn sẵn 15 skill ban đầu.",
   toolIds: [
     "read",
     "write",
@@ -100,6 +119,7 @@ const basicPreset: EnterpriseAccessPreset = {
     "web_fetch",
     "x_search",
   ],
+  initialSkillIds: basicInitialSkillIds,
 };
 
 const noPreset: EnterpriseAccessPreset = {
@@ -107,6 +127,7 @@ const noPreset: EnterpriseAccessPreset = {
   label: "Không có preset",
   description: "Chỉ sử dụng các quyền được cấp riêng.",
   toolIds: [],
+  initialSkillIds: [],
 };
 
 const detailAccount: EnterpriseAccount = {
@@ -160,6 +181,14 @@ const unavailableSkill: EnterpriseSkillCatalogItem = {
   name: "1password",
   intrinsicStatus: "unavailable",
   setupReason: "binary:op",
+};
+
+const hrSkill: EnterpriseSkillCatalogItem = {
+  ...githubSkill,
+  resourceKey: "skill:global:openclaw-bundled:hr-skill",
+  skillKey: "hr-skill",
+  name: "HR",
+  description: "Tra cứu dữ liệu nhân sự.",
 };
 
 let container: HTMLDivElement;
@@ -230,12 +259,42 @@ describe("Enterprise admin account creation", () => {
     render(page.render(), container);
 
     expect(container.textContent).toContain("Quyền cơ bản");
-    expect(container.textContent).toContain(
-      "Cấp 32 công cụ cơ bản, đồng bộ quyền sử dụng trong sandbox.",
-    );
+    expect(container.textContent).toContain("Cấp 32 công cụ và chọn sẵn 15 skill ban đầu.");
     expect(container.querySelectorAll(".ea-account-tool-list .ea-badge")).toHaveLength(32);
     expect(container.textContent).toContain("browser");
     expect(container.textContent).toContain("web_fetch");
+  });
+
+  it("preselects the basic preset's initial skills when the preset changes", () => {
+    const page = new EnterpriseAdminAccountsPage() as unknown as MutableAccountsPage;
+    page.createOpen = true;
+    page.createStep = 2;
+    page.createRole = "employee";
+    page.createPersonalAgentEnabled = true;
+    page.createAccessPresetKey = "standard-coding@1";
+    page.accessPresets = [basicPreset, codingPreset, noPreset];
+    page.createSelectedSkillKeys = [];
+    page.createCatalogLoading = false;
+    page.createCatalogError = "";
+    page.createSharedAgents = [];
+    page.createSkills = [hrSkill];
+
+    render(page.render(), container);
+    const preset = container.querySelector<HTMLSelectElement>("select[name='accessPresetKey']");
+    expect(preset).not.toBeNull();
+    if (!preset) {
+      return;
+    }
+    preset.value = "basic@1";
+    preset.dispatchEvent(new Event("change", { bubbles: true }));
+    render(page.render(), container);
+
+    expect(
+      container.querySelector<HTMLInputElement>(
+        "input[name='skillGrants'][value='skill:global:openclaw-bundled:hr-skill']",
+      )?.checked,
+    ).toBe(true);
+    expect(page.createSelectedSkillKeys).toEqual(basicInitialSkillIds);
   });
 
   it("sends applyAccessPreset when the edit form changes the selected preset", async () => {

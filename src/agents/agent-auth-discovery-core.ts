@@ -1,5 +1,6 @@
 /** Env/config-backed credential discovery shared by agent auth discovery modes. */
 import type { OpenClawConfig } from "../config/types.openclaw.js";
+import type { PluginMetadataSnapshot } from "../plugins/plugin-metadata-snapshot.types.js";
 import type { AgentCredentialMap } from "./agent-auth-credentials.js";
 import {
   listProviderEnvAuthLookupKeys,
@@ -10,6 +11,8 @@ import { resolveEnvApiKey } from "./model-auth-env.js";
 /** Options for discovering env-backed credentials during agent auth discovery. */
 export type AgentDiscoveryAuthLookupOptions = {
   config?: OpenClawConfig;
+  /** Reuse the exact lifecycle metadata generation already admitted for this discovery. */
+  metadataSnapshot?: PluginMetadataSnapshot;
   workspaceDir?: string;
   env?: NodeJS.ProcessEnv;
 };
@@ -24,6 +27,7 @@ export function addEnvBackedAgentCredentials(
     config: options.config,
     workspaceDir: options.workspaceDir,
     env,
+    ...(options.metadataSnapshot ? { metadataSnapshot: options.metadataSnapshot } : {}),
   };
   const lookupMaps = resolveProviderEnvAuthLookupMaps(lookupParams);
   const { aliasMap, envCandidateMap: candidateMap, authEvidenceMap } = lookupMaps;

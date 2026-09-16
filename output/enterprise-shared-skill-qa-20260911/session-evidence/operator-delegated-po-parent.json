@@ -1,0 +1,71 @@
+{
+  "capturedAt": "2026-09-11T15:18:09.313061+00:00",
+  "label": "operator-delegated-po-parent",
+  "agentId": "enterprise-personal-2ae2cbc2deecdb86fe86",
+  "sessionId": "01fb8506-a3f2-4a0d-aefc-31ea155532b1",
+  "sessionKey": "agent:enterprise-personal-2ae2cbc2deecdb86fe86:dashboard:3e43946f-70f4-481a-b81f-6302db5a8a98",
+  "runIds": [
+    "announce:v1:agent:purchase-order-skill:subagent:cd14837d-d4f4-4265-bd20-3891ea756c49:9555e241-8ec8-470e-8966-f5c48a1a222f",
+    "e14adb3e-f36f-4e5e-b5de-4ed114a4efbf"
+  ],
+  "modelId": null,
+  "materializedCatalog": {
+    "toolCount": 28,
+    "toolNames": [
+      "apply_patch",
+      "ask_user",
+      "browser"
+    ]
+  },
+  "transcript": {
+    "eventCount": 10,
+    "eventTypes": {
+      "message": 9,
+      "session": 1
+    },
+    "toolCalls": [
+      "enterprise_delegate",
+      "progress_card"
+    ],
+    "toolResults": [
+      "enterprise_delegate",
+      "progress_card"
+    ],
+    "toolErrorCount": 0,
+    "codes": []
+  },
+  "trajectory": {
+    "eventCount": 14,
+    "eventTypes": {
+      "context.compiled": 2,
+      "model.completed": 2,
+      "prompt.submitted": 2,
+      "session.ended": 2,
+      "session.started": 2,
+      "tool.call": 2,
+      "tool.result": 2
+    },
+    "toolCalls": [
+      "enterprise_delegate",
+      "progress_card"
+    ],
+    "toolResults": [
+      "enterprise_delegate",
+      "progress_card"
+    ],
+    "toolResultSuccess": [
+      true,
+      true
+    ],
+    "codes": []
+  },
+  "taskRuns": [],
+  "skillOperations": [],
+  "acceptanceSignals": {
+    "hasMaterializedToolCatalog": true,
+    "hasToolCall": true,
+    "hasSkillScriptCall": false,
+    "hasRouterCall": false,
+    "hasAuthorizationError": false
+  }
+}

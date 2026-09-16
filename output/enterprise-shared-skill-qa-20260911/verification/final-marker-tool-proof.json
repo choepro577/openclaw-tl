@@ -1,0 +1,34 @@
+[
+  {
+    "seq": 27,
+    "tool": "read",
+    "toolCallId": "exec-2065416a-c844-4877-b4cf-19387fcd16ae",
+    "isError": false,
+    "markerReturned": false,
+    "notGranted": false
+  },
+  {
+    "seq": 29,
+    "tool": "skill_script",
+    "toolCallId": "exec-70a2a6af-1128-4b79-a96e-2b9b724a0d23",
+    "isError": false,
+    "markerReturned": true,
+    "notGranted": false
+  },
+  {
+    "seq": 34,
+    "tool": "read",
+    "toolCallId": "exec-10932c76-fa4e-4876-b9ef-e0dc5735b673",
+    "isError": true,
+    "markerReturned": false,
+    "notGranted": false
+  },
+  {
+    "seq": 36,
+    "tool": "skill_script",
+    "toolCallId": "exec-b8ff66ac-6692-4f4f-a27b-ead760f0b3c3",
+    "isError": true,
+    "markerReturned": false,
+    "notGranted": true
+  }
+]

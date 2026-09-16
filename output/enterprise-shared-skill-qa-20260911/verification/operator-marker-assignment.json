@@ -1,0 +1,11 @@
+{
+  "agent": "purchase-order-skill",
+  "beforeSkills": [
+    "purchase-order-skill"
+  ],
+  "afterSkills": [
+    "purchase-order-skill",
+    "qa-shared-acceptance-skill"
+  ],
+  "markerPath": "/Users/hieunguyenduc/.openclaw/skills/qa-shared-acceptance-skill"
+}

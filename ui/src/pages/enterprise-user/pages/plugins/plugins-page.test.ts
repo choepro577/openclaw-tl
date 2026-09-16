@@ -90,14 +90,13 @@ describe("UserPluginsPage", () => {
     });
   });
 
-  it("cancels discovery when access is revoked even if the agent stays discoverable", async () => {
+  it("keeps plugin discovery personal when bootstrap defaults to a shared agent", async () => {
     vi.useFakeTimers();
     const previous = userBootstrapStore.state;
     vi.mocked(loadUserExtensionInventory).mockResolvedValue({ items: [], grants: [] });
     vi.mocked(listUserPluginRequests).mockResolvedValue([]);
     vi.mocked(searchUserExtensions).mockImplementationOnce(() => new Promise(() => {}));
     const page = new UserPluginsPage();
-    Object.assign(page, { agentKey: "shared:revoked" });
     const controller = searchController(page);
     controller.changeTab("discover");
     const oldSignal = vi.mocked(searchUserExtensions).mock.calls[0]?.[0].signal;
@@ -154,7 +153,7 @@ describe("UserPluginsPage", () => {
       await vi.advanceTimersByTimeAsync(0);
       expect(oldSignal?.aborted).toBe(true);
       expect(searchUserExtensions).toHaveBeenLastCalledWith(
-        expect.objectContaining({ agentKey: "shared:finance" }),
+        expect.objectContaining({ agentKey: "personal" }),
       );
     } finally {
       userBootstrapStore.state = previous;

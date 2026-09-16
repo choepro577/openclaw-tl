@@ -1,3 +1,4 @@
+import { performance } from "node:perf_hooks";
 import {
   GATEWAY_CLIENT_IDS,
   GATEWAY_CLIENT_MODES,
@@ -15,6 +16,7 @@ import {
   runWithDiagnosticTraceContext,
 } from "../../../infra/diagnostic-trace-context.js";
 import { createLazyPromise } from "../../../shared/lazy-runtime.js";
+import type { GatewayRequestTiming } from "../../server-methods/types.js";
 import { classifyGatewayStaleInstall } from "../../stale-install.js";
 import { formatForLog, logWs } from "../../ws-log.js";
 import type { GatewayWsClient } from "../ws-types.js";
@@ -64,7 +66,11 @@ export function createGatewayAuthenticatedRequestDispatcher(params: {
     return true;
   };
 
-  const dispatch = async (parsed: unknown, client: GatewayWsClient): Promise<void> => {
+  const dispatch = async (
+    parsed: unknown,
+    client: GatewayWsClient,
+    receivedAtMs = performance.now(),
+  ): Promise<void> => {
     // After handshake, accept only req frames
     if (!validateRequestFrame(parsed)) {
       send({
@@ -79,6 +85,11 @@ export function createGatewayAuthenticatedRequestDispatcher(params: {
       return;
     }
     const req = parsed;
+    // Capture the server monotonic boundary before Enterprise projection,
+    // auth barriers, or handler module loading can add latency. This object is
+    // request-local and is never accepted from, or serialized to, the client.
+    const requestTiming: GatewayRequestTiming | undefined =
+      req.method === "chat.send" && Number.isFinite(receivedAtMs) ? { receivedAtMs } : undefined;
     logWs("in", "req", { connId, id: req.id, method: req.method });
     for (;;) {
       const barrier = deviceCredentialMutationBarrier;
@@ -163,6 +174,9 @@ export function createGatewayAuthenticatedRequestDispatcher(params: {
 
     let context = buildRequestContext();
     if (client.internal?.enterpriseSession) {
+      if (requestTiming) {
+        requestTiming.enterpriseProjectionStartedAtMs = performance.now();
+      }
       const { prepareEnterpriseGatewayRequest } =
         await import("../../../enterprise/isolation/enterprise-gateway-policy.js");
       const admission = prepareEnterpriseGatewayRequest({
@@ -186,6 +200,10 @@ export function createGatewayAuthenticatedRequestDispatcher(params: {
         return;
       }
       context = admission.context;
+      if (requestTiming?.enterpriseProjectionStartedAtMs !== undefined) {
+        requestTiming.enterpriseProjectionMs =
+          performance.now() - requestTiming.enterpriseProjectionStartedAtMs;
+      }
     }
     const agentRuntimeIdentity = client.internal?.agentRuntimeIdentity;
     if (
@@ -241,6 +259,7 @@ export function createGatewayAuthenticatedRequestDispatcher(params: {
           extraHandlers,
           methodRegistry: getMethodRegistry?.(),
           context,
+          ...(requestTiming ? { requestTiming } : {}),
           ...(requestController ? { signal: requestController.signal } : {}),
         });
       } catch (err) {

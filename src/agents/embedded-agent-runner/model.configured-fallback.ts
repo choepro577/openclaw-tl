@@ -3,6 +3,7 @@ import type { Model } from "../../llm/types.js";
 import type { PluginMetadataSnapshotOwnerMaps } from "../../plugins/plugin-metadata-snapshot.types.js";
 import { DEFAULT_CONTEXT_TOKENS } from "../defaults.js";
 import { resolveCatalogOwnedModelCompat } from "../model-compat-catalog.js";
+import type { StaticProviderModelIdNormalizer } from "../model-ref-shared.js";
 import { attachModelProviderLocalService } from "../provider-local-service.js";
 import {
   attachModelProviderRequestRouteFacts,
@@ -45,6 +46,7 @@ export function buildConfiguredFallbackModel(params: {
   getStaticCatalogModel?: () => StaticCatalogFallbackModel | undefined;
   workspaceDir?: string;
   runtimeHooks?: ProviderRuntimeHooks;
+  normalizeModelId?: StaticProviderModelIdNormalizer;
 }): Model | undefined {
   const { provider, modelId, cfg, agentDir, workspaceDir, runtimeHooks } = params;
   const providerConfig = resolveConfiguredProviderConfig(cfg, provider);
@@ -76,6 +78,7 @@ export function buildConfiguredFallbackModel(params: {
     discoveredParams: staticCatalogModel?.params,
     providerParams: providerConfig?.params,
     configuredParams: configuredModel?.params,
+    ...(params.normalizeModelId ? { normalizeModelId: params.normalizeModelId } : {}),
   });
   const providerConfiguredApi = normalizeResolvedTransportApi(providerConfig?.api);
   const configuredModelBaseUrl = normalizeTransportBaseUrl(configuredModel?.baseUrl);

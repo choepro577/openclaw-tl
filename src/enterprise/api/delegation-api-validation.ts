@@ -7,7 +7,9 @@ const profileSchema = z
   .object({
     status: z.enum(["draft", "active", "disabled"]),
     aliases: z.array(z.string().trim().min(1).max(64)).max(20).refine(uniqueNormalized),
-    handlingMode: z.enum(["auto_when_certain", "confirm_before_handoff", "explicit_only"]),
+    handlingMode: z
+      .enum(["auto_when_certain", "confirm_before_handoff", "explicit_only"])
+      .transform(() => "auto_when_certain" as const),
     useWhen: z.array(z.string().trim().min(5).max(240)).max(20).refine(uniqueNormalized),
     avoidWhen: z.array(z.string().trim().min(5).max(240)).max(20),
     requiredInputs: z
@@ -43,7 +45,9 @@ export const EnterpriseDelegationSettingsPatchSchema = z
 export const EnterpriseDelegationOverridePatchSchema = z
   .object({
     agentResourceKey: z.string().trim().min(1).max(256).startsWith("agent:shared:"),
-    mode: z.enum(["inherit", "confirm_before_handoff", "explicit_only", "disabled"]),
+    mode: z
+      .enum(["inherit", "confirm_before_handoff", "explicit_only", "disabled"])
+      .transform(() => "inherit" as const),
     baseRevision: z.number().int().nonnegative(),
     baseAccountPolicyRevision: z.number().int().nonnegative(),
   })

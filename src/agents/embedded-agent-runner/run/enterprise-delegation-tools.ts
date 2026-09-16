@@ -4,12 +4,16 @@ import {
   readRecentSessionTranscriptActiveEvents,
 } from "../../../config/sessions/session-accessor.js";
 import {
+  readEnterpriseDelegationAgentFirstContext,
+  recordEnterpriseAgentFirstFallback,
+} from "../../../enterprise/delegation/delegation-agent-first.js";
+import {
   enterpriseDelegationConversationInputs,
   enterpriseDelegationConversationResults,
 } from "../../../enterprise/delegation/delegation-router-context.js";
+import { parseEnterpriseDelegationRouterDecision } from "../../../enterprise/delegation/delegation-router-model.js";
 import {
   consumeEnterpriseDelegationDecision,
-  readEnterpriseDelegationDecisionRoutes,
   prepareEnterpriseDelegationTurn,
 } from "../../../enterprise/delegation/delegation-router.js";
 import { readEnterpriseDelegationPolicy } from "../../../enterprise/delegation/delegation-store.js";
@@ -38,6 +42,9 @@ type EnterpriseDelegationReplayState = {
   signatures: Map<string, Promise<ReturnType<typeof jsonResult>>>;
   queued: Promise<unknown>;
   launched: number;
+  consumedDecisionIds: Set<string>;
+  /** The gated path may ask the legacy router for one quality-preserving recovery. */
+  legacyFallbackUsed: boolean;
 };
 
 // The admitted run context is the stable owner across harness retries. Keep the
@@ -64,23 +71,11 @@ function replayStateFor(context: AdmittedRunContext): EnterpriseDelegationReplay
     signatures: new Map(),
     queued: Promise.resolve(),
     launched: 0,
+    consumedDecisionIds: new Set(),
+    legacyFallbackUsed: false,
   };
   replayStates.set(context, created);
   return created;
-}
-
-function hasExactAgentSet(
-  assignments: readonly EnterpriseDelegationAssignment[],
-  approvedRoutes: readonly { agentId: string }[],
-): boolean {
-  if (assignments.length !== approvedRoutes.length) {
-    return false;
-  }
-  const requested = new Set(assignments.map((item) => item.agentId));
-  return (
-    requested.size === assignments.length &&
-    approvedRoutes.every((route) => requested.has(route.agentId))
-  );
 }
 
 function readDelegationTranscript(params: EmbeddedRunAttemptParams) {
@@ -203,6 +198,15 @@ export function withEnterpriseDelegationTools<T>(
   const sessionKey = params.sessionKey;
   let closed = false;
   const replayState = replayStateFor(params.admittedRunContext);
+  // The preparation branch stores this private context before the Personal
+  // Agent starts. Capture the fact once so a structured tool call can still
+  // be recognized after the reducer clears the preparation context.
+  const agentFirstExperimentActive =
+    readEnterpriseDelegationAgentFirstContext({
+      config,
+      sessionKey,
+      parentRunId: params.runId,
+    }) !== undefined;
   const assertCurrent = () => {
     assertActive();
     if (closed) {
@@ -220,7 +224,7 @@ export function withEnterpriseDelegationTools<T>(
       }
     }
   };
-  const dispatch = async (assignments: EnterpriseDelegationAssignment[]) => {
+  const dispatch = async (assignments: EnterpriseDelegationAssignment[], rawRouting?: unknown) => {
     assertCurrent();
     const request = userRequest(params);
     if (!request) {
@@ -245,41 +249,31 @@ export function withEnterpriseDelegationTools<T>(
         "delegate_limit_reached",
       );
     }
-    let decisionId: string | undefined;
-    const currentTurn = metadata.turn;
-    if (currentTurn?.outcome === "delegate" && currentTurn.decisionId) {
-      const approved = readEnterpriseDelegationDecisionRoutes({
-        config,
-        accountId: metadata.accountId,
-        personalAgentId: agentId,
-        sessionKey,
-        parentRunId: params.runId,
-        decisionId: currentTurn.decisionId,
-      });
-      if (approved.ok) {
-        if (!hasExactAgentSet(assignments, approved.routes)) {
-          return enterpriseDelegationResult(
-            {
-              status: "blocked",
-              instruction:
-                "The proposed specialist agentIds do not match the server-approved assignment set. Retry enterprise_delegate with the exact approved agentIds; no decision was consumed.",
-            },
-            "assignment_set_mismatch",
-          );
-        }
-        decisionId = currentTurn.decisionId;
-      } else if (approved.reasonCode !== "decision_replayed") {
-        return enterpriseDelegationResult(
-          {
-            status: "blocked",
-            instruction:
-              "The request or specialist permissions changed. No specialist was started.",
-          },
-          approved.reasonCode,
-        );
+
+    const turnResult = (turn: NonNullable<typeof metadata.turn> | undefined) =>
+      enterpriseDelegationResult(
+        {
+          status: turn?.outcome ?? "blocked",
+          instruction: turn?.instruction ?? "No specialist was started.",
+        },
+        turn?.reasonCode ?? "delegation_not_started",
+      );
+    const structuredRouting =
+      agentFirstExperimentActive && rawRouting !== undefined
+        ? parseEnterpriseDelegationRouterDecision(rawRouting)
+        : undefined;
+    const runLegacyFallback = async (reasonCode: string) => {
+      if (
+        !agentFirstExperimentActive ||
+        replayState.legacyFallbackUsed ||
+        replayState.launched > 0
+      ) {
+        return undefined;
       }
-    }
-    if (!decisionId) {
+      // This bit is owned by the admitted run, so concurrent/replayed tool
+      // calls cannot spend more than one extra semantic router attempt.
+      replayState.legacyFallbackUsed = true;
+      recordEnterpriseAgentFirstFallback({ config, parentRunId: params.runId, reasonCode });
       await prepareEnterpriseDelegationTurn({
         config,
         agentId,
@@ -289,45 +283,70 @@ export function withEnterpriseDelegationTools<T>(
         conversationInputs: request.conversationInputs,
         conversationResults: request.conversationResults,
         proposedAssignments: assignments,
+        agentFirst: false,
       });
       assertCurrent();
-      const turn = metadata.turn;
+      return metadata.turn;
+    };
+
+    let decisionId: string | undefined;
+    const currentTurn = metadata.turn;
+    if (currentTurn && currentTurn.outcome !== "delegate") {
+      // A local/clarify/blocked result is already the server-owned answer for
+      // this turn. Calling the legacy router again here only adds latency and
+      // can replace a deliberate clarification with a different plan.
+      return turnResult(currentTurn);
+    }
+    if (
+      currentTurn?.outcome === "delegate" &&
+      currentTurn.decisionId &&
+      !replayState.consumedDecisionIds.has(currentTurn.decisionId)
+    ) {
+      decisionId = currentTurn.decisionId;
+    }
+    if (!decisionId) {
+      let turn: NonNullable<typeof metadata.turn> | undefined;
+      if (agentFirstExperimentActive && structuredRouting === undefined) {
+        turn = await runLegacyFallback(
+          rawRouting === undefined ? "structured_routing_missing" : "structured_routing_invalid",
+        );
+        if (!turn && replayState.launched > 0) {
+          return enterpriseDelegationResult(
+            {
+              status: "blocked",
+              instruction:
+                "Submit the complete structured routing object for this follow-up; no specialist was started.",
+            },
+            "structured_routing_required",
+          );
+        }
+      } else {
+        await prepareEnterpriseDelegationTurn({
+          config,
+          agentId,
+          sessionKey,
+          parentRunId: params.runId,
+          prompt: request.prompt,
+          conversationInputs: request.conversationInputs,
+          conversationResults: request.conversationResults,
+          proposedAssignments: assignments,
+          agentFirst: false,
+          ...(structuredRouting ? { agentFirstDecision: structuredRouting } : {}),
+        });
+        assertCurrent();
+        turn = metadata.turn;
+        if (
+          agentFirstExperimentActive &&
+          structuredRouting &&
+          (turn?.reasonCode === "agent_first_assignment_mismatch" ||
+            turn?.reasonCode === "router_route_unknown" ||
+            turn?.reasonCode?.startsWith("router_input_"))
+        ) {
+          turn = await runLegacyFallback(`structured_routing_${turn.reasonCode}`);
+        }
+      }
       if (turn?.outcome !== "delegate" || !turn.decisionId) {
-        return enterpriseDelegationResult(
-          {
-            status: turn?.outcome ?? "blocked",
-            instruction: turn?.instruction ?? "No specialist was started.",
-          },
-          turn?.reasonCode ?? "delegation_not_started",
-        );
-      }
-      const approved = readEnterpriseDelegationDecisionRoutes({
-        config,
-        accountId: metadata.accountId,
-        personalAgentId: agentId,
-        sessionKey,
-        parentRunId: params.runId,
-        decisionId: turn.decisionId,
-      });
-      if (!approved.ok) {
-        return enterpriseDelegationResult(
-          {
-            status: "blocked",
-            instruction:
-              "The request or specialist permissions changed. No specialist was started.",
-          },
-          approved.reasonCode,
-        );
-      }
-      if (!hasExactAgentSet(assignments, approved.routes)) {
-        return enterpriseDelegationResult(
-          {
-            status: "blocked",
-            instruction:
-              "The proposed specialist agentIds do not match the server-approved assignment set. Retry enterprise_delegate with the exact approved agentIds; no decision was consumed.",
-          },
-          "assignment_set_mismatch",
-        );
+        return turnResult(turn);
       }
       decisionId = turn.decisionId;
     }
@@ -338,16 +357,21 @@ export function withEnterpriseDelegationTools<T>(
       sessionKey,
       parentRunId: params.runId,
       decisionId,
+      assignmentAgentIds: assignments.map((assignment) => assignment.agentId),
     });
     if (!consumed.ok) {
       return enterpriseDelegationResult(
         {
           status: "blocked",
-          instruction: "The request or specialist permissions changed. No specialist was started.",
+          instruction:
+            consumed.reasonCode === "assignment_set_mismatch"
+              ? "The proposed specialist agentIds do not match the server-approved assignment set. Retry enterprise_delegate with the exact approved agentIds; no decision was consumed."
+              : "The request or specialist permissions changed. No specialist was started.",
         },
         consumed.reasonCode,
       );
     }
+    replayState.consumedDecisionIds.add(decisionId);
     const decision = consumed.decision;
     let transferred = false;
     const evidence = await prepareEnterpriseDelegationEvidence({
@@ -429,9 +453,12 @@ export function withEnterpriseDelegationTools<T>(
       sessionKey,
       runId: params.runId,
       assertActive: assertCurrent,
-      execute(callId, assignments) {
+      execute(callId, assignments, routing) {
         assertCurrent();
-        const signature = JSON.stringify(assignments);
+        const signature = JSON.stringify({
+          assignments,
+          ...(agentFirstExperimentActive ? { routing } : {}),
+        });
         const previous = replayState.calls.get(callId);
         if (previous) {
           if (previous.signature !== signature) {
@@ -449,7 +476,7 @@ export function withEnterpriseDelegationTools<T>(
         }
         const result =
           replayState.signatures.get(signature) ??
-          replayState.queued.then(() => dispatch(assignments));
+          replayState.queued.then(() => dispatch(assignments, routing));
         replayState.calls.set(callId, { signature, result });
         replayState.signatures.set(signature, result);
         // Serialize plan authority changes; children inside each batch launch concurrently.

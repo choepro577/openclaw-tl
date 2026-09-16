@@ -16,8 +16,9 @@ import {
 } from "../../enterprise/skill-runtime/skill-script-runtime.js";
 import type { SkillSnapshot } from "../../skills/types.js";
 import type { OperationalRunInstanceRef } from "../admitted-run-context.js";
+import { USER_VISIBLE_URL_PATHS_FIELD } from "../user-visible-tool-urls.js";
 import type { AnyAgentTool } from "./common.js";
-import { asToolParamsRecord, jsonResult, readToolStringParam } from "./common.js";
+import { asToolParamsRecord, jsonResult, readToolStringParam, textResult } from "./common.js";
 import { getGatewayToolCallerIdentity } from "./gateway-caller-context.js";
 
 export const ENTERPRISE_SKILL_SCRIPT_TOOL_ID = "skill_script";
@@ -204,7 +205,19 @@ export function createEnterpriseSkillScriptTools(options: {
             ) {
               admittedState.routedOperations.set(routeKey, extractRoutedSkillOperations(result));
             }
-            return jsonResult(result);
+            // Preserve every field while spending the model's tool budget on data, not indentation.
+            const urlPaths =
+              resolved.entrypoint.kind === "operation" && operation
+                ? resolved.entrypoint.userVisibleUrlPaths?.[operation]
+                : undefined;
+            const details =
+              result && typeof result === "object" && !Array.isArray(result)
+                ? {
+                    ...(result as Record<string, unknown>),
+                    [USER_VISIBLE_URL_PATHS_FIELD]: urlPaths ?? [],
+                  }
+                : result;
+            return textResult(JSON.stringify(result), details);
           };
           const result = Promise.resolve().then(perform);
           state.calls.set(callKey, { signature, result });

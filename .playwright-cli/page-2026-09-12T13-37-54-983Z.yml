@@ -1,0 +1,42 @@
+- generic [ref=f3e7]:
+  - link "Skip to main content" [ref=f3e8] [cursor=pointer]:
+    - /url: "#control-ui-main"
+  - generic [ref=f3e9]:
+    - button "Collapse sidebar" [expanded] [ref=f3e11]
+    - button "Open command palette" [ref=f3e16]
+  - button "Show limited access details" [ref=f3e21]
+  - complementary [ref=f3e27]:
+    - generic [ref=f3e28]:
+      - generic [ref=f3e29]:
+        - button "qa · Agent menu" [ref=f3e32]:
+          - generic [aria-hidden] [ref=f3e34]: Q
+          - generic [ref=f3e35]:
+            - generic [ref=f3e36]: qa
+            - generic [ref=f3e40]: Ready to chat
+        - button "New session" [disabled] [ref=f3e44]
+      - generic [ref=f3e47]:
+        - navigation [ref=f3e48]:
+          - generic [ref=f3e49]:
+            - generic [ref=f3e50]: Pages
+            - button "Edit pinned items" [ref=f3e51]
+          - generic [ref=f3e54]:
+            - link "Automations" [ref=f3e56] [cursor=pointer]:
+              - /url: /app/automations
+            - link "Plugins" [ref=f3e64] [cursor=pointer]:
+              - /url: /app/settings/plugins
+        - generic [ref=f3e70]:
+          - generic [ref=f3e71]: Sessions
+          - button "Filter & sort" [ref=f3e72]
+          - button "New session" [disabled] [ref=f3e74]
+      - generic [ref=f3e77]:
+        - 'button "Identity and app menu for Enterprise startup benchmark: git@0485e37* · 2h ago" [ref=f3e78]':
+          - generic "Enterprise startup benchmark" [ref=f3e80]: ES
+          - generic [ref=f3e82]:
+            - generic "Enterprise startup benchmark" [ref=f3e83]
+            - generic [aria-hidden] [ref=f3e84]: git@0485e37* · 2h ago
+        - status [ref=f3e85]
+        - generic [ref=f3e87]:
+          - status [ref=f3e88]: 0 inbox items
+          - button "0 inbox items" [ref=f3e89]
+  - separator "Resize sidebar" [ref=f3e94]
+  - main [ref=f3e95]

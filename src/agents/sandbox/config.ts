@@ -24,7 +24,7 @@ import {
   DEFAULT_SANDBOX_WORKDIR,
   DEFAULT_SANDBOX_WORKSPACE_ROOT,
 } from "./constants.js";
-import { resolveSandboxToolPolicyForAgent } from "./tool-policy.js";
+import { isToolAllowed, resolveSandboxToolPolicyForAgent } from "./tool-policy.js";
 import type {
   SandboxBrowserConfig,
   SandboxConfig,
@@ -141,6 +141,7 @@ export function resolveSandboxBrowserConfig(params: {
   scope: SandboxScope;
   globalBrowser?: Partial<SandboxBrowserConfig>;
   agentBrowser?: Partial<SandboxBrowserConfig>;
+  enabledByToolPolicy?: boolean;
 }): SandboxBrowserConfig {
   const agentBrowser = params.scope === "shared" ? undefined : params.agentBrowser;
   const globalBrowser = params.globalBrowser;
@@ -148,7 +149,9 @@ export function resolveSandboxBrowserConfig(params: {
   // Treat `binds: []` as an explicit override, so it can disable `docker.binds` for the browser container.
   const bindsConfigured = globalBrowser?.binds !== undefined || agentBrowser?.binds !== undefined;
   return {
-    enabled: agentBrowser?.enabled ?? globalBrowser?.enabled ?? false,
+    enabled:
+      params.enabledByToolPolicy === true ||
+      (agentBrowser?.enabled ?? globalBrowser?.enabled ?? false),
     image: agentBrowser?.image ?? globalBrowser?.image ?? DEFAULT_SANDBOX_BROWSER_IMAGE,
     containerPrefix:
       agentBrowser?.containerPrefix ??
@@ -277,6 +280,7 @@ export function resolveSandboxConfigForAgent(
       scope,
       globalBrowser: agent?.browser,
       agentBrowser: agentSandbox?.browser,
+      enabledByToolPolicy: isToolAllowed(toolPolicy, "browser"),
     }),
     tools: {
       allow: toolPolicy.allow,

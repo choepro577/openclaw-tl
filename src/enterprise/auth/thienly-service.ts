@@ -9,6 +9,10 @@ import {
   getEnterpriseAccountByUsername,
 } from "../accounts/account-store.js";
 import { appendEnterpriseAuditEvent } from "../audit/audit-store.js";
+import {
+  accessPresetInitialSkillIds,
+  ENTERPRISE_ACCESS_PRESET_BASIC,
+} from "../entitlements/resource-keys.js";
 import { projectEnterpriseRuntimeConfig } from "../isolation/enterprise-gateway-policy.js";
 import { buildEnterpriseUserBootstrapV2 } from "../user/user-bootstrap-service.js";
 import { verifyEnterprisePassword } from "./password.js";
@@ -82,6 +86,31 @@ const identitySchema = z.object({
   display_name: z.string().trim().min(1).max(128),
 });
 
+/** Validate identities from either the Thiên Lý exchange or its authenticated profile API. */
+export function validateThienLyIdentity(payload: unknown) {
+  if (
+    payload &&
+    typeof payload === "object" &&
+    (!("staff_code" in payload) ||
+      payload.staff_code == null ||
+      (typeof payload.staff_code === "string" && !payload.staff_code.trim()))
+  ) {
+    throw new ThienLyAuthError("EMPLOYEE_CODE_REQUIRED", 401);
+  }
+  const identity = identitySchema.safeParse(payload);
+  if (!identity.success) {
+    throw new ThienLyAuthError("THIENLY_IDENTITY_INVALID", 401);
+  }
+  const value = identity.data;
+  if (
+    value.subject !== `comnieu:${value.company_id}:${value.user_id}` ||
+    !/^[a-z0-9][a-z0-9._-]{2,63}$/.test(value.staff_code.trim().toLowerCase())
+  ) {
+    throw new ThienLyAuthError("EMPLOYEE_CODE_INVALID", 401);
+  }
+  return value;
+}
+
 export async function exchangeThienLyCode(
   attempt: ThienLyAttempt,
   code: string,
@@ -118,27 +147,7 @@ export async function exchangeThienLyCode(
       401,
     );
   }
-  const payload = envelope.data.data;
-  if (
-    payload &&
-    typeof payload === "object" &&
-    (!("staff_code" in payload) ||
-      payload.staff_code == null ||
-      (typeof payload.staff_code === "string" && !payload.staff_code.trim()))
-  ) {
-    throw new ThienLyAuthError("EMPLOYEE_CODE_REQUIRED", 401);
-  }
-  const identity = identitySchema.safeParse(payload);
-  if (!identity.success) {
-    throw new ThienLyAuthError("THIENLY_IDENTITY_INVALID", 401);
-  }
-  const value = identity.data;
-  if (
-    value.subject !== `comnieu:${value.company_id}:${value.user_id}` ||
-    !/^[a-z0-9][a-z0-9._-]{2,63}$/.test(value.staff_code.trim().toLowerCase())
-  ) {
-    throw new ThienLyAuthError("EMPLOYEE_CODE_INVALID", 401);
-  }
+  const value = validateThienLyIdentity(envelope.data.data);
   updateThienLyAttempt(attempt.id, ["verifying"], { identity: value, phase: "account" });
 }
 
@@ -208,8 +217,10 @@ export function provisionThienLyAccount(id: string, config: OpenClawConfig): Thi
           role: "employee",
           mustChangePassword: false,
           personalAgentEnabled: true,
-          accessPresetKey: "basic@1",
-          initialEntitlements: [],
+          accessPresetKey: ENTERPRISE_ACCESS_PRESET_BASIC,
+          initialEntitlements: accessPresetInitialSkillIds(ENTERPRISE_ACCESS_PRESET_BASIC).map(
+            (resourceId) => ({ resourceType: "skill", resourceId, effect: "allow" }),
+          ),
         });
         bindThienLyIdentity(identity, account.id, username);
         appendEnterpriseAuditEvent({
@@ -220,7 +231,7 @@ export function provisionThienLyAccount(id: string, config: OpenClawConfig): Thi
           targetId: account.id,
           requestId: null,
           before: null,
-          after: { username, accessPresetKey: "basic@1" },
+          after: { username, accessPresetKey: ENTERPRISE_ACCESS_PRESET_BASIC },
           outcome: "success",
         });
       }

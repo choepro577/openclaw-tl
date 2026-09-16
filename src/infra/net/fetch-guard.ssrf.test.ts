@@ -396,13 +396,44 @@ describe("fetchWithSsrFGuard hardening", () => {
     ];
     for (const url of blockedUrls) {
       const fetchImpl = vi.fn();
+      const onRequestStart = vi.fn();
       await expect(
         fetchWithSsrFGuard({
           url,
           fetchImpl,
+          onRequestStart,
         }),
       ).rejects.toThrow(/private|internal|blocked/i);
       expect(fetchImpl).not.toHaveBeenCalled();
+      expect(onRequestStart).not.toHaveBeenCalled();
+    }
+  });
+
+  it("observes dispatch after DNS and preserves the request when the observer throws", async () => {
+    clearProxyEnv();
+    const lookup = createStalledLookup();
+    const events: string[] = [];
+    const pending = fetchWithSsrFGuard({
+      url: "https://public.example/resource",
+      lookupFn: lookup.lookupFn,
+      fetchImpl: async () => {
+        events.push("fetch");
+        return okResponse();
+      },
+      onRequestStart: (redirectCount) => {
+        events.push(`submit:${redirectCount}`);
+        throw new Error("diagnostic observer unavailable");
+      },
+    });
+    await vi.waitFor(() => expect(lookup.lookupFn).toHaveBeenCalledOnce());
+    expect(events).toEqual([]);
+    lookup.release();
+    const result = await pending;
+    try {
+      expect(events).toEqual(["submit:0", "fetch"]);
+      expect(await result.response.text()).toBe("ok");
+    } finally {
+      await result.release();
     }
   });
 

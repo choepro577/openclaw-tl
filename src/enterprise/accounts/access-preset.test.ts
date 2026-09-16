@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  accessPresetInitialSkillIds,
   accessPresetToolIds,
   normalizeEnterpriseAccessPresetKey,
 } from "../entitlements/resource-keys.js";
@@ -47,6 +48,23 @@ describe("basic access preset", () => {
         "x_search",
       ].toSorted(),
     );
+    expect(accessPresetInitialSkillIds("basic@1")).toEqual([
+      "skill:global:openclaw-bundled:clawhub",
+      "skill:global:openclaw-bundled:diagram-maker",
+      "skill:global:openclaw-bundled:gifgrep",
+      "skill:global:openclaw-bundled:mcporter",
+      "skill:global:openclaw-bundled:nano-pdf",
+      "skill:global:openclaw-bundled:obsidian",
+      "skill:global:openclaw-bundled:skill-creator",
+      "skill:global:openclaw-bundled:summarize",
+      "skill:global:openclaw-bundled:taskflow",
+      "skill:global:openclaw-bundled:taskflow-inbox-triage",
+      "skill:global:openclaw-bundled:tmux",
+      "skill:global:openclaw-bundled:video-frames",
+      "skill:global:openclaw-bundled:weather",
+      "skill:global:openclaw-bundled:xurl",
+      "skill:global:openclaw-bundled:hr-skill",
+    ]);
   });
 });
 

@@ -1,0 +1,51 @@
+{
+  "accountId": "68264167-a2d8-48b1-a00a-d31a06a7fd92",
+  "before": {
+    "configured": true,
+    "revision": 3,
+    "profile": "coding",
+    "alsoAllow": [],
+    "deny": [
+      "code_execution",
+      "codex_threads",
+      "create_goal",
+      "dismiss_task",
+      "get_goal",
+      "google_meet",
+      "heartbeat_respond",
+      "image_generate",
+      "intent",
+      "message",
+      "sessions_list",
+      "sessions_yield",
+      "teams_meetings",
+      "update_goal",
+      "zoom_meetings"
+    ]
+  },
+  "after": {
+    "configured": true,
+    "revision": 4,
+    "profile": "coding",
+    "alsoAllow": [],
+    "deny": [
+      "code_execution",
+      "codex_threads",
+      "create_goal",
+      "dismiss_task",
+      "get_goal",
+      "google_meet",
+      "heartbeat_respond",
+      "image_generate",
+      "intent",
+      "message",
+      "read",
+      "sessions_list",
+      "sessions_yield",
+      "skill_script",
+      "teams_meetings",
+      "update_goal",
+      "zoom_meetings"
+    ]
+  }
+}

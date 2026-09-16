@@ -60,6 +60,12 @@ export type SandboxBackendHandle = {
   id: SandboxBackendId;
   runtimeId: string;
   runtimeLabel: string;
+  /**
+   * Set when the backend already persisted its runtime metadata during
+   * acquisition. The context resolver must not perform a second registry
+   * write; custom backends leave this unset and retain the fallback write.
+   */
+  registryManaged?: boolean;
   workdir: string;
   env?: Record<string, string>;
   configLabel?: string;

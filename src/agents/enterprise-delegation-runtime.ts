@@ -10,6 +10,7 @@ export type EnterpriseDelegationRuntime = {
   execute: (
     callId: string,
     assignments: EnterpriseDelegationAssignment[],
+    routing?: unknown,
   ) => ReturnType<AnyAgentTool["execute"]>;
 };
 

@@ -1,0 +1,15 @@
+{
+  "sessionId": "9904b634-4f30-450f-af7f-32704d2e8a45",
+  "transcriptToolCallSeq": 122,
+  "transcriptToolResultSeq": 123,
+  "tool": "skill_script",
+  "operation": "save_po_product",
+  "result": "Plugin approval request rejected: unauthorized",
+  "gateway": "127.0.0.1:18789",
+  "at": "2026-09-11T23:23:29.459+07:00",
+  "handshakeFailure": "enterprise_session_invalid",
+  "newApprovalRow": false,
+  "businessOperationExecuted": false,
+  "modelMisclassifiedAs": "PO service unauthorized",
+  "buildId": "2026.8.1-2d6f02d14f5e-2026-09-11T16-05-29.194Z"
+}

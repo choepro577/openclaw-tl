@@ -1,3 +1,4 @@
+import { performance } from "node:perf_hooks";
 /**
  * Guarded provider fetch transport utilities.
  *
@@ -17,7 +18,10 @@ import {
   parseStrictFiniteNumber,
   parseStrictNonNegativeInteger,
 } from "@openclaw/normalization-core/number-coercion";
-import { getActiveDiagnosticsTimelineSpan } from "../infra/diagnostics-timeline.js";
+import {
+  emitDiagnosticsTimelineEvent,
+  getActiveDiagnosticsTimelineSpan,
+} from "../infra/diagnostics-timeline.js";
 import {
   fetchWithSsrFGuard,
   withTrustedEnvProxyGuardedFetchMode,
@@ -938,9 +942,28 @@ export function buildGuardedModelFetch(
       (swappedEgress.headers && init ? { ...init, headers: swappedEgress.headers } : init);
     const baseSignal = baseInit?.signal ?? undefined;
     const localServiceSignal = buildModelRequestSignal(baseSignal, requestTimeoutMs);
+    const onRequestStart = (redirectCount: number) => {
+      try {
+        const active = getActiveDiagnosticsTimelineSpan();
+        emitDiagnosticsTimelineEvent({
+          type: "provider.request",
+          name: "provider.http.submit",
+          operation: "submit",
+          provider: model.provider,
+          phase: "provider",
+          monotonicMs: performance.now(),
+          runId: active?.runId,
+          parentSpanId: active?.spanId,
+          attributes: { api: model.api, model: model.id, redirectCount },
+        });
+      } catch {
+        // Private transports also call this directly, outside the guard observer.
+      }
+    };
     const guardedFetchOptions = {
       url,
       init: baseInit,
+      ...(!privateContext && !privatePreparation ? { onRequestStart } : {}),
       capture:
         privateContext || privatePreparation
           ? (false as const)
@@ -957,6 +980,7 @@ export function buildGuardedModelFetch(
             fetchImpl: async (requestUrl: RequestInfo | URL, outgoingInit?: RequestInit) => {
               assertPrivatePreparationTransport();
               if (!privateContext) {
+                onRequestStart(0);
                 return await fetchWithRuntimeDispatcherOrMockedGlobal(requestUrl, outgoingInit);
               }
               if (resolveDebugProxySettings().enabled) {
@@ -975,6 +999,7 @@ export function buildGuardedModelFetch(
               });
               // The guard has completed DNS, policy and dispatcher preparation. Never
               // pass the private body through global fetch capture or request observers.
+              onRequestStart(0);
               const response = await fetchWithRuntimeDispatcherOrMockedGlobal(
                 requestUrl,
                 privateInit,

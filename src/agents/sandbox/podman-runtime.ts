@@ -256,6 +256,35 @@ export async function resolvePodmanSandboxRuntimeInfo(): Promise<PodmanSandboxRu
   return { machine, rootless: rootless === "true", target, version };
 }
 
+function isPodmanContainerNotFound(stderr: string): boolean {
+  return (
+    /no such container/iu.test(stderr) ||
+    /no container with name or id .* found/iu.test(stderr) ||
+    /container .* does not exist/iu.test(stderr)
+  );
+}
+
+export async function recordedPodmanContainerState(engine: SandboxContainerEngine, name: string) {
+  const result = await execContainer(engine, ["inspect", "-f", "{{.State.Running}}", name], {
+    allowFailure: true,
+  });
+  if (result.code === 0) {
+    return { exists: true, running: result.stdout.trim() === "true" };
+  }
+  if (isPodmanContainerNotFound(result.stderr)) {
+    return { exists: false, running: false };
+  }
+  const detail = result.stderr.trim();
+  throw Object.assign(
+    new Error(
+      detail
+        ? `Unable to inspect recorded Podman sandbox runtime ${name}: ${detail}`
+        : `Unable to inspect recorded Podman sandbox runtime ${name} (exit ${result.code})`,
+    ),
+    { code: result.code },
+  );
+}
+
 export async function validateSandboxContainerEngineTarget(
   engine: SandboxContainerEngine,
   expectedTarget?: SandboxContainerEngineTarget,

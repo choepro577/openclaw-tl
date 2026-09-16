@@ -1,0 +1,99 @@
+{
+  "capturedAt": "2026-09-11T16:31:12.487098+00:00",
+  "label": "operator-personal-deny-child-failed",
+  "agentId": "purchase-order-skill",
+  "sessionId": "c71b4fcc-5308-4bfc-b818-dd9bcdbf9862",
+  "sessionKey": "agent:purchase-order-skill:subagent:8e2971c1-2d3d-451d-883f-3eafa8289ce0",
+  "runIds": [
+    "ef50cbdb-921d-4d15-b76d-b776194c972e"
+  ],
+  "modelId": null,
+  "materializedCatalog": {
+    "toolCount": 2,
+    "toolNames": [
+      "read",
+      "skill_script"
+    ]
+  },
+  "transcript": {
+    "eventCount": 12,
+    "eventTypes": {
+      "message": 11,
+      "session": 1
+    },
+    "toolCalls": [
+      "read",
+      "skill_script",
+      "skill_script",
+      "skill_script"
+    ],
+    "toolResults": [
+      "read",
+      "skill_script",
+      "skill_script",
+      "skill_script"
+    ],
+    "toolErrorCount": 0,
+    "codes": []
+  },
+  "trajectory": {
+    "eventCount": 13,
+    "eventTypes": {
+      "context.compiled": 1,
+      "model.completed": 1,
+      "prompt.submitted": 1,
+      "session.ended": 1,
+      "session.started": 1,
+      "tool.call": 4,
+      "tool.result": 4
+    },
+    "toolCalls": [
+      "read",
+      "skill_script",
+      "skill_script",
+      "skill_script"
+    ],
+    "toolResults": [
+      "read",
+      "skill_script",
+      "skill_script",
+      "skill_script"
+    ],
+    "toolResultSuccess": [
+      false,
+      false,
+      false,
+      false
+    ],
+    "codes": []
+  },
+  "taskRuns": [
+    {
+      "runId": "ef50cbdb-921d-4d15-b76d-b776194c972e",
+      "status": "succeeded",
+      "deliveryStatus": "delivered",
+      "toolUseCount": 4,
+      "lastToolName": "skill_script",
+      "errorClass": null
+    }
+  ],
+  "skillOperations": [
+    {
+      "skill": "purchase-order-skill",
+      "entrypoint": "router_tool_search",
+      "operation": "router"
+    },
+    {
+      "skill": "purchase-order-skill",
+      "entrypoint": "router_tool_search",
+      "operation": "search"
+    }
+  ],
+  "acceptanceSignals": {
+    "hasMaterializedToolCatalog": true,
+    "hasToolCall": true,
+    "hasSkillScriptCall": true,
+    "hasRouterCall": false,
+    "hasAuthorizationError": false
+  }
+}

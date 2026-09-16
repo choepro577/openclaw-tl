@@ -258,6 +258,7 @@ export async function prepareChatSendAttachments(params: {
         {
           phase: "agent-turn",
           config: cfg,
+          runId: clientRunId,
           attributes: {
             ...chatSendTraceAttributes,
             attachmentCount: normalizedAttachments.length,

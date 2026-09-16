@@ -1,0 +1,71 @@
+{
+  "capturedAt": "2026-09-11T14:04:58.277233+00:00",
+  "label": "prior-skill-script-auth-fail-v2",
+  "agentId": "purchase-order-skill",
+  "sessionId": "c797b0f5-8c77-49d1-a8c5-bf539f8f8c84",
+  "sessionKey": "agent:purchase-order-skill:dashboard:33d6e40c-a37f-41ec-bcc6-420ebcbf918f",
+  "runIds": [
+    "0fc66727-4d67-42cd-b41e-b36823253a50"
+  ],
+  "modelId": null,
+  "materializedCatalog": {
+    "toolCount": 25,
+    "toolNames": [
+      "apply_patch",
+      "ask_user",
+      "browser"
+    ]
+  },
+  "transcript": {
+    "eventCount": 8,
+    "eventTypes": {
+      "message": 7,
+      "session": 1
+    },
+    "toolCalls": [
+      "read",
+      "skill_script"
+    ],
+    "toolResults": [
+      "read",
+      "skill_script"
+    ],
+    "toolErrorCount": 0,
+    "codes": [
+      "SKILL_NOT_GRANTED"
+    ]
+  },
+  "trajectory": {
+    "eventCount": 9,
+    "eventTypes": {
+      "context.compiled": 1,
+      "model.completed": 1,
+      "prompt.submitted": 1,
+      "session.ended": 1,
+      "session.started": 1,
+      "tool.call": 2,
+      "tool.result": 2
+    },
+    "toolCalls": [
+      "read",
+      "skill_script"
+    ],
+    "toolResults": [
+      "read",
+      "skill_script"
+    ],
+    "toolResultSuccess": [
+      true,
+      false
+    ],
+    "codes": []
+  },
+  "taskRuns": [],
+  "acceptanceSignals": {
+    "hasMaterializedToolCatalog": true,
+    "hasToolCall": true,
+    "hasSkillScriptCall": true,
+    "hasRouterCall": false,
+    "hasAuthorizationError": true
+  }
+}

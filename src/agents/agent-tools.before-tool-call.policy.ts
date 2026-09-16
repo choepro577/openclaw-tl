@@ -226,9 +226,9 @@ export async function runBeforeToolCallHook(args: {
       ...(args.ctx?.channelId && { channelId: args.ctx.channelId }),
       ...(args.ctx?.requester ? { requester: args.ctx.requester } : {}),
     });
-    const resolveEnterpriseDelegationGuard = async (
+    const resolveEnterpriseDelegationGuard = (
       candidateParams: unknown,
-    ): Promise<HookOutcome | undefined> => {
+    ): HookOutcome | undefined => {
       if (!isEnterpriseCapabilityRun) {
         return undefined;
       }
@@ -248,12 +248,7 @@ export async function runBeforeToolCallHook(args: {
         childAgentId: args.ctx.agentId,
         toolName,
         toolParams: isPlainObject(candidateParams) ? candidateParams : {},
-        ...(args.toolCallId ? { toolCallId: args.toolCallId } : {}),
-        ...(args.ctx?.skillsSnapshot ? { skillsSnapshot: args.ctx.skillsSnapshot } : {}),
       });
-      if (decision.kind === "not_delegated_child" || decision.kind === "allow") {
-        return undefined;
-      }
       if (decision.kind === "block") {
         return {
           blocked: true,
@@ -263,57 +258,7 @@ export async function runBeforeToolCallHook(args: {
           params: candidateParams,
         };
       }
-      const approvalOutcome = await resolveBeforeToolCallApprovalOutcome({
-        result: {
-          requireApproval: {
-            title: decision.title,
-            description: decision.description,
-            timeoutMs: decision.timeoutMs,
-            allowedDecisions: decision.allowedDecisions,
-            pluginId: "enterprise-delegation",
-            timeoutReason: "Thao tác bị hủy vì yêu cầu xác nhận đã hết thời gian chờ.",
-          },
-        },
-        approvalMode: args.approvalMode,
-        toolName,
-        ...(args.toolCallId ? { toolCallId: args.toolCallId } : {}),
-        ...(args.ctx ? { ctx: args.ctx } : {}),
-        signal: args.signal,
-        baseParams: candidateParams,
-      });
-      if (!approvalOutcome) {
-        return undefined;
-      }
-      if (approvalOutcome.blocked || approvalOutcome.deferredApproval) {
-        return approvalOutcome;
-      }
-      const approvedParams = approvalOutcome.params;
-      const revalidated = evaluateEnterpriseDelegationToolCall({
-        config: args.ctx.config,
-        childSessionKey: args.ctx.sessionKey,
-        childRunId: args.ctx.runId,
-        childAgentId: args.ctx.agentId,
-        toolName,
-        toolParams: isPlainObject(approvedParams) ? approvedParams : {},
-        ...(args.toolCallId ? { toolCallId: args.toolCallId } : {}),
-        ...(args.ctx?.skillsSnapshot ? { skillsSnapshot: args.ctx.skillsSnapshot } : {}),
-        ...(approvalOutcome.approvalResolution
-          ? { approvalResolution: approvalOutcome.approvalResolution }
-          : {}),
-      });
-      if (revalidated.kind !== "allow") {
-        return {
-          blocked: true,
-          kind: "veto",
-          deniedReason: "plugin-before-tool-call",
-          reason:
-            revalidated.kind === "block"
-              ? revalidated.reason
-              : "delegation_approval_not_revalidated",
-          params: approvedParams,
-        };
-      }
-      return approvalOutcome;
+      return undefined;
     };
     const toolContext = buildToolContext(toolIdentity);
     // Policies form a mutation chain. Reconcile each decision against the prior
@@ -405,18 +350,13 @@ export async function runBeforeToolCallHook(args: {
         ? deriveToolParams(toolName, policyAdjustedParams, deriveOptions)
         : derivedToolParams;
     if (!hasBeforeToolCallHooks) {
-      const enterpriseApprovalOutcome =
-        await resolveEnterpriseDelegationGuard(policyAdjustedParams);
-      if (enterpriseApprovalOutcome?.blocked) {
-        return enterpriseApprovalOutcome;
+      const enterpriseDenial = resolveEnterpriseDelegationGuard(policyAdjustedParams);
+      if (enterpriseDenial) {
+        return enterpriseDenial;
       }
-      if (enterpriseApprovalOutcome?.deferredApproval) {
-        return enterpriseApprovalOutcome;
-      }
-      const enterpriseAdjustedParams = enterpriseApprovalOutcome?.params ?? policyAdjustedParams;
       const finalApprovalOutcome = await resolveSkillWorkshopApprovalForFinalParams({
         toolName,
-        params: enterpriseAdjustedParams,
+        params: policyAdjustedParams,
         approvalMode: args.approvalMode,
         ...(args.toolCallId ? { toolCallId: args.toolCallId } : {}),
         ...(args.ctx ? { ctx: args.ctx } : {}),
@@ -427,12 +367,10 @@ export async function runBeforeToolCallHook(args: {
       }
       const allowed: HookOutcome = {
         blocked: false as const,
-        params: enterpriseAdjustedParams,
+        params: policyAdjustedParams,
       };
-      const approvalResolution =
-        enterpriseApprovalOutcome?.approvalResolution ?? trustedApprovalResolution;
-      if (approvalResolution) {
-        allowed.approvalResolution = approvalResolution;
+      if (trustedApprovalResolution) {
+        allowed.approvalResolution = trustedApprovalResolution;
       }
       return allowed;
     }
@@ -502,16 +440,10 @@ export async function runBeforeToolCallHook(args: {
         adjustedParams: mergeParamsWithApprovalOverrides(finalParams, hookResult.params),
       });
     }
-    const enterpriseApprovalOutcome = await resolveEnterpriseDelegationGuard(finalParams);
-    if (enterpriseApprovalOutcome?.blocked) {
-      return enterpriseApprovalOutcome;
+    const enterpriseDenial = resolveEnterpriseDelegationGuard(finalParams);
+    if (enterpriseDenial) {
+      return enterpriseDenial;
     }
-    if (enterpriseApprovalOutcome?.deferredApproval) {
-      return enterpriseApprovalOutcome;
-    }
-    finalParams = enterpriseApprovalOutcome?.params ?? finalParams;
-    finalApprovalResolution =
-      enterpriseApprovalOutcome?.approvalResolution ?? finalApprovalResolution;
     const finalApprovalOutcome = await resolveSkillWorkshopApprovalForFinalParams({
       toolName,
       params: finalParams,

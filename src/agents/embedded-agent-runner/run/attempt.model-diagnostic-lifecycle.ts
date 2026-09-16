@@ -1,3 +1,4 @@
+import { performance } from "node:perf_hooks";
 import { withProviderAcceptanceObserver, type ProviderAcceptance } from "@openclaw/ai/transports";
 import { isPromiseLike } from "@openclaw/normalization-core/promise-like";
 import { truncateUtf16Safe } from "@openclaw/normalization-core/utf16-slice";
@@ -153,6 +154,7 @@ function boundedTimelineAttribute(value: string | undefined): string | undefined
 function emitProviderRequestTimelineEvent(
   eventBase: ModelCallEventBase,
   startedAt: number,
+  startedAtMonotonicMs: number,
   durationMs: number,
   ok: boolean,
   responseStatus: number | undefined,
@@ -166,6 +168,7 @@ function emitProviderRequestTimelineEvent(
     type: "provider.request",
     name: "provider.request",
     timestamp: new Date(startedAt).toISOString(),
+    monotonicMs: startedAtMonotonicMs,
     runId: eventBase.runId,
     spanId: eventBase.callId,
     durationMs,
@@ -281,6 +284,7 @@ function dispatchModelCallEndedHook(
 function emitModelCallCompleted(
   eventBase: ModelCallEventBase,
   startedAt: number,
+  startedAtMonotonicMs: number,
   observer: ModelCallObserver,
   ownerGeneration: CoreModelRequestOwnerGeneration | undefined,
 ): void {
@@ -293,6 +297,7 @@ function emitModelCallCompleted(
   emitProviderRequestTimelineEvent(
     eventBase,
     startedAt,
+    startedAtMonotonicMs,
     durationMs,
     true,
     observer.state.responseStatus,
@@ -321,6 +326,7 @@ function emitModelCallCompleted(
 function emitModelCallError(
   eventBase: ModelCallEventBase,
   startedAt: number,
+  startedAtMonotonicMs: number,
   observer: ModelCallObserver,
   err: unknown,
   ownerGeneration: CoreModelRequestOwnerGeneration | undefined,
@@ -338,6 +344,7 @@ function emitModelCallError(
   emitProviderRequestTimelineEvent(
     eventBase,
     startedAt,
+    startedAtMonotonicMs,
     durationMs,
     false,
     responseStatus,
@@ -442,17 +449,32 @@ export function createModelLifecycle(params: {
   }
   params.ctx.onStarted?.();
   const startedAt = Date.now();
+  const startedAtMonotonicMs = performance.now();
   const propagatedOptions = withDiagnosticRequestContext(params.options, trace, observer, callId);
   return {
     eventBase,
     observer,
     propagatedOptions,
     startedAt,
+    startedAtMonotonicMs,
     emitCompleted() {
-      emitModelCallCompleted(eventBase, startedAt, observer, params.ctx.ownerGeneration);
+      emitModelCallCompleted(
+        eventBase,
+        startedAt,
+        startedAtMonotonicMs,
+        observer,
+        params.ctx.ownerGeneration,
+      );
     },
     emitError(err: unknown) {
-      emitModelCallError(eventBase, startedAt, observer, err, params.ctx.ownerGeneration);
+      emitModelCallError(
+        eventBase,
+        startedAt,
+        startedAtMonotonicMs,
+        observer,
+        err,
+        params.ctx.ownerGeneration,
+      );
     },
   };
 }

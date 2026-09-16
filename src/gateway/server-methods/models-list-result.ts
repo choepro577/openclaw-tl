@@ -463,6 +463,7 @@ export async function buildModelsListResult(
       ? params.preloadedCatalog
       : undefined;
   let loadedSnapshot: Awaited<ReturnType<typeof loadDeferredCatalog>> | undefined;
+  let pendingLoadedSnapshot: Promise<Awaited<ReturnType<typeof loadDeferredCatalog>>> | undefined;
   let loadedReadOnly = true;
   let usedPreloadedCatalog = false;
   const handleCatalogTimeout = (timeoutMs: number) => {
@@ -494,11 +495,12 @@ export async function buildModelsListResult(
       if (params.preloadedOnly) {
         return { entries: [], routeVariants: [] };
       }
-      loadedSnapshot = await loadDeferredCatalog(params.context, initialAgentId, {
+      pendingLoadedSnapshot = loadDeferredCatalog(params.context, initialAgentId, {
         readOnly: loadedReadOnly,
         refreshAuth: refresh && loadedReadOnly,
         refreshFullCatalog: loadParams.refresh === true,
       });
+      loadedSnapshot = await pendingLoadedSnapshot;
       return loadedSnapshot;
     },
     onTimeout: handleCatalogTimeout,
@@ -543,18 +545,25 @@ export async function buildModelsListResult(
       snapshot = escalatedCatalog;
     }
   }
-  if (
-    loadedSnapshot &&
-    params.agentId !== undefined &&
-    !publishedModelCatalogOwnerMatchesAgent(loadedSnapshot, initialAgentId)
-  ) {
-    return { models: [] };
-  }
-  const ownerSnapshot =
+  let ownerSnapshot =
     loadedSnapshot ??
     (preloadedCatalog && params.catalogProjector
       ? undefined
       : await readPreparedCatalog(params.context, initialAgentId));
+  // A prepared-only browse may hit its UI deadline while its request-scoped owner is still
+  // materializing. Keep waiting for that already-started owner instead of dropping the paired
+  // metadata/auth state and turning an available configured model into "unavailable".
+  if (!params.catalogProjector && pendingLoadedSnapshot) {
+    ownerSnapshot = await pendingLoadedSnapshot;
+    snapshot = ownerSnapshot;
+  }
+  if (
+    ownerSnapshot &&
+    params.agentId !== undefined &&
+    !publishedModelCatalogOwnerMatchesAgent(ownerSnapshot, initialAgentId)
+  ) {
+    return { models: [] };
+  }
   const cfg = ownerSnapshot?.config ?? initialConfig;
   const agentId = ownerSnapshot?.agentId ?? initialAgentId;
   const workspaceDir =

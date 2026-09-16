@@ -432,9 +432,16 @@ describe("Thiên Lý authentication HTTP boundary", () => {
           personalAgentEnabled: true,
           defaultAgentId: null,
         });
-        expect(
-          listEnterpriseEntitlements(account!.id).filter((item) => item.resourceType !== "tool"),
-        ).toEqual([]);
+        const skillEntitlements = listEnterpriseEntitlements(account!.id).filter(
+          (item) => item.resourceType === "skill" && item.effect === "allow",
+        );
+        expect(skillEntitlements).toHaveLength(15);
+        expect(skillEntitlements.map((item) => item.resourceId)).toEqual(
+          expect.arrayContaining([
+            "skill:global:openclaw-bundled:hr-skill",
+            "skill:global:openclaw-bundled:xurl",
+          ]),
+        );
         expect(
           resolveEnterpriseResourceAccess(
             account!,
@@ -472,6 +479,12 @@ describe("Thiên Lý authentication HTTP boundary", () => {
             kind: "personal",
             availability: "ready",
             actions: expect.objectContaining({ canChat: true }),
+          }),
+          expect.objectContaining({
+            kind: "shared",
+            canonicalName: "Main Agent",
+            access: expect.objectContaining({ allowed: false, reason: "not_granted" }),
+            actions: expect.objectContaining({ canChat: false, canRequestAccess: true }),
           }),
         ]);
       } finally {

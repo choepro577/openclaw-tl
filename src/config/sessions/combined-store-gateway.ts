@@ -25,10 +25,14 @@ import type { OpenClawConfig } from "../types.openclaw.js";
 import { resolveSessionStorePathCore } from "./paths.js";
 import {
   countSessionEntryRowsReadOnly,
+  listLatestSessionEntriesReadOnly,
   listSessionEntriesCore,
   listSessionEntriesReadOnly,
 } from "./session-accessor.js";
-import type { SessionEntryListScope } from "./session-accessor.types.js";
+import type {
+  SessionEntryLatestReadResult,
+  SessionEntryListScope,
+} from "./session-accessor.types.js";
 import { canonicalSessionKeyMigrationRequiredError } from "./session-canonical-key.js";
 import { resolveSqliteTargetFromSessionStorePath } from "./session-sqlite-target.js";
 import { resolveDeliveryProvenCanonicalSessionKey } from "./store-entry.js";
@@ -50,6 +54,18 @@ type GatewaySessionStoreOptions = {
   strictConfiguredAgentStoresOnly?: boolean;
   includeIncognito?: boolean;
   projection?: SessionEntryListScope["projection"];
+};
+
+type GatewayLatestSessionStoreOptions = Pick<
+  GatewaySessionStoreOptions,
+  "agentId" | "strictConfiguredAgentStoresOnly" | "projection"
+> & {
+  /** Promoted creator identity used to bound the Enterprise user probe. */
+  createdActorId?: string;
+  /** Additional canonical keys, such as an administrator's home session. */
+  exactSessionKeys?: readonly string[];
+  /** Number of candidates retained per physical store before visibility filtering. */
+  candidateLimit?: number;
 };
 
 type ResolvedGatewaySessionStoreTargets = {
@@ -124,6 +140,28 @@ function loadGatewayStoreEntries(params: {
     clone: false,
     projection: params.projection,
     storePath: params.storePath,
+  });
+}
+
+function loadLatestGatewayStoreEntries(params: {
+  agentId: string;
+  createdActorId?: string;
+  exactSessionKeys?: readonly string[];
+  projection: GatewaySessionEntryProjection;
+  storePath: string;
+  candidateLimit: number;
+}): SessionEntryLatestReadResult {
+  return listLatestSessionEntriesReadOnly({
+    agentId: params.agentId,
+    clone: false,
+    ...(params.createdActorId ? { createdActorId: params.createdActorId } : {}),
+    ...(params.exactSessionKeys ? { exactSessionKeys: params.exactSessionKeys } : {}),
+    projection: params.projection,
+    sessionKeyPrefix: `agent:${normalizeAgentId(params.agentId)}:`,
+    storePath: params.storePath,
+    // The accessor fetches one look-ahead row so the Enterprise caller can
+    // detect a hidden candidate and fall back to the canonical full path.
+    limit: params.candidateLimit,
   });
 }
 
@@ -409,6 +447,104 @@ export function canPrewarmCombinedSessionStoresForGateway(
     }
   }
   return true;
+}
+
+/**
+ * Loads only a bounded newest-row window from each durable target. This is for
+ * narrow foreground decisions (currently Enterprise resume/new), where the
+ * caller supplies the authenticated creator id and any exact special keys it
+ * may see. Canonical key validation and cross-target duplicate handling stay
+ * identical to the full combined loader.
+ */
+export function loadLatestCombinedSessionStoreForGatewayCore(
+  cfg: OpenClawConfig,
+  opts: GatewayLatestSessionStoreOptions = {},
+): {
+  candidateScanComplete: boolean;
+  diagnostics?: readonly string[];
+  durableStorePath?: string;
+  durableTargets: ReadonlyArray<{ agentId: string; storePath: string }>;
+  storePath: string;
+  store: Record<string, SessionEntry>;
+} {
+  const projection = opts.projection ?? "list";
+  const candidateLimit = Math.max(1, Math.min(256, Math.floor(opts.candidateLimit ?? 32)));
+  const {
+    configuredAgentIds,
+    defaultAgentId,
+    diagnostics,
+    durableStorePath: preparedDurableStorePath,
+    durableTargets,
+    requestedAgentId,
+    storeConfig,
+  } = resolveGatewaySessionStoreTargets(cfg, opts);
+  const combined: Record<string, SessionEntry> = {};
+  let candidateScanComplete = true;
+  for (const target of durableTargets) {
+    const agentId = target.agentId;
+    const storePath = target.storePath;
+    const latest = loadLatestGatewayStoreEntries({
+      agentId,
+      ...(opts.createdActorId ? { createdActorId: opts.createdActorId } : {}),
+      ...(opts.exactSessionKeys ? { exactSessionKeys: opts.exactSessionKeys } : {}),
+      projection,
+      storePath,
+      candidateLimit,
+    });
+    candidateScanComplete &&= !latest.hasMore;
+    for (const { sessionKey: key, entry } of latest.entries) {
+      const canonicalKey = resolveStoredSessionKeyForAgentStore({
+        cfg,
+        agentId,
+        sessionKey: key,
+      });
+      if (key !== canonicalKey) {
+        throw canonicalSessionKeyMigrationRequiredError(
+          `non-canonical persisted row resolves to session key ${canonicalKey}`,
+        );
+      }
+      const canonicalAgentId = normalizeAgentId(
+        parseAgentSessionKey(canonicalKey)?.agentId ?? agentId,
+      );
+      if (requestedAgentId && canonicalAgentId !== requestedAgentId) {
+        continue;
+      }
+      mergeSessionEntryIntoCombined({
+        cfg,
+        combined,
+        entry,
+        agentId: canonicalAgentId,
+        canonicalKey,
+      });
+    }
+  }
+
+  if (configuredAgentIds) {
+    filterCombinedStoreToConfiguredAgents({ cfg, configuredAgentIds, store: combined });
+  }
+
+  const durableStorePaths = durableTargets.map((target) => target.storePath);
+  const durableStorePath =
+    preparedDurableStorePath ?? resolveCombinedDatabasePath(durableTargets, defaultAgentId);
+  if (storeConfig && !isStorePathTemplate(storeConfig)) {
+    return {
+      candidateScanComplete,
+      diagnostics,
+      durableStorePath,
+      durableTargets,
+      storePath: durableStorePath,
+      store: combined,
+    };
+  }
+  const storePath = resolveCombinedStorePath(durableStorePaths, storeConfig);
+  return {
+    candidateScanComplete,
+    diagnostics,
+    durableStorePath,
+    durableTargets,
+    storePath,
+    store: combined,
+  };
 }
 
 /** Loads and canonicalizes session entries for gateway views across one or more agent stores. */

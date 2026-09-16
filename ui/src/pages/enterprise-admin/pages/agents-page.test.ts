@@ -105,6 +105,37 @@ describe("Enterprise admin agent detail panels", () => {
       ),
     ).toEqual(["Danh tính", "Tổng quan", "Chọn model"]);
     expect(container.querySelector(".ea-kpis")).toBeNull();
+    expect(container.textContent).not.toContain("Developer");
+  });
+
+  it("shows Developer only for a shared Agent", () => {
+    const page = new EnterpriseAdminAgentsPage() as unknown as MutableAgentPage;
+    page.selected = {
+      kind: "shared",
+      value: {
+        kind: "shared",
+        agentId: "support",
+        resourceKey: "agent:shared:support",
+        name: "Support",
+        model: null,
+        workspace: "/workspace",
+        runtimeType: "embedded",
+        assignedUserCount: 0,
+        skillCount: 0,
+        toolCount: 0,
+      },
+    };
+    page.drawerTab = "overview";
+    page.panelLoading = false;
+    page.panelData = {
+      agent: { name: "Support" },
+      workspace: "/workspace",
+      defaults: { model: null },
+    };
+
+    render(page.render(), container);
+
+    expect(container.textContent).toContain("Developer");
   });
 
   it("opens the first core file as soon as the Files panel loads", async () => {

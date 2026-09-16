@@ -1,0 +1,17 @@
+{
+  "foreignKeyViolations": 0,
+  "grants": {
+    "enterprise_account_plugin_grants": {
+      "count": 2,
+      "scopes": {
+        "account": 2
+      }
+    },
+    "enterprise_codex_plugin_grants": {
+      "count": 1,
+      "scopes": {
+        "account": 1
+      }
+    }
+  }
+}

@@ -71,6 +71,37 @@ const OPENAI_REASONING_REPLAY_METADATA = {
 } as const;
 
 describe("redactTranscriptMessage", () => {
+  it("persists only declared skill-script bearer links intact", () => {
+    const url = "https://example.test/po?sites=A%2CB&token=abcdefghijklmnopqrstuvwxyz0123456789";
+    const message = castAgentMessage({
+      role: "toolResult",
+      toolName: "skill_script",
+      toolCallId: "call_po",
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify({ result: { data: url }, apiKey: "sk-1234567890abcdef" }),
+        },
+      ],
+      details: { result: { data: "***" }, __openclawUserVisibleUrlPaths: ["result.data"] },
+    });
+    const persistedMessage = redactTranscriptMessage(message, cfg("tools"));
+    const persisted = msgContent(persistedMessage) as Array<{
+      text: string;
+    }>;
+    expect(persisted[0]?.text).toContain(url);
+    expect(persisted[0]?.text).not.toContain("sk-1234567890abcdef");
+    expect(
+      (persistedMessage as unknown as { details: { __openclawUserVisibleUrlPaths: string[] } })
+        .details.__openclawUserVisibleUrlPaths,
+    ).toEqual(["result.data"]);
+    const unrelated = castAgentMessage({ ...message, toolName: "read" });
+    const redacted = msgContent(redactTranscriptMessage(unrelated, cfg("tools"))) as Array<{
+      text: string;
+    }>;
+    expect(redacted[0]?.text).not.toContain(url);
+  });
+
   it("redacts text block matching default patterns (sk- token)", () => {
     const msg = textMessage("key is sk-abcdef1234567890xyz end");
     const result = redactTranscriptMessage(msg, cfg("tools"));

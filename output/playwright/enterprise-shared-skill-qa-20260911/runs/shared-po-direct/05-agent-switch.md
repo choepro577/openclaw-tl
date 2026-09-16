@@ -1,0 +1,24 @@
+- generic [ref=f1e7]:
+  - link "Skip to main content" [ref=f1e8] [cursor=pointer]:
+    - /url: "#enterprise-user-main"
+  - complementary "Enterprise User navigation" [ref=f1e11]:
+    - generic [ref=f1e12]:
+      - generic [ref=f1e14]:
+        - group [ref=f1e16]:
+          - generic "Switch active Agent" [ref=f1e17]:
+            - generic [aria-hidden] [ref=f1e18]: ◌
+            - generic [ref=f1e19]:
+              - generic [ref=f1e20]: Active Agent
+              - strong [ref=f1e21]: Unavailable
+        - button "New chat" [disabled] [ref=f1e25]
+        - navigation "User pages" [ref=f1e28]:
+          - button "Agents" [ref=f1e29]
+          - generic "Organized chats" [ref=f1e36]:
+            - generic [ref=f1e37]:
+              - button "Projects" [expanded] [ref=f1e38]
+              - button "New Project" [ref=f1e41]
+            - status [ref=f1e43]: Loading…
+      - group [ref=f1e45]:
+        - generic "Account" [ref=f1e46]:
+          - generic [aria-hidden] [ref=f1e47]: U
+  - main [ref=f1e49]

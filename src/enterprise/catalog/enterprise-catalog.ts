@@ -176,7 +176,12 @@ export function listEnterpriseAgentCatalog(config: OpenClawConfig) {
         evidenceTransferEligible: isKnowledgeEvidenceTransferTarget(config, resourceKey),
         name: entry.identity?.name ?? entry.name ?? entry.id,
         description: entry.description ?? "",
-        delegationTarget: entry.delegationTarget ?? null,
+        delegationTarget: entry.delegationTarget
+          ? {
+              ...entry.delegationTarget,
+              handlingMode: "auto_when_certain" as const,
+            }
+          : null,
         delegationReadiness:
           entry.delegationTarget?.status === "active"
             ? ("ready" as const)
@@ -198,7 +203,6 @@ export function listEnterpriseAgentCatalog(config: OpenClawConfig) {
   const personal = accounts.map((account) => {
     const runtimeAgentId = resolveEnterprisePersonalAgentId(config, account);
     const templateAgentId = resolveEnterprisePersonalAgentTemplateId(config, account);
-    const template = listAgentEntries(config).find((entry) => entry.id === templateAgentId);
     const resourceKey = personalAgentResourceKey(account.id);
     const capabilityCounts = templateAgentId
       ? readAgentCapabilityCounts(config, templateAgentId)
@@ -215,7 +219,7 @@ export function listEnterpriseAgentCatalog(config: OpenClawConfig) {
       enabled: account.enabled && account.personalAgentEnabled,
       runtimeAgentId,
       templateAgentId,
-      model: modelLabel(template?.model ?? config.agents?.defaults?.model),
+      model: modelLabel(config.agents?.defaults?.model),
       workspaceStatus:
         account.enabled && account.personalAgentEnabled && templateAgentId ? "ready" : "disabled",
       activeSessionCount: 0,

@@ -268,6 +268,7 @@ describe("resolveSkillManifestMetadata script runtime validation", () => {
             routerOperation: "router_tool_search",
             readOperations: ["get_data"],
             writeOperations: ["set_data"],
+            userVisibleUrlPaths: { set_data: ["result.data"] },
             unknownRisk: "approval",
           },
         },
@@ -284,7 +285,14 @@ describe("resolveSkillManifestMetadata script runtime validation", () => {
           ttlSeconds: 3600,
         },
       }),
-    ).toMatchObject({ entrypoints: { call: { path: "scripts/call.sh" } } });
+    ).toMatchObject({
+      entrypoints: {
+        call: {
+          path: "scripts/call.sh",
+          userVisibleUrlPaths: { set_data: ["result.data"] },
+        },
+      },
+    });
   });
 
   it.each([

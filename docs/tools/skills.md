@@ -445,6 +445,7 @@ approval waits. Revoked or changed capabilities cannot execute stale callbacks.
           authExemptOperations: ["router_tool_search", "router_index_status"],
           readOperations: ["get_record"],
           writeOperations: ["create_record"],
+          userVisibleUrlPaths: { create_record: ["result.data"] },
           unknownRisk: "approval",
           timeoutMs: 30000,
         },
@@ -472,6 +473,15 @@ environment variable, password, or token. Entrypoints must be executable regular
 files (not symlinks) whose real path remains under the Skill's `scripts/`
 directory. Read operations run directly; write and unclassified operations use
 the existing one-shot Enterprise approval.
+
+When an operation returns a bearer link meant for the user, declare its exact
+result path in `userVisibleUrlPaths`. Only HTTP(S) URLs without userinfo at that
+declared path are kept intact in model-visible tool text. The Control UI shows
+the original URL directly under the tool card for opening or copying, including
+its query parameters; unrelated credentials remain redacted. Do not make the
+assistant copy the link into its own reply: transcript redaction still masks
+bearer query parameters in ordinary assistant text. Grant this exception only
+for links the user is intended to receive.
 
 For login-token authentication, add an `auth` block with `loginEntrypoint`,
 `loginOperation`, metadata-defined `fields`, `tokenPaths`, `injectArgument`, and

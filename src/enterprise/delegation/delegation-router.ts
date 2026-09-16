@@ -5,6 +5,10 @@ import { generateSecureUuid } from "../../infra/secure-random.js";
 import { normalizeAgentId } from "../../routing/session-key.js";
 import type { OpenClawStateDatabaseOptions } from "../../state/openclaw-state-db.js";
 import { getEnterpriseAccountById } from "../accounts/account-store.js";
+import {
+  clearEnterpriseDelegationAgentFirstContext,
+  rememberEnterpriseDelegationAgentFirstContext,
+} from "./delegation-agent-first.js";
 import { listEnterpriseDelegationCandidates } from "./delegation-candidates.js";
 import { explicitlyMentionedEnterpriseAgentIds } from "./delegation-explicit-match.js";
 import {
@@ -26,9 +30,8 @@ import {
 import { createDelegationTurnEffects, setTurn } from "./delegation-router-effects.js";
 import {
   prepareEnterpriseDelegationRouterModel,
-  runPendingConfirmationChecks,
   runRouterModel,
-  verifyRouterModel,
+  parseEnterpriseDelegationRouterDecision,
   reconcileRouterInputs,
   ROUTER_MAX_TASK_CHARS,
   type EnterpriseDelegationRouterModelStage,
@@ -64,38 +67,6 @@ const ROUTER_RETRY_QUESTION =
 const RETRY_TARGET_QUESTION =
   "Mình chưa xác định được phần việc chuyên gia cần thử lại. Bạn nêu rõ chuyên gia hoặc mô tả phần việc muốn thử lại giúp mình nhé?";
 
-function verifierClarificationQuestion(reasonCode: string, unavailable: boolean): string {
-  if (unavailable) {
-    return ROUTER_RETRY_QUESTION;
-  }
-  switch (reasonCode) {
-    case "router_verifier_target_disagreed":
-      return "Mình chưa xác định chắc chắn chuyên gia phù hợp cho phần việc này. Bạn nêu rõ chuyên gia hoặc phần việc muốn giao giúp mình nhé?";
-    case "router_verifier_handling_disagreed":
-      return "Mình chưa xác định chắc chắn nên xử lý phần việc này bằng tra cứu tài liệu hay chuyên gia. Bạn xác nhận nguồn hoặc mục tiêu cần nhận giúp mình nhé?";
-    case "router_verifier_outcome_disagreed":
-      return "Mình chưa thể xác nhận phương án chuyển việc vừa đề xuất. Bạn nói rõ kết quả cuối cùng cần nhận giúp mình nhé?";
-    case "router_verifier_low_confidence":
-    case "router_verifier_low_margin":
-      return "Mình chưa đủ chắc chắn về phạm vi phần việc. Bạn nói rõ đối tượng hoặc phạm vi cần xử lý giúp mình nhé?";
-    default:
-      return "Chưa có chuyên gia nào bắt đầu. Bạn có thể xác nhận phần việc và kết quả cần nhận trước khi mình chuyển việc không?";
-  }
-}
-function snapshotPendingClarification(pending: PendingClarification): PendingClarification {
-  return {
-    ...pending,
-    userInputs: [...pending.userInputs],
-    explicitAgentIds: [...pending.explicitAgentIds],
-    consentedAgentIds: [...pending.consentedAgentIds],
-    routes: pending.routes.map((route) => ({
-      ...route,
-      requiredInputs: route.requiredInputs.map((input) => ({ ...input })),
-      knowledgeQueries: [...route.knowledgeQueries],
-    })),
-  };
-}
-
 export async function prepareEnterpriseDelegationTurn(params: {
   config: OpenClawConfig;
   agentId: string;
@@ -111,8 +82,10 @@ export async function prepareEnterpriseDelegationTurn(params: {
   contextualPlanning?: boolean;
   simulation?: boolean;
   proposedAssignments?: readonly { agentId: string; task: string }[];
-  /** Internal experiment seam; production callers retain the sequential default. */
-  routerEvaluationMode?: "sequential" | "parallel_pending_confirmation";
+  /** Internal opt-in path: prepare facts for the Personal Agent, without a router LLM call. */
+  agentFirst?: boolean;
+  /** Structured route decision supplied by the Personal Agent experiment. */
+  agentFirstDecision?: unknown;
   stateOptions?: OpenClawStateDatabaseOptions;
 }): Promise<void> {
   const startedAt = Date.now();
@@ -123,6 +96,11 @@ export async function prepareEnterpriseDelegationTurn(params: {
   ) {
     return;
   }
+  clearEnterpriseDelegationAgentFirstContext({
+    config: params.config,
+    sessionKey: params.sessionKey,
+    parentRunId: params.parentRunId,
+  });
   delete delegation.turn;
   delegation.request = { sessionKey: params.sessionKey, parentRunId: params.parentRunId };
   const key = pendingInputKey(delegation.accountId, params.sessionKey);
@@ -151,10 +129,7 @@ export async function prepareEnterpriseDelegationTurn(params: {
   const candidates = assigned.filter(
     (candidate) =>
       candidate.routable ||
-      (params.simulation === true &&
-        candidate.effective &&
-        candidate.profile?.status === "active" &&
-        candidate.effectiveMode !== "disabled"),
+      (params.simulation === true && candidate.effective && candidate.profile?.status === "active"),
   );
   const previousDelegationContext =
     params.previousDelegationContext ??
@@ -177,9 +152,6 @@ export async function prepareEnterpriseDelegationTurn(params: {
   let userInputs = pending?.userInputs ?? [...conversationInputs, params.prompt];
   let requiresRenewedConsent = pending?.requiresRenewedConsent ?? false;
   let consentedAgentIds: string[] = [];
-  // Exact retries can satisfy explicit_only admission without suppressing a
-  // fresh confirm_before_handoff prompt when the prior attempt was unapproved.
-  let retryExplicitAgentIds: string[] = [];
   let explicitAgentIds = explicitMatches(params.prompt, candidates).map(
     (candidate) => candidate.agentId,
   );
@@ -228,11 +200,7 @@ export async function prepareEnterpriseDelegationTurn(params: {
   const runRouter = async (
     request: Omit<
       RouterModelRequest,
-      | "preparedModel"
-      | "diagnosticStage"
-      | "diagnosticRole"
-      | "diagnosticRunId"
-      | "diagnosticAttempt"
+      "preparedModel" | "diagnosticStage" | "diagnosticRunId" | "diagnosticAttempt"
     >,
     diagnosticStage: EnterpriseDelegationRouterModelStage,
   ) =>
@@ -240,7 +208,6 @@ export async function prepareEnterpriseDelegationTurn(params: {
       ...request,
       preparedModel: await getPreparedRouterModel(),
       diagnosticStage,
-      diagnosticRole: diagnosticStage === "verification" ? "verifier" : "router",
       diagnosticRunId: params.parentRunId,
       diagnosticAttempt: ++routerModelAttempt,
     });
@@ -301,13 +268,42 @@ export async function prepareEnterpriseDelegationTurn(params: {
       "Chưa có chuyên gia nào bắt đầu. Bạn gửi lại yêu cầu ngắn gọn, kèm đầy đủ các giá trị cần thiết giúp mình nhé?",
     );
   };
+  const suppliedAgentFirstDecision =
+    params.agentFirstDecision === undefined
+      ? undefined
+      : parseEnterpriseDelegationRouterDecision(params.agentFirstDecision);
+  const suppliedAgentFirstDecisionInvalidForTurn =
+    suppliedAgentFirstDecision === undefined ||
+    (pending
+      ? suppliedAgentFirstDecision.continuation === undefined ||
+        suppliedAgentFirstDecision.handoffConsent === undefined
+      : suppliedAgentFirstDecision.continuation !== undefined ||
+        suppliedAgentFirstDecision.handoffConsent !== undefined);
+  const rememberAgentFirstContext = () => {
+    if (params.simulation) {
+      return;
+    }
+    rememberEnterpriseDelegationAgentFirstContext(params.config, {
+      accountId: account.id,
+      personalAgentId: delegation.personalAgentId,
+      sessionKey: params.sessionKey,
+      parentRunId: params.parentRunId,
+      prompt: params.prompt,
+      conversationInputs,
+      conversationResults,
+      previousDelegationContext,
+      candidates,
+      pending,
+      policy,
+      explicitAgentIds,
+    });
+  };
   if (!withinRouterContextBudget(prompt, conversationInputs, conversationResults)) {
     finishOversizedContext();
     return;
   }
   let modelDecision: RouterModelDecision | undefined;
-  let deterministicRetry = false;
-  let parallelPendingConfirmation = false;
+  let routingResultReasonCode: string | undefined;
   let expectedAgentIds: string[] = [];
   let continuationContext: PendingClarification | undefined;
   if (pending) {
@@ -334,46 +330,35 @@ export async function prepareEnterpriseDelegationTurn(params: {
       conversationResults,
       previousDelegationContext,
     };
-    if (
-      params.routerEvaluationMode === "parallel_pending_confirmation" &&
-      pending.kind === "confirmation" &&
-      !pending.requiresRenewedConsent &&
-      pending.consentedAgentIds.length === 0
-    ) {
-      const pendingSnapshot = snapshotPendingClarification(pending);
-      const parallelAttemptBase = routerModelAttempt;
-      routerModelAttempt += 2;
-      const parallel = await runPendingConfirmationChecks({
-        ...request,
-        pendingClarification: pendingSnapshot,
-        preparedModel: await getPreparedRouterModel(),
-        diagnosticRunId: params.parentRunId,
-        diagnosticAttemptBase: parallelAttemptBase,
-      });
-      if (!isCurrentPending(pending)) {
+    if (params.agentFirst && params.agentFirstDecision === undefined && !pending) {
+      // The primary Personal Agent owns the one semantic decision in the
+      // experiment. Keep the server facts available to its structured tool call;
+      // never spend a router round-trip here. Pending lifecycle messages stay on
+      // this server-owned continuation path so cancel/revise cannot be left in
+      // a stale plan when a model answers in text without calling the tool.
+      rememberAgentFirstContext();
+      return;
+    }
+    if (params.agentFirstDecision !== undefined) {
+      if (suppliedAgentFirstDecisionInvalidForTurn) {
         finish(
-          "blocked",
-          "pending_clarification_replaced",
-          "Do not delegate: this clarification was superseded.",
+          "clarify",
+          "agent_first_decision_invalid",
+          "The Enterprise routing proposal was not valid. Ask the user to restate the task; no specialist has started.",
+          [],
+          "not_required",
+          "Chưa có chuyên gia nào bắt đầu. Bạn mô tả lại phần việc và kết quả cần nhận giúp mình nhé?",
         );
         return;
       }
-      if (parallel.ok) {
-        modelDecision = parallel.decision;
-        parallelPendingConfirmation = true;
-      }
+      modelDecision = suppliedAgentFirstDecision;
+    } else {
+      // A clarification answer gets one routing pass. A timeout leaves the exact
+      // pending slot intact so the user can resend it; never guess a handoff.
+      const result = await runRouter(request, "continuation");
+      routingResultReasonCode = result.reasonCode;
+      modelDecision = result.decision;
     }
-    let result = modelDecision ? undefined : await runRouter(request, "continuation");
-    // One retry only for our own deadline, while this exact clarification still owns
-    // the slot. Reuse the untouched answer; never guess consent or start a child here.
-    if (
-      result?.reasonCode === "router_timed_out" &&
-      pendingClarifications.get(key) === pending &&
-      pending.expiresAt > Date.now()
-    ) {
-      result = await runRouter(request, "continuation_retry");
-    }
-    modelDecision ??= result?.decision;
     // A later request, policy emergency-off, or invalidation owns the slot now.
     if (pendingClarifications.get(key) !== pending) {
       finish(
@@ -402,15 +387,15 @@ export async function prepareEnterpriseDelegationTurn(params: {
     if (!continuation || continuation === "unclear") {
       finish(
         "clarify",
-        result?.reasonCode ?? "pending_clarification_unresolved",
-        result?.reasonCode
+        routingResultReasonCode ?? "pending_clarification_unresolved",
+        routingResultReasonCode
           ? "Explain briefly that specialist routing could not complete right now and no specialist has started. Do not silently substitute your own analysis or present the task as completed. Ask the user to resend their last answer to retry. Do not repeat the configured missing-information question as though no answer was supplied."
           : "Ask this concise question: " + pending.question,
         candidates.filter((candidate) =>
           pending!.routes.some((route) => route.agentId === candidate.agentId),
         ),
         "pending",
-        result?.reasonCode ? ROUTER_RETRY_QUESTION : pending.question,
+        routingResultReasonCode ? ROUTER_RETRY_QUESTION : pending.question,
       );
       return;
     }
@@ -471,7 +456,7 @@ export async function prepareEnterpriseDelegationTurn(params: {
           knowledgeQueries: route.knowledgeQueries,
           // A revision replaces the assignment, whereas an answer enriches the same assignment.
           task:
-            parallelPendingConfirmation || continuation === "revise" || inputCorrection
+            continuation === "revise" || inputCorrection
               ? route.task
               : withAnswerContext(
                   pending!.routes.find((previous) => previous.agentId === route.agentId)?.task ??
@@ -543,11 +528,8 @@ export async function prepareEnterpriseDelegationTurn(params: {
     }
     if (exactRetry.kind === "matched") {
       source = "rule";
-      deterministicRetry = true;
       // A pure retry is an explicit continuation of the previous specialist
-      // target. It satisfies explicit_only admission, while
-      // confirm_before_handoff still requires prior approved consent below.
-      retryExplicitAgentIds = exactRetry.routes.map((route) => route.agentId);
+      // target. It is deterministic and does not need another routing pass.
       consentedAgentIds = exactRetry.consentedAgentIds;
       modelDecision = {
         outcome: "delegate",
@@ -595,23 +577,50 @@ export async function prepareEnterpriseDelegationTurn(params: {
       const rule =
         explicit.length === 0 ? deterministicMatch(params.prompt, candidates) : undefined;
       source = explicit.length > 0 ? "explicit" : rule ? "rule" : "ai";
-      // Required inputs are semantic facts, not label/ID regex matches. Both model passes
-      // assess every configured field, including already-supplied natural-language values.
-      const result = await runRouter(
-        {
-          config: params.config,
-          personalAgentId: delegation.personalAgentId,
-          prompt,
-          candidates,
-          policy,
-          proposedAssignments: params.proposedAssignments,
-          conversationInputs,
-          conversationResults,
-          previousDelegationContext,
-        },
-        "proposal",
-      );
-      modelDecision = result.decision;
+      if (params.agentFirst && params.agentFirstDecision === undefined) {
+        // No semantic router call is made for an uncertain request. The primary
+        // model receives the bounded candidate facts and chooses local handling
+        // or a structured enterprise_delegate call.
+        explicitAgentIds = explicit.map((candidate) => candidate.agentId);
+        rememberAgentFirstContext();
+        return;
+      }
+      if (params.agentFirstDecision !== undefined) {
+        if (suppliedAgentFirstDecisionInvalidForTurn) {
+          finish(
+            "clarify",
+            "agent_first_decision_invalid",
+            "The Enterprise routing proposal was not valid. Ask the user to restate the task; no specialist has started.",
+            [],
+            "not_required",
+            "Chưa có chuyên gia nào bắt đầu. Bạn mô tả lại phần việc và kết quả cần nhận giúp mình nhé?",
+          );
+          return;
+        }
+        modelDecision = suppliedAgentFirstDecision;
+      }
+      if (modelDecision) {
+        // The structured decision is reduced below by the same grounding and
+        // policy checks as a legacy router response.
+      } else {
+        // Required inputs are semantic facts, not label/ID regex matches. This single model
+        // pass assesses every configured field, including already-supplied natural-language values.
+        const result = await runRouter(
+          {
+            config: params.config,
+            personalAgentId: delegation.personalAgentId,
+            prompt,
+            candidates,
+            policy,
+            proposedAssignments: params.proposedAssignments,
+            conversationInputs,
+            conversationResults,
+            previousDelegationContext,
+          },
+          "proposal",
+        );
+        modelDecision = result.decision;
+      }
     }
   }
   if (!modelDecision) {
@@ -652,21 +661,36 @@ export async function prepareEnterpriseDelegationTurn(params: {
     }
     consentedAgentIds = [];
     explicitAgentIds = [];
-    requiresRenewedConsent = true;
-  }
-  const newConsentProposed =
-    continuationContext !== undefined &&
-    !scopeChanged &&
-    modelDecision.handoffConsent === "approved";
-  if (newConsentProposed && continuationContext) {
-    // Provisional only: neither pending state nor a decision may commit this without verification.
-    consentedAgentIds = continuationContext.routes.map((route) => route.agentId);
+    requiresRenewedConsent = false;
   }
   const chosen = modelDecision.routes
     .map((route) => candidates.find((candidate) => candidate.agentId === route.agentId))
     .filter(isDefinedCandidate);
   const invalidRoute = chosen.length !== modelDecision.routes.length;
   const routeIds = modelDecision.routes.map((route) => route.agentId);
+  if (params.agentFirstDecision !== undefined && params.proposedAssignments) {
+    const proposedIds = params.proposedAssignments.map((assignment) =>
+      normalizeAgentId(assignment.agentId),
+    );
+    const proposedSet = new Set(proposedIds);
+    const routeSet = new Set(routeIds);
+    if (
+      proposedIds.length !== proposedSet.size ||
+      routeIds.length !== routeSet.size ||
+      proposedSet.size !== routeSet.size ||
+      [...proposedSet].some((agentId) => !routeSet.has(agentId))
+    ) {
+      finish(
+        "clarify",
+        "agent_first_assignment_mismatch",
+        "The Enterprise routing proposal did not match the requested assignment set. No specialist has started.",
+        [],
+        "not_required",
+        "Chưa có chuyên gia nào bắt đầu vì phương án chuyển việc chưa khớp. Bạn mô tả lại phần việc cần giao giúp mình nhé?",
+      );
+      return;
+    }
+  }
   const scopeMismatch =
     expectedAgentIds.length > 0 &&
     (routeIds.some((id) => !expectedAgentIds.includes(id)) ||
@@ -685,19 +709,6 @@ export async function prepareEnterpriseDelegationTurn(params: {
     );
     return;
   }
-  const explicitOnly = chosen.find(
-    (candidate) =>
-      candidate.effectiveMode === "explicit_only" &&
-      !explicitAgentIds.includes(candidate.agentId) &&
-      !retryExplicitAgentIds.includes(candidate.agentId),
-  );
-  const confirmations = chosen.filter(
-    (candidate) =>
-      (candidate.effectiveMode === "confirm_before_handoff" || requiresRenewedConsent) &&
-      (requiresRenewedConsent || !explicitAgentIds.includes(candidate.agentId)) &&
-      !consentedAgentIds.includes(candidate.agentId),
-  );
-  const confirmation = confirmations.length > 0;
   const avoided = chosen.find((candidate) =>
     candidate.profile?.avoidWhen.some((example) => containsPhrase(prompt, example)),
   );
@@ -728,108 +739,19 @@ export async function prepareEnterpriseDelegationTurn(params: {
     invalidRoute ||
     scopeMismatch ||
     overLimit ||
-    explicitOnly !== undefined ||
-    confirmation ||
     missing !== undefined ||
     inputIssue !== null;
-  const shouldVerify =
-    !deterministicRetry &&
-    !parallelPendingConfirmation &&
-    (!uncertain ||
-      (newConsentProposed &&
-        missing !== undefined &&
-        !invalidRoute &&
-        !scopeMismatch &&
-        inputIssue === null &&
-        !overLimit &&
-        !explicitOnly &&
-        modelDecision.confidence >= policy.autoThreshold &&
-        modelDecision.confidence - modelDecision.secondConfidence >= policy.minimumMargin &&
-        (routeIds.length < 2 || modelDecision.independent)));
-  if (shouldVerify) {
-    const verification = await verifyRouterModel({
-      config: params.config,
-      personalAgentId: delegation.personalAgentId,
-      prompt: continuationContext ? params.prompt : prompt,
-      candidates,
-      policy,
-      decision: modelDecision,
-      pendingClarification: continuationContext,
-      userInputs,
-      allowMissingInputs: missing !== undefined,
-      proposedAssignments: params.proposedAssignments,
-      conversationInputs,
-      conversationResults,
-      previousDelegationContext,
-      preparedModel: await getPreparedRouterModel(),
-      diagnosticStage: "verification",
-      diagnosticRole: "verifier",
-      diagnosticRunId: params.parentRunId,
-      diagnosticAttempt: ++routerModelAttempt,
-    });
-    if (
-      (continuationContext && pendingClarifications.get(key) !== continuationContext) ||
-      (plan &&
-        (plans.get(plan.planId)?.planRevision !== plan.planRevision ||
-          plan.expiresAt <= Date.now()))
-    ) {
-      finish(
-        "blocked",
-        "pending_clarification_replaced",
-        "Do not delegate: this plan was cancelled or superseded while verification was running.",
-      );
-      return;
-    }
-    if (!verification.ok) {
-      const question = verifierClarificationQuestion(
-        verification.reasonCode,
-        verification.unavailable === true,
-      );
-      // The first pass alone cannot commit new consent after independent verification fails.
-      consentedAgentIds = continuationContext?.consentedAgentIds ?? [];
-      if (verification.unavailable && continuationContext) {
-        if (!params.simulation && !pendingClarifications.has(key)) {
-          pendingClarifications.set(key, continuationContext);
-        }
-      } else {
-        remember("choice", question, chosen, modelDecision.routes);
-      }
-      finish(
-        "clarify",
-        verification.reasonCode,
-        "No specialist has started. Do not silently substitute your own analysis or present the task as completed. Ask this exact clarification question: " +
-          question,
-        chosen,
-        "not_required",
-        question,
-      );
-      return;
-    }
-  }
-  if (newConsentProposed && (shouldVerify || parallelPendingConfirmation)) {
-    requiresRenewedConsent = false;
-    auditPlanPhase("selected", chosen);
-    auditPlanPhase("confirmed", chosen);
-  } else if (newConsentProposed) {
-    consentedAgentIds = scopeChanged ? [] : (continuationContext?.consentedAgentIds ?? []);
-  }
   if (uncertain) {
-    const invalidPlan = invalidRoute || scopeMismatch || inputIssue || overLimit || explicitOnly;
-    // Consent belongs to an admissible plan. Never offer a handoff which cannot
-    // be retained, or turn an explicit-only policy rejection into an approval prompt.
+    const invalidPlan = invalidRoute || scopeMismatch || inputIssue || overLimit;
     const question =
-      invalidRoute || scopeMismatch || inputIssue || explicitOnly
+      invalidRoute || scopeMismatch || inputIssue
         ? "Chưa có chuyên gia nào bắt đầu vì phương án chuyển việc chưa hợp lệ. Bạn làm rõ phần việc và kết quả cần nhận giúp mình nhé?"
         : overLimit
           ? "Bạn muốn ưu tiên tối đa " + policy.maxDelegatesPerTurn + " phần việc nào trước?"
           : missing?.question ||
-            (confirmation
-              ? "Bạn có đồng ý giao các phần việc đã nêu cho " +
-                chosen.map((candidate) => candidate.name).join(", ") +
-                " không?"
-              : modelDecision.question ||
-                pending?.question ||
-                "Bạn có thể nói rõ kết quả bạn muốn nhận không?");
+            modelDecision.question ||
+            pending?.question ||
+            "Bạn có thể nói rõ kết quả bạn muốn nhận không?";
     const reasonCode = invalidRoute
       ? "router_route_unknown"
       : scopeMismatch
@@ -838,20 +760,11 @@ export async function prepareEnterpriseDelegationTurn(params: {
           ? `router_${inputIssue}`
           : overLimit
             ? "router_agent_limit"
-            : explicitOnly
-              ? "router_mode_disallowed"
-              : missing
-                ? "required_input_missing:" + missing.id
-                : confirmation
-                  ? "handoff_confirmation_required"
-                  : "router_ambiguous";
+            : missing
+              ? "required_input_missing:" + missing.id
+              : "router_ambiguous";
     if (!invalidPlan) {
-      remember(
-        missing ? "input" : confirmation ? "confirmation" : "choice",
-        question,
-        chosen,
-        modelDecision.routes,
-      );
+      remember(missing ? "input" : "choice", question, chosen, modelDecision.routes);
     } else if (
       (classifyEnterpriseFollowupIntent(params.prompt) === "retry" ||
         classifyEnterpriseFollowupIntent(params.prompt) === "recheck") &&
@@ -880,7 +793,7 @@ export async function prepareEnterpriseDelegationTurn(params: {
       reasonCode,
       "Ask this concise clarification question: " + question,
       chosen,
-      confirmation && !invalidPlan ? "pending" : "not_required",
+      "not_required",
       question,
     );
     return;
@@ -911,12 +824,6 @@ export async function prepareEnterpriseDelegationTurn(params: {
   }
   const identity = ensurePlan();
   auditPlanPhase("selected", chosen);
-  if (
-    consentedAgentIds.length > 0 ||
-    chosen.some((candidate) => explicitAgentIds.includes(candidate.agentId))
-  ) {
-    auditPlanPhase("confirmed", chosen);
-  }
   const decision = createDecision({
     planId: identity.planId,
     planRevision: identity.planRevision,
@@ -929,7 +836,7 @@ export async function prepareEnterpriseDelegationTurn(params: {
     policyRevision: policy.revision,
     accountPolicyRevision: account.policyRevision,
     source,
-    confirmationState: consentedAgentIds.length > 0 ? "approved" : "not_required",
+    confirmationState: "not_required",
     routes: chosen.map((candidate, index) => ({
       assignmentId:
         continuationContext?.routes.find((item) => item.agentId === candidate.agentId)

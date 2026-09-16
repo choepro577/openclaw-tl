@@ -1,0 +1,9 @@
+- generic [ref=f2e40]:
+  - link "Skip to main content" [ref=f2e41] [cursor=pointer]:
+    - /url: "#control-ui-main"
+  - generic [ref=f2e42]:
+    - button "Collapse sidebar" [expanded] [ref=f2e44]
+    - button "Open command palette" [ref=f2e49]
+  - separator "Resize sidebar" [ref=f2e54]
+  - main [ref=f2e55]:
+    - paragraph [ref=f2e59]: Starting MAAP…

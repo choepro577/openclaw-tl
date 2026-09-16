@@ -1881,7 +1881,13 @@ describe("handleSendChat", () => {
           status: "started",
           serverTiming: {
             receivedToAckMs: 17,
+            receivedToNormalizeMs: 3,
+            normalizeMs: 0.25,
+            enterpriseProjectionMs: 1.5,
+            authorizationMs: 2,
             loadSessionMs: 4,
+            admissionMs: 7,
+            queueWaitMs: 0.5,
             prepareAttachmentsMs: 0.5,
           },
         },
@@ -1906,7 +1912,13 @@ describe("handleSendChat", () => {
     expect(ack?.requestDurationMs).toEqual(expect.any(Number));
     expect(ack).toMatchObject({
       serverReceivedToAckMs: 17,
+      serverReceivedToNormalizeMs: 3,
+      serverNormalizeMs: 0.25,
+      serverEnterpriseProjectionMs: 1.5,
+      serverAuthorizationMs: 2,
       serverLoadSessionMs: 4,
+      serverAdmissionMs: 7,
+      serverQueueWaitMs: 0.5,
       serverPrepareAttachmentsMs: 0.5,
     });
   });

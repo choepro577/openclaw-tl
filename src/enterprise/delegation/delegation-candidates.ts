@@ -40,31 +40,6 @@ export type EnterpriseDelegationCandidate = {
   reasonCodes: string[];
 };
 
-const HANDLING_RANK: Record<EnterpriseDelegationHandlingMode, number> = {
-  auto_when_certain: 0,
-  confirm_before_handoff: 1,
-  explicit_only: 2,
-  disabled: 3,
-};
-
-function effectiveHandlingMode(
-  configured: AgentDelegationTargetConfig["handlingMode"] | undefined,
-  override: EnterpriseDelegationOverrideMode,
-): EnterpriseDelegationHandlingMode {
-  const base = configured ?? "explicit_only";
-  if (override === "inherit") {
-    return base;
-  }
-  return HANDLING_RANK[override] >= HANDLING_RANK[base] ? override : base;
-}
-
-export function enterpriseDelegationModeCanOverride(
-  configured: AgentDelegationTargetConfig["handlingMode"],
-  override: EnterpriseDelegationOverrideMode,
-): boolean {
-  return override === "inherit" || HANDLING_RANK[override] >= HANDLING_RANK[configured];
-}
-
 function profileRevision(config: OpenClawConfig, agentId: string): string {
   // A user request runs against an account-scoped projection, while the live
   // delegation guard rechecks the host source config. The projection already
@@ -158,7 +133,13 @@ export function listEnterpriseDelegationCandidates(
       const resourceKey = sharedAgentResourceKey(agentId);
       const override = overrides.get(resourceKey);
       const profile = entry?.delegationTarget;
-      const mode = effectiveHandlingMode(profile?.handlingMode, override?.mode ?? "inherit");
+      const canonicalProfile = profile
+        ? {
+            ...profile,
+            handlingMode: "auto_when_certain" as const,
+          }
+        : undefined;
+      const mode: EnterpriseDelegationHandlingMode = "auto_when_certain";
       const reasonCodes: string[] = [];
       if (!account.enabled) {
         reasonCodes.push("account_disabled");
@@ -175,9 +156,6 @@ export function listEnterpriseDelegationCandidates(
       if (!profile || profile.status !== "active") {
         reasonCodes.push(profile?.status === "disabled" ? "profile_disabled" : "profile_not_ready");
       }
-      if (mode === "disabled") {
-        reasonCodes.push("override_disabled");
-      }
       if (policy.rollout === "off") {
         reasonCodes.push("rollout_off");
       }
@@ -188,7 +166,7 @@ export function listEnterpriseDelegationCandidates(
         resourceKey,
         name: entry?.identity?.name ?? entry?.name ?? agentId,
         description: entry?.description?.trim() ?? "",
-        profile: profile ?? null,
+        profile: canonicalProfile ?? null,
         profileRevision: profileRevision(config, agentId),
         assigned: true,
         effective,
@@ -196,7 +174,6 @@ export function listEnterpriseDelegationCandidates(
           effective &&
           account.personalAgentEnabled &&
           profile?.status === "active" &&
-          mode !== "disabled" &&
           policy.rollout !== "off",
         overrideMode: override?.mode ?? "inherit",
         overrideRevision: override?.revision ?? 0,

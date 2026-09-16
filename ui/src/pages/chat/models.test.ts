@@ -30,6 +30,7 @@ describe("loadModels", () => {
     await loadModels({ request } as unknown as GatewayBrowserClient, {
       agentId: "main",
       preparedOnly: true,
+      refreshIfDue: true,
     });
 
     expect(request).toHaveBeenCalledWith("models.list", {

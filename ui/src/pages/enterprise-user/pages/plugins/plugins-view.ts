@@ -1,8 +1,6 @@
 import { html, nothing, type TemplateResult } from "lit";
 import { repeat } from "lit/directives/repeat.js";
-import type { AgentSelectOption } from "../../../../components/agent-select.ts";
 import { renderHubTabs } from "../../../../components/hub-tabs.ts";
-import "../../../../components/agent-select-registration.ts";
 import { icons } from "../../../../components/icons.ts";
 import {
   renderSettingsPage,
@@ -76,7 +74,6 @@ export type UserPluginsViewProps = {
   onReviewVersionChange: (version: string) => void;
   onTabChange: (tab: UserPluginsTab) => void;
   onInstalledFilterChange: (filter: UserInstalledFilter) => void;
-  onAgentChange: (agentKey: string) => void;
   onQueryChange: (query: string) => void;
   onRetry: () => void;
   onDismissError: () => void;
@@ -124,28 +121,6 @@ function codexViewProps(props: UserPluginsViewProps): CodexCatalogViewProps {
     copyFeedback: props.copyFeedback,
     onCloseDetail: props.onCloseCodexDetail,
   };
-}
-
-function agentOptions(agents: readonly EnterpriseUserAgent[]): AgentSelectOption[] {
-  return agents.map((agent) => ({
-    value: agent.key,
-    label: agent.name,
-    description: agent.kind === "personal" ? eu("personalAgent") : eu("managedByCompany"),
-  }));
-}
-
-function renderAgentField(props: UserPluginsViewProps) {
-  return html`<div class="plugins-field eu-plugins-agent-field">
-    <span>${eu("pluginsAgent")}</span>
-    <openclaw-agent-select
-      class="agent-select--settings"
-      .options=${agentOptions(props.agents)}
-      .value=${props.agentKey}
-      .accessibleLabel=${eu("pluginsAgent")}
-      .disabled=${props.loading || props.busy}
-      .onSelect=${props.onAgentChange}
-    ></openclaw-agent-select>
-  </div>`;
 }
 
 function isIssue(item: UserSkillInstall): boolean {
@@ -226,7 +201,6 @@ function renderInstalledToolbar(props: UserPluginsViewProps) {
       })),
       onChange: props.onInstalledFilterChange,
     })}
-    ${renderAgentField(props)}
     <span class="plugins-toolbar__hint">
       ${eu("pluginsShown", {
         count: String(filteredInstalls(props).length + filteredCodexGrants(props).length),
@@ -237,7 +211,6 @@ function renderInstalledToolbar(props: UserPluginsViewProps) {
 
 function renderDiscoverToolbar(props: UserPluginsViewProps) {
   return html`<div class="plugins-toolbar plugins-toolbar--fields eu-plugins-toolbar">
-    ${renderAgentField(props)}
     <label class="plugins-field eu-plugins-search-field">
       <span>${eu("pluginsSearch")}</span>
       <input

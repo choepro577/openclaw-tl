@@ -2,12 +2,21 @@
 import { isRecord } from "@openclaw/normalization-core/record-coerce";
 import { listAgentEntries, resolveAgentWorkspaceDir } from "../../agents/agent-scope.js";
 import { isToolAllowedByPolicyName } from "../../agents/tool-policy-match.js";
+import { cloneConfigWithResolutionFacts } from "../../config/resolution-facts.js";
+import { registerRuntimeConfigWriteListener } from "../../config/runtime-snapshot.js";
 import type { AgentConfig, AgentEntryConfig } from "../../config/types.agents.js";
 import type { OpenClawConfig } from "../../config/types.openclaw.js";
 import type { AgentToolsConfig, ToolAllowDenyPolicyConfig } from "../../config/types.tools.js";
 import { markGatewayRequestScopedRuntimeConfig } from "../../gateway/request-runtime-config.js";
 import type { GatewayClient, GatewayRequestContext } from "../../gateway/server-methods/types.js";
+import {
+  emitDiagnosticsTimelineEvent,
+  getActiveDiagnosticsTimelineSpan,
+} from "../../infra/diagnostics-timeline.js";
+import { getActivePluginRegistryVersion } from "../../plugins/runtime.js";
 import { normalizeAgentId, parseAgentSessionKey } from "../../routing/session-key.js";
+import { registerSkillsChangeListener } from "../../skills/runtime/refresh-state.js";
+import { openOpenClawStateDatabase } from "../../state/openclaw-state-db.js";
 import { isReservedSystemAgentId } from "../../system-agent/agent-id.js";
 import { getEnterpriseAccountByProfileId } from "../accounts/account-store.js";
 import { readEnterpriseAccountToolPolicy } from "../accounts/account-tool-policy-store.js";
@@ -18,6 +27,7 @@ import {
   type EnterpriseDelegationCandidate,
 } from "../delegation/delegation-candidates.js";
 import { explicitlyMentionedEnterpriseAgentIds } from "../delegation/delegation-explicit-match.js";
+import { readEnterpriseDelegationPolicy } from "../delegation/delegation-store.js";
 import { isEnterpriseEnabled } from "../enterprise-config.js";
 import {
   listEnterpriseEntitlements,
@@ -35,6 +45,7 @@ import {
 import { listActiveEnterpriseCodexPluginGrants } from "../extensions/codex-plugin-store.js";
 import { verifiedEnterpriseUserSkillsForRuntimeAgent } from "../extensions/extension-runtime-integrity.js";
 import { createEnterpriseKnowledgeAuthority } from "../knowledge/authority.js";
+import { subscribeKnowledgeAccessChanges } from "../knowledge/knowledge-access-changes.js";
 import { listPublishedZonesForAgent } from "../knowledge/knowledge-zone-store.js";
 import {
   resolveEnterprisePersonalAgentId,
@@ -76,6 +87,216 @@ const KNOWLEDGE_TOOL_IDS: readonly string[] = [
   "enterprise_knowledge_get",
 ];
 const SKILL_SCRIPT_TOOL_ID = "skill_script";
+
+type EnterpriseCacheInvalidationReason = "config" | "account" | "skills" | "knowledge";
+
+function emitEnterpriseCacheStatus(params: {
+  config: OpenClawConfig;
+  name: "enterprise.gateway.delegation_facts_cache" | "enterprise.gateway.runtime_projection_cache";
+  state: "hit" | "miss";
+  reason?: EnterpriseCacheInvalidationReason;
+}): void {
+  const activeSpan = getActiveDiagnosticsTimelineSpan();
+  emitDiagnosticsTimelineEvent(
+    {
+      type: "mark",
+      name: params.name,
+      ...(activeSpan?.runId ? { runId: activeSpan.runId } : {}),
+      ...(activeSpan?.phase ? { phase: activeSpan.phase } : { phase: "enterprise-admission" }),
+      attributes: {
+        cache: params.state,
+        ...(params.reason ? { invalidationReason: params.reason } : {}),
+      },
+    },
+    { config: params.config },
+  );
+}
+
+type EnterpriseDelegationFactsCacheEntry = {
+  accountPolicyRevision: number;
+  delegationPolicyRevision: number;
+  skillsRevision: number;
+  candidates: EnterpriseDelegationCandidate[];
+};
+
+// A projected config is an immutable prepared-runtime snapshot. Keep only the
+// expensive assignment/profile facts on that snapshot; account/session auth,
+// request metadata, and live capability checks remain outside this cache. The
+// WeakMap follows the prepared owner lifetime, while owner revisions fence
+// durable policy and Knowledge changes.
+const enterpriseDelegationFactsCache = new WeakMap<
+  OpenClawConfig,
+  Map<string, EnterpriseDelegationFactsCacheEntry>
+>();
+const MAX_ENTERPRISE_DELEGATION_FACTS_ENTRIES = 256;
+let enterpriseSkillsRevision = 0;
+
+// Skill refresh versions are monotonic per workspace, so taking the maximum
+// across workspaces is not a valid aggregate: an update in workspace B can be
+// hidden by an older, larger version in workspace A. The refresh event is the
+// ownership boundary; one process-local revision invalidates every prepared
+// Enterprise facts snapshot when any skill source changes.
+const ensureEnterpriseSkillsInvalidationListener = (() => {
+  const listener = () => {
+    enterpriseSkillsRevision += 1;
+  };
+  return () => {
+    // Tests reset refresh-state listeners between cases. Re-registering the
+    // same function is idempotent in the Set and keeps this cache correct.
+    registerSkillsChangeListener(listener);
+  };
+})();
+
+let enterpriseKnowledgeRevision = 0;
+
+// Knowledge bindings, publication selection, and zone access have their own
+// revision domain. The post-commit event is the owner boundary, so a cached
+// projection never has to scan every allowed Agent on a cache hit while a
+// committed Knowledge mutation still invalidates the projection immediately.
+subscribeKnowledgeAccessChanges(() => {
+  enterpriseKnowledgeRevision += 1;
+});
+
+type EnterpriseRuntimeProjectionCacheEntry = {
+  accountPolicyRevision: number;
+  configGeneration: number;
+  delegationCandidates: readonly EnterpriseDelegationCandidate[];
+  knowledgeRevision: number;
+  /** SQLite fence catches committed mutations made by another process. */
+  stateDatabaseVersion?: number;
+  pluginRegistryVersion: number;
+  skillsRevision: number;
+  allowedAgentIds: readonly string[];
+  knowledgeAgentIds: readonly string[];
+  projectedConfig: OpenClawConfig;
+};
+
+// Workspace/template materialization is the largest synchronous part of the
+// Enterprise admission projection. The prepared config object is immutable;
+// retain it by the prepared config owner and account policy revision, then
+// return a fresh top-level object before request metadata is attached. The
+// request metadata lives in a WeakMap keyed by that returned object, so sharing
+// the cached projection itself would let one request overwrite another.
+const enterpriseRuntimeProjectionCache = new WeakMap<
+  OpenClawConfig,
+  Map<string, EnterpriseRuntimeProjectionCacheEntry>
+>();
+const MAX_ENTERPRISE_RUNTIME_PROJECTION_ENTRIES = 128;
+let enterpriseRuntimeProjectionGeneration = 0;
+
+function readEnterpriseStateDatabaseVersion(): number | undefined {
+  try {
+    const row = openOpenClawStateDatabase().db.prepare("PRAGMA data_version").get() as {
+      data_version?: unknown;
+    };
+    return typeof row.data_version === "number" ? row.data_version : undefined;
+  } catch {
+    // A cache hit is never safe without the durable fence. The normal
+    // projection path still performs its existing live reads and will rebuild.
+    return undefined;
+  }
+}
+
+// Runtime config writes replace the prepared owner or change its policy
+// inputs. Keep the generation fence here instead of hashing the whole config
+// on each admission; a direct caller that owns a standalone config remains
+// fenced by that config object's identity.
+registerRuntimeConfigWriteListener(() => {
+  enterpriseRuntimeProjectionGeneration += 1;
+});
+
+function resolveEnterpriseKnowledgeAgentIds(
+  account: EnterpriseAccount,
+  allowed: ReadonlySet<string>,
+  personalAgentId: string,
+): string[] {
+  return [...allowed]
+    .filter((agentId) => {
+      const resourceKey =
+        agentId === personalAgentId
+          ? personalAgentResourceKey(account.id)
+          : sharedAgentResourceKey(agentId);
+      // `allowed` is resolved from the same account policy revision. Knowledge
+      // access itself is fenced by enterpriseKnowledgeRevision below.
+      return listPublishedZonesForAgent(resourceKey, undefined).length > 0;
+    })
+    .toSorted();
+}
+
+function cloneEnterpriseRuntimeProjection(config: OpenClawConfig): OpenClawConfig {
+  // markGatewayRequestScopedRuntimeConfig stores mutable request metadata by
+  // config identity. A root clone is sufficient to isolate that metadata while
+  // preserving the immutable nested projection without a full deep clone on
+  // every message.
+  return { ...config };
+}
+
+function freezeEnterpriseRuntimeProjection<T>(value: T, seen = new WeakSet<object>()): T {
+  if (!value || typeof value !== "object" || seen.has(value as object)) {
+    return value;
+  }
+  seen.add(value as object);
+  for (const nested of Object.values(value as Record<string, unknown>)) {
+    freezeEnterpriseRuntimeProjection(nested, seen);
+  }
+  return Object.freeze(value);
+}
+
+function ownImmutableEnterpriseRuntimeProjection(config: OpenClawConfig): OpenClawConfig {
+  // The cache must own every nested value before freezing. Freezing the
+  // projection assembled from `config` would freeze the caller's runtime
+  // snapshot and make later config publication fail in surprising ways.
+  return freezeEnterpriseRuntimeProjection(cloneConfigWithResolutionFacts(config));
+}
+
+function resolveEnterpriseDelegationFacts(
+  config: OpenClawConfig,
+  account: EnterpriseAccount,
+): EnterpriseDelegationCandidate[] {
+  ensureEnterpriseSkillsInvalidationListener();
+  const delegationPolicyRevision = readEnterpriseDelegationPolicy().revision;
+  const byAccount =
+    enterpriseDelegationFactsCache.get(config) ??
+    new Map<string, EnterpriseDelegationFactsCacheEntry>();
+  enterpriseDelegationFactsCache.set(config, byAccount);
+  const cached = byAccount.get(account.id);
+  const factsCacheMissReason: EnterpriseCacheInvalidationReason | undefined = !cached
+    ? "config"
+    : cached.accountPolicyRevision !== account.policyRevision ||
+        cached.delegationPolicyRevision !== delegationPolicyRevision
+      ? "account"
+      : cached.skillsRevision !== enterpriseSkillsRevision
+        ? "skills"
+        : undefined;
+  if (cached && factsCacheMissReason === undefined) {
+    emitEnterpriseCacheStatus({
+      config,
+      name: "enterprise.gateway.delegation_facts_cache",
+      state: "hit",
+    });
+    return cached.candidates;
+  }
+  emitEnterpriseCacheStatus({
+    config,
+    name: "enterprise.gateway.delegation_facts_cache",
+    state: "miss",
+    reason: factsCacheMissReason,
+  });
+  const candidates = listEnterpriseDelegationCandidates(config, account);
+  if (byAccount.size >= MAX_ENTERPRISE_DELEGATION_FACTS_ENTRIES) {
+    const oldest = byAccount.keys().next().value;
+    if (oldest !== undefined) {
+      byAccount.delete(oldest);
+    }
+  }
+  byAccount.set(account.id, {
+    accountPolicyRevision: account.policyRevision,
+    delegationPolicyRevision,
+    skillsRevision: enterpriseSkillsRevision,
+    candidates,
+  });
+  return candidates;
+}
 
 export type EnterpriseGatewayAdmission =
   | { allowed: true; context: GatewayRequestContext; account?: EnterpriseAccount }
@@ -386,28 +607,65 @@ export function projectEnterpriseRuntimeConfig(
     userAudience?: boolean;
     /** Reuse the roster already resolved for this request when available. */
     delegationCandidates?: readonly EnterpriseDelegationCandidate[];
+    /** Reuse the admission entitlement set instead of resolving it twice. */
+    allowedAgentIds?: ReadonlySet<string>;
   } = {},
 ): OpenClawConfig {
   const restricted = account.role === "employee" || options.userAudience === true;
-  const allowed = resolveEnterpriseAllowedAgentIds(config, account, options);
+  const userAudience = options.userAudience === true;
   const personalAgentId = resolveEnterprisePersonalAgentId(config, account);
+  const pluginRegistryVersion = getActivePluginRegistryVersion();
+  const stateDatabaseVersion = readEnterpriseStateDatabaseVersion();
+  ensureEnterpriseSkillsInvalidationListener();
+  const delegationCandidates =
+    options.delegationCandidates ?? resolveEnterpriseDelegationFacts(config, account);
+  const cacheKey = `${account.id}:${userAudience ? "user" : "operator"}`;
+  const byAccount =
+    enterpriseRuntimeProjectionCache.get(config) ??
+    new Map<string, EnterpriseRuntimeProjectionCacheEntry>();
+  enterpriseRuntimeProjectionCache.set(config, byAccount);
+  const cached = byAccount.get(cacheKey);
+  const cacheMatches =
+    cached &&
+    cached.accountPolicyRevision === account.policyRevision &&
+    cached.delegationCandidates === delegationCandidates &&
+    cached.knowledgeRevision === enterpriseKnowledgeRevision &&
+    stateDatabaseVersion !== undefined &&
+    cached.stateDatabaseVersion === stateDatabaseVersion &&
+    cached.pluginRegistryVersion === pluginRegistryVersion &&
+    cached.skillsRevision === enterpriseSkillsRevision &&
+    cached.configGeneration === enterpriseRuntimeProjectionGeneration;
+  if (cacheMatches && cached) {
+    emitEnterpriseCacheStatus({
+      config,
+      name: "enterprise.gateway.runtime_projection_cache",
+      state: "hit",
+    });
+    return cloneEnterpriseRuntimeProjection(cached.projectedConfig);
+  }
+  const projectionCacheMissReason: EnterpriseCacheInvalidationReason = !cached
+    ? "config"
+    : cached.accountPolicyRevision !== account.policyRevision ||
+        cached.delegationCandidates !== delegationCandidates
+      ? "account"
+      : cached.knowledgeRevision !== enterpriseKnowledgeRevision
+        ? "knowledge"
+        : cached.skillsRevision !== enterpriseSkillsRevision
+          ? "skills"
+          : "config";
+  emitEnterpriseCacheStatus({
+    config,
+    name: "enterprise.gateway.runtime_projection_cache",
+    state: "miss",
+    reason: projectionCacheMissReason,
+  });
+  const allowed = options.allowedAgentIds
+    ? new Set(options.allowedAgentIds)
+    : resolveEnterpriseAllowedAgentIds(config, account, options);
   const knowledgeAgentIds = new Set(
-    options.userAudience
-      ? [...allowed].filter((agentId) => {
-          const resourceKey =
-            agentId === personalAgentId
-              ? personalAgentResourceKey(account.id)
-              : sharedAgentResourceKey(agentId);
-          return (
-            resolveEnterpriseResourceAccess(account, "agent", resourceKey).allowed &&
-            listPublishedZonesForAgent(resourceKey, undefined).length > 0
-          );
-        })
-      : [],
+    userAudience ? resolveEnterpriseKnowledgeAgentIds(account, allowed, personalAgentId) : [],
   );
   const storedAccountToolPolicy = readEnterpriseAccountToolPolicy(account.id);
-  const delegationCandidates =
-    options.delegationCandidates ?? listEnterpriseDelegationCandidates(config, account);
   const hasAssignedSpecialist = delegationCandidates.some((candidate) => candidate.effective);
   const routableSpecialistIds = delegationCandidates
     .filter((candidate) => candidate.routable)
@@ -573,7 +831,16 @@ export function projectEnterpriseRuntimeConfig(
           (() => {
             const scopedAgent = toScopedAgent(
               config,
-              { ...personalTemplateWithAccountPolicy, id: personalAgentId },
+              {
+                ...personalTemplateWithAccountPolicy,
+                id: personalAgentId,
+                model: config.agents?.defaults?.model,
+                models: config.agents?.defaults?.models,
+                modelPolicy: config.agents?.defaults?.modelPolicy,
+                utilityModel: config.agents?.defaults?.utilityModel,
+                thinkingDefault: config.agents?.defaults?.thinkingDefault,
+                fastModeDefault: config.agents?.defaults?.fastModeDefault,
+              },
               account,
               preferredDefault,
               toolAllowForAgent(personalAgentId),
@@ -612,7 +879,7 @@ export function projectEnterpriseRuntimeConfig(
       return [id, rest];
     }),
   );
-  return {
+  const projectedConfig: OpenClawConfig = {
     ...config,
     gateway: {
       ...config.gateway,
@@ -686,6 +953,26 @@ export function projectEnterpriseRuntimeConfig(
       list: undefined,
     },
   };
+  const ownedProjectedConfig = ownImmutableEnterpriseRuntimeProjection(projectedConfig);
+  if (byAccount.size >= MAX_ENTERPRISE_RUNTIME_PROJECTION_ENTRIES) {
+    const oldest = byAccount.keys().next().value;
+    if (oldest !== undefined && oldest !== cacheKey) {
+      byAccount.delete(oldest);
+    }
+  }
+  byAccount.set(cacheKey, {
+    accountPolicyRevision: account.policyRevision,
+    configGeneration: enterpriseRuntimeProjectionGeneration,
+    delegationCandidates,
+    knowledgeRevision: enterpriseKnowledgeRevision,
+    stateDatabaseVersion,
+    pluginRegistryVersion,
+    skillsRevision: enterpriseSkillsRevision,
+    allowedAgentIds: [...allowed].toSorted(),
+    knowledgeAgentIds: [...knowledgeAgentIds].toSorted(),
+    projectedConfig: ownedProjectedConfig,
+  });
+  return cloneEnterpriseRuntimeProjection(ownedProjectedConfig);
 }
 
 function requestedAgentIds(params: unknown): Set<string> {
@@ -804,7 +1091,7 @@ export function prepareEnterpriseGatewayRequest(params: {
   >();
   const personalAgentId = resolveEnterprisePersonalAgentId(config, account);
   const resolvedDelegationCandidates = userAudience
-    ? listEnterpriseDelegationCandidates(config, account)
+    ? resolveEnterpriseDelegationFacts(config, account)
     : [];
   const delegationCandidates = userAudience
     ? resolvedDelegationCandidates.map((candidate) => ({
@@ -824,6 +1111,7 @@ export function prepareEnterpriseGatewayRequest(params: {
     : projectEnterpriseRuntimeConfig(config, account, {
         userAudience,
         delegationCandidates: userAudience ? resolvedDelegationCandidates : undefined,
+        allowedAgentIds: allowedAgents,
       });
   const scopedContext = managementRequest
     ? params.context

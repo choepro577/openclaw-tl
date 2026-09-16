@@ -65,7 +65,6 @@ describe("Enterprise delegation profile AI draft", () => {
           JSON.stringify({
             description: "Chuyên kiểm tra nghĩa vụ và rủi ro trong hợp đồng doanh nghiệp.",
             aliases: ["chuyên gia hợp đồng"],
-            handlingMode: "auto_when_certain",
             useWhen: [
               "Kiểm tra điều khoản phạt trong hợp đồng",
               "Đánh giá nghĩa vụ trước khi ký hợp đồng",
@@ -83,6 +82,7 @@ describe("Enterprise delegation profile AI draft", () => {
         "contracts",
       );
       expect(result).toMatchObject({ source: "ai", saved: false, draft: { status: "draft" } });
+      expect(result.draft.handlingMode).toBe("auto_when_certain");
       expect(result.draft.requiredInputs[0]?.id).toBe("");
     });
   });

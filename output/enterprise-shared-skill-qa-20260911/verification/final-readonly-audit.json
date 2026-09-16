@@ -1,0 +1,47 @@
+[
+  {
+    "label": "final-original-parent-child",
+    "sessionId": "811f374f-edab-4673-aa6f-d9f1fc69eb72",
+    "operations": [
+      "router_tool_search",
+      "router_tool_search",
+      "search_po_sites",
+      "get_po_draft_list"
+    ],
+    "noWriteOperation": true
+  },
+  {
+    "label": "final-marker-removed",
+    "sessionId": "d88a4963-c920-4d9a-bb59-3fbe2d328f6b",
+    "operations": [
+      "router_tool_search",
+      "router_tool_search",
+      "search_po_sites",
+      "get_po_draft_list",
+      "router_tool_search",
+      "search_po_sites",
+      "get_po_draft_list"
+    ],
+    "noWriteOperation": true
+  },
+  {
+    "label": "final-new-delegated-child-deny",
+    "sessionId": "81802a99-e79d-4cd4-8a3a-60b94f88aaea",
+    "operations": [
+      "router_tool_search",
+      "router_tool_search",
+      "search_po_sites",
+      "get_po_draft_list"
+    ],
+    "noWriteOperation": true
+  },
+  {
+    "label": "final-delegated-hr-child",
+    "sessionId": "f9e70f2d-7943-46a1-ab7d-a471ed726ee0",
+    "operations": [
+      "router_tool_search",
+      "get_departments"
+    ],
+    "noWriteOperation": true
+  }
+]

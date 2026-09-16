@@ -1,0 +1,13 @@
+{
+  "capturedAt": "2026-09-11T14:34:11Z",
+  "action": "add",
+  "agentId": "purchase-order-skill",
+  "skill": "qa-shared-acceptance-skill",
+  "configSha256": "4b5d25247872b1710137672e21f9c7919e4a4545b83c2f1d6f647c9624d4f5b7",
+  "skillSha256": "025b92957e760d1a95281e2fa7909bc1097aad55b326f9793ae404ff79d5983b",
+  "scriptMode": "-rwx------",
+  "assignedSkills": [
+    "purchase-order-skill",
+    "qa-shared-acceptance-skill"
+  ]
+}

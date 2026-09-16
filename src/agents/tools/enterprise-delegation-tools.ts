@@ -1,5 +1,6 @@
 import { isRecord } from "@openclaw/normalization-core/record-coerce";
 import { Type } from "typebox";
+import { isEnterpriseAgentFirstExperimentEnabled } from "../../enterprise/delegation/delegation-agent-first.js";
 import { readGatewayRequestRuntimeMetadata } from "../../gateway/request-runtime-config.js";
 import { normalizeAgentId } from "../../routing/session-key.js";
 import type { EnterpriseDelegationExecutionOptions } from "../enterprise-delegation-execution.js";
@@ -38,6 +39,69 @@ function createSpecialistsListTool(options: EnterpriseDelegationExecutionOptions
   };
 }
 
+function createAgentFirstRoutingSchema() {
+  return Type.Optional(
+    Type.Object(
+      {
+        outcome: Type.Union([
+          Type.Literal("delegate"),
+          Type.Literal("clarify"),
+          Type.Literal("local"),
+        ]),
+        handling: Type.Union([
+          Type.Literal("direct"),
+          Type.Literal("knowledge"),
+          Type.Literal("specialist"),
+          Type.Literal("hybrid"),
+        ]),
+        continuation: Type.Optional(
+          Type.Union([
+            Type.Literal("confirm"),
+            Type.Literal("answer"),
+            Type.Literal("revise"),
+            Type.Literal("cancel"),
+            Type.Literal("new_task"),
+            Type.Literal("unclear"),
+          ]),
+        ),
+        handoffConsent: Type.Optional(
+          Type.Union([Type.Literal("approved"), Type.Literal("denied"), Type.Literal("unchanged")]),
+        ),
+        confidence: Type.Number({ minimum: 0, maximum: 1 }),
+        secondConfidence: Type.Number({ minimum: 0, maximum: 1 }),
+        independent: Type.Boolean(),
+        question: Type.String({ maxLength: 500 }),
+        routes: Type.Array(
+          Type.Object(
+            {
+              agentId: Type.String({ minLength: 1, maxLength: 200 }),
+              task: Type.String({ minLength: 1, maxLength: 4000 }),
+              missingRequiredInputIds: Type.Array(Type.String({ minLength: 1 })),
+              resolvedRequiredInputs: Type.Array(
+                Type.Object(
+                  {
+                    id: Type.String({ minLength: 1 }),
+                    value: Type.String({ minLength: 1, maxLength: 1000 }),
+                    sourceText: Type.String({ minLength: 1, maxLength: 1000 }),
+                  },
+                  { additionalProperties: false },
+                ),
+                { maxItems: 32 },
+              ),
+              knowledgeQueries: Type.Array(Type.String({ minLength: 1, maxLength: 500 }), {
+                maxItems: 8,
+              }),
+            },
+            { additionalProperties: false },
+          ),
+          { maxItems: 3 },
+        ),
+      },
+      { additionalProperties: false },
+    ),
+  );
+}
+
 export function createEnterpriseDelegationTools(
   options: EnterpriseDelegationExecutionOptions,
 ): AnyAgentTool[] {
@@ -59,11 +123,20 @@ export function createEnterpriseDelegationTools(
   ) {
     return tools;
   }
+  const agentFirstExperimentEnabled = isEnterpriseAgentFirstExperimentEnabled();
+  const description = [
+    "Delegate focused tasks to assigned specialists. Submit independent tasks together to run in parallel. You may call again with a new, narrower follow-up after reviewing results. Use only the server-approved agentIds and canonical tasks in the current-turn directive. Only delegate work needed for the user's request; never copy private retrieved sources into task text. The server checks scope, inputs and handoff policy.",
+    ...(agentFirstExperimentEnabled
+      ? [
+          "Include the complete structured routing object so the server can reuse the same required-input and provenance reducer without a second router model call.",
+        ]
+      : []),
+    "Accepted launches continue in the background; continue independent work. When a specialist result is required and no independent work remains, end this turn; the result will return through the background completion flow. Do not poll or repeat accepted tasks. If clarification is required, ask the returned question and wait for the user.",
+  ].join(" ");
   tools.push({
     name: "enterprise_delegate",
     label: "Enterprise specialists",
-    description:
-      "Delegate focused tasks to assigned specialists. Submit independent tasks together to run in parallel. You may call again with a new, narrower follow-up after reviewing results. Use only the server-approved agentIds and canonical tasks in the current-turn directive. Only delegate work needed for the user's request; never copy private retrieved sources into task text. The server checks scope, inputs and handoff policy. Accepted launches continue in the background; continue independent work. When a specialist result is required and no independent work remains, end this turn; the result will return through the background completion flow. Do not poll or repeat accepted tasks. If clarification is required, ask the returned question and wait for the user.",
+    description,
     parameters: Type.Object(
       {
         assignments: Type.Array(
@@ -74,8 +147,9 @@ export function createEnterpriseDelegationTools(
             },
             { additionalProperties: false },
           ),
-          { minItems: 1, maxItems: 3 },
+          { minItems: agentFirstExperimentEnabled ? 0 : 1, maxItems: 3 },
         ),
+        ...(agentFirstExperimentEnabled ? { routing: createAgentFirstRoutingSchema() } : {}),
       },
       { additionalProperties: false },
     ),
@@ -88,7 +162,8 @@ export function createEnterpriseDelegationTools(
       if (
         !isRecord(raw) ||
         !Array.isArray(raw.assignments) ||
-        raw.assignments.length < 1 ||
+        (raw.assignments.length < 1 &&
+          (!agentFirstExperimentEnabled || raw.routing === undefined)) ||
         raw.assignments.length > 3
       ) {
         return jsonResult({ status: "forbidden", reasonCode: "invalid_assignments" });
@@ -110,7 +185,11 @@ export function createEnterpriseDelegationTools(
         }
         assignments.push({ agentId: item.agentId, task: item.task });
       }
-      return runtime.execute(callId, assignments);
+      return runtime.execute(
+        callId,
+        assignments,
+        agentFirstExperimentEnabled ? raw.routing : undefined,
+      );
     },
   });
   return tools;

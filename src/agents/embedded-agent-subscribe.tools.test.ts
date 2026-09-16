@@ -214,6 +214,23 @@ function getTextContent(result: unknown, index = 0): string {
 }
 
 describe("sanitizeToolResult", () => {
+  it("keeps only declared skill-script bearer links intact for the model", () => {
+    const url = "https://example.test/po?sites=A%2CB&token=abcdefghijklmnopqrstuvwxyz0123456789";
+    const result = {
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify({ result: { data: url }, apiKey: "sk-1234567890abcdef" }),
+        },
+      ],
+      details: { result: { data: url }, __openclawUserVisibleUrlPaths: ["result.data"] },
+    };
+    const allowed = getTextContent(sanitizeToolResult(result, "skill_script"));
+    expect(allowed).toContain(url);
+    expect(allowed).not.toContain("sk-1234567890abcdef");
+    expect(getTextContent(sanitizeToolResult(result, "read"))).not.toContain(url);
+  });
+
   it("redacts JSON-style apiKey fields in text content blocks", () => {
     const result = {
       content: [

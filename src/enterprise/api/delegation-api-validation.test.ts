@@ -105,6 +105,22 @@ describe("Enterprise delegation API validation", () => {
     ).toThrow("FIELD_INVALID:profile.requiredInputs.0.question");
   });
 
+  it("canonicalizes legacy routing preferences at the API boundary", () => {
+    const profile = parseEnterpriseDelegationApiBody(EnterpriseDelegationProfilePatchSchema, {
+      ...validProfile,
+      profile: { ...validProfile.profile, handlingMode: "explicit_only" },
+    });
+    expect(profile.profile.handlingMode).toBe("auto_when_certain");
+
+    const override = parseEnterpriseDelegationApiBody(EnterpriseDelegationOverridePatchSchema, {
+      agentResourceKey: "agent:shared:contracts",
+      mode: "disabled",
+      baseRevision: 0,
+      baseAccountPolicyRevision: 0,
+    });
+    expect(override.mode).toBe("inherit");
+  });
+
   it("bounds activation and simulation payloads and keeps empty actions empty", () => {
     expect(() =>
       parseEnterpriseDelegationApiBody(EnterpriseDelegationActivationSchema, {

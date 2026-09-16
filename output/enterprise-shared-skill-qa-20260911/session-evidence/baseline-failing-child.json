@@ -1,0 +1,58 @@
+{
+  "capturedAt": "2026-09-11T14:03:24.771719+00:00",
+  "label": "baseline-failing-child",
+  "agentId": "purchase-order-skill",
+  "sessionId": "2a24902d-6aad-49ac-88bf-2e063fef6780",
+  "sessionKey": "agent:purchase-order-skill:subagent:8385ce01-253b-4aad-b4a1-db7d86457d11",
+  "runIds": [
+    "0abb4a45-c702-4a7f-b377-6a9adf5f3ed8"
+  ],
+  "modelId": null,
+  "materializedCatalog": {
+    "toolCount": 0,
+    "toolNames": [],
+    "modelId": null
+  },
+  "transcript": {
+    "eventCount": 4,
+    "eventTypes": {
+      "message": 3,
+      "session": 1
+    },
+    "toolCalls": [],
+    "toolResults": [],
+    "toolErrorCount": 0,
+    "codes": []
+  },
+  "trajectory": {
+    "eventCount": 5,
+    "eventTypes": {
+      "context.compiled": 1,
+      "model.completed": 1,
+      "prompt.submitted": 1,
+      "session.ended": 1,
+      "session.started": 1
+    },
+    "toolCalls": [],
+    "toolResults": [],
+    "toolResultSuccess": [],
+    "codes": []
+  },
+  "taskRuns": [
+    {
+      "runId": "0abb4a45-c702-4a7f-b377-6a9adf5f3ed8",
+      "status": "succeeded",
+      "deliveryStatus": "delivered",
+      "toolUseCount": null,
+      "lastToolName": null,
+      "errorClass": null
+    }
+  ],
+  "acceptanceSignals": {
+    "hasMaterializedToolCatalog": false,
+    "hasToolCall": false,
+    "hasSkillScriptCall": false,
+    "hasRouterCall": false,
+    "hasAuthorizationError": false
+  }
+}

@@ -11,12 +11,51 @@ import { canReviewOperatorApproval } from "../operator-approval-authorization.js
 import { APPROVALS_SCOPE } from "../operator-scopes.js";
 import { sessionObserverScopeKey } from "../session-observer-model.js";
 import { resolveRequestedSessionAgentId } from "../session-request-agent.js";
+import { resolveSessionSharingRole, resolveSessionSharingTarget } from "../session-sharing.js";
 import { resolveSessionStoreAgentId } from "../session-store-key.js";
 import { resolveSessionSubscriptionKey } from "../session-subscription-keys.js";
 import { resolveSessionStoreKey } from "../session-utils.js";
+import { enterpriseUserPortalIdentity } from "./gateway-client-identity.js";
 import { requireSessionKey } from "./sessions-shared.js";
-import type { GatewayRequestHandlers } from "./types.js";
+import type { GatewayRequestContext, GatewayRequestHandlers } from "./types.js";
 import { assertValidParams } from "./validation.js";
+
+function scheduleEnterpriseSessionPrewarmInBackground(params: {
+  accountId: string;
+  sessionId: string;
+  sessionKey: string;
+  agentId: string;
+  context: GatewayRequestContext;
+}): void {
+  void import("../../enterprise/prewarm/enterprise-prewarm.js")
+    .then(({ scheduleEnterpriseSessionPrewarm }) =>
+      scheduleEnterpriseSessionPrewarm({
+        accountId: params.accountId,
+        sessionId: params.sessionId,
+        sessionKey: params.sessionKey,
+        agentId: params.agentId,
+        getContext: () => params.context,
+      }),
+    )
+    .catch(() => undefined);
+}
+
+function invalidateEnterpriseSessionPrewarmInBackground(params: {
+  accountId: string;
+  sessionId: string;
+  sessionKey: string;
+}): void {
+  void import("../../enterprise/prewarm/enterprise-prewarm.js")
+    .then(({ invalidateEnterprisePrewarmForAccount }) =>
+      invalidateEnterprisePrewarmForAccount({
+        accountId: params.accountId,
+        sessionId: params.sessionId,
+        sessionKey: params.sessionKey,
+        reason: "session_unsubscribed",
+      }),
+    )
+    .catch(() => undefined);
+}
 
 export const sessionSubscriptionHandlers: GatewayRequestHandlers = {
   "sessions.subscribe": ({ client, context, respond }) => {
@@ -157,6 +196,25 @@ export const sessionSubscriptionHandlers: GatewayRequestHandlers = {
       } else {
         context.subscribeSessionMessageEvents(connId, subscriptionKey);
       }
+      const enterpriseSession = client?.internal?.enterpriseSession;
+      const enterpriseIdentity = enterpriseUserPortalIdentity(client);
+      if (enterpriseSession?.audience === "user" && enterpriseIdentity && requestedAgentId) {
+        const target = resolveSessionSharingTarget({
+          cfg,
+          sessionKey: canonicalKey,
+          agentId: requestedAgentId,
+        });
+        const role = target ? resolveSessionSharingRole({ cfg, client, target }) : undefined;
+        if (role === "owner" || role === "admin") {
+          scheduleEnterpriseSessionPrewarmInBackground({
+            accountId: enterpriseIdentity.accountId,
+            sessionId: enterpriseSession.sessionId,
+            sessionKey: canonicalKey,
+            agentId: requestedAgentId,
+            context,
+          });
+        }
+      }
       respond(
         true,
         {
@@ -209,6 +267,15 @@ export const sessionSubscriptionHandlers: GatewayRequestHandlers = {
     );
     if (connId) {
       context.unsubscribeSessionMessageEvents(connId, subscriptionKey);
+      const enterpriseSession = client?.internal?.enterpriseSession;
+      const enterpriseIdentity = enterpriseUserPortalIdentity(client);
+      if (enterpriseSession?.audience === "user" && enterpriseIdentity) {
+        invalidateEnterpriseSessionPrewarmInBackground({
+          accountId: enterpriseIdentity.accountId,
+          sessionId: enterpriseSession.sessionId,
+          sessionKey: canonicalKey,
+        });
+      }
     }
     respond(true, { subscribed: false, key: canonicalKey }, undefined);
   },

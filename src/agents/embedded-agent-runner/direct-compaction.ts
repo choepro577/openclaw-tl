@@ -30,6 +30,10 @@ export async function compactEmbeddedAgentSessionDirectOnce(
     });
     return preparation.value.fail(reason, err);
   } finally {
-    await runtime?.dispose();
+    try {
+      await runtime?.dispose();
+    } finally {
+      preparation.value.releaseSandbox?.();
+    }
   }
 }

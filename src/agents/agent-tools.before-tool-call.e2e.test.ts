@@ -60,10 +60,7 @@ import {
 import { createOpenClawCodingTools } from "./agent-tools.js";
 import { createWriteTool } from "./sessions/index.js";
 import type { AnyAgentTool } from "./tools/common.js";
-import {
-  getGatewayToolCallerIdentity,
-  withGatewayToolCallerIdentity,
-} from "./tools/gateway-caller-context.js";
+import { withGatewayToolCallerIdentity } from "./tools/gateway-caller-context.js";
 import { callGatewayTool } from "./tools/gateway.js";
 
 const CRITICAL_THRESHOLD = 20;
@@ -2187,60 +2184,61 @@ metadata: ${JSON.stringify({
     return { config, rootDir, stateOptions };
   }
 
-  it("routes Shared Agent write and unknown skill operations through the common owner and reviewer", async () => {
-    const fixture = await createEnterpriseSharedApprovalFixture();
-    let ownerAtRequest: string | undefined;
-    let requestCount = 0;
-    mockCallGateway.mockImplementation(async (method) => {
-      if (method === "plugin.approval.request") {
-        ownerAtRequest = getGatewayToolCallerIdentity()?.approvalOwnerPluginId;
-        requestCount += 1;
-        return { id: `shared-approval-${requestCount}`, status: "accepted" };
+  it.each([false, true])(
+    "executes granted business operations without an approval route (hooks: %s)",
+    async (hasHooks) => {
+      hookRunner.hasHooks.mockReturnValue(hasHooks);
+      const fixture = await createEnterpriseSharedApprovalFixture();
+      mockCallGateway.mockResolvedValue({ id: "no-route", decision: null });
+      try {
+        for (const operation of ["set_data", "unclassified_operation"]) {
+          const params = {
+            skill: "approval-skill",
+            entrypoint: "lookup",
+            operation,
+          };
+          const result = await runBeforeToolCallHook({
+            toolName: "skill_script",
+            params,
+            toolCallId: `business-${operation}`,
+            ctx: {
+              agentId: "contracts",
+              config: fixture.config,
+              sessionKey: "shared-business-session",
+              runId: "shared-business-run",
+              trigger: "user",
+            },
+          });
+          expect(result).toEqual({ blocked: false, params });
+        }
+        const unauthorizedParams = {
+          skill: "unassigned-skill",
+          entrypoint: "lookup",
+          operation: "set_data",
+        };
+        if (hasHooks) {
+          hookRunner.runBeforeToolCall.mockResolvedValue({ params: unauthorizedParams });
+        }
+        const denied = await runBeforeToolCallHook({
+          toolName: "skill_script",
+          params: hasHooks
+            ? { ...unauthorizedParams, skill: "approval-skill" }
+            : unauthorizedParams,
+          ctx: {
+            agentId: "contracts",
+            config: fixture.config,
+            sessionKey: "shared-business-session",
+            runId: "shared-business-run",
+          },
+        });
+        expect(denied).toMatchObject({ blocked: true, reason: "SKILL_NOT_GRANTED" });
+        expect(mockCallGateway).not.toHaveBeenCalled();
+      } finally {
+        closeOpenClawStateDatabaseForTest();
+        await fs.rm(fixture.rootDir, { recursive: true, force: true });
       }
-      return { id: `shared-approval-${requestCount}`, decision: "allow-once" };
-    });
-    try {
-      for (const operation of ["set_data", "unclassified_operation"]) {
-        const result = await withGatewayToolCallerIdentity(
-          { agentId: "contracts", sessionKey: "shared-approval-session" },
-          async () =>
-            await runBeforeToolCallHook({
-              toolName: "skill_script",
-              params: {
-                skill: "approval-skill",
-                entrypoint: "lookup",
-                operation,
-              },
-              toolCallId: `shared-approval-${operation}`,
-              ctx: {
-                agentId: "contracts",
-                config: fixture.config,
-                sessionKey: "shared-approval-session",
-                runId: "shared-approval-run",
-                trigger: "user",
-                approvalReviewerDeviceId: "parent-reviewer-device",
-              },
-            }),
-        );
-        expect(result).toMatchObject({ blocked: false, approvalResolution: "allow-once" });
-      }
-      expect(requestCount).toBe(2);
-      expect(ownerAtRequest).toBe("enterprise-delegation");
-      for (const call of mockCallGateway.mock.calls.filter(
-        ([method]) => method === "plugin.approval.request",
-      )) {
-        const request = call[2] as Record<string, unknown>;
-        // The Gateway derives the owner from the host-bound approval context;
-        // the public payload intentionally does not carry a caller-selected
-        // plugin id that could be spoofed.
-        expect(request).not.toHaveProperty("pluginId");
-        expect(request.approvalReviewerDeviceIds).toEqual(["parent-reviewer-device"]);
-      }
-    } finally {
-      closeOpenClawStateDatabaseForTest();
-      await fs.rm(fixture.rootDir, { recursive: true, force: true });
-    }
-  });
+    },
+  );
 
   async function runAbortDuringApprovalWait(options?: {
     abortReason?: unknown;

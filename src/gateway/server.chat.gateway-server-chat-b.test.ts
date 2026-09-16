@@ -4273,10 +4273,10 @@ describe("gateway server chat", () => {
               payload: expect.objectContaining({
                 runId: "idem-active-a",
                 status: "started",
-                serverTiming: {
+                serverTiming: expect.objectContaining({
                   receivedToAckMs: expect.any(Number),
                   loadSessionMs: expect.any(Number),
-                },
+                }),
               }),
               error: undefined,
             },
@@ -4295,10 +4295,10 @@ describe("gateway server chat", () => {
             payload: expect.objectContaining({
               runId: "idem-active-a",
               status: "started",
-              serverTiming: {
+              serverTiming: expect.objectContaining({
                 receivedToAckMs: expect.any(Number),
                 loadSessionMs: expect.any(Number),
-              },
+              }),
             }),
             error: undefined,
           },
@@ -4308,10 +4308,10 @@ describe("gateway server chat", () => {
             payload: expect.objectContaining({
               runId: "idem-active-b",
               status: "started",
-              serverTiming: {
+              serverTiming: expect.objectContaining({
                 receivedToAckMs: expect.any(Number),
                 loadSessionMs: expect.any(Number),
-              },
+              }),
             }),
             error: undefined,
           },
@@ -4333,10 +4333,10 @@ describe("gateway server chat", () => {
               payload: expect.objectContaining({
                 runId: "idem-active-a",
                 status: "started",
-                serverTiming: {
+                serverTiming: expect.objectContaining({
                   receivedToAckMs: expect.any(Number),
                   loadSessionMs: expect.any(Number),
-                },
+                }),
               }),
               error: undefined,
             },
@@ -4346,10 +4346,10 @@ describe("gateway server chat", () => {
               payload: expect.objectContaining({
                 runId: "idem-active-b",
                 status: "started",
-                serverTiming: {
+                serverTiming: expect.objectContaining({
                   receivedToAckMs: expect.any(Number),
                   loadSessionMs: expect.any(Number),
-                },
+                }),
               }),
               error: undefined,
             },
@@ -4359,10 +4359,10 @@ describe("gateway server chat", () => {
               payload: expect.objectContaining({
                 runId: "idem-active-c",
                 status: "started",
-                serverTiming: {
+                serverTiming: expect.objectContaining({
                   receivedToAckMs: expect.any(Number),
                   loadSessionMs: expect.any(Number),
-                },
+                }),
               }),
               error: undefined,
             },
@@ -4384,10 +4384,10 @@ describe("gateway server chat", () => {
             payload: expect.objectContaining({
               runId: "idem-active-d",
               status: "started",
-              serverTiming: {
+              serverTiming: expect.objectContaining({
                 receivedToAckMs: expect.any(Number),
                 loadSessionMs: expect.any(Number),
-              },
+              }),
             }),
             error: undefined,
           });
@@ -4511,10 +4511,10 @@ describe("gateway server chat", () => {
           payload: expect.objectContaining({
             runId: "idem-sequential-a",
             status: "started",
-            serverTiming: {
+            serverTiming: expect.objectContaining({
               receivedToAckMs: expect.any(Number),
               loadSessionMs: expect.any(Number),
-            },
+            }),
           }),
           error: undefined,
         },
@@ -4524,10 +4524,10 @@ describe("gateway server chat", () => {
           payload: expect.objectContaining({
             runId: "idem-sequential-b",
             status: "started",
-            serverTiming: {
+            serverTiming: expect.objectContaining({
               receivedToAckMs: expect.any(Number),
               loadSessionMs: expect.any(Number),
-            },
+            }),
           }),
           error: undefined,
         },
@@ -4749,10 +4749,10 @@ describe("gateway server chat", () => {
           payload: expect.objectContaining({
             runId: "idem-server-timing",
             status: "started",
-            serverTiming: {
+            serverTiming: expect.objectContaining({
               receivedToAckMs: expect.any(Number),
               loadSessionMs: expect.any(Number),
-            },
+            }),
           }),
           error: undefined,
         },
@@ -5635,10 +5635,10 @@ describe("gateway server chat", () => {
           expect(sendRes.payload).toMatchObject({
             runId: "idem-timeline",
             status: "started",
-            serverTiming: {
+            serverTiming: expect.objectContaining({
               receivedToAckMs: expect.any(Number),
               loadSessionMs: expect.any(Number),
-            },
+            }),
           });
 
           await waitForFast(() => {

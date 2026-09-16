@@ -36,6 +36,8 @@ export type SessionPatchOptions = {
   ownsModelOverride?: () => boolean;
   /** Capture the current connection now, but dispatch only after this tail settles. */
   waitFor?: Promise<unknown>;
+  /** Drop queued work when a newer intent has replaced it. */
+  shouldDispatch?: () => boolean;
   /**
    * Skips the canonical list refresh this patch forces. Batch callers own one
    * refresh after their last row; otherwise an N-row batch pays N full

@@ -109,7 +109,7 @@ describe("enterprise delegation persistence", () => {
     expect(readEnterpriseDelegationPolicy(options)).toMatchObject({ rollout: "off", revision: 0 });
   });
 
-  it("keeps a restrictive override dormant across revoke and restores it on regrant", () => {
+  it("normalizes legacy per-account modes while keeping the row across revoke and regrant", () => {
     const options = stateOptions();
     const resourceKey = sharedAgentResourceKey("contracts");
     const account = createEnterpriseAccount(
@@ -148,7 +148,7 @@ describe("enterprise delegation persistence", () => {
       options,
     );
     expect(listEnterpriseDelegationOverrides(account.id, options)).toMatchObject([
-      { mode: "explicit_only", revision: 1 },
+      { mode: "inherit", revision: 1 },
     ]);
 
     applyEnterpriseAccessChanges(
@@ -164,7 +164,7 @@ describe("enterprise delegation persistence", () => {
       options,
     );
     expect(listEnterpriseDelegationOverrides(account.id, options)).toMatchObject([
-      { mode: "explicit_only", revision: 1 },
+      { mode: "inherit", revision: 1 },
     ]);
   });
 
@@ -434,7 +434,7 @@ describe("enterprise delegation persistence", () => {
     );
     expect(next).toMatchObject({ rollout: "on", revision: 2 });
     expect(listEnterpriseDelegationOverrides(account.id, options)).toMatchObject([
-      { mode: "disabled", revision: 1 },
+      { mode: "inherit", revision: 1 },
     ]);
   });
 });
