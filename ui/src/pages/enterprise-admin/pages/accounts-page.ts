@@ -16,6 +16,7 @@ import {
 import { OpenClawLightDomElement } from "../../../lit/openclaw-element.ts";
 import {
   createAdminAccount,
+  deleteAdminAccount,
   applyAdminAccessChanges,
   listAdminAccounts,
   listAdminAgentCatalog,
@@ -92,6 +93,8 @@ export class EnterpriseAdminAccountsPage extends OpenClawLightDomElement {
   @state() private assignmentSource = new Map<string, boolean>();
   @state() private detailLoading = false;
   @state() private saving = false;
+  @state() private deleting = false;
+  @state() private deletedUsername = "";
   @state() private detailAccessPresetKey = "";
   @state() private drawerDirty = false;
   private query = "";
@@ -338,6 +341,35 @@ export class EnterpriseAdminAccountsPage extends OpenClawLightDomElement {
       this.error = errorMessage(error);
     } finally {
       this.detailLoading = false;
+    }
+  }
+
+  private async deleteAccount(account: EnterpriseAccount): Promise<void> {
+    if (
+      this.deleting ||
+      this.saving ||
+      this.detailLoading ||
+      !showNativeConfirm(eaa("deleteAccountConfirm", { username: account.username }))
+    ) {
+      return;
+    }
+    this.deleting = true;
+    this.error = "";
+    this.deletedUsername = "";
+    try {
+      await deleteAdminAccount(account.id);
+      if (this.selected?.account.id === account.id) {
+        this.drawerDirty = false;
+        this.closeDetail();
+      }
+      this.deletedUsername = account.username;
+      this.cursor = "";
+      this.previousCursors = [];
+      await this.load();
+    } catch (error) {
+      this.error = errorMessage(error);
+    } finally {
+      this.deleting = false;
     }
   }
 
@@ -642,11 +674,23 @@ export class EnterpriseAdminAccountsPage extends OpenClawLightDomElement {
           <button
             class="ea-button ea-button--danger"
             type="button"
+            ?disabled=${this.deleting || this.saving || this.detailLoading}
+            @click=${() => void this.deleteAccount(account)}
+          >
+            ${eaa(this.deleting ? "deletingAccount" : "deleteAccount")}
+          </button>
+          <button
+            class="ea-button ea-button--danger"
+            type="button"
             @click=${() => void this.resetPassword()}
           >
             ${eaa("resetPasswordAction")}
           </button>
-          <button class="ea-button ea-button--primary" type="submit" ?disabled=${this.saving}>
+          <button
+            class="ea-button ea-button--primary"
+            type="submit"
+            ?disabled=${this.saving || this.deleting}
+          >
             ${this.saving ? ea("Đang lưu…") : ea("Lưu thay đổi")}
           </button>
         </div>
@@ -869,6 +913,11 @@ export class EnterpriseAdminAccountsPage extends OpenClawLightDomElement {
             ${icons.plus} ${ea("Tạo tài khoản")}
           </button>
         </header>
+        ${this.deletedUsername
+          ? html`<p class="ea-banner" role="status">
+              ${eaa("accountDeleted", { username: this.deletedUsername })}
+            </p>`
+          : nothing}
         <div class="ea-toolbar">
           <input
             class="ea-input"
@@ -1012,6 +1061,18 @@ export class EnterpriseAdminAccountsPage extends OpenClawLightDomElement {
                             <td>${formatDate(account.updatedAt)}</td>
                             <td class="ea-table__action">
                               <button class="ea-button" type="button">${ea("Xem")}</button>
+                              <button
+                                class="ea-button ea-button--danger"
+                                type="button"
+                                ?disabled=${this.deleting || this.saving || this.detailLoading}
+                                aria-label="${eaa("deleteAccount")} @${account.username}"
+                                @click=${(event: Event) => {
+                                  event.stopPropagation();
+                                  void this.deleteAccount(account);
+                                }}
+                              >
+                                ${eaa("deleteAccount")}
+                              </button>
                             </td>
                           </tr>
                         `,

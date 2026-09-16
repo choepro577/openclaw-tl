@@ -20,6 +20,7 @@ import {
   getEnterpriseAccountById,
   listEnterpriseAccounts,
   updateEnterpriseAccount,
+  deleteEnterpriseAccount,
 } from "../accounts/account-store.js";
 import type { EnterpriseAccount, EnterpriseAccountRole } from "../accounts/account-types.js";
 import {
@@ -2392,6 +2393,21 @@ export async function handleEnterpriseHttpRequest(
         : sendError(res, 404, "ACCOUNT_NOT_FOUND", "Không tìm thấy tài khoản.");
     }
 
+    if (adminAccountRoute && adminAccountRoute.tail === "" && req.method === "DELETE") {
+      const admin = requireAdmin(req, res);
+      if (!admin || !requirePortalCsrf(req, res, admin, "admin")) {
+        return true;
+      }
+      const account = deleteEnterpriseAccount(adminAccountRoute.accountId, {
+        actorAccountId: admin.account.id,
+        actorSessionId: admin.sessionId,
+        requestId: requestId(req),
+      });
+      invalidateEnterprisePrewarmForAccount({ accountId: account.id, reason: "account_deleted" });
+      hooks.disconnectClientsForProfile?.(account.profileId);
+      return sendJson(res, 200, { ok: true });
+    }
+
     if (adminAccountRoute && adminAccountRoute.tail === "" && req.method === "PATCH") {
       const admin = requireAdmin(req, res);
       if (!admin || !requirePortalCsrf(req, res, admin, "admin")) {
@@ -3902,7 +3918,7 @@ export async function handleEnterpriseHttpRequest(
           res,
           409,
           "LAST_ADMIN_REQUIRED",
-          "Không thể khóa hoặc hạ role admin cuối cùng.",
+          "Không thể xoá, khóa hoặc hạ role admin cuối cùng.",
         );
       }
       const account = updateEnterpriseAccount(current.id, {
@@ -4060,8 +4076,11 @@ export async function handleEnterpriseHttpRequest(
     if (message === "BODY_TOO_LARGE") {
       return sendError(res, 413, message, "Request body vượt quá giới hạn.");
     }
+    if (message === "SELF_DELETE_FORBIDDEN") {
+      return sendError(res, 409, message, "Không thể tự xoá tài khoản đang đăng nhập.");
+    }
     if (message === "LAST_ADMIN_REQUIRED") {
-      return sendError(res, 409, message, "Không thể khóa hoặc hạ role admin cuối cùng.");
+      return sendError(res, 409, message, "Không thể xoá, khóa hoặc hạ role admin cuối cùng.");
     }
     if (message.startsWith("POLICY_REVISION_CONFLICT:")) {
       const [, accountId, currentRevision] = message.split(":");

@@ -409,6 +409,55 @@ export function updateEnterpriseAccount(
   );
 }
 
+/** Delete login/access state atomically; retain the profile for historical conversations. */
+export function deleteEnterpriseAccount(
+  accountId: string,
+  audit: { actorAccountId: string; actorSessionId: string; requestId: string | null },
+  options: OpenClawStateDatabaseOptions = {},
+): EnterpriseAccount {
+  ensureEnterpriseSchema(options);
+  return runOpenClawStateWriteTransaction(
+    (database) => {
+      const { db } = database;
+      const row = selectAccount(db, "id", accountId);
+      if (!row) {
+        throw new Error("ACCOUNT_NOT_FOUND");
+      }
+      if (accountId === audit.actorAccountId) {
+        throw new Error("SELF_DELETE_FORBIDDEN");
+      }
+      if (
+        row.role === "administrator" &&
+        row.enabled &&
+        countEnterpriseAdministrators(options) <= 1
+      ) {
+        throw new Error("LAST_ADMIN_REQUIRED");
+      }
+      const account = withoutPassword(toAccount(row));
+      removeEnterpriseDefaultAutomations(database, accountId, options.env);
+      db.prepare("DELETE FROM enterprise_accounts WHERE id = ?").run(accountId); // sqlite-allow-raw -- Account-owned access/session rows cascade in this transaction.
+      db.prepare(
+        "DELETE FROM user_profile_identities WHERE provider = 'openclaw-account' AND subject = ? AND profile_id = ?",
+      ).run(accountId, account.profileId); // sqlite-allow-raw -- Remove only this account's login binding, preserving history.
+      db.prepare(`INSERT INTO enterprise_audit_events
+        (id, actor_account_id, actor_session_id, action, target_type, target_id, request_id,
+         before_json, after_json, outcome, created_at)
+        VALUES (?, ?, ?, 'account.delete', 'account', ?, ?, ?, NULL, 'success', ?)`).run(
+        generateSecureUuid(),
+        audit.actorAccountId,
+        audit.actorSessionId,
+        accountId,
+        audit.requestId,
+        JSON.stringify(account),
+        Date.now(),
+      ); // sqlite-allow-raw -- Deletion and password-free audit commit together.
+      return account;
+    },
+    options,
+    { operationLabel: "enterprise.accounts.delete" },
+  );
+}
+
 export function markEnterpriseAccountLogin(
   accountId: string,
   options: OpenClawStateDatabaseOptions = {},

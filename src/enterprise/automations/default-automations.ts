@@ -85,7 +85,7 @@ export function provisionEnterpriseDefaultAutomations(
   deferOpenClawStatePostCommitPublication(database, () => noteCronJobsStoreCommit(storeKey));
 }
 
-/** Bootstrap rollback removes only the newly created account's scheduled state. */
+/** Remove all scheduled jobs owned by an account on deletion or bootstrap rollback. */
 export function removeEnterpriseDefaultAutomations(
   database: OpenClawStateDatabase,
   accountId: string,

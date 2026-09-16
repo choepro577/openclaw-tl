@@ -5,14 +5,17 @@ import {
   ErrorCodes,
 } from "../../../packages/gateway-protocol/src/index.js";
 import type { OpenClawConfig } from "../../config/types.openclaw.js";
+import { loadCronJobsStoreSync, resolveCronJobsStorePath } from "../../cron/store.js";
 import type { GatewayRequestContext } from "../../gateway/server-methods/types.js";
 import { closeOpenClawStateDatabaseForTest } from "../../state/openclaw-state-db.js";
 import { withOpenClawTestState } from "../../test-utils/openclaw-test-state.js";
 import {
   createEnterpriseAccount,
+  deleteEnterpriseAccount,
   getEnterpriseAccountById,
   updateEnterpriseAccount,
 } from "../accounts/account-store.js";
+import { listEnterpriseAuditEvents } from "../audit/audit-store.js";
 import { ENTERPRISE_ADMIN_AUTH_COOKIE, ENTERPRISE_USER_AUTH_COOKIE } from "../auth/cookie.js";
 import { hashEnterprisePassword } from "../auth/password.js";
 import {
@@ -747,6 +750,108 @@ describe("Enterprise HTTP API", () => {
             })
           ).status,
         ).toBe(200);
+      } finally {
+        await closeServer(server);
+      }
+    });
+  });
+
+  it("deletes accounts only with admin CSRF, revokes login and owned jobs, and preserves other accounts", async () => {
+    await withOpenClawTestState({ scenario: "minimal", applyEnv: true }, async () => {
+      const passwordHash = await hashEnterprisePassword("delete-account-password");
+      const admin = createEnterpriseAccount({
+        username: "delete.admin",
+        displayName: "Admin",
+        passwordHash,
+        role: "administrator",
+        mustChangePassword: false,
+      });
+      const employee = createEnterpriseAccount({
+        username: "delete.employee",
+        displayName: "Employee",
+        passwordHash,
+        role: "employee",
+        mustChangePassword: false,
+      });
+      const disconnectClientsForProfile = vi.fn();
+      const { server, baseUrl } = await startEnterpriseServer(ENTERPRISE_CONFIG, {
+        disconnectClientsForProfile,
+      });
+      try {
+        const login = await apiRequest(baseUrl, "/api/auth/admin/login", {
+          method: "POST",
+          body: { username: admin.username, password: "delete-account-password" },
+        });
+        const { csrfToken } = await login.json();
+        const cookie = cookieFrom(login);
+        const userLogin = await apiRequest(baseUrl, "/api/auth/user/login", {
+          method: "POST",
+          body: { username: employee.username, password: "delete-account-password" },
+        });
+        const userCookie = cookieFrom(userLogin);
+        const userBody = await userLogin.json();
+        const path = `/api/enterprise/admin/accounts/${employee.id}`;
+        expect((await apiRequest(baseUrl, path, { method: "DELETE" })).status).toBe(401);
+        expect(
+          (
+            await apiRequest(baseUrl, path, {
+              method: "DELETE",
+              cookie: userCookie,
+              csrf: userBody.csrfToken,
+            })
+          ).status,
+        ).toBe(401);
+        expect((await apiRequest(baseUrl, path, { method: "DELETE", cookie })).status).toBe(403);
+        expect(getEnterpriseAccountById(employee.id)).toBeDefined();
+        const self = await apiRequest(baseUrl, `/api/enterprise/admin/accounts/${admin.id}`, {
+          method: "DELETE",
+          cookie,
+          csrf: csrfToken,
+        });
+        expect(self.status).toBe(409);
+        expect(await self.json()).toMatchObject({ code: "SELF_DELETE_FORBIDDEN" });
+        expect(() =>
+          deleteEnterpriseAccount(admin.id, {
+            actorAccountId: employee.id,
+            actorSessionId: "test",
+            requestId: null,
+          }),
+        ).toThrow("LAST_ADMIN_REQUIRED");
+        const deleted = await apiRequest(baseUrl, path, {
+          method: "DELETE",
+          cookie,
+          csrf: csrfToken,
+        });
+        expect(deleted.status).toBe(200);
+        expect(await deleted.json()).toEqual({ ok: true });
+        expect(getEnterpriseAccountById(employee.id)).toBeUndefined();
+        expect(getEnterpriseAccountById(admin.id)).toBeDefined();
+        expect(listEnterpriseEntitlements(employee.id)).toEqual([]);
+        expect(
+          loadCronJobsStoreSync(resolveCronJobsStorePath()).jobs.every(
+            (job) => job.owner?.accountId === admin.id,
+          ),
+        ).toBe(true);
+        expect(disconnectClientsForProfile).toHaveBeenCalledWith(employee.profileId);
+        expect(
+          (await apiRequest(baseUrl, "/api/auth/user/me", { cookie: userCookie })).status,
+        ).toBe(401);
+        expect(
+          (
+            await apiRequest(baseUrl, "/api/auth/user/login", {
+              method: "POST",
+              body: { username: employee.username, password: "delete-account-password" },
+            })
+          ).status,
+        ).toBe(401);
+        expect(
+          (await apiRequest(baseUrl, path, { method: "DELETE", cookie, csrf: csrfToken })).status,
+        ).toBe(404);
+        expect(
+          listEnterpriseAuditEvents().some(
+            (event) => event.action === "account.delete" && event.targetId === employee.id,
+          ),
+        ).toBe(true);
       } finally {
         await closeServer(server);
       }

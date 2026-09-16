@@ -2,6 +2,13 @@ import { brandProductCopy } from "../branding/display-brand.ts";
 import { i18n } from "./index.ts";
 
 const copy = {
+  deleteAccount: ["Xoá tài khoản", "Delete account"],
+  deletingAccount: ["Đang xoá…", "Deleting…"],
+  accountDeleted: ["Đã xoá tài khoản @{username}.", "Account @{username} deleted."],
+  deleteAccountConfirm: [
+    "Xoá vĩnh viễn tài khoản @{username}? Quyền truy cập, phiên đăng nhập, Knowledge cá nhân và lịch tự động của tài khoản sẽ bị xoá. Hồ sơ lịch sử hội thoại được giữ lại. Không thể hoàn tác.",
+    "Permanently delete @{username}? The account's access, sign-in sessions, personal Knowledge and automations will be deleted. Conversation history profiles are retained. This cannot be undone.",
+  ],
   usernameInvalid: [
     "Username chỉ gồm chữ thường không dấu, số, dấu chấm, gạch dưới hoặc gạch ngang.",
     "Username may contain only lowercase ASCII letters, numbers, dots, underscores, or hyphens.",

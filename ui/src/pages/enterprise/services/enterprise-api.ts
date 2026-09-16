@@ -272,6 +272,14 @@ export async function updateAdminAccount(accountId: string, patch: EnterpriseAdm
   );
 }
 
+export async function deleteAdminAccount(accountId: string) {
+  return requestJson<{ ok: true }>(
+    `/api/enterprise/admin/accounts/${encodeURIComponent(accountId)}`,
+    { method: "DELETE" },
+    "admin",
+  );
+}
+
 export async function resetAdminAccountPassword(accountId: string, newPassword: string) {
   return requestJson<{ account: EnterpriseAccount }>(
     `/api/enterprise/admin/accounts/${encodeURIComponent(accountId)}/reset-password`,

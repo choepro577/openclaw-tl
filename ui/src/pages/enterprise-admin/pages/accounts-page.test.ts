@@ -12,6 +12,7 @@ import type {
 import { EnterpriseAdminAccountsPage } from "./accounts-page.ts";
 
 const enterpriseApiMocks = vi.hoisted(() => ({
+  deleteAdminAccount: vi.fn(),
   updateAdminAccount: vi.fn(),
   loadAdminAccount: vi.fn(),
   listAdminAccounts: vi.fn(),
@@ -196,6 +197,7 @@ let container: HTMLDivElement;
 describe("Enterprise admin account creation", () => {
   beforeEach(async () => {
     await i18n.setLocale("vi");
+    enterpriseApiMocks.deleteAdminAccount.mockReset();
     enterpriseApiMocks.updateAdminAccount.mockReset();
     enterpriseApiMocks.loadAdminAccount.mockReset();
     enterpriseApiMocks.listAdminAccounts.mockReset();
@@ -204,9 +206,47 @@ describe("Enterprise admin account creation", () => {
   });
 
   afterEach(async () => {
+    vi.restoreAllMocks();
     render(nothing, container);
     container.remove();
     await i18n.setLocale("en");
+  });
+
+  it("confirms deletion, preserves the drawer on failure and closes it after success", async () => {
+    const confirm = vi.spyOn(globalThis, "confirm").mockReturnValue(false);
+    enterpriseApiMocks.listAdminAccounts.mockResolvedValue({
+      accounts: [],
+      pageInfo: { total: 0, nextCursor: null },
+      accessPresets: [],
+    });
+    const page = new EnterpriseAdminAccountsPage();
+    Object.assign(page, { selected: detail, loading: false });
+    render(page.render(), container);
+    const button = [...container.querySelectorAll("button")].find(
+      (item) => item.textContent?.trim() === "Xoá tài khoản",
+    );
+    expect(button).toBeDefined();
+    button?.click();
+    expect(confirm).toHaveBeenCalledWith(expect.stringContaining(`@${detailAccount.username}`));
+    expect(enterpriseApiMocks.deleteAdminAccount).not.toHaveBeenCalled();
+    confirm.mockReturnValue(true);
+    enterpriseApiMocks.deleteAdminAccount.mockRejectedValueOnce(
+      new Error("Không thể tự xoá tài khoản đang đăng nhập."),
+    );
+    button?.click();
+    await vi.waitFor(() => {
+      render(page.render(), container);
+      expect(container.textContent).toContain("Không thể tự xoá tài khoản đang đăng nhập.");
+    });
+    expect(container.querySelector("openclaw-enterprise-admin-dialog")).not.toBeNull();
+    enterpriseApiMocks.deleteAdminAccount.mockResolvedValue({ ok: true });
+    button?.click();
+    await vi.waitFor(() => {
+      render(page.render(), container);
+      expect(container.textContent).toContain(`Đã xoá tài khoản @${detailAccount.username}.`);
+    });
+    expect(enterpriseApiMocks.deleteAdminAccount).toHaveBeenLastCalledWith(detailAccount.id);
+    expect(container.querySelector("openclaw-enterprise-admin-dialog")).toBeNull();
   });
 
   it("presents access choices from human-readable Agent and Skill catalog data", () => {
