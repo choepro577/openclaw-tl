@@ -4,7 +4,6 @@ import {
   isRecord,
 } from "@openclaw/normalization-core/record-coerce";
 import { truncateUtf16Safe } from "@openclaw/normalization-core/utf16-slice";
-import { declaredUserVisibleToolUrls } from "../../../../src/agents/user-visible-tool-urls.js";
 // Control UI chat domain owns pure tool-card extraction rules.
 import {
   extractCanvasFromDetails,
@@ -503,10 +502,4 @@ export function extractToolCardsCached(message: unknown, prefix = "tool"): ToolC
   const cards = extractToolCards(message, prefix);
   byPrefix.set(prefix, cards);
   return cards;
-}
-
-export function hasUserVisibleToolUrl(message: unknown): boolean {
-  return extractToolCardsCached(message).some(
-    (card) => declaredUserVisibleToolUrls(card.name, card.details, card.outputText).length > 0,
-  );
 }

@@ -29,10 +29,10 @@ export function prepareWorkerLiveEventData(
   if (event.payload.phase === "start") {
     payload.args = sanitizeToolArgs(event.payload.args);
   } else if (event.payload.phase === "update") {
-    const partialResult = sanitizeToolResult(event.payload.partialResult, toolName);
+    const partialResult = sanitizeToolResult(event.payload.partialResult);
     payload.partialResult = toolName === "exec" ? capLiveExecResult(partialResult) : partialResult;
   } else {
-    const result = sanitizeToolResult(event.payload.result, toolName);
+    const result = sanitizeToolResult(event.payload.result);
     payload.result = toolName === "exec" ? capLiveExecResult(result) : result;
   }
   return payload;

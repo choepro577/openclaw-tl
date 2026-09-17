@@ -438,47 +438,21 @@ function authFailure(value: unknown): boolean {
   ].some((needle) => text.includes(needle));
 }
 
-function isUserVisibleHttpUrl(value: string): boolean {
-  try {
-    const parsed = new URL(value);
-    return (
-      (parsed.protocol === "http:" || parsed.protocol === "https:") &&
-      !parsed.username &&
-      !parsed.password
-    );
-  } catch {
-    return false;
-  }
-}
-
-function scrubSecrets(
-  value: unknown,
-  token: string,
-  userVisibleUrlPaths = new Set<string>(),
-  pathParts: string[] = [],
-): unknown {
+function scrubSecrets(value: unknown, token: string): unknown {
   if (typeof value === "string") {
-    if (userVisibleUrlPaths.has(pathParts.join(".")) && isUserVisibleHttpUrl(value)) {
-      return value;
-    }
     return token && value.includes(token) ? value.replaceAll(token, "<redacted>") : value;
   }
   if (Array.isArray(value)) {
-    return value.map((child) => scrubSecrets(child, token, userVisibleUrlPaths, pathParts));
+    return value.map((child) => scrubSecrets(child, token));
   }
   if (!isRecord(value)) {
     return value;
   }
   return Object.fromEntries(
-    Object.entries(value).map(([key, child]) => {
-      const childPath = [...pathParts, key];
-      return [
-        key,
-        SECRET_KEY_PATTERN.test(key) && !userVisibleUrlPaths.has(childPath.join("."))
-          ? "<redacted>"
-          : scrubSecrets(child, token, userVisibleUrlPaths, childPath),
-      ];
-    }),
+    Object.entries(value).map(([key, child]) => [
+      key,
+      SECRET_KEY_PATTERN.test(key) ? "<redacted>" : scrubSecrets(child, token),
+    ]),
   );
 }
 
@@ -669,11 +643,7 @@ export async function runEnterpriseSkillScript(params: {
       throw new EnterpriseSkillScriptError("SKILL_AUTH_REQUIRED", 401);
     }
     outcome = "success";
-    const userVisibleUrlPaths =
-      resolved.entrypoint.kind === "operation" && operation
-        ? new Set(resolved.entrypoint.userVisibleUrlPaths?.[operation] ?? [])
-        : undefined;
-    return params.login === true ? parsed : scrubSecrets(parsed, token, userVisibleUrlPaths);
+    return params.login === true ? parsed : scrubSecrets(parsed, token);
   } finally {
     appendEnterpriseAuditEvent({
       actorAccountId: params.accountId,

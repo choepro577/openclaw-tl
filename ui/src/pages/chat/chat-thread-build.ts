@@ -19,7 +19,6 @@ import {
 } from "../../lib/chat/heartbeat-display.ts";
 import { extractTextCached } from "../../lib/chat/message-extract.ts";
 import { normalizeRoleForGrouping } from "../../lib/chat/message-normalizer.ts";
-import { hasUserVisibleToolUrl } from "../../lib/chat/tool-cards.ts";
 import { areUiSessionKeysEquivalent } from "../../lib/sessions/session-key.ts";
 import {
   buildCompactionDividerItem,
@@ -235,7 +234,7 @@ export function buildChatItems(props: BuildChatItemsProps): Array<ChatItem | Mes
       });
     }
 
-    if (!props.showToolCalls && isToolResult && !hasUserVisibleToolUrl(msg)) {
+    if (!props.showToolCalls && isToolResult) {
       continue;
     }
 
@@ -581,7 +580,7 @@ export function buildChatItems(props: BuildChatItemsProps): Array<ChatItem | Mes
       }
     }
     const tool = toolItems[i];
-    if (tool && (props.showToolCalls || hasUserVisibleToolUrl(tool.message))) {
+    if (tool && props.showToolCalls) {
       const toolItem: ChatItem = {
         kind: "message",
         key: tool.key,

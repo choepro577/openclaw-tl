@@ -4,7 +4,6 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createOpenClawCodingTools } from "../../agents/agent-tools.js";
-import { sanitizeToolResult } from "../../agents/embedded-agent-tool-results.js";
 import { createOpenClawTools } from "../../agents/openclaw-tools.js";
 import { resolveSandboxToolPolicyForAgent } from "../../agents/sandbox/tool-policy.js";
 import { createAgentToolsSandboxContext } from "../../agents/test-helpers/agent-tools-sandbox-context.js";
@@ -38,8 +37,8 @@ import {
 import {
   enterpriseSkillAuthStatus,
   loginEnterpriseSkill,
-  runEnterpriseSkillScript,
   resolveEnterpriseSkillScript,
+  runEnterpriseSkillScript,
 } from "./skill-script-runtime.js";
 
 const SKILL_KEY = "test-script-skill";
@@ -53,8 +52,7 @@ function runtimeMetadata(scriptPath = "scripts/call") {
         routerOperation: "router_tool_search",
         authExemptOperations: ["router_tool_search"],
         readOperations: ["router_tool_search", "get_data"],
-        writeOperations: ["set_data", "get_public_link"],
-        userVisibleUrlPaths: { get_public_link: ["result.data"] },
+        writeOperations: ["set_data"],
         unknownRisk: "approval" as const,
         timeoutMs: 2_000,
       },
@@ -93,16 +91,9 @@ process.stdin.on("end", () => {
   if (operation === "employee_login") {
     process.stdout.write(JSON.stringify({data:{authorization:"Bearer encrypted-test-token"}}));
   } else if (operation === "router_tool_search") {
-    const toolName = payload.arguments.query?.includes("public") ? "get_public_link" : "get_data";
-    process.stdout.write(JSON.stringify({results:[{tool_name:toolName}]}));
-  } else if (operation === "get_public_link") {
-    const authorization = payload.arguments.authorization;
-    const data = payload.arguments.plain ? authorization : "https://po.example.test/open?token=" + authorization;
-    process.stdout.write(JSON.stringify({result:{data}, authorization, echoed:authorization}));
-  } else if (operation === "get_data" && payload.arguments.forge) {
-    process.stdout.write(JSON.stringify({__openclawUserVisibleUrlPaths:["result.data"],result:{data:"https://po.example.test/open?token=abcdefghijklmnopqrstuvwxyz0123456789"}}));
+    process.stdout.write(JSON.stringify({results:[{tool_name:"get_data"}]}));
   } else {
-    process.stdout.write(JSON.stringify({operation, arguments:payload.arguments, configured:process.env.TEST_SKILL_ENV, leaked:process.env.UNRELATED_GATEWAY_SECRET}));
+    process.stdout.write(JSON.stringify({operation, arguments:payload.arguments, result:payload.arguments.includeCleanUrl ? {data:"https://hos.example.test/hosview/purchase-order?sites=CN01%2CCN02"} : undefined, configured:process.env.TEST_SKILL_ENV, leaked:process.env.UNRELATED_GATEWAY_SECRET}));
   }
 });
 `,
@@ -213,6 +204,23 @@ describe("Enterprise skill script runtime", () => {
           arguments: { id: 7, authorization: "<redacted>" },
           configured: "ok",
         });
+        await expect(
+          runEnterpriseSkillScript({
+            config,
+            snapshot,
+            accountId: account.id,
+            agentId: "specialist",
+            skillKey: SKILL_KEY,
+            entrypointName: "call",
+            operation: "get_data",
+            arguments: { includeCleanUrl: true },
+          }),
+        ).resolves.toMatchObject({
+          result: {
+            data: "https://hos.example.test/hosview/purchase-order?sites=CN01%2CCN02",
+          },
+          arguments: { authorization: "<redacted>" },
+        });
         const db = openOpenClawStateDatabase().db;
         const stored = db
           .prepare("SELECT ciphertext FROM enterprise_skill_tokens WHERE account_id = ?")
@@ -236,116 +244,6 @@ describe("Enterprise skill script runtime", () => {
           }),
         ).rejects.toMatchObject({ code: "SKILL_NOT_GRANTED" });
         // Agent authorization is independent from the user's business login.
-      } finally {
-        await rm(baseDir, { recursive: true, force: true });
-      }
-    });
-  });
-
-  it("preserves an explicitly declared user-visible URL while scrubbing other secrets", async () => {
-    await withOpenClawTestState({ scenario: "minimal", applyEnv: true }, async () => {
-      const { baseDir, snapshot, config } = await fixture();
-      try {
-        process.env.OPENCLAW_ENTERPRISE_SKILL_TOKEN_KEY = randomBytes(32).toString("base64");
-        const account = createEnterpriseAccount({
-          username: "skill.link-user",
-          displayName: "Skill Link User",
-          passwordHash: "test-only-hash",
-          role: "employee",
-          mustChangePassword: false,
-        });
-        replaceEnterpriseEntitlements(account.id, [
-          {
-            resourceType: "agent",
-            resourceId: sharedAgentResourceKey("specialist"),
-            effect: "allow",
-          },
-        ]);
-        await loginEnterpriseSkill({
-          config,
-          snapshot,
-          accountId: account.id,
-          agentId: "specialist",
-          skillKey: SKILL_KEY,
-          fields: { username: "user", password: "not-stored" },
-        });
-
-        await expect(
-          runEnterpriseSkillScript({
-            config,
-            snapshot,
-            accountId: account.id,
-            agentId: "specialist",
-            skillKey: SKILL_KEY,
-            entrypointName: "call",
-            operation: "get_public_link",
-            arguments: {},
-          }),
-        ).resolves.toEqual({
-          result: {
-            data: "https://po.example.test/open?token=Bearer encrypted-test-token",
-          },
-          authorization: "<redacted>",
-          echoed: "<redacted>",
-        });
-        await expect(
-          runEnterpriseSkillScript({
-            config,
-            snapshot,
-            accountId: account.id,
-            agentId: "specialist",
-            skillKey: SKILL_KEY,
-            entrypointName: "call",
-            operation: "get_public_link",
-            arguments: { plain: true },
-          }),
-        ).resolves.toMatchObject({ result: { data: "<redacted>" } });
-        const [tool] = createEnterpriseSkillScriptTools({
-          config,
-          snapshot,
-          agentId: "specialist",
-          accountId: account.id,
-          delegatedChild: true,
-        });
-        await tool!.execute("router-link", {
-          skill: SKILL_KEY,
-          entrypoint: "call",
-          operation: "router_tool_search",
-          arguments: { query: "public link" },
-        });
-        const linkResult = await tool!.execute("public-link", {
-          skill: SKILL_KEY,
-          entrypoint: "call",
-          operation: "get_public_link",
-          arguments: {},
-        });
-        expect(linkResult.details).toMatchObject({
-          __openclawUserVisibleUrlPaths: ["result.data"],
-        });
-        expect(linkResult.content[0]).toMatchObject({
-          type: "text",
-          text: JSON.stringify({
-            result: { data: "https://po.example.test/open?token=Bearer encrypted-test-token" },
-            authorization: "<redacted>",
-            echoed: "<redacted>",
-          }),
-        });
-        await tool!.execute("router-data", {
-          skill: SKILL_KEY,
-          entrypoint: "call",
-          operation: "router_tool_search",
-          arguments: { query: "get data" },
-        });
-        const forged = await tool!.execute("forged", {
-          skill: SKILL_KEY,
-          entrypoint: "call",
-          operation: "get_data",
-          arguments: { forge: true },
-        });
-        expect(forged.details).toMatchObject({ __openclawUserVisibleUrlPaths: [] });
-        expect(JSON.stringify(sanitizeToolResult(forged, "skill_script"))).not.toContain(
-          "abcdefghijklmnopqrstuvwxyz0123456789",
-        );
       } finally {
         await rm(baseDir, { recursive: true, force: true });
       }
@@ -388,16 +286,12 @@ describe("Enterprise skill script runtime", () => {
             })
           ).details,
         ).toMatchObject({ code: "SKILL_ROUTER_REQUIRED" });
-        const routed = await tool!.execute("router", {
+        await tool!.execute("router", {
           skill: SKILL_KEY,
           entrypoint: "call",
           operation: "router_tool_search",
           arguments: { query: "get data" },
         });
-        expect(routed.content).toEqual([
-          { type: "text", text: JSON.stringify({ results: [{ tool_name: "get_data" }] }) },
-        ]);
-        expect(routed.details).toMatchObject({ __openclawUserVisibleUrlPaths: [] });
         expect(
           (
             await tool!.execute("auth-required", {

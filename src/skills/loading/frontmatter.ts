@@ -103,26 +103,6 @@ function parseScriptEntrypoint(value: unknown): SkillScriptEntrypoint | undefine
   const authExemptOperations = scriptIdList(value.authExemptOperations);
   const readOperations = scriptIdList(value.readOperations);
   const writeOperations = scriptIdList(value.writeOperations);
-  let userVisibleUrlPaths: Record<string, string[]> | undefined;
-  if (value.userVisibleUrlPaths !== undefined) {
-    if (!isRecord(value.userVisibleUrlPaths)) {
-      return undefined;
-    }
-    userVisibleUrlPaths = {};
-    for (const [rawOperation, rawPaths] of Object.entries(value.userVisibleUrlPaths)) {
-      const operation = scriptId(rawOperation);
-      if (!Array.isArray(rawPaths)) {
-        return undefined;
-      }
-      const paths = rawPaths.filter(
-        (item): item is string => typeof item === "string" && TOKEN_PATH_PATTERN.test(item),
-      );
-      if (!operation || paths.length === 0 || paths.length !== rawPaths.length) {
-        return undefined;
-      }
-      userVisibleUrlPaths[operation] = [...new Set(paths)];
-    }
-  }
   if (
     (value.routerOperation !== undefined && !routerOperation) ||
     (value.routerBypassOperations !== undefined && !routerBypassOperations) ||
@@ -143,7 +123,6 @@ function parseScriptEntrypoint(value: unknown): SkillScriptEntrypoint | undefine
     ...(authExemptOperations ? { authExemptOperations } : {}),
     ...(readOperations ? { readOperations } : {}),
     ...(writeOperations ? { writeOperations } : {}),
-    ...(userVisibleUrlPaths ? { userVisibleUrlPaths } : {}),
   };
 }
 

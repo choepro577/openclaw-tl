@@ -24,11 +24,6 @@ import {
   shouldPreserveTranscriptImagePayload,
 } from "./transcript-redact-images.js";
 import { sanitizeCompactionReplayState } from "./transcript-redact-replay.js";
-import {
-  declaredUserVisibleToolUrls,
-  protectUserVisibleUrls,
-  restoreUserVisibleUrls,
-} from "./user-visible-tool-urls.js";
 
 function resolveTranscriptLoggingConfig(cfg?: OpenClawConfig) {
   const configuredLogging = readLoggingConfig();
@@ -73,15 +68,6 @@ function redactTranscriptStructuredFieldValue(
 function isPlainTranscriptObject(value: object): value is Record<string, unknown> {
   const prototype = Object.getPrototypeOf(value);
   return prototype === Object.prototype || prototype === null;
-}
-
-function isTranscriptTextBlock(
-  value: unknown,
-): value is Record<string, unknown> & { text: string } {
-  if (!value || typeof value !== "object" || !isPlainTranscriptObject(value)) {
-    return false;
-  }
-  return typeof value.text === "string";
 }
 
 type TranscriptValueLocation =
@@ -699,41 +685,12 @@ export function redactTranscriptMessage(message: AgentMessage, cfg?: OpenClawCon
   if (isTranscriptRedactionDisabled(cfg)) {
     return message;
   }
-  const source = message as unknown as Record<string, unknown>;
-  const content = Array.isArray(source.content) ? source.content : [];
-  const firstText = content.find(isTranscriptTextBlock);
-  const urls =
-    source.role === "toolResult" && typeof source.toolName === "string"
-      ? declaredUserVisibleToolUrls(source.toolName, source.details, firstText?.text)
-      : [];
-  const prepared = urls.length
-    ? {
-        ...source,
-        content: content.map((block) =>
-          isTranscriptTextBlock(block)
-            ? Object.assign({}, block, { text: protectUserVisibleUrls(block.text, urls) })
-            : block,
-        ),
-      }
-    : message;
-  const redacted = redactTranscriptStructuredValue(
-    prepared,
+  return redactTranscriptStructuredValue(
+    message,
     cfg,
     undefined,
     new WeakSet<object>(),
     false,
     "root",
   ) as AgentMessage;
-  if (!urls.length) {
-    return redacted;
-  }
-  const result = redacted as unknown as Record<string, unknown>;
-  return {
-    ...result,
-    content: (Array.isArray(result.content) ? result.content : []).map((block) =>
-      isTranscriptTextBlock(block)
-        ? Object.assign({}, block, { text: restoreUserVisibleUrls(block.text, urls) })
-        : block,
-    ),
-  } as AgentMessage;
 }

@@ -214,21 +214,25 @@ function getTextContent(result: unknown, index = 0): string {
 }
 
 describe("sanitizeToolResult", () => {
-  it("keeps only declared skill-script bearer links intact for the model", () => {
-    const url = "https://example.test/po?sites=A%2CB&token=abcdefghijklmnopqrstuvwxyz0123456789";
+  it("keeps clean result links and redacts authentication query values", () => {
+    const cleanUrl =
+      "https://hos.example.test/hosview/purchase-order?sites=CN01%2CCN02&sDate=2026-09-17";
+    const jwt = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJwbzEyMyJ9.signature1234567890";
     const result = {
       content: [
         {
           type: "text",
-          text: JSON.stringify({ result: { data: url }, apiKey: "sk-1234567890abcdef" }),
+          text: JSON.stringify({
+            clean: cleanUrl,
+            legacy: `https://hos.example.test/hosview/purchase-order?public-key=${jwt}`,
+          }),
         },
       ],
-      details: { result: { data: url }, __openclawUserVisibleUrlPaths: ["result.data"] },
     };
-    const allowed = getTextContent(sanitizeToolResult(result, "skill_script"));
-    expect(allowed).toContain(url);
-    expect(allowed).not.toContain("sk-1234567890abcdef");
-    expect(getTextContent(sanitizeToolResult(result, "read"))).not.toContain(url);
+
+    const text = getTextContent(sanitizeToolResult(result));
+    expect(text).toContain(cleanUrl);
+    expect(text).not.toContain(jwt);
   });
 
   it("redacts JSON-style apiKey fields in text content blocks", () => {

@@ -127,7 +127,7 @@ export function createCliEventHandlers(params: {
           name: event.name,
           toolCallId: event.toolCallId,
           isError: event.isError,
-          result: sanitizeToolResult(event.result, event.name),
+          result: sanitizeToolResult(event.result),
           ...(startedArgs ? { args: sanitizeToolArgs(startedArgs) } : {}),
           ...(resultContentSource ? { resultContentSource } : {}),
         },
@@ -174,7 +174,7 @@ export function createCliEventHandlers(params: {
           name: event.name,
           toolCallId: event.toolCallId,
           isError: event.isError,
-          result: sanitizeToolResult(event.result, event.name),
+          result: sanitizeToolResult(event.result),
         },
       });
     }

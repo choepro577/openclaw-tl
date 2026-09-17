@@ -318,6 +318,25 @@ describe("Codex plugin inventory", () => {
     );
   });
 
+  it("propagates plugin detail timeouts to the bounded thread-config fallback", async () => {
+    const timeout = Object.assign(new Error("plugin/read timed out"), {
+      code: "CODEX_APP_SERVER_LOCAL_REQUEST_CANCELLED",
+      reason: "timed out",
+    });
+
+    await expect(
+      readCodexPluginInventory({
+        pluginConfig: pluginConfig({ github: curatedPlugin("github") }),
+        request: async (method) => {
+          if (method === "plugin/installed") {
+            return pluginInstalled([activePlugin("github")]);
+          }
+          throw timeout;
+        },
+      }),
+    ).rejects.toBe(timeout);
+  });
+
   it("resolves an installed workspace plugin from the one canonical installed snapshot", async () => {
     const appCache = await cachedApps(appInfo("workspace-data-app", true));
     const calls: Array<{ method: string; params: unknown }> = [];

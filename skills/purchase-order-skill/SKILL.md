@@ -45,7 +45,6 @@ metadata:
                         "delete_po_product",
                         "confirm_po",
                       ],
-                    "userVisibleUrlPaths": { "create_po_draft": ["result.data"] },
                     "unknownRisk": "approval",
                     "timeoutMs": 30000,
                   },
@@ -100,10 +99,9 @@ không diễn giải thành một yêu cầu mới.
 ## Dang nhap PO bao mat
 
 1. Khong bao gio hoi, nhan, lap lai hoac luu password/token dang nhap trong chat,
-   transcript, file, command hay tool arguments. Ngoại lệ duy nhất là URL truy
-   cập do `create_po_draft.result.data` trả về: đây là link dành cho user và thẻ
-   kết quả `skill_script` hiển thị nguyên văn, kể cả query parameter tên `token`,
-   `signature` hoặc tương tự. Không lặp lại token đó trong văn bản assistant.
+   transcript, file, command hay tool arguments. Link trong
+   `create_po_draft.result.data` phải là URL sạch do service trả về, không phải
+   ngoại lệ để lộ token, chữ ký hoặc JWT.
 2. Khong goi `employee_login`. Dang nhap do UI/Gateway thuc hien ngoai
    transcript bang hop thoai bao mat; nut **PO** canh o chat van dung de mo lai.
 3. Nếu `skill_script` trả `SKILL_AUTH_REQUIRED`, dừng các operation PO còn
@@ -194,11 +192,18 @@ thành công.
 thái PO nháp đó. Nếu một tool hoặc backend chỉ hỗ trợ preview, giữ nguyên
 preview-only và chỉ commit khi user đã nêu rõ chính thao tác commit đó.
 
-Sau `create_po_draft`, chỉ báo thành công khi chính call đó trả thành công. Thẻ
-`skill_script` tự hiển thị URL nguyên văn trong `result.data` để user bấm/copy;
-trong câu trả lời chỉ dẫn user đến link gốc ngay dưới thẻ công cụ. Không chép lại,
-rút gọn hoặc dựng URL từ `Notes`, mã PO, dữ liệu nháp cũ hay query string. Nếu
-không có `result.data`, nói rõ service không trả link; không tự dựng link.
+Sau `create_po_draft`, chỉ báo thành công khi chính call đó trả thành công.
+
+- Nếu có `result.data`, câu trả lời cuối phải chứa nguyên văn URL sạch đó để
+  agent cha và user nhận được qua luồng kết quả thông thường. Không thêm marker,
+  rút gọn, escape, dựng lại hoặc sửa query string.
+- Nếu không có `result.data`, nói rõ service không trả link; không tự dựng link
+  từ `Notes`, mã PO, dữ liệu nháp cũ hay query string.
+- Nếu user chỉ hỏi lại link của lần tạo vừa xong, dùng kết quả đã có trong
+  session; không gọi lại `create_po_draft`, prerequisite, router hoặc đăng nhập.
+- Nếu URL bị redaction hoặc còn query xác thực như `token`, `signature`,
+  `public-key=<JWT>`, báo service chưa trả link sạch; không tìm cách khôi phục
+  giá trị đã che.
 
 Neu tool tra loi, giu nguyen ma phan loai de user biet buoc tiep theo:
 

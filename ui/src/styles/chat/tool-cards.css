@@ -187,13 +187,6 @@ button.chat-delegation__row:hover {
   margin-top: 2px;
 }
 
-.chat-tool-user-visible-url {
-  display: block;
-  margin: 4px 0 6px 28px;
-  color: var(--accent);
-  overflow-wrap: anywhere;
-}
-
 .chat-bubble--tool-shell > .chat-tool-msg-collapse,
 .chat-bubble--tool-shell > .chat-tools-inline > .chat-tool-msg-collapse {
   margin-top: 0;

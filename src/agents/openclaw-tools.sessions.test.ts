@@ -697,12 +697,27 @@ describe("sessions tools", () => {
   });
 
   it("sessions_history filters tool messages by default", async () => {
+    const cleanUrl =
+      "https://hos.example.test/hosview/purchase-order?sites=CN01%2CCN02&sDate=2026-09-17";
+    const jwt = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJwbzEyMyJ9.signature1234567890";
     callGatewayMock.mockImplementation(async (opts: unknown) => {
       const request = opts as { method?: string };
       if (request.method === "chat.history") {
         return {
           messages: [
-            { role: "toolResult", content: [] },
+            {
+              role: "toolResult",
+              toolName: "skill_script",
+              content: [
+                {
+                  type: "text",
+                  text: JSON.stringify({
+                    result: { data: cleanUrl },
+                    legacy: `https://hos.example.test/hosview/purchase-order?public-key=${jwt}`,
+                  }),
+                },
+              ],
+            },
             {
               role: "assistant",
               provider: "openclaw",
@@ -738,7 +753,10 @@ describe("sessions tools", () => {
       sessionKey: "main",
       includeTools: true,
     });
-    const withToolsDetails = withTools.details as { messages?: unknown[] };
+    const withToolsDetails = withTools.details as {
+      messages?: Array<Record<string, unknown>>;
+      contentRedacted?: boolean;
+    };
     expect(withToolsDetails.messages).toHaveLength(4);
     expect(withToolsDetails.messages).toContainEqual(
       expect.objectContaining({ provider: "openclaw", model: "delivery-mirror" }),
@@ -746,6 +764,12 @@ describe("sessions tools", () => {
     expect(withToolsDetails.messages).toContainEqual(
       expect.objectContaining({ provider: "openclaw", model: "gateway-injected" }),
     );
+    const toolResult = withToolsDetails.messages?.find(
+      (message) => message.role === "toolResult",
+    ) as { content?: Array<{ text?: string }> } | undefined;
+    expect(toolResult?.content?.[0]?.text).toContain(cleanUrl);
+    expect(toolResult?.content?.[0]?.text).not.toContain(jwt);
+    expect(withToolsDetails.contentRedacted).toBe(true);
   });
 
   it("sessions_history caps oversized payloads and strips tool-owned heavy fields", async () => {

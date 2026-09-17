@@ -3,10 +3,9 @@ import { asNullableRecord, isRecord } from "@openclaw/normalization-core/record-
 import { truncateUtf16Safe } from "@openclaw/normalization-core/utf16-slice";
 import { html, nothing } from "lit";
 import { ref } from "lit/directives/ref.js";
-import { declaredUserVisibleToolUrls } from "../../../../../src/agents/user-visible-tool-urls.js";
 import { icons, type IconName } from "../../../components/icons.ts";
-import "../../../components/tooltip.ts";
 import { isMarkdownBlockArtText } from "../../../components/markdown-text.ts";
+import "../../../components/tooltip.ts";
 import { syncTabGroupLabel } from "../../../components/web-awesome-tabs.ts";
 import { t } from "../../../i18n/index.ts";
 import type {
@@ -885,10 +884,6 @@ export function renderToolCard(
       ? resolveToolWorkspaceFilePath(card, view)
       : null;
   const isFileRow = Boolean(workspaceFilePath);
-  const userVisibleUrls =
-    outcome === "succeeded"
-      ? declaredUserVisibleToolUrls(card.name, card.details, card.outputText)
-      : [];
 
   return html`
     <div class="chat-tool-msg-collapse chat-tool-msg-collapse--manual ${expanded ? "is-open" : ""}">
@@ -939,15 +934,6 @@ export function renderToolCard(
             >
             <span class="chat-tool-row__chevron" aria-hidden="true">${icons.chevronRight}</span>
           </button>`}
-      ${userVisibleUrls.map(
-        (url) => html`<a
-          class="chat-tool-user-visible-url"
-          href=${url}
-          target="_blank"
-          rel="noopener noreferrer"
-          >${url}</a
-        >`,
-      )}
       ${expanded
         ? html`
             <div class="chat-tool-msg-body">

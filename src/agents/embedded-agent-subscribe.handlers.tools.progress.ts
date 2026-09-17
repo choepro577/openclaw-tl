@@ -73,7 +73,7 @@ export function handleToolExecutionUpdate(
   const toolCallId = evt.toolCallId;
   const hideFromChannelProgress = evt.hideFromChannelProgress === true;
   const partial = evt.partialResult;
-  const sanitized = sanitizeToolResult(partial, toolName);
+  const sanitized = sanitizeToolResult(partial);
   const isExecTool = isExecToolName(toolName);
   const liveResult = isExecTool ? capLiveExecResult(sanitized) : sanitized;
   const toolProgress = isExecTool ? undefined : readChannelToolProgress(liveResult);

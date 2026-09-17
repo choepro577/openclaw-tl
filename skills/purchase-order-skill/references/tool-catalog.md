@@ -26,8 +26,7 @@ Sau do goi mot tool xuat hien trong `results`:
 
 Khong truyen `password` hoac `authorization`. Gateway so huu phien dang nhap
 PO, tu chen token vao upstream request va redacted secret truoc khi tra ket qua
-cho agent. Ngoại lệ duy nhất là URL user-facing được khai báo tại
-`userVisibleUrlPaths`; URL đó giữ nguyên mọi query parameter.
+cho agent. Không có ngoại lệ redaction cho URL trả về.
 
 ## Routing rules
 
@@ -70,9 +69,10 @@ bất kỳ trường nào và không được biến thành tra cứu nháp.
 4. Giữ `getFrom: 1` và `sDate` đã chuẩn hóa nếu schema/router hiện tại hỗ trợ.
 5. Không dùng request list rỗng để kết luận không thể tạo. Không dùng draft list
    lịch sử làm kết quả tạo mới.
-6. Chỉ trả link nguyên văn từ `create_po_draft.result.data`, không xóa hoặc che
-   query parameter kể cả `token`; nếu field vắng mặt thì báo không có link. Cấm
-   ghép hoặc đoán URL.
+6. Chỉ trả URL sạch nguyên văn từ `create_po_draft.result.data`; nếu field vắng
+   mặt thì báo không có link. Cấm ghép, đoán URL hoặc khôi phục token đã che.
+7. Follow-up chỉ xin lại link phải đọc kết quả đã có trong session, không gọi lại
+   router, prerequisite, đăng nhập hoặc `create_po_draft`.
 
 ## Write policy
 

@@ -8,6 +8,7 @@ import type {
   CodexAppInventoryCacheRead,
   CodexAppInventoryRequest,
 } from "./app-inventory-cache.js";
+import { isCodexAppServerRequestTimeoutError } from "./client.js";
 import {
   CODEX_PLUGINS_MARKETPLACE_NAME,
   CODEX_PLUGINS_WORKSPACE_MARKETPLACE_NAME,
@@ -463,6 +464,9 @@ async function readPluginDetail(
     )) as v2.PluginReadResponse;
     return response.plugin;
   } catch (error) {
+    if (isCodexAppServerRequestTimeoutError(error)) {
+      throw error;
+    }
     diagnostics.push({
       code: "plugin_detail_unavailable",
       plugin: pluginPolicy,

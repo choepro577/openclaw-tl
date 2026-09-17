@@ -21,7 +21,7 @@ const SESSION_DESCRIPTIONS = [
     tool: "sessions_history",
     describe: describeSessionsHistoryTool,
     original:
-      "Read sanitized visible-session history. Before reply/debug/resume. Supports limit, offset, search-result sessionId/messageId anchors, and tool messages.",
+      "Read sanitized visible-session history. Before reply/debug/resume. Supports limit, offset, search-result sessionId/messageId anchors, and tool messages. To recover an omitted result from a completed child, read that child with includeTools:true and reuse its tool output; never repeat the side effect.",
   },
   {
     tool: "sessions_search",

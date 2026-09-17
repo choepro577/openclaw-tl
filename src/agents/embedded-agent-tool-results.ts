@@ -20,11 +20,6 @@ import {
   readToolResultDetails,
   readToolResultStatus,
 } from "./tool-result-error.js";
-import {
-  declaredUserVisibleToolUrls,
-  protectUserVisibleUrls,
-  restoreUserVisibleUrls,
-} from "./user-visible-tool-urls.js";
 
 const TOOL_RESULT_MAX_CHARS = 8000;
 const TOOL_ERROR_MAX_CHARS = 400;
@@ -253,7 +248,7 @@ export function sanitizeToolArgs(args: unknown): unknown {
   return redactStringsDeep(args);
 }
 
-export function sanitizeToolResult(result: unknown, toolName = ""): unknown {
+export function sanitizeToolResult(result: unknown): unknown {
   if (typeof result === "string") {
     return redactModelVisibleToolPayloadText(result);
   }
@@ -264,15 +259,6 @@ export function sanitizeToolResult(result: unknown, toolName = ""): unknown {
     return result;
   }
   const record = result as Record<string, unknown>;
-  const originalText = Array.isArray(record.content)
-    ? record.content.find((item) => readRecord(item)?.type === "text")
-    : undefined;
-  const rawText = readRecord(originalText)?.text;
-  const urls = declaredUserVisibleToolUrls(
-    toolName,
-    record.details,
-    typeof rawText === "string" ? rawText : undefined,
-  );
   // Strip image data first so the deep redaction pass doesn't waste work
   // scanning base64 payloads (and so we capture the original byte counts).
   const preCleaned: Record<string, unknown> = { ...record };
@@ -291,9 +277,6 @@ export function sanitizeToolResult(result: unknown, toolName = ""): unknown {
         delete cleaned.data;
         return Object.assign({}, cleaned, { bytes, omitted: true });
       }
-      if (readStringValue(entry.type) === "text" && typeof entry.text === "string" && urls.length) {
-        return Object.assign({}, entry, { text: protectUserVisibleUrls(entry.text, urls) });
-      }
       return entry;
     });
   }
@@ -309,9 +292,7 @@ export function sanitizeToolResult(result: unknown, toolName = ""): unknown {
       }
       const entry = item as Record<string, unknown>;
       if (readStringValue(entry.type) === "text" && typeof entry.text === "string") {
-        return Object.assign({}, entry, {
-          text: truncateToolText(restoreUserVisibleUrls(entry.text, urls)),
-        });
+        return Object.assign({}, entry, { text: truncateToolText(entry.text) });
       }
       return entry;
     });

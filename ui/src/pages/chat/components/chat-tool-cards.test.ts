@@ -39,27 +39,6 @@ function pointerClick(element: Element) {
 }
 
 describe("tool-cards", () => {
-  it("opens the exact declared tool link without asking the assistant to copy it", () => {
-    const url = "https://example.test/po?sites=A%2CB&token=abcdefghijklmnopqrstuvwxyz0123456789";
-    const container = document.createElement("div");
-    render(
-      renderToolCard(
-        {
-          id: "po-link",
-          name: "skill_script",
-          completed: true,
-          outputText: JSON.stringify({ result: { data: url } }),
-          details: { result: { data: "***" }, __openclawUserVisibleUrlPaths: ["result.data"] },
-        },
-        { expanded: false, onToggleExpanded: vi.fn() },
-      ),
-      container,
-    );
-    const link = container.querySelector<HTMLAnchorElement>(".chat-tool-user-visible-url");
-    expect(link?.getAttribute("href")).toBe(url);
-    expect(link?.textContent).toBe(url);
-  });
-
   it("routes MCP App previews through the dedicated double-iframe host", async () => {
     const container = document.createElement("div");
     render(
