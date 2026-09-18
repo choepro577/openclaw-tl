@@ -217,6 +217,7 @@ function createSandboxConfig(
     },
     browser: {
       enabled: false,
+      maxRunningContainers: 0,
       image: "openclaw-browser:test",
       containerPrefix: "oc-browser-",
       network: "openclaw-sandbox-browser",

@@ -24,11 +24,13 @@ import {
 } from "./registry.js";
 import type { SandboxConfig } from "./types.js";
 
-const SANDBOX_PRUNE_THROTTLE_MS = 5 * 60 * 1000;
+const SANDBOX_PRUNE_THROTTLE_MS = 60 * 1000;
+const SANDBOX_IDLE_PRUNE_GRACE_MS = 1000;
 
 let lastPruneAtMs = 0;
 let pruneInFlight: Promise<void> | null = null;
 let scheduledPruneInFlight: Promise<void> | null = null;
+const idlePruneTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
 type PruneableRegistryEntry = Pick<
   SandboxRegistryEntry,
@@ -189,14 +191,17 @@ async function runSandboxPrune(cfg: SandboxConfig, protectedKeys?: ReadonlySet<s
 }
 
 /** Runs sandbox pruning at most once per throttle window. */
-export async function maybePruneSandboxes(cfg: SandboxConfig, options: SandboxPruneOptions = {}) {
+export async function maybePruneSandboxes(
+  cfg: SandboxConfig,
+  options: SandboxPruneOptions = {},
+): Promise<boolean> {
   const now = Date.now();
   if (now - lastPruneAtMs < SANDBOX_PRUNE_THROTTLE_MS) {
-    return;
+    return false;
   }
   if (pruneInFlight) {
     await pruneInFlight;
-    return;
+    return false;
   }
   lastPruneAtMs = now;
   const run = runSandboxPrune(cfg, options.protectedKeys);
@@ -208,6 +213,48 @@ export async function maybePruneSandboxes(cfg: SandboxConfig, options: SandboxPr
       pruneInFlight = null;
     }
   }
+  return true;
+}
+
+/** Resets the per-scope idle deadline and retries if another prune consumed the throttle window. */
+export function scheduleSandboxIdlePrune(cfg: SandboxConfig, scopeKey: string): void {
+  const key = scopeKey.trim();
+  const existing = idlePruneTimers.get(key);
+  if (existing) {
+    clearTimeout(existing);
+    idlePruneTimers.delete(key);
+  }
+  if (!key || cfg.prune.idleHours <= 0) {
+    return;
+  }
+
+  const schedule = (delayMs: number) => {
+    const timer = setTimeout(() => {
+      void maybePruneSandboxes(cfg).then(
+        (ran) => {
+          if (idlePruneTimers.get(key) !== timer) {
+            return;
+          }
+          if (ran) {
+            idlePruneTimers.delete(key);
+            return;
+          }
+          schedule(SANDBOX_PRUNE_THROTTLE_MS + SANDBOX_IDLE_PRUNE_GRACE_MS);
+        },
+        (error: unknown) => {
+          const message = error instanceof Error ? error.message : String(error);
+          defaultRuntime.error?.(`Sandbox idle prune failed: ${message}`);
+          if (idlePruneTimers.get(key) === timer) {
+            schedule(SANDBOX_PRUNE_THROTTLE_MS + SANDBOX_IDLE_PRUNE_GRACE_MS);
+          }
+        },
+      );
+    }, delayMs);
+    timer.unref();
+    idlePruneTimers.set(key, timer);
+  };
+
+  schedule(cfg.prune.idleHours * 60 * 60 * 1000 + SANDBOX_IDLE_PRUNE_GRACE_MS);
 }
 
 /**

@@ -573,11 +573,35 @@ function toScopedAgent(
       scope: "session" as const,
       docker: {
         ...effectiveSandbox.docker,
+        memory:
+          agent.sandbox?.docker?.memory ?? config.agents?.defaults?.sandbox?.docker?.memory ?? "1g",
+        memorySwap:
+          agent.sandbox?.docker?.memorySwap ??
+          config.agents?.defaults?.sandbox?.docker?.memorySwap ??
+          "1g",
+        pidsLimit:
+          agent.sandbox?.docker?.pidsLimit ??
+          config.agents?.defaults?.sandbox?.docker?.pidsLimit ??
+          256,
         // Skills can reach LAN services; explicit agent/global network policy still wins.
         network:
           agent.sandbox?.docker?.network ??
           config.agents?.defaults?.sandbox?.docker?.network ??
           "bridge",
+      },
+      browser: {
+        ...effectiveSandbox.browser,
+        maxRunningContainers:
+          agent.sandbox?.browser?.maxRunningContainers ??
+          config.agents?.defaults?.sandbox?.browser?.maxRunningContainers ??
+          3,
+      },
+      prune: {
+        ...effectiveSandbox.prune,
+        idleHours:
+          agent.sandbox?.prune?.idleHours ??
+          config.agents?.defaults?.sandbox?.prune?.idleHours ??
+          0.25,
       },
     },
     skills: scopedSkills(

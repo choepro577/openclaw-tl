@@ -45,7 +45,11 @@ import {
   readDockerPort,
   resolveDockerEnvPolicyEpoch,
 } from "./docker.js";
-import { hasSandboxActiveUsers } from "./lifecycle.js";
+import {
+  acquireSandboxLifecycleLease,
+  hasSandboxActiveUsers,
+  isSandboxLifecycleActive,
+} from "./lifecycle.js";
 import {
   buildNoVncObserverTokenUrl,
   consumeNoVncObserverToken,
@@ -54,7 +58,11 @@ import {
   NOVNC_PASSWORD_ENV_KEY,
   issueNoVncObserverToken,
 } from "./novnc-auth.js";
-import { readBrowserRegistry, updateBrowserRegistry } from "./registry.js";
+import {
+  readBrowserRegistry,
+  removeBrowserRegistryEntry,
+  updateBrowserRegistry,
+} from "./registry.js";
 import { buildSandboxContainerName, resolveSandboxAgentId, slugifySessionKey } from "./shared.js";
 import { isToolAllowed } from "./tool-policy.js";
 import type { SandboxBrowserContext, SandboxConfig } from "./types.js";
@@ -74,7 +82,20 @@ const CDP_SOURCE_RANGE_ENV_KEY = "OPENCLAW_BROWSER_CDP_SOURCE_RANGE";
 const CDP_AUTH_TOKEN_ENV_KEY = "OPENCLAW_BROWSER_CDP_AUTH_TOKEN";
 const SANDBOX_BROWSER_IMAGE_CONTRACT_LABEL = "org.openclaw.sandbox-browser.contract";
 const browserContainerLifecycleQueue = new KeyedAsyncQueue();
+const browserCapacityQueue = new KeyedAsyncQueue();
 const browserNetworkLifecycleQueue = new KeyedAsyncQueue();
+
+export class SandboxBrowserCapacityError extends Error {
+  readonly code = "sandbox_browser_capacity";
+  readonly retryable = true;
+
+  constructor(maxRunningContainers: number) {
+    super(
+      `Sandbox browser capacity is full (${maxRunningContainers}/${maxRunningContainers}); all registered browsers are active or remaining containers are not safely managed. Retry after a running task finishes.`,
+    );
+    this.name = "SandboxBrowserCapacityError";
+  }
+}
 
 function buildSandboxCdpAuthHeader(token: string): string {
   return `Basic ${Buffer.from(`openclaw:${token}`).toString("base64")}`;
@@ -227,6 +248,78 @@ async function ensureDockerNetwork(
   });
 }
 
+async function ensureSandboxBrowserCapacity(params: {
+  maxRunningContainers: number;
+  targetContainerName: string;
+}): Promise<void> {
+  if (params.maxRunningContainers === 0) {
+    return;
+  }
+  const result = await execDocker([
+    "ps",
+    "--filter",
+    "label=openclaw.sandboxBrowser=1",
+    "--format",
+    "{{.Names}}",
+  ]);
+  const running = new Set(
+    result.stdout
+      .split(/\r?\n/u)
+      .map((name) => name.trim())
+      .filter(Boolean),
+  );
+  if (running.has(params.targetContainerName)) {
+    return;
+  }
+
+  const registry = await readBrowserRegistry();
+  const candidates = registry.entries
+    .filter(
+      (entry) =>
+        entry.containerName !== params.targetContainerName &&
+        Boolean(entry.sessionKey) &&
+        running.has(entry.containerName),
+    )
+    .toSorted(
+      (left, right) =>
+        left.lastUsedAtMs - right.lastUsedAtMs ||
+        left.containerName.localeCompare(right.containerName),
+    );
+
+  while (running.size >= params.maxRunningContainers) {
+    const candidate = candidates.shift();
+    if (!candidate) {
+      throw new SandboxBrowserCapacityError(params.maxRunningContainers);
+    }
+    if (
+      isSandboxLifecycleActive(candidate.sessionKey) ||
+      isSandboxLifecycleActive(candidate.containerName)
+    ) {
+      continue;
+    }
+    const release = await acquireSandboxLifecycleLease(candidate.sessionKey);
+    try {
+      if (
+        hasSandboxActiveUsers(candidate.sessionKey) ||
+        hasSandboxActiveUsers(candidate.containerName)
+      ) {
+        continue;
+      }
+      const state = await dockerContainerState(candidate.containerName);
+      if (!state.running) {
+        running.delete(candidate.containerName);
+        continue;
+      }
+      await stopCachedBrowserBridgesForContainer(candidate.containerName);
+      await execDocker(["rm", "-f", candidate.containerName]);
+      await removeBrowserRegistryEntry(candidate.containerName);
+      running.delete(candidate.containerName);
+    } finally {
+      release();
+    }
+  }
+}
+
 type EnsureSandboxBrowserParams = {
   scopeKey: string;
   workspaceDir: string;
@@ -256,12 +349,16 @@ export async function ensureSandboxBrowser(
   const slug = params.cfg.scope === "shared" ? "shared" : slugifySessionKey(params.scopeKey);
   const containerName = buildSandboxContainerName(params.cfg.browser.containerPrefix, slug);
 
-  // Independent agent runs can converge on one Docker resource. Serialize the
-  // full lifecycle so followers re-read container and bridge state after the
-  // preceding create, start, or replacement has settled.
-  return await browserContainerLifecycleQueue.enqueue(containerName, async () => {
-    return await ensureSandboxBrowserContainer(params, containerName);
-  });
+  const ensureContainer = async () =>
+    await browserContainerLifecycleQueue.enqueue(containerName, async () => {
+      return await ensureSandboxBrowserContainer(params, containerName);
+    });
+  if (params.cfg.browser.maxRunningContainers === 0) {
+    return await ensureContainer();
+  }
+  // ponytail: one process-wide lock keeps count+evict+create atomic; shard it only if browser
+  // provisioning throughput becomes measurable.
+  return await browserCapacityQueue.enqueue("sandbox-browser-capacity", ensureContainer);
 }
 
 async function ensureSandboxBrowserContainer(
@@ -377,6 +474,13 @@ async function ensureSandboxBrowserContainer(
         running = false;
       }
     }
+  }
+
+  if (!running) {
+    await ensureSandboxBrowserCapacity({
+      maxRunningContainers: params.cfg.browser.maxRunningContainers,
+      targetContainerName: containerName,
+    });
   }
 
   if (!hasContainer) {

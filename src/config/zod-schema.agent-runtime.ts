@@ -241,6 +241,7 @@ const SandboxDockerSchema = z
 const SandboxBrowserSchema = z
   .object({
     enabled: z.boolean().optional(),
+    maxRunningContainers: z.number().int().nonnegative().optional(),
     image: z.string().optional(),
     containerPrefix: z.string().optional(),
     network: z.string().optional(),
@@ -271,7 +272,7 @@ const SandboxBrowserSchema = z
 
 const SandboxPruneSchema = z
   .object({
-    idleHours: z.number().int().nonnegative().optional(),
+    idleHours: z.number().nonnegative().optional(),
     maxAgeDays: z.number().int().nonnegative().optional(),
   })
   .strict()

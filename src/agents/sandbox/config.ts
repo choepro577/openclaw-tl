@@ -152,6 +152,8 @@ export function resolveSandboxBrowserConfig(params: {
     enabled:
       params.enabledByToolPolicy === true ||
       (agentBrowser?.enabled ?? globalBrowser?.enabled ?? false),
+    maxRunningContainers:
+      agentBrowser?.maxRunningContainers ?? globalBrowser?.maxRunningContainers ?? 0,
     image: agentBrowser?.image ?? globalBrowser?.image ?? DEFAULT_SANDBOX_BROWSER_IMAGE,
     containerPrefix:
       agentBrowser?.containerPrefix ??

@@ -27,6 +27,22 @@ function expectSchemaFailurePath(result: SchemaParseResult, expectedPathPrefix: 
 }
 
 describe("agent defaults schema", () => {
+  it("accepts fractional sandbox idle hours and bounded browser capacity", () => {
+    const parsed = AgentDefaultsSchema.parse({
+      sandbox: {
+        browser: { maxRunningContainers: 3 },
+        prune: { idleHours: 0.25 },
+      },
+    });
+
+    expect(parsed?.sandbox?.browser?.maxRunningContainers).toBe(3);
+    expect(parsed?.sandbox?.prune?.idleHours).toBe(0.25);
+    expectSchemaFailurePath(
+      AgentDefaultsSchema.safeParse({ sandbox: { prune: { idleHours: -0.25 } } }),
+      "sandbox.prune.idleHours",
+    );
+  });
+
   it("accepts legacy delegation handling modes for runtime normalization", () => {
     const agent = AgentEntrySchema.parse({
       id: "specialist",

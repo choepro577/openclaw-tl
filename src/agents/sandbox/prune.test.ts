@@ -1,9 +1,10 @@
 // Sandbox prune tests cover runtime removal ordering and registry cleanup
 // behavior for stale sandbox entries.
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { SandboxConfig } from "./types.js";
 
 let maybePruneSandboxes: typeof import("./prune.js").maybePruneSandboxes;
+let scheduleSandboxIdlePrune: typeof import("./prune.js").scheduleSandboxIdlePrune;
 let BROWSER_BRIDGES: typeof import("./browser-bridges.js").BROWSER_BRIDGES;
 let acquireSandboxLifecycleLease: typeof import("./lifecycle.js").acquireSandboxLifecycleLease;
 
@@ -83,6 +84,7 @@ function buildPruneConfig(): SandboxConfig {
     },
     browser: {
       enabled: true,
+      maxRunningContainers: 0,
       image: "openclaw-sandbox-browser:bookworm-slim",
       containerPrefix: "openclaw-sbx-browser-",
       network: "none",
@@ -134,8 +136,12 @@ describe("maybePruneSandboxes", () => {
     backendMocks.removeRuntime.mockResolvedValue(undefined);
     ({ BROWSER_BRIDGES } = await import("./browser-bridges.js"));
     BROWSER_BRIDGES.clear();
-    ({ maybePruneSandboxes } = await import("./prune.js"));
+    ({ maybePruneSandboxes, scheduleSandboxIdlePrune } = await import("./prune.js"));
     ({ acquireSandboxLifecycleLease } = await import("./lifecycle.js"));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it("removes the registry entry after runtime removal succeeds", async () => {
@@ -249,5 +255,90 @@ describe("maybePruneSandboxes", () => {
     expect(order).toEqual(["bridge", "runtime", "registry"]);
     expect(BROWSER_BRIDGES.has("agent:coder:main")).toBe(false);
     nowSpy.mockRestore();
+  });
+
+  it("resets the 15-minute idle deadline when the same scope is used again", async () => {
+    const now = Date.now();
+    vi.useFakeTimers();
+    vi.setSystemTime(now);
+    const cfg = buildPruneConfig();
+    cfg.prune.idleHours = 0.25;
+    registryMocks.readRegistry.mockResolvedValue({
+      entries: [
+        {
+          containerName: "sandbox-reset",
+          backendId: "docker",
+          sessionKey: "scope:reset",
+          createdAtMs: now,
+          lastUsedAtMs: now,
+          image: "openclaw-sandbox:bookworm-slim",
+        },
+      ],
+    });
+
+    scheduleSandboxIdlePrune(cfg, "scope:reset");
+    await vi.advanceTimersByTimeAsync(10 * 60 * 1000);
+    scheduleSandboxIdlePrune(cfg, "scope:reset");
+    await vi.advanceTimersByTimeAsync(6 * 60 * 1000);
+    expect(backendMocks.removeRuntime).not.toHaveBeenCalled();
+
+    await vi.advanceTimersByTimeAsync(9 * 60 * 1000 + 1001);
+    expect(backendMocks.removeRuntime).toHaveBeenCalledTimes(1);
+  });
+
+  it("prunes workspace and browser registries after 15 minutes idle", async () => {
+    const now = Date.now();
+    vi.useFakeTimers();
+    vi.setSystemTime(now);
+    const cfg = buildPruneConfig();
+    cfg.prune.idleHours = 0.25;
+    registryMocks.readRegistry.mockResolvedValue({
+      entries: [
+        {
+          containerName: "sandbox-idle",
+          backendId: "docker",
+          sessionKey: "scope:idle",
+          createdAtMs: now,
+          lastUsedAtMs: now,
+          image: "openclaw-sandbox:bookworm-slim",
+        },
+      ],
+    });
+    registryMocks.readBrowserRegistry.mockResolvedValue({
+      entries: [
+        {
+          containerName: "browser-idle",
+          sessionKey: "scope:idle",
+          createdAtMs: now,
+          lastUsedAtMs: now,
+          image: "openclaw-sandbox-browser:bookworm-slim",
+          cdpPort: 49100,
+        },
+      ],
+    });
+
+    scheduleSandboxIdlePrune(cfg, "scope:idle");
+    await vi.advanceTimersByTimeAsync(15 * 60 * 1000 + 1001);
+
+    expect(registryMocks.removeRegistryEntry).toHaveBeenCalledWith("sandbox-idle");
+    expect(registryMocks.removeBrowserRegistryEntry).toHaveBeenCalledWith("browser-idle");
+  });
+
+  it("retries an idle deadline when another prune used the throttle window", async () => {
+    const now = Date.now();
+    vi.useFakeTimers();
+    vi.setSystemTime(now);
+    const cfg = buildPruneConfig();
+    cfg.prune.idleHours = 0.0001;
+
+    await maybePruneSandboxes(cfg);
+    backendMocks.removeRuntime.mockClear();
+    registryMocks.removeRegistryEntry.mockClear();
+    scheduleSandboxIdlePrune(cfg, "scope:retry");
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(backendMocks.removeRuntime).not.toHaveBeenCalled();
+
+    await vi.advanceTimersByTimeAsync(61 * 1000);
+    expect(backendMocks.removeRuntime).toHaveBeenCalledTimes(1);
   });
 });

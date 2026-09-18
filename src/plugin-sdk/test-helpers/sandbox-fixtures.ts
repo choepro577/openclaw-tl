@@ -12,6 +12,7 @@ export function createSandboxBrowserConfig(
 ): SandboxBrowserConfig {
   return {
     enabled: false,
+    maxRunningContainers: 0,
     image: "openclaw-browser",
     containerPrefix: "openclaw-browser-",
     network: "bridge",

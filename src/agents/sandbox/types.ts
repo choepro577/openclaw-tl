@@ -37,6 +37,7 @@ export type SandboxWorkspaceAccess = "none" | "ro" | "rw";
 
 export type SandboxBrowserConfig = {
   enabled: boolean;
+  maxRunningContainers: number;
   image: string;
   containerPrefix: string;
   network: string;

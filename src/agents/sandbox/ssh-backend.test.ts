@@ -428,6 +428,7 @@ describe("ssh sandbox backend", () => {
         },
         browser: {
           enabled: false,
+          maxRunningContainers: 0,
           image: "openclaw-browser",
           containerPrefix: "openclaw-browser-",
           network: "bridge",

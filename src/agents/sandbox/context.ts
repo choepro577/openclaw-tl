@@ -221,6 +221,33 @@ function scheduleSandboxPruneAfterPreparation(
     });
 }
 
+function scheduleSandboxIdlePruneAfterRelease(
+  cfg: ReturnType<typeof resolveSandboxConfigForAgent>,
+  config: OpenClawConfig | undefined,
+  scopeKey: string,
+): void {
+  if (cfg.prune.idleHours <= 0) {
+    return;
+  }
+  const timelineOptions = sandboxTimelineOptions({
+    config,
+    cfg,
+    stage: "prune-idle-schedule",
+  });
+  void import("./prune.js")
+    .then(({ scheduleSandboxIdlePrune }) => {
+      measureDiagnosticsTimelineSpanSync(
+        "sandbox.prune.idle_schedule",
+        () => scheduleSandboxIdlePrune(cfg, scopeKey),
+        timelineOptions,
+      );
+    })
+    .catch((error: unknown) => {
+      const message = error instanceof Error ? error.message : String(error);
+      defaultRuntime.error?.(`Sandbox idle prune scheduling failed: ${message}`);
+    });
+}
+
 async function resolveSandboxResourcePreparationUncoalesced(
   params: ResolveSandboxContextParams,
   resolved: ResolvedSandboxSession,
@@ -515,9 +542,25 @@ async function resolveProvisionedSandboxContext(
   // snapshot, while the active attempt carries the snapshot captured at
   // admission. The foreground reservation protects the scope while this
   // refresh runs without serializing already-active turns.
-  let releaseSandboxActive = params.holdActiveLease
+  const releaseActiveLease = params.holdActiveLease
     ? await (activeReservation?.wait() ?? acquireSandboxActiveLease(layout.scopeKey))
     : undefined;
+  let releaseSandboxActive = releaseActiveLease
+    ? (() => {
+        let released = false;
+        return () => {
+          if (released) {
+            return;
+          }
+          released = true;
+          releaseActiveLease();
+          scheduleSandboxIdlePruneAfterRelease(cfg, params.config, layout.scopeKey);
+        };
+      })()
+    : undefined;
+  if (!releaseSandboxActive) {
+    scheduleSandboxIdlePruneAfterRelease(cfg, params.config, layout.scopeKey);
+  }
   let skillFacts: SandboxSkillFacts;
   try {
     skillFacts = await syncSandboxWorkspaceSkills({

@@ -136,12 +136,16 @@ On Ubuntu/AppArmor hosts with Docker sandbox mode enabled, Codex app-server `wor
 ### Sandboxed browser
 
 - The sandbox browser auto-starts (ensures CDP is reachable) when the browser tool needs it. Configure via `agents.defaults.sandbox.browser.autoStart` (default `true`) and `autoStartTimeoutMs` (default 12s).
+- `agents.defaults.sandbox.browser.maxRunningContainers` limits running browser containers (`0` is unlimited). At capacity, OpenClaw reuses the target when it is already running, otherwise evicts the least-recently-used registered browser with no active lifecycle lease. If all registered browsers are active, the request fails with a retryable capacity error. Unregistered labeled containers count toward capacity but are not deleted automatically.
 - Sandbox browser containers use a dedicated Docker network (`openclaw-sandbox-browser`) instead of the global `bridge` network. Configure with `agents.defaults.sandbox.browser.network`.
 - Sandbox browser network mode `"none"` is unsupported because browser control requires host-published CDP ports. Use the dedicated default, `bridge`, or another custom bridge network. `openclaw doctor --fix` disables affected persisted sidecars and restores the dedicated network without silently enabling egress.
 - `agents.defaults.sandbox.browser.cdpSourceRange` restricts container-edge CDP ingress with a CIDR allowlist (for example `172.21.0.1/32`).
 - noVNC observer access is password-protected by default; OpenClaw emits a short-lived token URL that serves a local bootstrap page and opens noVNC with the password in the URL fragment (not query string or header logs).
 - `agents.defaults.sandbox.browser.allowHostControl` (default `false`) lets sandboxed sessions target the host browser explicitly.
 - Optional allowlists gate `target: "custom"`: `allowedControlUrls`, `allowedControlHosts`, `allowedControlPorts`.
+- `agents.defaults.sandbox.prune.idleHours` accepts decimals (`0.25` is 15 minutes) and resets from the active lease release; `0` disables idle pruning.
+
+Enterprise request projections keep `scope: "session"` and, only when the administrator has not configured an override, apply `docker.memory: "1g"`, `docker.memorySwap: "1g"`, `docker.pidsLimit: 256`, `browser.maxRunningContainers: 3`, and `prune.idleHours: 0.25`. These are Enterprise-only safety defaults; ordinary OpenClaw defaults are unchanged.
 
 ## Podman backend
 

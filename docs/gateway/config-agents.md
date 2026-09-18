@@ -782,6 +782,7 @@ Optional sandboxing for the embedded agent. See [Sandboxing](/gateway/sandboxing
         },
         browser: {
           enabled: false,
+          maxRunningContainers: 0, // 0 = unlimited
           image: "openclaw-sandbox-browser:bookworm-slim",
           network: "openclaw-sandbox-browser",
           cdpPort: 9222,
@@ -795,7 +796,7 @@ Optional sandboxing for the embedded agent. See [Sandboxing](/gateway/sandboxing
           autoStartTimeoutMs: 12000,
         },
         prune: {
-          idleHours: 24,
+          idleHours: 24, // decimals allowed; 0.25 = 15 minutes, 0 = disabled
           maxAgeDays: 7,
         },
       },
@@ -923,9 +924,11 @@ Codex app-server turns in an active OpenClaw sandbox use this same egress settin
 noVNC observer access is password-protected and brokered through a one-time, authenticated bootstrap URL. The observer URL is deliberately omitted from model-visible system prompt context.
 
 - `allowHostControl: false` (default) blocks sandboxed sessions from targeting the host browser.
+- `maxRunningContainers: 0` (default) leaves the running browser count unlimited. A positive limit serializes capacity checks; when full, OpenClaw evicts the least-recently-used registered browser that has no active lifecycle lease. If every registered browser is active, the new request fails with a retryable capacity error. Labeled containers missing from the registry count toward the limit but are never automatically deleted.
 - `network` defaults to `openclaw-sandbox-browser` (dedicated bridge network). Set to `bridge` only when you explicitly want global bridge connectivity. `"none"` is unsupported because CDP ports must be published to the host; `"host"` is blocked too. On upgrade, `openclaw doctor --fix` disables sidecars affected by a persisted `"none"` value and restores the dedicated network without silently enabling egress.
 - `cdpSourceRange` optionally restricts CDP ingress at the container edge to a CIDR range (for example `172.21.0.1/32`).
 - `sandbox.browser.binds` mounts additional host directories into the sandbox browser container only. When set (including `[]`), it replaces `docker.binds` for the browser container.
+- `sandbox.prune.idleHours` accepts decimals (`0.25` is 15 minutes). The idle deadline is reset when the session's active lease is released; `0` disables idle pruning.
 - The sandbox browser container's Chromium always launches with `--no-sandbox --disable-setuid-sandbox` (containers do not have the kernel primitives Chrome's own sandbox needs); there is no config toggle for this.
 - Launch defaults are defined in `scripts/sandbox-browser-entrypoint.sh` and tuned for container hosts:
   - `--remote-debugging-address=127.0.0.1`

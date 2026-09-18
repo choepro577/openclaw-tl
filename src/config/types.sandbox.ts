@@ -66,6 +66,8 @@ export type SandboxDockerSettings = {
 
 export type SandboxBrowserSettings = {
   enabled?: boolean;
+  /** Maximum running sandbox browser containers (0 = unlimited). */
+  maxRunningContainers?: number;
   image?: string;
   containerPrefix?: string;
   /** Docker network for sandbox browser containers (default: openclaw-sandbox-browser). */

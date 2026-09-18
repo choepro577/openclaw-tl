@@ -127,12 +127,23 @@ describe("sandbox config merges", () => {
   it("applies per-agent browser and prune overrides (ignored under shared scope)", () => {
     const browser = resolveSandboxBrowserConfig({
       scope: "agent",
-      globalBrowser: { enabled: false, headless: false, noVncEnabled: true },
-      agentBrowser: { enabled: true, headless: true, noVncEnabled: false },
+      globalBrowser: {
+        enabled: false,
+        headless: false,
+        noVncEnabled: true,
+        maxRunningContainers: 3,
+      },
+      agentBrowser: {
+        enabled: true,
+        headless: true,
+        noVncEnabled: false,
+        maxRunningContainers: 5,
+      },
     });
     expect(browser.enabled).toBe(true);
     expect(browser.headless).toBe(true);
     expect(browser.noVncEnabled).toBe(false);
+    expect(browser.maxRunningContainers).toBe(5);
 
     const prune = resolveSandboxPruneConfig({
       scope: "agent",

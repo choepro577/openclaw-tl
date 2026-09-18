@@ -34,6 +34,7 @@ const dockerMocks = vi.hoisted(() => ({
 
 const registryMocks = vi.hoisted(() => ({
   readBrowserRegistry: vi.fn(),
+  removeBrowserRegistryEntry: vi.fn(),
   updateBrowserRegistry: vi.fn(),
 }));
 
@@ -62,6 +63,7 @@ vi.mock("./docker.js", async () => {
 
 vi.mock("./registry.js", () => ({
   readBrowserRegistry: registryMocks.readBrowserRegistry,
+  removeBrowserRegistryEntry: registryMocks.removeBrowserRegistryEntry,
   updateBrowserRegistry: registryMocks.updateBrowserRegistry,
 }));
 
@@ -136,6 +138,7 @@ function buildConfig(noVncEnabled: boolean): SandboxConfig {
     },
     browser: {
       enabled: true,
+      maxRunningContainers: 0,
       image: "openclaw-sandbox-browser:bookworm-slim",
       containerPrefix: "openclaw-sbx-browser-",
       network: "openclaw-sandbox-browser",
@@ -244,6 +247,7 @@ describe("ensureSandboxBrowser create args", () => {
     dockerMocks.readDockerContainerLabel.mockClear();
     dockerMocks.readDockerPort.mockClear();
     registryMocks.readBrowserRegistry.mockClear();
+    registryMocks.removeBrowserRegistryEntry.mockClear();
     registryMocks.updateBrowserRegistry.mockClear();
     bridgeMocks.startBrowserBridgeServer.mockClear();
     bridgeMocks.stopBrowserBridgeServer.mockClear();
