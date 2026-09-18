@@ -53,7 +53,10 @@ import {
 } from "../personal-agent/personal-agent-config.js";
 import { ensureEnterpriseWorkspaceFromTemplate } from "../personal-agent/personal-workspace.js";
 import { isEnterpriseHostScriptSource } from "../skill-runtime/skill-script-runtime.js";
-import { resolveEnterpriseSharedAgentCapabilities } from "./enterprise-agent-capabilities.js";
+import {
+  resolveEnterprisePersonalAgentCapabilities,
+  resolveEnterpriseSharedAgentCapabilities,
+} from "./enterprise-agent-capabilities.js";
 import { compileEnterpriseToolPolicy } from "./enterprise-tool-policy.js";
 import {
   enterpriseUserGatewayMethodAllowed,
@@ -903,7 +906,7 @@ export function projectEnterpriseRuntimeConfig(
       return [id, rest];
     }),
   );
-  const projectedConfig: OpenClawConfig = {
+  let projectedConfig: OpenClawConfig = {
     ...config,
     gateway: {
       ...config.gateway,
@@ -977,6 +980,58 @@ export function projectEnterpriseRuntimeConfig(
       list: undefined,
     },
   };
+  const personalCapability = scopedPersonal.length
+    ? resolveEnterprisePersonalAgentCapabilities({
+        config: projectedConfig,
+        account,
+        agentId: personalAgentId,
+      })
+    : undefined;
+  const personalHasScriptRuntime =
+    personalCapability?.allowed === true &&
+    personalCapability.skillsSnapshot.skills.some(
+      (skill) =>
+        Boolean(skill.scriptRuntime) &&
+        Boolean(skill.source) &&
+        isEnterpriseHostScriptSource(skill.source!),
+    );
+  const projectedPersonal = projectedConfig.agents?.entries?.[personalAgentId];
+  if (personalHasScriptRuntime && projectedPersonal && personalTemplateWithAccountPolicy) {
+    const personalTools = scopedTools(
+      personalTemplateWithAccountPolicy.tools,
+      config.tools?.sandbox?.tools,
+      [...toolAllowForAgent(personalAgentId), SKILL_SCRIPT_TOOL_ID],
+      accountToolDeny,
+      restricted,
+    );
+    projectedConfig = {
+      ...projectedConfig,
+      tools: {
+        ...projectedConfig.tools,
+        allow: projectedConfig.tools?.allow
+          ? [...new Set([...projectedConfig.tools.allow, SKILL_SCRIPT_TOOL_ID])].toSorted()
+          : undefined,
+        alsoAllow: [
+          ...new Set([...(projectedConfig.tools?.alsoAllow ?? []), SKILL_SCRIPT_TOOL_ID]),
+        ].toSorted(),
+      },
+      agents: {
+        ...projectedConfig.agents,
+        entries: {
+          ...projectedConfig.agents?.entries,
+          [personalAgentId]: {
+            ...projectedPersonal,
+            tools: {
+              ...personalTools,
+              alsoAllow: [
+                ...new Set([...(personalTools?.alsoAllow ?? []), ...managedDelegationTools]),
+              ].toSorted(),
+            },
+          },
+        },
+      },
+    };
+  }
   const ownedProjectedConfig = ownImmutableEnterpriseRuntimeProjection(projectedConfig);
   if (byAccount.size >= MAX_ENTERPRISE_RUNTIME_PROJECTION_ENTRIES) {
     const oldest = byAccount.keys().next().value;
@@ -1197,6 +1252,21 @@ export function prepareEnterpriseGatewayRequest(params: {
                         agentId: normalizeAgentId(agentId),
                         reason: "account_disabled" as const,
                       };
+                    }
+                    if (normalizeAgentId(agentId) === normalizeAgentId(personalAgentId)) {
+                      if (currentAccount.policyRevision !== account.policyRevision) {
+                        return {
+                          allowed: false as const,
+                          accountId: account.id,
+                          agentId: normalizeAgentId(agentId),
+                          reason: "account_policy_changed" as const,
+                        };
+                      }
+                      return resolveEnterprisePersonalAgentCapabilities({
+                        config: projectedConfig!,
+                        account: currentAccount,
+                        agentId,
+                      });
                     }
                     return resolveEnterpriseSharedAgentCapabilities({
                       config: params.context.getRuntimeConfig(),

@@ -2,6 +2,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { afterEach, describe, expect, it } from "vitest";
 import { listAgentIds, resolveAgentConfig } from "../../agents/agent-scope.js";
 import { resolveDefaultModelForAgent } from "../../agents/model-selection.js";
+import { createOpenClawTools } from "../../agents/openclaw-tools.js";
 import { resolveSandboxConfigForAgent } from "../../agents/sandbox/config.js";
 import {
   isToolAllowed,
@@ -598,6 +599,7 @@ describe("enterprise gateway policy", () => {
       });
       const config: OpenClawConfig = {
         enterprise: { enabled: true, personalAgent: { templateAgentId: "main" } },
+        gateway: { auth: { mode: "accounts" } },
         agents: {
           entries: {
             main: {
@@ -622,19 +624,43 @@ describe("enterprise gateway policy", () => {
       };
 
       const projected = projectEnterpriseRuntimeConfig(config, account);
-      const personal = resolveAgentConfig(
-        projected,
-        resolveEnterprisePersonalAgentId(config, account),
-      );
+      const personalAgentId = resolveEnterprisePersonalAgentId(config, account);
+      const personal = resolveAgentConfig(projected, personalAgentId);
       const shared = resolveAgentConfig(projected, "hrm");
 
       expect(personal?.skills).toEqual(["hr-skill"]);
       expect(personal?.tools?.deny).toContain("write");
+      expect(personal?.tools?.alsoAllow).toContain("skill_script");
       expect(shared?.skills).toEqual(["hr-skill", "purchase-order-skill"]);
       expect(shared?.tools?.allow).toEqual(["read", "skill_script", "write"]);
       expect(shared?.tools?.deny).not.toContain("write");
       expect(shared?.tools?.deny).toEqual(expect.arrayContaining(["exec", "terminal"]));
       expect(shared?.tools?.alsoAllow).toContain("skill_script");
+
+      const session = createEnterpriseSession(account.id);
+      const admission = prepareEnterpriseGatewayRequest({
+        client: createEnterpriseUserGatewayClient(account, session.sessionId),
+        context: { getRuntimeConfig: () => config } as GatewayRequestContext,
+        method: "chat.send",
+        requestParams: { agentId: personalAgentId },
+      });
+      expect(admission.allowed).toBe(true);
+      if (!admission.allowed) {
+        throw new Error("Expected an admitted Personal Agent request");
+      }
+      const runtimeConfig = admission.context.getRuntimeConfig();
+      const capability =
+        readGatewayRequestRuntimeMetadata(runtimeConfig)?.enterpriseCapabilities?.resolve(
+          personalAgentId,
+        );
+      expect(capability?.allowed ? capability.scope : capability?.reason).toBe("personal");
+      expect(
+        createOpenClawTools({
+          config: runtimeConfig,
+          agentSessionKey: `agent:${personalAgentId}:dashboard:personal-skill`,
+          requesterAgentIdOverride: personalAgentId,
+        }).map((tool) => tool.name),
+      ).toContain("skill_script");
     });
   });
 

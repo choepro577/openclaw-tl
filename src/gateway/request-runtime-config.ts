@@ -75,7 +75,7 @@ export type GatewayRequestRuntimeMetadata = {
   enterpriseKnowledge?: {
     createAuthority(agentId: string): EnterpriseKnowledgeAuthority;
   };
-  /** Live capability resolver for Shared Agents. Re-resolves after every session turn. */
+  /** Live capability resolver for Personal and Shared Agents. Re-resolves after every turn. */
   enterpriseCapabilities?: EnterpriseSharedAgentCapabilityResolver;
   enterpriseDelegation?: {
     accountId: string;

@@ -213,10 +213,9 @@ export async function ensureSkillSnapshot(params: {
   const sessionAgentId = resolveSessionAgentId({ sessionKey, config: cfg });
   const capabilityResolution =
     readGatewayRequestRuntimeMetadata(cfg)?.enterpriseCapabilities?.resolve(sessionAgentId);
-  const capabilityRevision =
-    capabilityResolution?.allowed && capabilityResolution.scope === "shared"
-      ? capabilityResolution.revision
-      : undefined;
+  const capabilityRevision = capabilityResolution?.allowed
+    ? capabilityResolution.revision
+    : undefined;
   const nodeSkillsEligibility = resolveNodeExecEligibility({
     cfg,
     sessionEntry,

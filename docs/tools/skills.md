@@ -418,13 +418,14 @@ metadata:
 ### Enterprise script runtime
 
 An administrator-published Enterprise Skill can expose fixed scripts or named
-operations without adding a product-specific tool. Granting a shared Agent gives
-both direct sessions and delegated child runs access to that Agent's published
-Skills and the internal `skill_script` tool. These capabilities stay scoped to
-the shared Agent. Administrators never grant the runner or each Skill again to
-the user. Existing sessions refresh on the next turn; every script call checks
-current assignment and capability revision, including after authentication or
-approval waits. Revoked or changed capabilities cannot execute stale callbacks.
+operations without adding a product-specific tool. Granting the Skill to an
+account gives its Personal Agent access to the internal `skill_script` tool;
+granting a shared Agent gives both direct sessions and delegated child runs
+access to that Agent's published Skills and the same runner. Administrators do
+not grant the runner separately. Existing sessions refresh on the next turn;
+every script call checks current assignment and capability revision, including
+after authentication or approval waits. Revoked or changed capabilities cannot
+execute stale callbacks.
 
 ```json5
 {

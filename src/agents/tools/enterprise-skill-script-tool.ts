@@ -62,7 +62,7 @@ export function createEnterpriseSkillScriptTools(options: {
       name: ENTERPRISE_SKILL_SCRIPT_TOOL_ID,
       label: "Skill Script",
       description:
-        "Run a declared script entrypoint from a skill assigned to this Enterprise Shared Agent. Pass only the skill key, declared entrypoint, operation, and business arguments. Never pass a path, command, environment variable, password, or token. For operation entrypoints with routerOperation, call the router first and then only an operation returned by it.",
+        "Run a declared script entrypoint from a skill assigned to this Enterprise Agent. Pass only the skill key, declared entrypoint, operation, and business arguments. Never pass a path, command, environment variable, password, or token. For operation entrypoints with routerOperation, call the router first and then only an operation returned by it.",
       parameters: Type.Object(
         {
           skill: Type.String({ minLength: 1, maxLength: 128 }),

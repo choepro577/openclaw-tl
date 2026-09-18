@@ -23,10 +23,17 @@ import { fingerprintSkillSnapshotConfig } from "../../skills/runtime/snapshot-co
 import type { SkillSnapshot } from "../../skills/types.js";
 import type { OpenClawStateDatabaseOptions } from "../../state/openclaw-state-db.js";
 import type { EnterpriseAccount } from "../accounts/account-types.js";
-import { listEnterpriseEntitlements } from "../entitlements/entitlement-store.js";
-import { parseEnterpriseResourceKey } from "../entitlements/resource-keys.js";
+import {
+  listEnterpriseEntitlements,
+  resolveEnterpriseResourceAccess,
+} from "../entitlements/entitlement-store.js";
+import {
+  parseEnterpriseResourceKey,
+  personalAgentResourceKey,
+} from "../entitlements/resource-keys.js";
 import { listActiveEnterpriseSharedCodexPluginGrantFingerprints } from "../extensions/codex-plugin-store.js";
 import { listEnterpriseEffectivePluginGrants } from "../extensions/extension-store.js";
+import { resolveEnterprisePersonalAgentId } from "../personal-agent/personal-agent-config.js";
 import { listActiveEnterprisePluginGrantTools } from "./enterprise-plugin-tool-grants.js";
 
 export type EnterpriseSharedAgentCapabilities =
@@ -36,14 +43,16 @@ export type EnterpriseSharedAgentCapabilities =
       agentId: string;
       reason:
         | "account_disabled"
+        | "account_policy_changed"
         | "agent_not_configured"
         | "agent_not_granted"
-        | "agent_explicitly_denied";
+        | "agent_explicitly_denied"
+        | "personal_agent_disabled";
       revision?: string;
     }
   | {
       allowed: true;
-      scope: "shared";
+      scope: "personal" | "shared";
       accountId: string;
       agentId: string;
       /** The exact skill catalog used by this run. Includes script metadata. */
@@ -325,6 +334,7 @@ function capabilityRevision(params: {
   account: EnterpriseAccount;
   config: OpenClawConfig;
   agentId: string;
+  scope: "personal" | "shared";
   skillsSnapshot: SkillSnapshot;
   skillContentsFingerprint: string;
   toolPolicy?: AgentToolsConfig;
@@ -337,6 +347,7 @@ function capabilityRevision(params: {
         accountId: params.account.id,
         accountPolicyRevision: params.account.policyRevision,
         agentId: params.agentId,
+        scope: params.scope,
         configFingerprint: fingerprintSkillSnapshotConfig(params.config),
         skillFilter: params.skillsSnapshot.skillFilter,
         skillVersion: params.skillsSnapshot.version,
@@ -346,6 +357,65 @@ function capabilityRevision(params: {
       }),
     )
     .digest("hex");
+}
+
+/** Resolve the account-scoped capability published by its synthetic Personal Agent. */
+export function resolveEnterprisePersonalAgentCapabilities(params: {
+  config: OpenClawConfig;
+  account: EnterpriseAccount;
+  agentId: string;
+}): EnterpriseSharedAgentCapabilities {
+  const agentId = normalizeAgentId(params.agentId);
+  const base = { accountId: params.account.id, agentId };
+  if (!params.account.enabled) {
+    return { allowed: false, ...base, reason: "account_disabled" };
+  }
+  if (!params.account.personalAgentEnabled) {
+    return { allowed: false, ...base, reason: "personal_agent_disabled" };
+  }
+  if (agentId !== resolveEnterprisePersonalAgentId(params.config, params.account)) {
+    return { allowed: false, ...base, reason: "agent_not_configured" };
+  }
+  const access = resolveEnterpriseResourceAccess(
+    params.account,
+    "agent",
+    personalAgentResourceKey(params.account.id),
+  );
+  if (!access.allowed) {
+    return {
+      allowed: false,
+      ...base,
+      reason: access.reason === "explicit_deny" ? "agent_explicitly_denied" : "agent_not_granted",
+    };
+  }
+  const entry = findAgentEntry(params.config, agentId);
+  const skillSnapshot = resolveEnterpriseSharedAgentSkillSnapshot({
+    config: params.config,
+    agentId,
+  });
+  if (!entry || !skillSnapshot) {
+    return { allowed: false, ...base, reason: "agent_not_configured" };
+  }
+  const { snapshot, skillContentsFingerprint } = skillSnapshot;
+  return {
+    allowed: true,
+    scope: "personal",
+    ...base,
+    skillsSnapshot: snapshot,
+    revision: capabilityRevision({
+      account: params.account,
+      config: params.config,
+      agentId,
+      scope: "personal",
+      skillsSnapshot: snapshot,
+      skillContentsFingerprint,
+      toolPolicy: entry.tools,
+      pluginGrantFingerprint: "personal",
+    }),
+    config: params.config,
+    ...(entry.tools ? { toolPolicy: entry.tools } : {}),
+    pluginTools: [],
+  };
 }
 
 /**
@@ -444,6 +514,7 @@ export function resolveEnterpriseSharedAgentCapabilities(params: {
       account: params.account,
       config: params.config,
       agentId,
+      scope: "shared",
       skillsSnapshot: snapshot,
       skillContentsFingerprint,
       toolPolicy,
