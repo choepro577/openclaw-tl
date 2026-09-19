@@ -588,16 +588,23 @@ export async function publishPreparedModelRuntimeOwnerBatch(params: {
     }
   })();
   for (const candidate of candidates) {
-    const pending = publication.then(() => {
-      // A newer auth publication may win while this batch finishes. Reject deduplicated callers
-      // at the owner boundary so the stale snapshot cannot escape despite being skipped at commit.
-      if (!candidate.isCurrent()) {
-        throw new PreparedModelRuntimePublicationSupersededError(
-          `prepared model runtime publication was superseded for ${candidate.input.agentDir}`,
-        );
-      }
-      return results.get(candidate.owner)!.snapshot;
-    });
+    const pending = publication
+      .then(() => {
+        // A newer auth publication may win while this batch finishes. Reject deduplicated callers
+        // at the owner boundary so the stale snapshot cannot escape despite being skipped at commit.
+        if (!candidate.isCurrent()) {
+          throw new PreparedModelRuntimePublicationSupersededError(
+            `prepared model runtime publication was superseded for ${candidate.input.agentDir}`,
+          );
+        }
+        return results.get(candidate.owner)!.snapshot;
+      })
+      .finally(() => {
+        // Superseded publications still settle; never retain their rejected promise or clear a successor.
+        if (candidate.owner.pending === pending) {
+          candidate.owner.pending = undefined;
+        }
+      });
     candidate.owner.pending = pending;
     void pending.catch(() => undefined);
   }
@@ -660,10 +667,9 @@ export async function publishModelRuntimeSnapshot(
       return result.snapshot;
     } catch (error) {
       const refreshError = toStringifiedError(error);
-      if (owner.generation === generation) {
+      // Invalidation can advance the generation without replacing this pending publication.
+      if (owner.pending === publication) {
         owner.pendingPluginGeneration = undefined;
-      }
-      if (owner.generation === generation && owners.get(key) === owner) {
         owner.pending = undefined;
         owner.needsRefresh = true;
         owner.refreshError = refreshError;

@@ -20,6 +20,11 @@ import {
   registerPreparedModelRuntimePublicationListener,
   refreshPreparedModelRuntimeSnapshots,
 } from "./prepared-model-runtime.js";
+import {
+  createPreparedModelRuntimeOwner,
+  ownerKey,
+  publishModelRuntimeSnapshot,
+} from "./prepared-model-runtime.owner.js";
 
 const mocks = getPreparedModelRuntimeMocks();
 
@@ -939,6 +944,84 @@ describe("prepared model runtime snapshots", () => {
     await expect(prepareModelRuntimeSnapshot({ config, agentDir })).resolves.toMatchObject({
       agentDir,
     });
+  });
+
+  it("clears a superseded single-owner publication so it can be reacquired", async () => {
+    const input = { config: {}, agentId: "default", agentDir: "/tmp/pending-owner-cleanup" };
+    const owners = new Map<string, ReturnType<typeof createPreparedModelRuntimeOwner>>();
+    const owner = createPreparedModelRuntimeOwner(input, "ephemeral");
+    let finishBuild!: () => void;
+    mocks.ensureOpenClawModelsJson.mockImplementationOnce(
+      async () =>
+        await new Promise<{ agentDir: string; wrote: false }>((resolve) => {
+          finishBuild = () => resolve({ agentDir: input.agentDir, wrote: false });
+        }),
+    );
+
+    const publication = publishModelRuntimeSnapshot(
+      input,
+      owners,
+      new Map(),
+      120_000,
+      owner,
+      "ephemeral",
+    );
+    await vi.waitFor(() => expect(mocks.ensureOpenClawModelsJson).toHaveBeenCalledOnce());
+    owner.generation += 1; // Simulate lifecycle invalidation during discovery.
+    finishBuild();
+
+    await expect(publication).rejects.toThrow("superseded");
+    expect(owners.get(ownerKey(input))).toBe(owner);
+    expect(owner.pending).toBeUndefined();
+  });
+
+  it("keeps a newer single-owner publication pending when an older one settles", async () => {
+    const input = { config: {}, agentId: "default", agentDir: "/tmp/pending-owner-replacement" };
+    const owners = new Map<string, ReturnType<typeof createPreparedModelRuntimeOwner>>();
+    const completions = new Map<string, Promise<void>>();
+    const owner = createPreparedModelRuntimeOwner(input, "ephemeral");
+    let finishFirstBuild!: () => void;
+    let finishSecondBuild!: () => void;
+    mocks.ensureOpenClawModelsJson
+      .mockImplementationOnce(
+        async () =>
+          await new Promise<{ agentDir: string; wrote: false }>((resolve) => {
+            finishFirstBuild = () => resolve({ agentDir: input.agentDir, wrote: false });
+          }),
+      )
+      .mockImplementationOnce(
+        async () =>
+          await new Promise<{ agentDir: string; wrote: false }>((resolve) => {
+            finishSecondBuild = () => resolve({ agentDir: input.agentDir, wrote: false });
+          }),
+      );
+
+    const first = publishModelRuntimeSnapshot(
+      input,
+      owners,
+      completions,
+      120_000,
+      owner,
+      "ephemeral",
+    );
+    await vi.waitFor(() => expect(mocks.ensureOpenClawModelsJson).toHaveBeenCalledOnce());
+    owner.generation += 1; // Invalidate the first generation.
+    const second = publishModelRuntimeSnapshot(
+      input,
+      owners,
+      completions,
+      120_000,
+      owner,
+      "ephemeral",
+    );
+    const secondPending = owner.pending;
+    finishFirstBuild();
+
+    await expect(first).rejects.toThrow("superseded");
+    await vi.waitFor(() => expect(mocks.ensureOpenClawModelsJson).toHaveBeenCalledTimes(2));
+    expect(owner.pending).toBe(secondPending);
+    finishSecondBuild();
+    await expect(second).resolves.toMatchObject({ agentDir: input.agentDir });
   });
 
   it("does not let a superseded owner hide a genuine sibling refresh failure", async () => {

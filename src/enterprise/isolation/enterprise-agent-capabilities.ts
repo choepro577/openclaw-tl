@@ -350,7 +350,6 @@ function capabilityRevision(params: {
         scope: params.scope,
         configFingerprint: fingerprintSkillSnapshotConfig(params.config),
         skillFilter: params.skillsSnapshot.skillFilter,
-        skillVersion: params.skillsSnapshot.version,
         skillContents: params.skillContentsFingerprint,
         toolPolicy: params.toolPolicy,
         pluginGrantFingerprint: params.pluginGrantFingerprint,

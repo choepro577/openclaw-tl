@@ -15,6 +15,7 @@ import {
   readGatewayRequestRuntimeMetadata,
 } from "../../gateway/request-runtime-config.js";
 import type { GatewayClient, GatewayRequestContext } from "../../gateway/server-methods/types.js";
+import { bumpSkillsSnapshotVersion } from "../../skills/runtime/refresh-state.js";
 import { closeOpenClawStateDatabaseForTest } from "../../state/openclaw-state-db.js";
 import { withOpenClawTestState } from "../../test-utils/openclaw-test-state.js";
 import { createEnterpriseAccount } from "../accounts/account-store.js";
@@ -649,11 +650,18 @@ describe("enterprise gateway policy", () => {
         throw new Error("Expected an admitted Personal Agent request");
       }
       const runtimeConfig = admission.context.getRuntimeConfig();
-      const capability =
-        readGatewayRequestRuntimeMetadata(runtimeConfig)?.enterpriseCapabilities?.resolve(
-          personalAgentId,
-        );
+      const capabilityResolver =
+        readGatewayRequestRuntimeMetadata(runtimeConfig)?.enterpriseCapabilities;
+      const capability = capabilityResolver?.resolve(personalAgentId);
       expect(capability?.allowed ? capability.scope : capability?.reason).toBe("personal");
+      if (!capability?.allowed) {
+        throw new Error("Expected an admitted Personal Agent capability");
+      }
+      bumpSkillsSnapshotVersion({ reason: "manual" });
+      const unchangedCapability = capabilityResolver?.resolve(personalAgentId);
+      expect(unchangedCapability?.allowed && unchangedCapability.revision).toBe(
+        capability.revision,
+      );
       expect(
         createOpenClawTools({
           config: runtimeConfig,
