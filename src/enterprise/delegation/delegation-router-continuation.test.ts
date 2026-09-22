@@ -12,6 +12,7 @@ import { closeOpenClawStateDatabaseForTest } from "../../state/openclaw-state-db
 import { createEnterpriseAccount, updateEnterpriseAccount } from "../accounts/account-store.js";
 import { listEnterpriseAuditEvents } from "../audit/audit-store.js";
 import { sharedAgentResourceKey } from "../entitlements/resource-keys.js";
+import { readEnterpriseDelegationAgentFirstContext } from "./delegation-agent-first.js";
 import {
   consumeEnterpriseDelegationDecision,
   invalidateEnterpriseDelegationPlan,
@@ -146,6 +147,7 @@ function fixture(profile: Partial<AgentDelegationTargetConfig> = {}, secondConfi
     const result = readGatewayRequestRuntimeMetadata(cfg)?.enterpriseDelegation?.turn;
     return {
       result,
+      recovery: readEnterpriseDelegationAgentFirstContext({ config: cfg, sessionKey, parentRunId }),
       consume: () =>
         consumeEnterpriseDelegationDecision({
           config: cfg,
@@ -436,10 +438,10 @@ describe("Enterprise delegation clarification lifecycle", () => {
     async (prompt) => {
       const { turn } = fixture();
       respond({ outcome: "local", routes: [] });
-      expect((await turn(prompt)).result).toMatchObject({
-        outcome: "local",
-        reasonCode: "router_no_candidate",
-      });
+      const next = await turn(prompt);
+      expect(next.result).toBeUndefined();
+      expect(next.recovery?.prompt).toBe(prompt);
+      expect(next.consume()).toEqual({ ok: false, reasonCode: "decision_not_found" });
       expect(completion.complete).toHaveBeenCalledTimes(1);
       expect(completion.complete.mock.lastCall![0].context.systemPrompt).toContain(
         "A negated or quoted name is not an explicit handoff request",
@@ -493,10 +495,20 @@ describe("Enterprise delegation clarification lifecycle", () => {
       if (continuation === "new_task") {
         respond({ outcome: "local", routes: [] });
       }
-      expect((await turn(answer)).result).toMatchObject({ outcome, reasonCode });
+      const next = await turn(answer);
+      if (continuation === "new_task") {
+        expect(next.result).toBeUndefined();
+        expect(next.recovery?.pending).toBeUndefined();
+        expect(next.recovery?.prompt).toBe(answer);
+      } else {
+        expect(next.result).toMatchObject({ outcome, reasonCode });
+      }
       if (outcome === "local") {
         respond({ outcome: "local", routes: [] });
-        expect((await turn("Đồng ý nhé.")).result?.outcome).toBe("local");
+        const followup = await turn("Đồng ý nhé.");
+        expect(followup.result).toBeUndefined();
+        expect(followup.recovery?.pending).toBeUndefined();
+        expect(followup.consume()).toEqual({ ok: false, reasonCode: "decision_not_found" });
         const payload = JSON.parse(
           completion.complete.mock.lastCall![0].context.messages[0].content,
         );
@@ -523,11 +535,9 @@ describe("Enterprise delegation clarification lifecycle", () => {
     const replacement =
       "Leave that agreement for later. Is data deleted 31 days ago still within our backup retention period?";
     const next = await turn(replacement);
-    expect(next.result).toMatchObject({
-      outcome: "local",
-      handling: "knowledge",
-      reasonCode: "router_no_candidate",
-    });
+    expect(next.result).toBeUndefined();
+    expect(next.recovery?.pending).toBeUndefined();
+    expect(next.recovery?.prompt).toBe(replacement);
     expect(next.consume()).toEqual({ ok: false, reasonCode: "decision_not_found" });
     expect(completion.complete).toHaveBeenCalledTimes(3);
 
@@ -1255,9 +1265,11 @@ describe("Enterprise delegation clarification lifecycle", () => {
     respond({ outcome: "clarify", question: "Which part should be assessed?" });
     await turn("Assess the budget for our new shop.");
     respond({ outcome: "local", routes: [] });
-    expect((await turn("Đồng ý.", { sessionKey: "another-session" })).result?.outcome).toBe(
-      "local",
-    );
+    const isolated = await turn("Đồng ý.", { sessionKey: "another-session" });
+    expect(isolated.result).toBeUndefined();
+    expect(isolated.recovery?.sessionKey).toBe("another-session");
+    expect(isolated.recovery?.pending).toBeUndefined();
+    expect(isolated.consume()).toEqual({ ok: false, reasonCode: "decision_not_found" });
     const other = createEnterpriseAccount(
       {
         username: "other.employee",
@@ -1283,7 +1295,14 @@ describe("Enterprise delegation clarification lifecycle", () => {
       prompt: "Đồng ý.",
       stateOptions: options,
     });
-    expect(metadata.enterpriseDelegation!.turn?.outcome).toBe("local");
+    expect(metadata.enterpriseDelegation!.turn).toBeUndefined();
+    expect(
+      readEnterpriseDelegationAgentFirstContext({
+        config: otherConfig,
+        sessionKey: "same-session",
+        parentRunId: "other-run",
+      }),
+    ).toMatchObject({ accountId: other.id, pending: undefined });
     expect(account.id).not.toBe(other.id);
     respond({ continuation: "confirm" });
     expect((await turn("Đồng ý.")).result?.outcome).toBe("delegate");
@@ -1305,8 +1324,10 @@ describe("Enterprise delegation clarification lifecycle", () => {
     await turn("Assess a different budget.", { simulation: true, sessionKey: "simulation-only" });
     expect(listEnterpriseDelegationEvents({}, options).total).toBe(before);
     respond({ outcome: "local", routes: [] });
-    expect((await turn("Đồng ý.", { sessionKey: "simulation-only" })).result?.outcome).toBe(
-      "local",
-    );
+    const isolated = await turn("Đồng ý.", { sessionKey: "simulation-only" });
+    expect(isolated.result).toBeUndefined();
+    expect(isolated.recovery?.sessionKey).toBe("simulation-only");
+    expect(isolated.recovery?.pending).toBeUndefined();
+    expect(isolated.consume()).toEqual({ ok: false, reasonCode: "decision_not_found" });
   });
 });

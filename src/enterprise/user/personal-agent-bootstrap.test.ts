@@ -40,6 +40,9 @@ describe("Enterprise Personal Agent bootstrap", () => {
     expect(first).toContain("Follow the authorized enterprise_delegate tool description");
     expect(first).not.toContain("sessions_yield");
     expect(first).toContain("including unverified pagination");
+    expect(first).toContain(
+      "A successful batch call does not prove every requested target succeeded",
+    );
     expect(first).toContain("do not relabel a grade as a job title");
     expect(first).not.toContain("agent-first routing facts");
     expect(first).toContain("A local routing outcome does not authorize an alternate source");

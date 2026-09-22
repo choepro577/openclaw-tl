@@ -298,6 +298,23 @@ export async function prepareEnterpriseDelegationTurn(params: {
       explicitAgentIds,
     });
   };
+  const recoverRouting = (reasonCode: string) => {
+    if (
+      params.simulation ||
+      params.proposedAssignments ||
+      params.agentFirstDecision !== undefined ||
+      policy.rollout !== "on" ||
+      candidates.length === 0
+    ) {
+      return false;
+    }
+    finish("local", reasonCode, "No specialist has started; inspect the permitted candidates.");
+    // A failed proposal is not a final local decision. Reuse the existing
+    // grounded coordinator path; its tool call cannot reopen this recovery.
+    delete delegation.turn;
+    rememberAgentFirstContext();
+    return true;
+  };
   if (!withinRouterContextBudget(prompt, conversationInputs, conversationResults)) {
     finishOversizedContext();
     return;
@@ -624,10 +641,13 @@ export async function prepareEnterpriseDelegationTurn(params: {
     }
   }
   if (!modelDecision) {
+    if (recoverRouting("router_unavailable")) {
+      return;
+    }
     finish(
-      "local",
+      "blocked",
       "router_unavailable",
-      "Handle the request locally. Do not claim that a specialist was consulted.",
+      "Specialist routing could not complete. No specialist has started. Report this limitation truthfully; do not invent operational results or required business fields.",
     );
     return;
   }
@@ -702,10 +722,16 @@ export async function prepareEnterpriseDelegationTurn(params: {
       modelDecision.confidence < policy.clarifyThreshold ||
       routeIds.length === 0)
   ) {
+    if (
+      (routeIds.length === 0 || modelDecision.confidence < policy.autoThreshold) &&
+      recoverRouting(routeIds.length === 0 ? "router_no_candidate" : "router_low_confidence")
+    ) {
+      return;
+    }
     finish(
       "local",
       routeIds.length === 0 ? "router_no_candidate" : "router_low_confidence",
-      "Handle the request locally. Do not claim that a specialist was consulted.",
+      "Answer locally only when the request can be fulfilled with available evidence and authorized tools. No specialist has started. Do not invent live records, completed actions or required business fields. If the requested operation cannot be performed, state that limitation; if user intent is ambiguous, ask only the specific unresolved question.",
     );
     return;
   }

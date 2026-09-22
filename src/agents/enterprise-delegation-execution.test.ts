@@ -319,6 +319,11 @@ describe("canonical Enterprise delegation execution", () => {
       expect(spawn.task).toContain("not permission for additional actions");
       expect(spawn.task).toContain("do not ask for confirmation again");
       expect(spawn.task).toContain("A preview-only request never authorizes a write");
+      expect(spawn.task).toContain(
+        "claim success only when the authoritative tool or service returned a success result",
+      );
+      expect(spawn.task).toContain("If a tool failed, say so; never claim completion or success.");
+      expect(spawn.task).toContain("Compare requested scope with returned scope");
     }
     expect(result).toMatchObject({
       reasonCode: "delegate_partial_failure",

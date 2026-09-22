@@ -1,6 +1,9 @@
 import { isRecord } from "@openclaw/normalization-core/record-coerce";
 import { Type } from "typebox";
-import { isEnterpriseAgentFirstExperimentEnabled } from "../../enterprise/delegation/delegation-agent-first.js";
+import {
+  isEnterpriseAgentFirstExperimentEnabled,
+  readEnterpriseDelegationAgentFirstContext,
+} from "../../enterprise/delegation/delegation-agent-first.js";
 import { readGatewayRequestRuntimeMetadata } from "../../gateway/request-runtime-config.js";
 import { normalizeAgentId } from "../../routing/session-key.js";
 import type { EnterpriseDelegationExecutionOptions } from "../enterprise-delegation-execution.js";
@@ -123,7 +126,13 @@ export function createEnterpriseDelegationTools(
   ) {
     return tools;
   }
-  const agentFirstExperimentEnabled = isEnterpriseAgentFirstExperimentEnabled();
+  const agentFirstExperimentEnabled =
+    isEnterpriseAgentFirstExperimentEnabled() ||
+    readEnterpriseDelegationAgentFirstContext({
+      config: options.config!,
+      sessionKey: runtime.sessionKey,
+      parentRunId: runtime.runId,
+    }) !== undefined;
   const description = [
     "Delegate focused tasks to assigned specialists. Submit independent tasks together to run in parallel. You may call again with a new, narrower follow-up after reviewing results. Use only the server-approved agentIds and canonical tasks in the current-turn directive. Only delegate work needed for the user's request; never copy private retrieved sources into task text. The server checks scope, inputs and handoff policy.",
     ...(agentFirstExperimentEnabled

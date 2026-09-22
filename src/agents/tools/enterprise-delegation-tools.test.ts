@@ -1,6 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { OpenClawConfig } from "../../config/types.openclaw.js";
-import { ENTERPRISE_AGENT_FIRST_EXPERIMENT_ENV } from "../../enterprise/delegation/delegation-agent-first.js";
+import {
+  ENTERPRISE_AGENT_FIRST_EXPERIMENT_ENV,
+  rememberEnterpriseDelegationAgentFirstContext,
+} from "../../enterprise/delegation/delegation-agent-first.js";
 import {
   markGatewayRequestScopedRuntimeConfig,
   readGatewayRequestRuntimeMetadata,
@@ -74,6 +77,54 @@ describe("Enterprise delegation discovery tools", () => {
         expect(tool?.description).not.toContain("structured routing object");
       },
     );
+  });
+
+  it("exposes recovery routing only for the prepared current turn without an experiment flag", async () => {
+    vi.stubEnv(ENTERPRISE_AGENT_FIRST_EXPERIMENT_ENV, "");
+    const config = scopedConfig();
+    rememberEnterpriseDelegationAgentFirstContext(config, {
+      accountId: "account-a",
+      personalAgentId: "personal",
+      sessionKey: "parent-session",
+      parentRunId: "parent-run",
+      prompt: "Review the contract",
+      conversationInputs: [],
+      conversationResults: [],
+      previousDelegationContext: [],
+      candidates: [],
+      explicitAgentIds: [],
+      policy: {
+        maxDelegatesPerTurn: 3,
+        autoThreshold: 0.9,
+        clarifyThreshold: 0.7,
+        minimumMargin: 0.15,
+        revision: 1,
+      },
+    });
+    for (const runId of ["parent-run", "other-run"]) {
+      await withEnterpriseDelegationRuntime(
+        {
+          agentId: "personal",
+          sessionKey: "parent-session",
+          runId,
+          assertActive: () => {},
+          execute: vi.fn(),
+        },
+        async () => {
+          const tool = createEnterpriseDelegationTools({
+            config,
+            agentId: "personal",
+            runSessionKey: "parent-session",
+            runId,
+          }).find((item) => item.name === "enterprise_delegate");
+          if (runId === "parent-run") {
+            expect(JSON.stringify(tool?.parameters)).toContain('"routing"');
+          } else {
+            expect(JSON.stringify(tool?.parameters) ?? "").not.toContain('"routing"');
+          }
+        },
+      );
+    }
   });
 
   it("allows an opted-in empty assignment lifecycle decision", async () => {

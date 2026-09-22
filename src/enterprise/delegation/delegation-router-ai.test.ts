@@ -11,6 +11,7 @@ import {
 import { closeOpenClawStateDatabaseForTest } from "../../state/openclaw-state-db.js";
 import { createEnterpriseAccount } from "../accounts/account-store.js";
 import { sharedAgentResourceKey } from "../entitlements/resource-keys.js";
+import { readEnterpriseDelegationAgentFirstContext } from "./delegation-agent-first.js";
 import type { EnterpriseDelegationHistoryEntry } from "./delegation-router-context.js";
 import {
   consumeEnterpriseDelegationDecision,
@@ -384,7 +385,7 @@ describe("enterprise delegation AI router", () => {
     expect(completionMocks.complete).toHaveBeenCalledTimes(1);
     const systemPrompt = completionMocks.complete.mock.calls[0]![0].context.systemPrompt;
     expect(systemPrompt).toContain(
-      "a fresh authoritative operational lookup governed by the data ownership rule below",
+      "an operational lookup or action governed by the data ownership rule below",
     );
     expect(systemPrompt).toContain(
       "A summary or straightforward recalculation of completed work stays local; a request to fetch, refresh or verify current records follows the data ownership rule below",
@@ -393,7 +394,7 @@ describe("enterprise delegation AI router", () => {
       "Only a substantive unresolved question, an affirmative named-specialist request, or a fresh lookup governed by the data ownership rule below can justify a new route",
     );
     expect(systemPrompt).toContain(
-      "Data ownership rule: a request to fetch, refresh or verify current operational records",
+      "Data ownership rule: a request to create, update, delete, approve, submit, fetch, refresh or verify operational records",
     );
     expect(systemPrompt).toContain(
       "Enterprise Knowledge is for published policy/document evidence",
@@ -674,7 +675,26 @@ describe("enterprise delegation AI router", () => {
           routes: [],
         }),
       );
-      const turn = await prepareTurn({ config, accountId: account.id, options, prompt });
+      expect(await prepareTurn({ config, accountId: account.id, options, prompt })).toBeUndefined();
+      await prepareEnterpriseDelegationTurn({
+        config,
+        agentId: `personal-${account.id}`,
+        sessionKey: "session-ai",
+        parentRunId: "run-ai",
+        prompt,
+        stateOptions: options,
+        proposedAssignments: [],
+        agentFirstDecision: JSON.parse(
+          routerJson({
+            handling,
+            outcome: "local",
+            confidence: 0.98,
+            secondConfidence: 0,
+            routes: [],
+          }),
+        ),
+      });
+      const turn = readGatewayRequestRuntimeMetadata(config)?.enterpriseDelegation?.turn;
       expect(turn).toMatchObject({ handling, outcome: "local", agentNames: [] });
       expect(turn?.decisionId).toBeUndefined();
       expect(completionMocks.complete).toHaveBeenCalledTimes(1);
@@ -727,7 +747,7 @@ describe("enterprise delegation AI router", () => {
   });
 
   it.each(["local", "clarify"] as const)(
-    "keeps ordinary knowledge retrieval local when the router returns %s without a candidate",
+    "allows coordinator-local knowledge retrieval when the router returns %s without a candidate",
     async (outcome) => {
       const options = stateOptions();
       const account = createEmployee(options, ["contracts"]);
@@ -748,13 +768,14 @@ describe("enterprise delegation AI router", () => {
         options,
         prompt: "Tra cứu thời lượng onboarding trong tri thức doanh nghiệp, không gọi chuyên gia.",
       });
-      expect(turn).toMatchObject({
-        outcome: "local",
-        agentNames: [],
-        reasonCode: "router_no_candidate",
-      });
-      expect(turn?.decisionId).toBeUndefined();
-      expect(turn?.instruction).not.toContain("choose a specialist");
+      expect(turn).toBeUndefined();
+      expect(
+        readEnterpriseDelegationAgentFirstContext({
+          config,
+          sessionKey: "session-ai",
+          parentRunId: "run-ai",
+        })?.candidates.map((candidate) => candidate.agentId),
+      ).toEqual(["contracts"]);
       expect(completionMocks.complete).toHaveBeenCalledTimes(1);
     },
   );
@@ -768,7 +789,14 @@ describe("enterprise delegation AI router", () => {
 
     expect(
       await prepareTurn({ config, accountId: account.id, options, prompt: "Tôi cần tư vấn" }),
-    ).toMatchObject({ outcome: "local", reasonCode: "router_unavailable" });
+    ).toBeUndefined();
+    expect(
+      readEnterpriseDelegationAgentFirstContext({
+        config,
+        sessionKey: "session-ai",
+        parentRunId: "run-ai",
+      })?.candidates.map((candidate) => candidate.agentId),
+    ).toEqual(["contracts"]);
     expect(completionMocks.complete).not.toHaveBeenCalled();
   });
 
@@ -795,7 +823,14 @@ describe("enterprise delegation AI router", () => {
 
     expect(
       await prepareTurn({ config, accountId: account.id, options, prompt: "Tôi cần tư vấn" }),
-    ).toMatchObject({ outcome: "local", reasonCode: "router_unavailable" });
+    ).toBeUndefined();
+    expect(
+      readEnterpriseDelegationAgentFirstContext({
+        config,
+        sessionKey: "session-ai",
+        parentRunId: "run-ai",
+      })?.candidates.map((candidate) => candidate.agentId),
+    ).toEqual(["contracts"]);
   });
 
   it("accepts the exact confidence and margin boundary in the single router pass", async () => {
@@ -877,7 +912,7 @@ describe("enterprise delegation AI router", () => {
         secondConfidence: 0.1,
         routes: [{ agentId: "contracts", task: "Đánh giá hợp đồng" }],
       }),
-      expected: { outcome: "local", reasonCode: "router_low_confidence" },
+      expected: undefined,
     },
     {
       label: "confidence between clarify and auto thresholds",
@@ -935,9 +970,24 @@ describe("enterprise delegation AI router", () => {
     const config = configFor(account.id, agentIds);
     queueCompletion(response);
 
-    expect(
-      await prepareTurn({ config, accountId: account.id, options, prompt: "Tôi cần tư vấn" }),
-    ).toMatchObject(expected);
+    const turn = await prepareTurn({
+      config,
+      accountId: account.id,
+      options,
+      prompt: "Tôi cần tư vấn",
+    });
+    if (expected) {
+      expect(turn).toMatchObject(expected);
+    } else {
+      expect(turn).toBeUndefined();
+      expect(
+        readEnterpriseDelegationAgentFirstContext({
+          config,
+          sessionKey: "session-ai",
+          parentRunId: "run-ai",
+        })?.candidates.map((candidate) => candidate.agentId),
+      ).toEqual(agentIds);
+    }
     expect(completionMocks.complete).toHaveBeenCalledTimes(1);
   });
 
@@ -1229,6 +1279,13 @@ describe("enterprise delegation AI router", () => {
 
     expect(
       await prepareTurn({ config, accountId: account.id, options, prompt: "Tôi cần tư vấn" }),
-    ).toMatchObject({ outcome: "local", reasonCode: "router_unavailable" });
+    ).toBeUndefined();
+    expect(
+      readEnterpriseDelegationAgentFirstContext({
+        config,
+        sessionKey: "session-ai",
+        parentRunId: "run-ai",
+      })?.candidates.map((candidate) => candidate.agentId),
+    ).toEqual(["contracts"]);
   });
 });

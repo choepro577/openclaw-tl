@@ -196,6 +196,66 @@ afterEach(() => {
 });
 
 describe("enterprise delegation router", () => {
+  it.each(["no-candidate", "confident-no-candidate", "unavailable"])(
+    "lets the coordinator recover %s using permitted candidates without another router call",
+    async (failure) => {
+      const options = stateOptions();
+      const account = createEmployee(options, "routing-recovery.employee", ["finance"]);
+      activePolicy(options);
+      const config = configFor(account.id);
+      const request = {
+        config,
+        agentId: `personal-${account.id}`,
+        sessionKey: "session-recovery",
+        parentRunId: "run-recovery",
+        prompt: "Kiểm tra số liệu dòng tiền quý cho tôi.",
+        stateOptions: options,
+      };
+      if (failure === "unavailable") {
+        completion.complete.mockRejectedValueOnce(new Error("router unavailable"));
+      } else {
+        completion.complete.mockResolvedValueOnce(
+          routerResponse({
+            outcome: "local",
+            confidence: failure === "confident-no-candidate" ? 0.99 : 0.2,
+            routes: [],
+          }),
+        );
+      }
+      await prepareEnterpriseDelegationTurn(request);
+
+      const context = readEnterpriseDelegationAgentFirstContext(request);
+      expect(context?.candidates.map((candidate) => candidate.agentId)).toEqual(["finance"]);
+      expect(readGatewayRequestRuntimeMetadata(config)?.enterpriseDelegation?.turn).toBeUndefined();
+
+      const task = request.prompt;
+      await prepareEnterpriseDelegationTurn({
+        ...request,
+        proposedAssignments: [{ agentId: "finance", task }],
+        agentFirstDecision: routerDecision({
+          routes: [{ agentId: "finance", task, missingRequiredInputIds: [] }],
+        }),
+      });
+      expect(readGatewayRequestRuntimeMetadata(config)?.enterpriseDelegation?.turn).toMatchObject({
+        outcome: "delegate",
+      });
+      const decision = consumeEnterpriseDelegationDecision({
+        config,
+        accountId: account.id,
+        personalAgentId: request.agentId,
+        sessionKey: request.sessionKey,
+        parentRunId: request.parentRunId,
+        decisionId: requireDecisionId(config),
+        stateOptions: options,
+      });
+      expect(decision.ok).toBe(true);
+      if (decision.ok) {
+        expect(decision.decision.routes).toMatchObject([{ agentId: "finance", task }]);
+      }
+      expect(completion.complete).toHaveBeenCalledTimes(1);
+    },
+  );
+
   it("prepares agent-first facts without spending a router model call", async () => {
     const options = stateOptions();
     const account = createEmployee(options, "agent-first.employee", ["finance"]);
@@ -518,9 +578,14 @@ describe("enterprise delegation router", () => {
         reasonCode: "required_input_missing:input-contract-code",
       },
     );
-    expect(readGatewayRequestRuntimeMetadata(config)?.enterpriseDelegation?.turn?.outcome).toBe(
-      "local",
-    );
+    expect(readGatewayRequestRuntimeMetadata(config)?.enterpriseDelegation?.turn).toBeUndefined();
+    expect(
+      readEnterpriseDelegationAgentFirstContext({
+        config,
+        sessionKey: "session-second",
+        parentRunId: "run-second",
+      })?.pending,
+    ).toBeUndefined();
     expect(readGatewayRequestRuntimeMetadata(config)?.enterpriseDelegation?.request).toEqual({
       sessionKey: "session-second",
       parentRunId: "run-second",
