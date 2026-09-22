@@ -1918,6 +1918,14 @@ async function loadChatHistoryUncached(
       // retaining the owned run. Replay fills that gap; per-identity sequence
       // fences keep a delayed snapshot from replacing newer live progress.
       replayInFlightRunEvents(state, res.inFlightRun);
+      // The snapshot can already contain a durable keyed commentary row while
+      // its active-event replay also restores the live segment. Reconcile after
+      // replay so the durable item owns the display exactly once.
+      pruneHistoryReplacedStreamSegments(state.chatMessages, state, {
+        persistCommentary: state.settings?.chatPersistCommentary !== false,
+        isHiddenAssistantMessage: shouldHideAssistantChatMessage,
+        isHiddenStreamText: isHiddenAssistantStreamText,
+      });
     }
 
     recordChatHistoryTiming(state, "applied", startedAtMs, {

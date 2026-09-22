@@ -1,5 +1,6 @@
 import { isRecord } from "@openclaw/normalization-core/record-coerce";
 import { Type } from "typebox";
+import { SILENT_REPLY_TOKEN } from "../../auto-reply/tokens.js";
 import {
   isEnterpriseAgentFirstExperimentEnabled,
   readEnterpriseDelegationAgentFirstContext,
@@ -140,7 +141,7 @@ export function createEnterpriseDelegationTools(
           "Include the complete structured routing object so the server can reuse the same required-input and provenance reducer without a second router model call.",
         ]
       : []),
-    "Accepted launches continue in the background; continue independent work. When a specialist result is required and no independent work remains, end this turn; the result will return through the background completion flow. Do not poll or repeat accepted tasks. If clarification is required, ask the returned question and wait for the user.",
+    `Accepted launches continue in the background; continue independent work. When a specialist result is required and no independent work remains, end this turn; the result will return through the background completion flow. Do not poll or repeat accepted tasks. If clarification is required, ask the returned question and wait for the user. An accepted handoff is a receipt, not a substantive result to summarize in a final answer. Ending a turn does not require another waiting announcement. If progress is already visible and there is no new result, blocker or question to communicate, use ${SILENT_REPLY_TOKEN} for the final response.`,
   ].join(" ");
   tools.push({
     name: "enterprise_delegate",

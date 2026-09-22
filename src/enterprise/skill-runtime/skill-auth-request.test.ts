@@ -118,6 +118,58 @@ describe("Enterprise skill auth request broker", () => {
     await expect(pending).rejects.toMatchObject({ code: "SKILL_AUTH_CANCELLED" });
   });
 
+  it("allows correction after failures and cancels only the exhausted auth request", async () => {
+    let requestId = "";
+    onEnterpriseSkillAuthRequired((event) => {
+      requestId = event.requestId;
+    });
+    const exhausted = wait();
+    const exhaustedId = requestId;
+    const result = expect(exhausted).rejects.toMatchObject({
+      code: "SKILL_AUTH_ATTEMPTS_EXHAUSTED",
+    });
+    const other = wait();
+    const otherId = requestId;
+    const claim = () =>
+      claimEnterpriseSkillAuthRequest({
+        requestId: exhaustedId,
+        accountId: "account-a",
+        parentSessionKey: "parent-a",
+        skillKey: "purchase-order-skill",
+      });
+    for (let attempt = 1; attempt <= 5; attempt++) {
+      expect(claim()).toMatchObject({ ok: true });
+      expect(releaseEnterpriseSkillAuthRequest(exhaustedId, true)).toBe(5 - attempt);
+    }
+    await result;
+    expect(claim()).toMatchObject({ ok: false, code: "SKILL_AUTH_REQUEST_NOT_FOUND" });
+    expect(resolveEnterpriseSkillAuthRequest(exhaustedId)).toBe(false);
+    expect(resolveEnterpriseSkillAuthRequest(otherId)).toBe(true);
+    await other;
+  });
+
+  it("does not count service failures and accepts a corrected login before the limit", async () => {
+    let requestId = "";
+    onEnterpriseSkillAuthRequired((event) => {
+      requestId = event.requestId;
+    });
+    const pending = wait();
+    const claim = () =>
+      claimEnterpriseSkillAuthRequest({
+        requestId,
+        accountId: "account-a",
+        parentSessionKey: "parent-a",
+        skillKey: "purchase-order-skill",
+      });
+    expect(claim()).toMatchObject({ ok: true });
+    expect(releaseEnterpriseSkillAuthRequest(requestId)).toBe(5);
+    expect(claim()).toMatchObject({ ok: true });
+    expect(releaseEnterpriseSkillAuthRequest(requestId, true)).toBe(4);
+    expect(claim()).toMatchObject({ ok: true });
+    expect(resolveEnterpriseSkillAuthRequest(requestId)).toBe(true);
+    await pending;
+  });
+
   it("rejects a waiting child on revoke and timeout", async () => {
     const revoked = wait();
     const revokedResult = expect(revoked).rejects.toMatchObject({ code: "SKILL_AUTH_REVOKED" });

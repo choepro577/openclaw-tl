@@ -4,6 +4,8 @@ import "../../../components/modal-dialog.ts";
 import { renderSensitiveInput } from "../../../components/sensitive-input.ts";
 import { eu } from "../../../i18n/enterprise-user.ts";
 import { formatUiError } from "../../../lib/format-error.ts";
+import { showToast } from "../../../lib/toast.ts";
+import { EnterpriseApiError } from "../../../pages/enterprise/services/enterprise-api.ts";
 import { isEnterpriseUiActive } from "../../enterprise/state/enterprise-ui-access.ts";
 import {
   disconnectEnterpriseSkill,
@@ -22,6 +24,13 @@ export type EnterpriseSkillAuthRequest = {
 
 const prompted = new Set<string>();
 let activeDialog: string | undefined;
+
+const terminalSkillAuthErrors = new Set([
+  "SKILL_AUTH_ATTEMPTS_EXHAUSTED",
+  "SKILL_AUTH_RATE_LIMITED",
+  "SKILL_AUTH_REQUEST_NOT_FOUND",
+  "SKILL_AUTH_REVOKED",
+]);
 
 function displayName(skillKey: string): string {
   return skillKey
@@ -47,10 +56,15 @@ function showSkillLogin(
     const values: Record<string, string> = {};
     const revealed = new Set<string>();
     let submitting = false;
+    let finished = false;
     let failure: string | null = null;
     const remainingMs = Math.max(0, Date.parse(request.expiresAt) - Date.now());
     let expiryTimer = 0;
     const finish = () => {
+      if (finished) {
+        return;
+      }
+      finished = true;
       window.clearTimeout(expiryTimer);
       render(nothing, host);
       host.remove();
@@ -61,7 +75,7 @@ function showSkillLogin(
     expiryTimer = window.setTimeout(finish, remainingMs);
     const blocked = () => request.fields.some((field) => !values[field.id]?.trim());
     const handleCancel = async (event?: Event) => {
-      if (submitting) {
+      if (finished || submitting) {
         event?.preventDefault();
         return;
       }
@@ -79,22 +93,36 @@ function showSkillLogin(
     };
     const handleSubmit = async (event: Event) => {
       event.preventDefault();
-      if (submitting || blocked()) {
+      if (finished || submitting || blocked()) {
         return;
       }
       submitting = true;
       failure = null;
       paint();
       try {
+        const submitTimeoutMs = Math.min(
+          60_000,
+          Math.max(1, Date.parse(request.expiresAt) - Date.now()),
+        );
         await loginEnterpriseSkill(
           request.parentSessionKey,
           request.skillKey,
           values,
           request.requestId,
+          AbortSignal.timeout(submitTimeoutMs),
         );
       } catch (error) {
+        if (finished) {
+          return;
+        }
+        if (error instanceof EnterpriseApiError && terminalSkillAuthErrors.has(error.code)) {
+          const message = formatUiError(error) || eu("loginFailed");
+          finish();
+          showToast({ message });
+          return;
+        }
         submitting = false;
-        failure = formatUiError(error);
+        failure = formatUiError(error) || eu("loginFailed");
         paint();
         return;
       }
@@ -172,7 +200,7 @@ function showSkillLogin(
                 : nothing}
               <div class="exec-approval-actions">
                 <button type="submit" class="btn primary" ?disabled=${submitting || blocked()}>
-                  ${eu("login")}
+                  ${submitting ? eu("loginBusy") : eu("login")}
                 </button>
                 <button type="button" class="btn" ?disabled=${submitting} @click=${handleCancel}>
                   ${eu("cancel")}

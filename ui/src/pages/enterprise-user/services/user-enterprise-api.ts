@@ -116,9 +116,11 @@ export function loginEnterpriseSkill(
   skillKey: string,
   fields: Record<string, string>,
   requestId?: string,
+  signal?: AbortSignal,
 ): Promise<EnterpriseSkillAuthStatus> {
   return requestEnterpriseUserJson("/api/enterprise/user/v2/skill-auth", {
     method: "POST",
+    ...(signal ? { signal } : {}),
     body: JSON.stringify({ sessionKey, skillKey, fields, ...(requestId ? { requestId } : {}) }),
   });
 }

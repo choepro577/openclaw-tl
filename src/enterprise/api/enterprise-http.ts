@@ -1517,7 +1517,19 @@ export async function handleEnterpriseHttpRequest(
           ]),
         );
         const rateLimitKey = `${principal.account.id}\0${skillKey}`;
-        assertSkillAuthAllowed(rateLimitKey);
+        try {
+          assertSkillAuthAllowed(rateLimitKey);
+        } catch (error) {
+          if (pendingRequestId) {
+            cancelEnterpriseSkillAuthRequest({
+              requestId: pendingRequestId,
+              accountId: principal.account.id,
+              parentSessionKey: sessionKey,
+              skillKey,
+            });
+          }
+          throw error;
+        }
         const claim = pendingRequestId
           ? claimEnterpriseSkillAuthRequest({
               requestId: pendingRequestId,
@@ -1587,14 +1599,24 @@ export async function handleEnterpriseHttpRequest(
           }
           return sendJson(res, 200, result);
         } catch (error) {
-          if (pendingRequestId) {
-            releaseEnterpriseSkillAuthRequest(pendingRequestId);
-          }
-          if (
+          const invalidCredentials =
             error instanceof EnterpriseSkillScriptError &&
-            ["SKILL_AUTH_INVALID", "AUTH_REQUIRED"].includes(error.code)
-          ) {
+            ["SKILL_AUTH_INVALID", "SKILL_AUTH_REQUIRED"].includes(error.code);
+          const remainingAttempts = pendingRequestId
+            ? releaseEnterpriseSkillAuthRequest(pendingRequestId, invalidCredentials)
+            : undefined;
+          if (invalidCredentials) {
             recordSkillAuthFailure(rateLimitKey);
+            if (remainingAttempts !== undefined) {
+              return sendJson(res, 401, {
+                code: remainingAttempts === 0 ? "SKILL_AUTH_ATTEMPTS_EXHAUSTED" : error.code,
+                message:
+                  remainingAttempts === 0
+                    ? "Đăng nhập thất bại 5 lần. Phiên đăng nhập skill này đã bị hủy."
+                    : `Đăng nhập không thành công. Kiểm tra tài khoản và mật khẩu. Còn ${remainingAttempts} lần thử.`,
+                remainingAttempts,
+              });
+            }
           }
           throw error;
         }

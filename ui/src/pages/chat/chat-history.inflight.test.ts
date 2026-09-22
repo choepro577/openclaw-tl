@@ -125,6 +125,119 @@ describe("chat history in-flight assistant recovery", () => {
     );
   });
 
+  it("does not replay a persisted keyed commentary row as a second live item", async () => {
+    const itemId = "preamble-already-persisted";
+    const history = activeHistory("run-live");
+    history.messages = [
+      {
+        role: "user",
+        content: "Continue working.",
+        __openclaw: { id: "prompt-1", seq: 1, idempotencyKey: "run-live:user" },
+      },
+      {
+        role: "assistant",
+        content: [{ type: "text", text: "Checking the workspace" }],
+        timestamp: 900,
+        openclawStreamFallback: {
+          replacementText: "Checking the workspace",
+          source: "segment",
+          itemId,
+        },
+        __openclaw: { id: "commentary-1", seq: 2, runId: "run-live" },
+      },
+    ];
+    (history.inFlightRun as { events?: unknown[] }).events = [
+      {
+        runId: "run-live",
+        seq: 1,
+        stream: "item",
+        ts: 900,
+        sessionKey: "main",
+        data: { kind: "preamble", itemId, progressText: "Checking the workspace" },
+      },
+      {
+        runId: "run-live",
+        seq: 2,
+        stream: "tool",
+        ts: 1_000,
+        sessionKey: "main",
+        data: {
+          toolCallId: "call-replayed",
+          name: "read",
+          phase: "start",
+          args: { path: "README.md" },
+        },
+      },
+    ];
+    const state = createState(history);
+
+    await loadHistoryWithBrowserTimers(state);
+
+    expect(state.chatStreamSegments).toEqual([]);
+    const items = buildChatItems({
+      paneId: "pane-a",
+      sessionKey: state.sessionKey,
+      runId: state.chatRunId,
+      messages: state.chatMessages,
+      toolMessages: state.chatToolMessages,
+      streamSegments: state.chatStreamSegments,
+      stream: state.chatStream,
+      streamStartedAt: state.chatStreamStartedAt,
+      showToolCalls: true,
+      persistCommentary: true,
+    });
+    expect(items.filter((item) => item.kind === "stream")).toHaveLength(0);
+    const durableCommentary = items
+      .filter((item) => item.kind === "group")
+      .flatMap((item) => item.messages.map(({ message }) => message))
+      .filter(
+        (message) =>
+          (message as { openclawStreamFallback?: { itemId?: unknown } }).openclawStreamFallback
+            ?.itemId === itemId,
+      );
+    expect(durableCommentary).toHaveLength(1);
+    expect(durableCommentary[0]).toMatchObject({
+      content: [{ type: "text", text: "Checking the workspace" }],
+    });
+  });
+
+  it("keeps a distinct same-text commentary item when its identity differs", () => {
+    const itemId = "preamble-distinct";
+    const items = buildChatItems({
+      paneId: "pane-a",
+      sessionKey: "main",
+      runId: "run-live",
+      messages: [
+        {
+          role: "user",
+          content: "Continue working.",
+          __openclaw: { id: "prompt-1", seq: 1, idempotencyKey: "run-live:user" },
+        },
+        {
+          role: "assistant",
+          content: [{ type: "text", text: "Checking the workspace" }],
+          timestamp: 900,
+          openclawStreamFallback: {
+            replacementText: "Checking the workspace",
+            source: "segment",
+            itemId: "preamble-persisted",
+          },
+          __openclaw: { id: "commentary-1", seq: 2, runId: "run-live" },
+        },
+      ],
+      toolMessages: [],
+      streamSegments: [{ text: "Checking the workspace", ts: 901, itemId }],
+      stream: null,
+      streamStartedAt: null,
+      showToolCalls: true,
+      persistCommentary: true,
+    });
+
+    expect(items.filter((item) => item.kind === "stream")).toMatchObject([
+      { text: "Checking the workspace" },
+    ]);
+  });
+
   it("restores cleared activity for an already-owned run after reconnect", async () => {
     const history = activeHistory("run-live");
     (history.inFlightRun as { events?: unknown[] }).events = [

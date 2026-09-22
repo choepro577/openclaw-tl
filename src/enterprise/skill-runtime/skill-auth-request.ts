@@ -1,6 +1,7 @@
 import { generateSecureUuid } from "../../infra/secure-random.js";
 import { resolveGlobalSingleton } from "../../shared/global-singleton.js";
 
+const MAX_AUTH_FAILURES = 5;
 const DEFAULT_AUTH_WAIT_MS = 5 * 60_000;
 
 export type EnterpriseSkillAuthField = {
@@ -26,6 +27,7 @@ type PendingAuth = EnterpriseSkillAuthRequired & {
   delegatedChild: boolean;
   assertActive?: () => void;
   resolving: boolean;
+  failedAttempts: number;
   resolve: () => void;
   reject: (error: EnterpriseSkillAuthRequestError) => void;
   timer: ReturnType<typeof setTimeout>;
@@ -112,6 +114,7 @@ export function waitForEnterpriseSkillAuth(params: {
       delegatedChild: params.delegatedChild ?? true,
       assertActive: params.assertActive,
       resolving: false,
+      failedAttempts: 0,
       resolve,
       reject: rejectPromise,
       timer: undefined as unknown as ReturnType<typeof setTimeout>,
@@ -189,11 +192,23 @@ export function claimEnterpriseSkillAuthRequest(params: {
   return { ok: true, request: readEnterpriseSkillAuthRequest(params.requestId)! };
 }
 
-export function releaseEnterpriseSkillAuthRequest(requestId: string): void {
+export function releaseEnterpriseSkillAuthRequest(
+  requestId: string,
+  invalidCredentials = false,
+): number | undefined {
   const item = pending.get(requestId);
-  if (item) {
-    item.resolving = false;
+  if (!item || !item.resolving) {
+    return undefined;
   }
+  item.resolving = false;
+  if (invalidCredentials) {
+    item.failedAttempts += 1;
+  }
+  const remainingAttempts = MAX_AUTH_FAILURES - item.failedAttempts;
+  if (remainingAttempts === 0) {
+    reject(item, "SKILL_AUTH_ATTEMPTS_EXHAUSTED");
+  }
+  return remainingAttempts;
 }
 
 export function resolveEnterpriseSkillAuthRequest(requestId: string): boolean {
