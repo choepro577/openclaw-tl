@@ -1625,7 +1625,7 @@ export class EnterpriseAdminAgentsPage extends OpenClawLightDomElement {
         ) as EnterpriseDeveloperIntegration["uploadPolicy"],
         maxUploadBytes: Number(data.get("maxUploadMb") ?? 10) * 1024 * 1024,
       });
-      this.developerNotice = "Đã lưu Integration.";
+      this.developerNotice = "Đã lưu kết nối.";
       await this.loadPanel();
     } catch (error) {
       this.panelError = errorMessage(error);
@@ -1641,7 +1641,7 @@ export class EnterpriseAdminAgentsPage extends OpenClawLightDomElement {
     if (
       !agentId ||
       this.panelSaving ||
-      !showNativeConfirm("Rotate API key? Key cũ còn hiệu lực tối đa 24 giờ.")
+      !showNativeConfirm("Tạo API key mới? Key cũ còn hiệu lực tối đa 24 giờ.")
     ) {
       return;
     }
@@ -1764,15 +1764,16 @@ export class EnterpriseAdminAgentsPage extends OpenClawLightDomElement {
 
   private async loadMoreDeveloperResponses(): Promise<void> {
     const agentId = this.developerAgentId();
-    const cursor = this.developerPanel?.pageInfo.nextBefore;
-    if (!agentId || !cursor || this.panelSaving) {
+    const { nextBefore, nextBeforeId } = this.developerPanel?.pageInfo ?? {};
+    if (!agentId || !nextBefore || !nextBeforeId || this.panelSaving) {
       return;
     }
     this.panelSaving = true;
     try {
       const next = await loadAdminDeveloperPanel(agentId, undefined, {
         ...this.developerFilters,
-        before: cursor,
+        before: nextBefore,
+        beforeId: nextBeforeId,
       });
       this.developerPanel = {
         ...next,
@@ -1805,7 +1806,11 @@ export class EnterpriseAdminAgentsPage extends OpenClawLightDomElement {
         notice: this.developerNotice,
         reveal: this.developerReveal,
         responseDetail: this.developerResponseDetail,
-        onCopy: (value) => void copyToClipboard(value),
+        onCopy: async (value) => {
+          this.developerNotice = (await copyToClipboard(value))
+            ? "Đã sao chép vào clipboard."
+            : "Không sao chép được. Hãy chọn và sao chép thủ công.";
+        },
         onDismissReveal: () => (this.developerReveal = undefined),
         onCreate: (event) => void this.createDeveloperIntegration(event),
         onSave: (integration, event) => void this.saveDeveloperIntegration(integration, event),

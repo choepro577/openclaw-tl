@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import { createServer, type Server } from "node:http";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
@@ -7,7 +8,10 @@ import {
 import type { OpenClawConfig } from "../../config/types.openclaw.js";
 import { loadCronJobsStoreSync, resolveCronJobsStorePath } from "../../cron/store.js";
 import type { GatewayRequestContext } from "../../gateway/server-methods/types.js";
-import { closeOpenClawStateDatabaseForTest } from "../../state/openclaw-state-db.js";
+import {
+  closeOpenClawStateDatabaseForTest,
+  openOpenClawStateDatabase,
+} from "../../state/openclaw-state-db.js";
 import { withOpenClawTestState } from "../../test-utils/openclaw-test-state.js";
 import {
   createEnterpriseAccount,
@@ -18,6 +22,10 @@ import {
 import { listEnterpriseAuditEvents } from "../audit/audit-store.js";
 import { ENTERPRISE_ADMIN_AUTH_COOKIE, ENTERPRISE_USER_AUTH_COOKIE } from "../auth/cookie.js";
 import { hashEnterprisePassword } from "../auth/password.js";
+import {
+  createDeveloperIntegration,
+  insertDeveloperResponse,
+} from "../developer/developer-store.js";
 import {
   listEnterpriseEntitlements,
   replaceEnterpriseEntitlements,
@@ -1533,4 +1541,86 @@ it("serves preset metadata and applies/reapplies basic through the authenticated
       await closeServer(server);
     }
   });
+});
+
+it("returns at most 20 Developer responses per page without skipping equal timestamps", async () => {
+  await withOpenClawTestState(
+    {
+      scenario: "minimal",
+      applyEnv: true,
+      env: { OPENCLAW_ENTERPRISE_SKILL_TOKEN_KEY: randomBytes(32).toString("base64") },
+    },
+    async () => {
+      createEnterpriseAccount({
+        username: "developer.admin",
+        displayName: "Developer Admin",
+        passwordHash: await hashEnterprisePassword("developer-admin-password"),
+        role: "administrator",
+        mustChangePassword: false,
+      });
+      const { integration } = await createDeveloperIntegration({
+        agentId: "support",
+        name: "Support backend",
+      });
+      for (let index = 0; index < 41; index += 1) {
+        insertDeveloperResponse({
+          id: `resp_${String(index).padStart(3, "0")}`,
+          integration,
+          externalConversationId: `ticket-${index}`,
+          sessionKey: `agent:support:developer:test-${index}`,
+          background: false,
+          request: {},
+        });
+      }
+      openOpenClawStateDatabase()
+        .db.prepare("UPDATE enterprise_developer_responses SET created_at = ? WHERE agent_id = ?")
+        .run(Date.now(), "support"); // sqlite-allow-raw -- Test identical-timestamp pagination.
+
+      const config: OpenClawConfig = {
+        ...ENTERPRISE_CONFIG,
+        agents: { entries: { support: { name: "Support" } } },
+      };
+      const { server, baseUrl } = await startEnterpriseServer(config);
+      try {
+        const login = await apiRequest(baseUrl, "/api/auth/admin/login", {
+          method: "POST",
+          body: { username: "developer.admin", password: "developer-admin-password" },
+        });
+        expect(login.status).toBe(200);
+        const cookie = cookieFrom(login);
+        const path = "/api/enterprise/admin/agents/shared/support/developer/responses";
+        type Page = {
+          responses: Array<{ id: string }>;
+          pageInfo: { hasMore: boolean; nextBefore: number | null; nextBeforeId: string | null };
+        };
+        const firstResponse = await apiRequest(baseUrl, path, { cookie });
+        expect(firstResponse.status).toBe(200);
+        let page = (await firstResponse.json()) as Page;
+        expect(page.responses).toHaveLength(20);
+        const requestedMore = await apiRequest(baseUrl, `${path}?limit=99`, { cookie });
+        expect(((await requestedMore.json()) as Page).responses).toHaveLength(20);
+
+        const ids = page.responses.map((item) => item.id);
+        const pageSizes = [page.responses.length];
+        while (page.pageInfo.hasMore) {
+          const { nextBefore, nextBeforeId } = page.pageInfo;
+          expect(nextBefore).not.toBeNull();
+          expect(nextBeforeId).not.toBeNull();
+          const query = new URLSearchParams({
+            before: String(nextBefore),
+            beforeId: String(nextBeforeId),
+          });
+          const response = await apiRequest(baseUrl, `${path}?${query}`, { cookie });
+          expect(response.status).toBe(200);
+          page = (await response.json()) as Page;
+          pageSizes.push(page.responses.length);
+          ids.push(...page.responses.map((item) => item.id));
+        }
+        expect(pageSizes).toEqual([20, 20, 1]);
+        expect(new Set(ids).size).toBe(41);
+      } finally {
+        await closeServer(server);
+      }
+    },
+  );
 });

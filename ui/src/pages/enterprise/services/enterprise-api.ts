@@ -372,7 +372,7 @@ export type EnterpriseDeveloperPanel = {
   basePath: string;
   integrations: EnterpriseDeveloperIntegration[];
   responses: EnterpriseDeveloperResponse[];
-  pageInfo: { hasMore: boolean; nextBefore: number | null };
+  pageInfo: { hasMore: boolean; nextBefore: number | null; nextBeforeId: string | null };
   retentionDays: number;
 };
 

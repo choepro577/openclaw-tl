@@ -11,6 +11,14 @@ export type DeveloperSecretReveal = {
   webhookSecret?: string;
 };
 
+const responseStatusLabels: Record<EnterpriseDeveloperResponse["status"], string> = {
+  queued: "Đang chờ",
+  in_progress: "Đang xử lý",
+  completed: "Hoàn thành",
+  failed: "Thất bại",
+  incomplete: "Chưa hoàn tất",
+};
+
 type Props = {
   panel: EnterpriseDeveloperPanel;
   origin: string;
@@ -37,14 +45,6 @@ type Props = {
   onFilter: (event: SubmitEvent) => void;
   onLoadMore: () => void;
 };
-
-function uploadPolicyLabel(value: EnterpriseDeveloperIntegration["uploadPolicy"]): string {
-  return value === "images"
-    ? "Chỉ ảnh"
-    : value === "images_and_documents"
-      ? "Ảnh + tài liệu hỗ trợ"
-      : "Tắt";
-}
 
 function outputText(response: EnterpriseDeveloperResponse): string {
   const output = response.response?.output;
@@ -81,270 +81,295 @@ function renderQuickStart(
   const curlSse = `curl -N ${baseUrl}/responses \\
   -H "Authorization: Bearer $OPENCLAW_DEVELOPER_API_KEY" \\
   -H "Content-Type: application/json" \\
-  -d '${JSON.stringify({ model: panel.agentId, input: "Xin chào", stream: true, background: false, metadata: { external_conversation_id: "ticket-8421", external_user_id: "customer-19" } })}'`;
-  const nodeSse = `const response = await fetch("${baseUrl}/responses", {
-  method: "POST",
-  headers: {
-    Authorization: \`Bearer \${process.env.OPENCLAW_DEVELOPER_API_KEY}\`,
-    "Content-Type": "application/json"
-  },
-  body: JSON.stringify({
-    model: "${panel.agentId}", input: "Xin chào", stream: true,
-    metadata: { external_conversation_id: "ticket-8421" }
-  })
-});
-for await (const chunk of response.body) process.stdout.write(Buffer.from(chunk));`;
-  const phpSse = `$ch = curl_init('${baseUrl}/responses');
-curl_setopt_array($ch, [
-  CURLOPT_POST => true,
-  CURLOPT_HTTPHEADER => [
-    'Authorization: Bearer '.getenv('OPENCLAW_DEVELOPER_API_KEY'),
-    'Content-Type: application/json'
-  ],
-  CURLOPT_POSTFIELDS => json_encode([
-    'model' => '${panel.agentId}', 'input' => 'Xin chào', 'stream' => true,
-    'metadata' => ['external_conversation_id' => 'ticket-8421']
-  ]),
-  CURLOPT_WRITEFUNCTION => function ($ch, $chunk) { echo $chunk; flush(); return strlen($chunk); }
-]);
-curl_exec($ch);`;
+  -d '${JSON.stringify({ model: panel.agentId, input: "Xin chào", stream: true, metadata: { external_conversation_id: "ticket-8421" } }, null, 2)}'`;
   const curlBackground = `curl ${baseUrl}/responses \\
   -H "Authorization: Bearer $OPENCLAW_DEVELOPER_API_KEY" \\
   -H "Idempotency-Key: ticket-8421-message-7" \\
   -H "Content-Type: application/json" \\
-  -d '${JSON.stringify({ model: panel.agentId, input: "Tổng hợp lịch sử khiếu nại", background: true, stream: false, metadata: { external_conversation_id: "ticket-8421" } })}'`;
-  const nodeBackground = `const response = await fetch("${baseUrl}/responses", {
-  method: "POST",
-  headers: {
-    Authorization: \`Bearer \${process.env.OPENCLAW_DEVELOPER_API_KEY}\`,
-    "Content-Type": "application/json",
-    "Idempotency-Key": "ticket-8421-message-7"
-  },
-  body: JSON.stringify({
-    model: "${panel.agentId}",
-    input: "Tổng hợp lịch sử khiếu nại",
-    background: true,
-    metadata: { external_conversation_id: "ticket-8421" }
-  })
-});
-console.log(await response.json());`;
-  const phpBackground = `$ch = curl_init('${baseUrl}/responses');
-curl_setopt_array($ch, [
-  CURLOPT_POST => true,
-  CURLOPT_RETURNTRANSFER => true,
-  CURLOPT_HTTPHEADER => [
-    'Authorization: Bearer '.getenv('OPENCLAW_DEVELOPER_API_KEY'),
-    'Content-Type: application/json',
-    'Idempotency-Key: ticket-8421-message-7'
-  ],
-  CURLOPT_POSTFIELDS => json_encode([
-    'model' => '${panel.agentId}', 'input' => 'Tổng hợp lịch sử khiếu nại',
-    'background' => true,
-    'metadata' => ['external_conversation_id' => 'ticket-8421']
-  ])
-]);
-echo curl_exec($ch);`;
-  const verify = `const signed = \`${"${timestamp}.${eventId}.${rawBody}"}\`;
+  -d '${JSON.stringify({ model: panel.agentId, input: "Tổng hợp lịch sử khiếu nại", background: true, metadata: { external_conversation_id: "ticket-8421" } }, null, 2)}'`;
+  const verify = `const signed = \`${"${webhookTimestamp}.${webhookId}.${rawBody}"}\`;
 const expected = crypto.createHmac("sha256", webhookSecret).update(signed).digest("hex");
-if (!crypto.timingSafeEqual(Buffer.from(signature.slice(3), "hex"), Buffer.from(expected, "hex"))) throw new Error("invalid signature");`;
+const received = webhookSignature.replace(/^v1=/, "");
+if (!crypto.timingSafeEqual(Buffer.from(received, "hex"), Buffer.from(expected, "hex"))) {
+  throw new Error("invalid webhook signature");
+}`;
   return html`
-    <section class="ea-card ea-panel-editor">
-      <div class="ea-section-heading">
-        <div>
-          <h3>Hướng dẫn nhanh</h3>
-          <p>Browser → Backend CSKH → OpenClaw → Backend CSKH → Browser</p>
+    <section class="ea-card ea-panel-editor ea-developer-section">
+      <div class="ea-developer-heading">
+        <span class="ea-developer-step">2</span>
+        <h3>Gọi Agent từ backend của bạn</h3>
+      </div>
+      <div class="ea-form-grid ea-developer-values">
+        <div class="ea-field">
+          <span>Base URL</span>
+          <div class="ea-code">${baseUrl}</div>
+        </div>
+        <div class="ea-field">
+          <span>Agent ID / model</span>
+          <div class="ea-code">${panel.agentId}</div>
         </div>
       </div>
-      <div class="ea-form-grid">
-        <label class="ea-field"
-          ><span>Base URL</span>
-          <div class="ea-code">${baseUrl}</div></label
-        >
-        <label class="ea-field"
-          ><span>Agent ID / model</span>
-          <div class="ea-code">${panel.agentId}</div></label
-        >
-      </div>
       <div class="ea-banner ea-banner--warning" role="note">
-        Không đặt API key trong JavaScript của trình duyệt. Trình duyệt chỉ gọi backend CSKH;
-        backend mới giữ key và gọi OpenClaw.
+        Trình duyệt chỉ gọi backend của bạn. Giữ API key trong backend, không đặt trong JavaScript
+        của trình duyệt.
       </div>
-      ${[
-        ["cURL — SSE", curlSse],
-        ["Node.js — SSE", nodeSse],
-        ["PHP — SSE", phpSse],
-        ["cURL — background", curlBackground],
-        ["Node.js — background", nodeBackground],
-        ["PHP — background", phpBackground],
-        ["Node.js — xác thực webhook", verify],
-      ].map(
-        ([title, code]) => html`
-          <details class="ea-card" style="margin-top: 10px">
-            <summary>${title}</summary>
-            <pre class="ea-code" style="white-space: pre-wrap">${code}</pre>
-            <button class="ea-button" type="button" @click=${() => onCopy(code!)}>Sao chép</button>
-          </details>
-        `,
-      )}
+      <div class="ea-developer-required">
+        <strong>Bắt buộc cho cả hai kiểu gọi</strong>
+        <ul>
+          <li><code>Authorization: Bearer</code> — API key của kết nối đã tạo.</li>
+          <li><code>Content-Type: application/json</code> — gửi body dạng JSON.</li>
+          <li><code>model</code> — Agent ID ở trên, phải khớp với kết nối.</li>
+          <li><code>input</code> — câu hỏi hoặc nội dung gửi cho Agent.</li>
+          <li>
+            <code>metadata.external_conversation_id</code> — ID hội thoại của ứng dụng bạn; dùng lại
+            ID này để tiếp tục hội thoại.
+          </li>
+        </ul>
+      </div>
+      <div class="ea-developer-example-grid">
+        <div class="ea-developer-example-group">
+          <h4>Trả lời trực tiếp (SSE)</h4>
+          <p><code>stream: true</code> để nhận câu trả lời theo thời gian thực.</p>
+          ${renderExamples([["cURL", curlSse]], onCopy)}
+        </div>
+        <div class="ea-developer-example-group">
+          <h4>Xử lý nền</h4>
+          <p>
+            <code>background: true</code> và header <code>Idempotency-Key</code> cho mỗi yêu cầu,
+            tránh chạy trùng khi gửi lại.
+          </p>
+          ${renderExamples([["cURL", curlBackground]], onCopy)}
+        </div>
+      </div>
+      <div class="ea-developer-example-group">
+        <h4>Xác thực webhook</h4>
+        ${renderExamples([["Node.js", verify]], onCopy)}
+      </div>
     </section>
   `;
 }
 
-function renderIntegrationRow(integration: EnterpriseDeveloperIntegration, props: Props) {
-  return html`
-    <tr>
-      <td>
-        <form
-          id=${`integration-${integration.id}`}
-          @submit=${(event: SubmitEvent) => props.onSave(integration, event)}
-        >
-          <input class="ea-input" name="name" .value=${integration.name} maxlength="128" required />
-          <div class="muted">ocdev_${integration.keyPrefix}_… · ${integration.status}</div>
-        </form>
-      </td>
-      <td>
-        <input
-          class="ea-input"
-          name="webhookUrl"
-          form=${`integration-${integration.id}`}
-          .value=${integration.webhookUrl ?? ""}
-          placeholder="https://cskh.example.com/webhooks/openclaw"
-        />
-        <div class="muted">
-          ${integration.lastWebhookStatus ?? "Chưa callback"} ·
-          ${formatDate(integration.lastWebhookAt)}
+function renderExamples(examples: [string, string][], onCopy: Props["onCopy"]) {
+  return examples.map(
+    ([title, code]) => html`
+      <details class="ea-developer-example">
+        <summary>${title}</summary>
+        <div class="ea-developer-example__body">
+          <pre class="ea-code">${code}</pre>
+          <button class="ea-button" type="button" @click=${() => onCopy(code)}>
+            Sao chép code
+          </button>
         </div>
-      </td>
-      <td>
-        <select
-          class="ea-select"
-          name="uploadPolicy"
-          form=${`integration-${integration.id}`}
-          .value=${integration.uploadPolicy}
+      </details>
+    `,
+  );
+}
+
+function renderIntegrationCard(integration: EnterpriseDeveloperIntegration, props: Props) {
+  return html`
+    <article class="ea-card ea-developer-integration">
+      <div class="ea-developer-integration__header">
+        <div>
+          <h4>${integration.name}</h4>
+          <span class="muted">Key: ocdev_${integration.keyPrefix}_…</span>
+        </div>
+        <span
+          class="ea-badge ${integration.status === "active"
+            ? "ea-badge--good"
+            : integration.status === "revoked"
+              ? "ea-badge--bad"
+              : "ea-badge--warn"}"
         >
-          <option value="disabled">Tắt</option>
-          <option value="images">Chỉ ảnh</option>
-          <option value="images_and_documents">Ảnh + tài liệu</option>
-        </select>
-        <input
-          class="ea-input"
-          name="maxUploadMb"
-          form=${`integration-${integration.id}`}
-          type="number"
-          min="1"
-          max="20"
-          .value=${String(Math.round(integration.maxUploadBytes / 1024 / 1024))}
-        />
-        <div class="muted">${uploadPolicyLabel(integration.uploadPolicy)}</div>
-      </td>
-      <td>
-        ${integration.requestCount} request · ${integration.errorCount} lỗi ·
-        ${integration.runningCount} đang chạy<br />
-        <span class="muted">Tạo: ${formatDate(integration.createdAt)}</span><br />
-        <span class="muted">Dùng gần nhất: ${formatDate(integration.lastUsedAt)}</span>
-      </td>
-      <td class="ea-table__action">
-        <button
-          class="ea-button"
-          form=${`integration-${integration.id}`}
-          type="submit"
-          ?disabled=${props.busy}
+          ${integration.status === "active"
+            ? "Đang hoạt động"
+            : integration.status === "disabled"
+              ? "Đã tắt"
+              : "Đã thu hồi"}
+        </span>
+      </div>
+      <form @submit=${(event: SubmitEvent) => props.onSave(integration, event)}>
+        <div class="ea-form-grid">
+          <label class="ea-field"
+            ><span>Tên kết nối</span>
+            <input
+              class="ea-input"
+              name="name"
+              .value=${integration.name}
+              maxlength="128"
+              required
+            />
+          </label>
+          <label class="ea-field"
+            ><span>Webhook URL (không bắt buộc)</span>
+            <input
+              class="ea-input"
+              name="webhookUrl"
+              type="url"
+              .value=${integration.webhookUrl ?? ""}
+              placeholder="https://cskh.example.com/webhooks/openclaw"
+            />
+          </label>
+          <label class="ea-field"
+            ><span>Cho phép tải lên</span>
+            <select class="ea-select" name="uploadPolicy" .value=${integration.uploadPolicy}>
+              <option value="disabled">Tắt</option>
+              <option value="images">Chỉ ảnh</option>
+              <option value="images_and_documents">Ảnh + tài liệu</option>
+            </select>
+          </label>
+          <label class="ea-field"
+            ><span>Dung lượng tối đa/request (MB)</span>
+            <input
+              class="ea-input"
+              name="maxUploadMb"
+              type="number"
+              min="1"
+              max="20"
+              .value=${String(Math.round(integration.maxUploadBytes / 1024 / 1024))}
+            />
+          </label>
+        </div>
+        <div class="ea-developer-integration__actions">
+          <button class="ea-button ea-button--primary" type="submit" ?disabled=${props.busy}>
+            Lưu thay đổi
+          </button>
+          <button
+            class="ea-button"
+            type="button"
+            ?disabled=${props.busy || !integration.webhookUrl}
+            @click=${() => props.onTest(integration)}
+          >
+            Thử webhook
+          </button>
+        </div>
+      </form>
+      <div class="ea-developer-integration__usage">
+        ${integration.requestCount} lượt gọi · ${integration.errorCount} lỗi ·
+        ${integration.runningCount} đang chạy
+        <span>Dùng gần nhất: ${formatDate(integration.lastUsedAt)}</span>
+        <span
+          >Webhook: ${integration.lastWebhookStatus ?? "Chưa có callback"} ·
+          ${formatDate(integration.lastWebhookAt)}</span
         >
-          Lưu
-        </button>
-        <button
-          class="ea-button"
-          type="button"
-          ?disabled=${props.busy || !integration.webhookUrl}
-          @click=${() => props.onTest(integration)}
-        >
-          Test webhook
-        </button>
-        <button
-          class="ea-button"
-          type="button"
-          ?disabled=${props.busy || integration.status === "revoked"}
-          @click=${() => props.onRotate(integration)}
-        >
-          Rotate key
-        </button>
-        ${integration.previousKeyExpiresAt && integration.previousKeyExpiresAt > Date.now()
-          ? html`<button
-              class="ea-button ea-button--danger"
-              type="button"
-              ?disabled=${props.busy}
-              @click=${() => props.onRevokePreviousKey(integration)}
-            >
-              Thu hồi key cũ
-            </button>`
-          : nothing}
-        ${integration.status === "active"
-          ? html`<button
-              class="ea-button"
-              type="button"
-              @click=${() => props.onStatus(integration, "disabled")}
-            >
-              Vô hiệu hóa
-            </button>`
-          : integration.status === "disabled"
+      </div>
+      <details class="ea-developer-management">
+        <summary>Quản lý API key và trạng thái</summary>
+        <div class="ea-developer-management__actions">
+          <button
+            class="ea-button"
+            type="button"
+            ?disabled=${props.busy || integration.status === "revoked"}
+            @click=${() => props.onRotate(integration)}
+          >
+            Tạo API key mới
+          </button>
+          ${integration.previousKeyExpiresAt && integration.previousKeyExpiresAt > Date.now()
+            ? html`<button
+                class="ea-button ea-button--danger"
+                type="button"
+                ?disabled=${props.busy}
+                @click=${() => props.onRevokePreviousKey(integration)}
+              >
+                Thu hồi key cũ
+              </button>`
+            : nothing}
+          ${integration.status === "active"
             ? html`<button
                 class="ea-button"
                 type="button"
-                @click=${() => props.onStatus(integration, "active")}
+                ?disabled=${props.busy}
+                @click=${() => props.onStatus(integration, "disabled")}
               >
-                Kích hoạt
+                Tạm tắt kết nối
+              </button>`
+            : integration.status === "disabled"
+              ? html`<button
+                  class="ea-button"
+                  type="button"
+                  ?disabled=${props.busy}
+                  @click=${() => props.onStatus(integration, "active")}
+                >
+                  Kích hoạt lại
+                </button>`
+              : nothing}
+          ${integration.status !== "revoked"
+            ? html`<button
+                class="ea-button ea-button--danger"
+                type="button"
+                ?disabled=${props.busy}
+                @click=${() => props.onStatus(integration, "revoked")}
+              >
+                Thu hồi kết nối
               </button>`
             : nothing}
-        ${integration.status !== "revoked"
-          ? html`<button
-              class="ea-button ea-button--danger"
-              type="button"
-              @click=${() => props.onStatus(integration, "revoked")}
-            >
-              Thu hồi
-            </button>`
-          : nothing}
-      </td>
-    </tr>
+        </div>
+      </details>
+    </article>
   `;
 }
 
 export function renderAgentDeveloperPanel(props: Props) {
   return html`
+    <div class="ea-developer-intro">
+      <h2>Kết nối Agent với ứng dụng</h2>
+      <p>Tạo kết nối, lưu API key vào backend của bạn, rồi gọi Agent và theo dõi kết quả.</p>
+      <div class="ea-developer-flow" aria-label="Luồng kết nối">
+        <span>Ứng dụng của bạn</span><span aria-hidden="true">→</span> <span>Backend của bạn</span
+        ><span aria-hidden="true">→</span>
+        <span>OpenClaw Agent</span>
+      </div>
+    </div>
     ${props.error ? html`<p class="ea-error" role="alert">${props.error}</p>` : nothing}
     ${props.notice ? html`<div class="ea-banner" role="status">${props.notice}</div>` : nothing}
     ${props.reveal
       ? html`
-          <section class="ea-banner" role="status">
+          <section class="ea-banner ea-developer-reveal" role="status">
             <strong
-              >Secret chỉ hiển thị một lần — hãy lưu vào secret manager của backend CSKH.</strong
+              >Lưu thông tin kết nối ngay. API key và webhook secret chỉ hiển thị một lần.</strong
             >
             <div class="ea-code">API key: ${props.reveal.apiKey}</div>
             ${props.reveal.webhookSecret
               ? html`<div class="ea-code">Webhook secret: ${props.reveal.webhookSecret}</div>`
               : nothing}
-            <button
-              class="ea-button"
-              type="button"
-              @click=${() => props.onCopy(props.reveal!.apiKey)}
-            >
-              Sao chép API key
-            </button>
-            <button class="ea-button" type="button" @click=${props.onDismissReveal}>Đã lưu</button>
+            <div class="ea-developer-reveal__actions">
+              <button
+                class="ea-button"
+                type="button"
+                @click=${() => props.onCopy(props.reveal!.apiKey)}
+              >
+                Sao chép API key
+              </button>
+              ${props.reveal.webhookSecret
+                ? html`<button
+                    class="ea-button"
+                    type="button"
+                    @click=${() => props.onCopy(props.reveal!.webhookSecret!)}
+                  >
+                    Sao chép webhook secret
+                  </button>`
+                : nothing}
+              <button
+                class="ea-button ea-button--primary"
+                type="button"
+                @click=${props.onDismissReveal}
+              >
+                Tôi đã lưu
+              </button>
+            </div>
           </section>
         `
       : nothing}
-    ${renderQuickStart(props.panel, props.origin, props.onCopy)}
-    <section class="ea-card ea-panel-editor">
-      <div class="ea-section-heading">
+    <section class="ea-card ea-panel-editor ea-developer-section">
+      <div class="ea-developer-heading">
+        <span class="ea-developer-step">1</span>
         <div>
-          <h3>Integrations</h3>
-          <p>Mỗi môi trường có key, webhook, upload policy và hạn mức độc lập.</p>
+          <h3>Tạo kết nối cho môi trường của bạn</h3>
+          <p>Mỗi kết nối có API key riêng. Webhook chỉ cần khi bạn muốn nhận kết quả xử lý nền.</p>
         </div>
       </div>
       <form class="ea-form-grid" @submit=${props.onCreate}>
         <label class="ea-field"
-          ><span>Tên</span
+          ><span>Tên kết nối</span
           ><input
             class="ea-input"
             name="name"
@@ -353,7 +378,7 @@ export function renderAgentDeveloperPanel(props: Props) {
             placeholder="CSKH Production"
         /></label>
         <label class="ea-field"
-          ><span>Webhook URL</span
+          ><span>Webhook URL (không bắt buộc)</span
           ><input
             class="ea-input"
             name="webhookUrl"
@@ -361,7 +386,7 @@ export function renderAgentDeveloperPanel(props: Props) {
             placeholder="https://cskh.example.com/webhooks/openclaw"
         /></label>
         <label class="ea-field"
-          ><span>Upload</span
+          ><span>Cho phép tải lên</span
           ><select class="ea-select" name="uploadPolicy">
             <option value="disabled">Tắt</option>
             <option value="images">Chỉ ảnh</option>
@@ -369,42 +394,36 @@ export function renderAgentDeveloperPanel(props: Props) {
           </select></label
         >
         <label class="ea-field"
-          ><span>Dung lượng/request (MB)</span
+          ><span>Dung lượng tối đa/request (MB)</span
           ><input class="ea-input" name="maxUploadMb" type="number" min="1" max="20" value="10"
         /></label>
-        <div class="ea-form-actions ea-form-grid__full">
+        <div class="ea-developer-create-action ea-form-grid__full">
           <button class="ea-button ea-button--primary" type="submit" ?disabled=${props.busy}>
-            Tạo Integration
+            Tạo kết nối và lấy API key
           </button>
         </div>
       </form>
-      <div class="ea-card ea-table-wrap" style="margin-top: 14px">
-        <table class="ea-table" style="min-width: 1100px">
-          <thead>
-            <tr>
-              <th>Tên / key</th>
-              <th>Webhook</th>
-              <th>Upload</th>
-              <th>Sử dụng</th>
-              <th class="ea-table__action">Thao tác</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${props.panel.integrations.map((item) => renderIntegrationRow(item, props))}
-          </tbody>
-        </table>
+      <div class="ea-developer-list">
+        <h4>Kết nối đã tạo (${props.panel.integrations.length})</h4>
+        ${props.panel.integrations.length
+          ? props.panel.integrations.map((item) => renderIntegrationCard(item, props))
+          : html`<p class="ea-developer-empty">
+              Chưa có kết nối nào. Tạo kết nối để nhận API key đầu tiên.
+            </p>`}
       </div>
     </section>
-    <section class="ea-card ea-panel-editor">
-      <div class="ea-section-heading">
+    ${renderQuickStart(props.panel, props.origin, props.onCopy)}
+    <section class="ea-card ea-panel-editor ea-developer-section">
+      <div class="ea-developer-heading">
+        <span class="ea-developer-step">3</span>
         <div>
-          <h3>Transcript</h3>
-          <p>Lưu ${props.panel.retentionDays} ngày; không hiển thị secret hoặc session key.</p>
+          <h3>Theo dõi các lượt gọi</h3>
+          <p>Xem trạng thái và nội dung trả lời trong ${props.panel.retentionDays} ngày.</p>
         </div>
       </div>
       <form class="ea-form-grid" @submit=${props.onFilter}>
         <label class="ea-field"
-          ><span>Integration</span
+          ><span>Kết nối</span
           ><select class="ea-select" name="integrationId">
             <option value="">Tất cả</option>
             ${props.panel.integrations.map(
@@ -413,20 +432,20 @@ export function renderAgentDeveloperPanel(props: Props) {
           </select></label
         >
         <label class="ea-field"
-          ><span>Conversation ID</span><input class="ea-input" name="externalConversationId"
+          ><span>ID cuộc hội thoại</span><input class="ea-input" name="externalConversationId"
         /></label>
         <label class="ea-field"
-          ><span>External user ID</span><input class="ea-input" name="externalUserId"
+          ><span>ID người dùng bên ngoài</span><input class="ea-input" name="externalUserId"
         /></label>
         <label class="ea-field"
           ><span>Trạng thái</span
           ><select class="ea-select" name="status">
             <option value="">Tất cả</option>
-            <option value="queued">queued</option>
-            <option value="in_progress">in_progress</option>
-            <option value="completed">completed</option>
-            <option value="failed">failed</option>
-            <option value="incomplete">incomplete</option>
+            <option value="queued">Đang chờ</option>
+            <option value="in_progress">Đang xử lý</option>
+            <option value="completed">Hoàn thành</option>
+            <option value="failed">Thất bại</option>
+            <option value="incomplete">Chưa hoàn tất</option>
           </select></label
         >
         <label class="ea-field"
@@ -435,17 +454,17 @@ export function renderAgentDeveloperPanel(props: Props) {
         <label class="ea-field"
           ><span>Đến ngày</span><input class="ea-input" name="before" type="date"
         /></label>
-        <div class="ea-form-actions ea-form-grid__full">
-          <button class="ea-button" type="submit">Lọc transcript</button>
+        <div class="ea-developer-create-action ea-form-grid__full">
+          <button class="ea-button" type="submit">Áp dụng bộ lọc</button>
         </div>
       </form>
-      <div class="ea-card ea-table-wrap">
+      <div class="ea-card ea-table-wrap ea-developer-responses">
         <table class="ea-table" style="min-width: 980px">
           <thead>
             <tr>
               <th>Thời gian</th>
-              <th>Conversation / user</th>
-              <th>Integration</th>
+              <th>Cuộc hội thoại / người dùng</th>
+              <th>Kết nối</th>
               <th>Trạng thái</th>
               <th>Nội dung trả lời</th>
             </tr>
@@ -464,7 +483,10 @@ export function renderAgentDeveloperPanel(props: Props) {
                     ${props.panel.integrations.find((item) => item.id === response.integrationId)
                       ?.name ?? response.integrationId}
                   </td>
-                  <td>${response.status}${response.background ? " · background" : " · direct"}</td>
+                  <td>
+                    ${responseStatusLabels[response.status]} ·
+                    ${response.background ? "xử lý nền" : "trực tiếp"}
+                  </td>
                   <td>
                     ${outputText(response).slice(0, 120)}<br />
                     <button
@@ -480,6 +502,9 @@ export function renderAgentDeveloperPanel(props: Props) {
           </tbody>
         </table>
       </div>
+      ${props.panel.responses.length
+        ? nothing
+        : html`<p class="ea-developer-empty">Chưa có lượt gọi nào khớp bộ lọc.</p>`}
       ${props.panel.pageInfo.hasMore
         ? html`<div class="ea-form-actions">
             <button
@@ -493,11 +518,11 @@ export function renderAgentDeveloperPanel(props: Props) {
           </div>`
         : nothing}
       ${props.responseDetail
-        ? html`<div class="ea-card" style="margin-top: 14px">
+        ? html`<div class="ea-card ea-developer-response-detail">
             <h4>${props.responseDetail.response.id}</h4>
             <p>
-              ${props.responseDetail.transcript.totalMessages} message · gồm tool call/result từ
-              transcript runtime.
+              ${props.responseDetail.transcript.totalMessages} tin nhắn · gồm lượt gọi công cụ và
+              kết quả.
             </p>
             <pre class="ea-code" style="white-space: pre-wrap">
 ${JSON.stringify(props.responseDetail, null, 2)}</pre>

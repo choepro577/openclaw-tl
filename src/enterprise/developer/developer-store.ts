@@ -837,6 +837,7 @@ export function listDeveloperResponses(
     externalUserId?: string;
     status?: string;
     before?: number;
+    beforeId?: string;
     after?: number;
     limit?: number;
   },
@@ -857,8 +858,13 @@ export function listDeveloperResponses(
     }
   }
   if (filters.before) {
-    clauses.push("created_at < ?");
-    params.push(filters.before);
+    if (filters.beforeId) {
+      clauses.push("(created_at < ? OR (created_at = ? AND id < ?))");
+      params.push(filters.before, filters.before, filters.beforeId);
+    } else {
+      clauses.push("created_at < ?");
+      params.push(filters.before);
+    }
   }
   if (filters.after) {
     clauses.push("created_at >= ?");
@@ -867,7 +873,7 @@ export function listDeveloperResponses(
   params.push(Math.max(1, Math.min(100, filters.limit ?? 50)));
   const rows = openOpenClawStateDatabase(options)
     .db.prepare(
-      `SELECT * FROM enterprise_developer_responses WHERE ${clauses.join(" AND ")} ORDER BY created_at DESC LIMIT ?`,
+      `SELECT * FROM enterprise_developer_responses WHERE ${clauses.join(" AND ")} ORDER BY created_at DESC, id DESC LIMIT ?`,
     )
     .all(...params) as ResponseRow[]; // sqlite-allow-raw -- Columns are a closed internal list; values remain bound.
   return rows.map(presentResponse);

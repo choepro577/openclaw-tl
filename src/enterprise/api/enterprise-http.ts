@@ -3005,7 +3005,7 @@ export async function handleEnterpriseHttpRequest(
         return sendError(res, 404, "INTEGRATION_NOT_FOUND", "Không tìm thấy Integration.");
       }
       if (req.method === "GET" && !developerRoute.itemId) {
-        const requestedLimit = Math.max(1, Math.min(99, Number(searchParams.get("limit")) || 50));
+        const requestedLimit = Math.max(1, Math.min(20, Number(searchParams.get("limit")) || 20));
         const filters =
           developerRoute.section === "responses"
             ? {
@@ -3014,6 +3014,7 @@ export async function handleEnterpriseHttpRequest(
                 externalUserId: searchParams.get("externalUserId") ?? undefined,
                 status: searchParams.get("status") ?? undefined,
                 before: Number(searchParams.get("before")) || undefined,
+                beforeId: searchParams.get("beforeId") || undefined,
                 after: Number(searchParams.get("after")) || undefined,
                 limit: requestedLimit + 1,
               }
@@ -3041,6 +3042,7 @@ export async function handleEnterpriseHttpRequest(
           pageInfo: {
             hasMore,
             nextBefore: hasMore ? (responses.at(-1)?.createdAt ?? null) : null,
+            nextBeforeId: hasMore ? (responses.at(-1)?.id ?? null) : null,
           },
           retentionDays: 90,
         });
