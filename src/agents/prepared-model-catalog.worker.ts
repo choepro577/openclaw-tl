@@ -1,5 +1,6 @@
 /** Worker-thread entrypoint for complete model-catalog discovery. */
 import { parentPort, workerData } from "node:worker_threads";
+import { createPluginRegistryIdNormalizer } from "../plugins/plugin-registry-id-normalizer.js";
 import { withPluginRuntimeGenerationScope } from "../plugins/runtime/generation-scope.js";
 import {
   resolveAgentCredentialMapFromStore,
@@ -75,7 +76,20 @@ function refreshAuthStore(params: {
 
 async function prepareWorkerGeneration(value: PreparedModelCatalogWorkerInput) {
   const { prepareWorkspaceBuildGroup } = await import("./prepared-model-runtime.facts.js");
-  const prepared = await prepareWorkspaceBuildGroup([value.input], "live");
+  const metadataSnapshot = {
+    ...value.pluginMetadataSnapshot,
+    normalizePluginId: createPluginRegistryIdNormalizer(value.pluginMetadataSnapshot.index, {
+      manifestRegistry: value.pluginMetadataSnapshot.manifestRegistry,
+    }),
+  };
+  const prepared = await prepareWorkspaceBuildGroup(
+    [value.input],
+    "live",
+    { preferBuiltPluginArtifacts: value.preferBuiltPluginArtifacts },
+    undefined,
+    undefined,
+    metadataSnapshot,
+  );
   const agentFacts = prepared.agentFacts[0];
   if (!agentFacts) {
     throw new Error("prepared model catalog worker produced no agent facts");
@@ -85,6 +99,7 @@ async function prepareWorkerGeneration(value: PreparedModelCatalogWorkerInput) {
     authStore: value.authStore,
     providerIds: value.providerIds,
     pluginMetadataSnapshot: prepared.pluginGeneration.pluginMetadataSnapshot,
+    preferBuiltPluginArtifacts: value.preferBuiltPluginArtifacts,
   });
   if (reconstructedFingerprint !== value.generationFingerprint) {
     throw new Error("prepared model catalog worker reconstructed a different runtime generation");

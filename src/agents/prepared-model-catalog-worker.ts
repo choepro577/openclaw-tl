@@ -24,6 +24,8 @@ export type PreparedModelCatalogWorkerInput = Readonly<{
   input: PreparedModelRuntimeInput;
   authStore: AuthProfileStore;
   providerIds: readonly string[];
+  pluginMetadataSnapshot: Omit<PluginMetadataSnapshot, "normalizePluginId">;
+  preferBuiltPluginArtifacts?: boolean;
 }>;
 
 export type PreparedModelWorkerRequest =
@@ -98,18 +100,21 @@ export function fingerprintPreparedModelCatalogGeneration(params: {
   authStore: AuthProfileStore;
   providerIds: readonly string[];
   pluginMetadataSnapshot: PluginMetadataSnapshot;
+  preferBuiltPluginArtifacts?: boolean;
 }): string {
   return fingerprintPreparedRuntimeFacts({
     input: params.input,
     authStore: params.authStore,
     providerIds: params.providerIds,
     pluginFingerprint: fingerprintPreparedModelCatalogPlugins(params.pluginMetadataSnapshot),
+    preferBuiltPluginArtifacts: params.preferBuiltPluginArtifacts === true,
   });
 }
 
 export function createPreparedModelCatalogWorkerInput(params: {
   agentFacts: PreparedModelRuntimeAgentFacts;
   pluginMetadataSnapshot: PluginMetadataSnapshot;
+  preferBuiltPluginArtifacts?: boolean;
 }): PreparedModelCatalogWorkerInput {
   const source = params.agentFacts.input;
   // Registries and closures stay process-local. The worker reconstructs them from this exact
@@ -130,6 +135,10 @@ export function createPreparedModelCatalogWorkerInput(params: {
   };
   const authStore = cloneAuthProfileStore(params.agentFacts.authStore);
   const providerIds = [...params.agentFacts.providerIds];
+  // Metadata belongs to the publishing lifecycle. Only its alias-normalizer closure
+  // is process-local; the worker restores that from these exact manifest/index facts.
+  const { normalizePluginId: _normalizePluginId, ...pluginMetadataSnapshot } =
+    params.pluginMetadataSnapshot;
   return {
     kind: "catalog",
     generationFingerprint: fingerprintPreparedModelCatalogGeneration({
@@ -137,10 +146,13 @@ export function createPreparedModelCatalogWorkerInput(params: {
       authStore,
       providerIds,
       pluginMetadataSnapshot: params.pluginMetadataSnapshot,
+      preferBuiltPluginArtifacts: params.preferBuiltPluginArtifacts,
     }),
     input,
     authStore,
     providerIds,
+    pluginMetadataSnapshot,
+    preferBuiltPluginArtifacts: params.preferBuiltPluginArtifacts,
   };
 }
 

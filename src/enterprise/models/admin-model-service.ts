@@ -17,6 +17,7 @@ import type {
 } from "../../gateway/server-methods/types.js";
 import { usageHandlers } from "../../gateway/server-methods/usage.js";
 import { wizardHandlers } from "../../gateway/server-methods/wizard.js";
+import { redactSensitiveText } from "../../logging/redact.js";
 import { isReservedSystemAgentId } from "../../system-agent/agent-id.js";
 import { validateEnterpriseAdminConfig } from "../config/admin-config-service.js";
 
@@ -346,7 +347,16 @@ export async function invokeEnterpriseAdminModelAction(options: {
     if (ownership.sessionId) {
       wizardOwners.delete(ownership.sessionId);
     }
-    throw error;
+    if (error instanceof EnterpriseAdminModelGatewayError) {
+      throw error;
+    }
+    // REST calls bypass the WebSocket dispatcher's error boundary. Keep the owning
+    // failure visible to administrators without returning provider credentials.
+    const message = redactSensitiveText(error instanceof Error ? error.message : String(error), {
+      mode: "tools",
+    });
+    options.context.logGateway.error(`Enterprise ${options.method} failed: ${message}`);
+    throw new EnterpriseAdminModelGatewayError({ code: "UNAVAILABLE", message });
   }
 }
 

@@ -883,6 +883,11 @@ extension OpenClawChatViewModel {
             sessionSnapshot: sessionSnapshot,
             armID: armID)
         else { return false }
+        if !refresh.applied || !refresh.runSnapshotApplied || !refresh.supportsInFlightRunState ||
+            refresh.hasInFlightRun || refresh.sessionHasActiveRun
+        {
+            self.pendingRunInactiveSinceMs[runId] = nil
+        }
         if case let .failed(message)? = terminalState {
             if refresh.applied,
                let timestamp,
@@ -917,6 +922,17 @@ extension OpenClawChatViewModel {
             if terminalState == .completed, allowNoOutputCompletion {
                 self.finishPendingRun(runId: runId, terminalState: .completed)
                 return false
+            }
+            if !refresh.sessionHasActiveRun {
+                let nowMs = Date().timeIntervalSince1970 * 1000
+                let inactiveSinceMs = self.pendingRunInactiveSinceMs[runId] ?? nowMs
+                self.pendingRunInactiveSinceMs[runId] = inactiveSinceMs
+                if nowMs - inactiveSinceMs >= Double(self.pendingRunTerminalHistoryGraceMs) {
+                    self.retirePendingRun(runId)
+                    self.pendingToolCallsById = [:]
+                    self.updateStreamingAssistantText(nil)
+                    return false
+                }
             }
             return true
         }
@@ -1188,6 +1204,7 @@ extension OpenClawChatViewModel {
         let session = sessionSnapshot ?? scope?.session ?? self.currentSessionSnapshot()
         let timestamp = userMessageTimestamp ?? scope?.latestUserTurn?.timestamp
         self.pendingRunOwnerArmIDs[runId] = armID
+        self.pendingRunInactiveSinceMs[runId] = nil
         // One arm owns both completion waits and history polling. Rearms cancel
         // every child so stale route/session results cannot retire a successor run.
         let owner = PendingRunOwnerReference(self)
@@ -1433,6 +1450,7 @@ extension OpenClawChatViewModel {
         self.pendingRunOwnerTasks[runId]?.cancel()
         self.pendingRunOwnerTasks[runId] = nil
         self.pendingRunOwnerArmIDs[runId] = nil
+        self.pendingRunInactiveSinceMs[runId] = nil
         if wasPending {
             self.logDiagnostic(
                 "chat.ui pending cleared sessionKey=\(self.sessionKey) "
@@ -1454,6 +1472,7 @@ extension OpenClawChatViewModel {
         }
         self.pendingRunOwnerTasks.removeAll()
         self.pendingRunOwnerArmIDs.removeAll()
+        self.pendingRunInactiveSinceMs.removeAll()
         self.pendingRuns.removeAll()
         self.pendingLocalUserEchoMessageIDsByRunID.removeAll()
         if !runIds.isEmpty, let hapticEvent {

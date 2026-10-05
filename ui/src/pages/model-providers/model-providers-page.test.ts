@@ -213,6 +213,46 @@ afterEach(() => {
 });
 
 describe("ModelProvidersPage agent scope", () => {
+  it("automatically adds a newly discovered model to all three default selectors", async () => {
+    vi.useFakeTimers();
+    try {
+      vi.spyOn(document, "hasFocus").mockReturnValue(true);
+      vi.spyOn(document, "visibilityState", "get").mockReturnValue("visible");
+      const { context, request } = createHarness("main");
+      const originalRequest = request.getMockImplementation()!;
+      const models = [{ id: "gpt-5.6-luna", name: "GPT-5.6 Luna", provider: "openai" }];
+      request.mockImplementation(async (method: string, params?: unknown) => {
+        if (method === "models.list") {
+          return { models: [...models] };
+        }
+        if (method === "config.get") {
+          return {
+            config: { agents: { defaults: { model: "openai/gpt-5.6-luna" } } },
+            hash: "hash",
+          };
+        }
+        return originalRequest(method, params);
+      });
+      const page = appendPage(context);
+      await vi.advanceTimersByTimeAsync(0);
+      await page.updateComplete;
+      expect(page.data?.models).toHaveLength(1);
+
+      models.push({ id: "gpt-6.1-sol", name: "GPT-6.1 Sol", provider: "openai" });
+      await vi.advanceTimersByTimeAsync(5 * 60_000);
+      await page.updateComplete;
+
+      expect(page.data?.models).toHaveLength(2);
+      expect(page.querySelectorAll('[value="openai/gpt-6.1-sol"]')).toHaveLength(3);
+      expect(requestCount(request, "models.list")).toBe(2);
+      page.remove();
+      await vi.advanceTimersByTimeAsync(5 * 60_000);
+      expect(requestCount(request, "models.list")).toBe(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("renders critical provider data before deferred usage completes", async () => {
     const { context, request } = createHarness("main", { deferProviderUsage: true });
     const originalRequest = request.getMockImplementation()!;

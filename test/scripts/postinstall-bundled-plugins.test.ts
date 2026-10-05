@@ -1181,8 +1181,18 @@ describe("bundled plugin postinstall", () => {
       JSON.stringify({ name: "@openclaw/acpx" }),
     );
 
+    await fs.mkdir(path.join(extensionsDir, "codex", "node_modules"), { recursive: true });
+    await fs.writeFile(
+      path.join(extensionsDir, "codex", "package.json"),
+      JSON.stringify({
+        name: "@openclaw/codex",
+        openclaw: { release: { bundleRuntimeDependencies: false } },
+      }),
+    );
+
     pruneBundledPluginSourceNodeModules({ extensionsDir });
 
+    await expectPathExists(path.join(extensionsDir, "codex", "node_modules"));
     await expectPathMissing(path.join(extensionsDir, "acpx", "node_modules"));
     await expectPathExists(path.join(extensionsDir, "fixtures", "node_modules"));
   });

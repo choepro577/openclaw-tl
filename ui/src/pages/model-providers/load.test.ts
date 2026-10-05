@@ -3,7 +3,7 @@ import type { GatewayBrowserClient } from "../../api/gateway.ts";
 import { loadModelProviderUsage, loadModelProvidersData } from "./load.ts";
 
 describe("loadModelProvidersData", () => {
-  it("keeps full catalog discovery out of the initial page load", async () => {
+  it("discovers the current account catalog on initial page load", async () => {
     const request = vi.fn(async (method: string, _params?: unknown) => {
       switch (method) {
         case "models.authStatus":
@@ -27,7 +27,7 @@ describe("loadModelProvidersData", () => {
     expect(request).toHaveBeenCalledWith("models.list", {
       view: "configured",
       agentId: "writer",
-      preparedOnly: true,
+      refresh: true,
     });
     expect(
       request.mock.calls.filter(
@@ -87,11 +87,6 @@ describe("loadModelProvidersData", () => {
     expect(request).toHaveBeenCalledWith("models.authStatus", {
       refresh: true,
       agentId: "writer",
-    });
-    expect(request).toHaveBeenCalledWith("models.list", {
-      view: "all",
-      agentId: "writer",
-      refresh: true,
     });
     expect(request).toHaveBeenCalledWith("models.list", {
       view: "configured",
@@ -201,15 +196,23 @@ describe("loadModelProvidersData", () => {
   });
 
   it("surfaces an explicit catalog refresh failure while retaining cached configured models", async () => {
+    let failing = false;
     const request = vi.fn(async (method: string, params?: unknown) => {
-      if (method === "models.list" && (params as { view?: string } | undefined)?.view === "all") {
+      if (
+        failing &&
+        method === "models.list" &&
+        (params as { refresh?: boolean } | undefined)?.refresh
+      ) {
         throw new Error("catalog refresh failed: OPENAI_API_KEY=sk-1234567890abcdef");
       }
       switch (method) {
         case "models.authStatus":
           return { ts: 1, providers: [], providerCapabilities: [] };
         case "models.list":
-          if ((params as { preparedOnly?: boolean } | undefined)?.preparedOnly === true) {
+          if (
+            !failing ||
+            (params as { preparedOnly?: boolean } | undefined)?.preparedOnly === true
+          ) {
             return {
               models: [{ id: "cached", name: "Cached", provider: "openai" }],
             };
@@ -228,6 +231,7 @@ describe("loadModelProvidersData", () => {
     const client = { request } as unknown as GatewayBrowserClient;
     await loadModelProvidersData(client, { agentId: "writer" });
     request.mockClear();
+    failing = true;
 
     const result = await loadModelProvidersData(client, { refresh: true, agentId: "writer" });
 
@@ -239,7 +243,23 @@ describe("loadModelProvidersData", () => {
           method === "models.list" &&
           (params as { view?: string } | undefined)?.view === "configured",
       ),
-    ).toHaveLength(0);
+    ).toHaveLength(1);
+  });
+
+  it("refreshes models and discovery outcomes in one account-scoped catalog request", async () => {
+    const models = [{ id: "gpt-6.1-sol", name: "GPT-6.1 Sol", provider: "openai" }];
+    const providerOutcomes = [{ provider: "openai", status: "ready" }];
+    const request = vi.fn(async (method: string) =>
+      method === "models.list" ? { models, providerOutcomes } : {},
+    );
+    const result = await loadModelProvidersData({ request } as unknown as GatewayBrowserClient, {
+      agentId: "main",
+      refresh: true,
+      deferProviderUsage: true,
+    });
+    expect(result.models).toEqual(models);
+    expect(result.providerOutcomes).toEqual(providerOutcomes);
+    expect(request.mock.calls.filter(([method]) => method === "models.list")).toHaveLength(1);
   });
 
   it("retries one cold Enterprise Admin usage refresh", async () => {

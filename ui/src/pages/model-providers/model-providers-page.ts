@@ -16,6 +16,7 @@ import { isGatewayMethodAdvertised } from "../../lib/gateway-methods.ts";
 import { normalizeAgentId } from "../../lib/sessions/session-key.ts";
 import { GatewayPageController } from "../../lit/gateway-page-controller.ts";
 import { OpenClawLightDomElement } from "../../lit/openclaw-element.ts";
+import { PollController } from "../../lit/poll-controller.ts";
 import { SubscriptionsController } from "../../lit/subscriptions-controller.ts";
 import { UsageRefreshPolicy } from "../usage/refresh-policy.ts";
 import {
@@ -152,6 +153,9 @@ export class ModelProvidersPage extends OpenClawLightDomElement {
     isLoading: () => this.loadClient !== null || this.usageClient !== null,
     reload: () => void this.refresh({ force: false }),
   });
+  private readonly catalogPolling = new PollController(this, 60_000, () =>
+    this.refreshPolicy.request("poll"),
+  );
   private readonly gateway = new GatewayPageController(this, {
     getGateway: () => this.context?.gateway,
     onIdentityChange: () => this.resetConnectionState(),
@@ -191,6 +195,7 @@ export class ModelProvidersPage extends OpenClawLightDomElement {
     );
 
   override disconnectedCallback() {
+    this.catalogPolling.stop();
     this.usageClient = null;
     void this.usageTask.run([null, ""]);
     this.subscriptions.clear();
@@ -243,7 +248,9 @@ export class ModelProvidersPage extends OpenClawLightDomElement {
   private adoptLoadedData(client: GatewayBrowserClient | null, data: ModelProvidersData) {
     this.data = data;
     this.dataClient = client;
-    this.refreshPolicy.setLastLoadedAtMs(data.providerUsage?.ok ? data.updatedAt : null);
+    this.refreshPolicy.setLastLoadedAtMs(
+      data.providerUsage?.ok && !data.catalogError ? data.updatedAt : null,
+    );
   }
 
   private invalidateRequests() {

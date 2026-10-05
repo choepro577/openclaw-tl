@@ -9,6 +9,11 @@ import {
 import type { CallGatewayOptions } from "../../../gateway/call.js";
 import { getAgentEventLifecycleGeneration } from "../../../infra/agent-events.js";
 import {
+  bindGatewayContextResolver,
+  getPluginRuntimeGatewayRequestScope,
+  withPluginRuntimeGatewayRequestScope,
+} from "../../../plugins/runtime/gateway-request-scope.js";
+import {
   getActiveGatewayRootWorkCount,
   markGatewayRestartDraining,
   resetGatewayWorkAdmission,
@@ -617,6 +622,43 @@ describe("subagent registry lifecycle hardening", () => {
     await waitForLifecycleState(() => expect(entry.delivery?.status).toBe("delivered"));
     expect(requesterTranscriptWrite).not.toHaveBeenCalled();
     expect(runSubagentAnnounceFlow).toHaveBeenCalledOnce();
+  });
+
+  it("runs detached completion with its Gateway owner outside the originating child client", async () => {
+    const entry = createRunEntry({
+      endedAt: 4_000,
+      expectsCompletionMessage: true,
+      retainAttachmentsOnKeep: true,
+    });
+    const ownerContext = { owner: "gateway-a" } as never;
+    const staleContext = { owner: "gateway-b" } as never;
+    const resolver = () => ownerContext;
+    bindGatewayContextResolver(entry, resolver);
+    const childClient = { internal: {} } as never;
+    let releaseCompletion!: () => void;
+    const completionReady = new Promise<void>((resolve) => {
+      releaseCompletion = resolve;
+    });
+    let completionScope: ReturnType<typeof getPluginRuntimeGatewayRequestScope>;
+    const runSubagentAnnounceFlow = vi.fn(async () => {
+      await completionReady;
+      completionScope = getPluginRuntimeGatewayRequestScope();
+      return "delivered" as const;
+    });
+    const controller = createLifecycleController({ entry, runSubagentAnnounceFlow });
+
+    withPluginRuntimeGatewayRequestScope(
+      { context: staleContext, client: childClient, isWebchatConnect: () => true },
+      () => expect(controller.startSubagentAnnounceCleanupFlow(entry.runId, entry)).toBe(true),
+    );
+    releaseCompletion();
+
+    await waitForLifecycleState(() => expect(entry.delivery?.status).toBe("delivered"));
+    expect(completionScope?.client).toBeUndefined();
+    expect(completionScope?.context).toBeUndefined();
+    expect(completionScope?.resolveGatewayContext).toBe(resolver);
+    expect(completionScope?.resolveGatewayContext?.()).toBe(ownerContext);
+    expect(completionScope?.isWebchatConnect()).toBe(false);
   });
 
   it("emits one progress end event at the canonical terminal transition", async () => {
@@ -4154,6 +4196,46 @@ describe("requester settle wake trigger", () => {
     await waitForLifecycleState(() => expect(freshTranscriptWrite).toHaveBeenCalledOnce());
     expect(requesterTranscriptWrite).not.toHaveBeenCalled();
     expect(settleWake).toHaveBeenCalledOnce();
+  });
+
+  it("runs detached settle synthesis with its Gateway owner outside the originating client", async () => {
+    const entry = createRunEntry({ endedAt: 4_000 });
+    const ownerContext = { owner: "gateway-a" } as never;
+    const resolver = () => ownerContext;
+    bindGatewayContextResolver(entry, resolver);
+    let releaseWake!: () => void;
+    const wakeReady = new Promise<void>((resolve) => {
+      releaseWake = resolve;
+    });
+    let wakeScope: ReturnType<typeof getPluginRuntimeGatewayRequestScope>;
+    const settleWake = vi.fn(async () => {
+      await wakeReady;
+      wakeScope = getPluginRuntimeGatewayRequestScope();
+      return false;
+    });
+    const controller = createLifecycleController({
+      entry,
+      maybeWakeRequesterAfterAllChildrenSettled: settleWake,
+    });
+
+    withPluginRuntimeGatewayRequestScope(
+      { client: { internal: {} } as never, isWebchatConnect: () => true },
+      () =>
+        controller.completeCleanupBookkeeping({
+          runId: entry.runId,
+          entry,
+          cleanup: "keep",
+          completedAt: 5_000,
+        }),
+    );
+    releaseWake();
+
+    await waitForLifecycleState(() => expect(wakeScope).toBeDefined());
+    expect(wakeScope?.client).toBeUndefined();
+    expect(wakeScope?.context).toBeUndefined();
+    expect(wakeScope?.resolveGatewayContext).toBe(resolver);
+    expect(wakeScope?.resolveGatewayContext?.()).toBe(ownerContext);
+    expect(wakeScope?.isWebchatConnect()).toBe(false);
   });
 
   it.each([

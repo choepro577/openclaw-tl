@@ -29,6 +29,12 @@ legacy Codex GPT refs; put OpenAI agent auth order under `auth.order.openai`.
 Legacy Codex auth profile ids and legacy Codex auth order entries are
 repaired by `openclaw doctor --fix`.
 
+On 2026-10-05, the managed Codex 0.160.0 `model/list` returned the visible
+models `gpt-6.1-sol`, `gpt-6-astra`, `gpt-6-sol`, `gpt-6-luna`,
+`gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-5.6-luna`, and `gpt-5.5` for an
+authenticated account. This is an observed snapshot; the Models page discovers
+the current account catalog rather than using this list as an allowlist.
+
 With provider/model runtime policy unset or `auto`, the `openai/*` prefix alone
 never selects this harness. OpenAI may select Codex implicitly only for an
 exact official HTTPS Platform Responses or ChatGPT Responses route with no
@@ -92,7 +98,7 @@ channel is the communication surface.
 - The official `@openclaw/codex` plugin installed. Include `codex` in
   `plugins.allow` if your config uses an allowlist.
 - Codex app-server `0.147.0` or newer. The plugin ships and manages the exact
-  `@openai/codex` `0.148.0` artifact, so a `codex` command on `PATH` does not
+  `@openai/codex` `0.160.0` artifact, so a `codex` command on `PATH` does not
   affect normal startup. Explicit custom, remote, and macOS desktop-owned
   app-servers must report valid SemVer at or above the supported minimum.
   Versions newer than the managed artifact initialize with a warning;

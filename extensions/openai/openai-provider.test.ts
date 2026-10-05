@@ -566,7 +566,7 @@ describe("buildOpenAIProvider", () => {
     });
 
     expect(provider.apiKey).toBe("sk-openai");
-    expect(provider.models.map((model) => model.id)).not.toContain("gpt-5.6");
+    expect(provider.models.map((model) => model.id)).toContain("gpt-5.6");
     expect(provider.models.map((model) => model.id)).toContain("gpt-5.5");
     expect(provider.models.map((model) => model.id)).toEqual(
       expect.arrayContaining([

@@ -8,6 +8,7 @@ import type { OpenClawPackageManifest } from "./manifest.js";
 import type { PluginMetadataSnapshot } from "./plugin-metadata-snapshot.types.js";
 import type { PluginRegistrySnapshot } from "./plugin-registry.js";
 import { createEmptyPluginRegistry } from "./registry-empty.js";
+import type { PluginRegistry } from "./registry-types.js";
 import type { ProviderPlugin } from "./types.js";
 
 type ResolveRuntimePluginRegistry = typeof import("./loader.js").resolveRuntimePluginRegistry;
@@ -35,6 +36,7 @@ const loadPluginMetadataSnapshotMock = vi.fn<LoadPluginMetadataSnapshot>();
 const loadPluginRegistrySnapshotMock = vi.fn<LoadPluginRegistrySnapshot>();
 const getCurrentPluginMetadataSnapshotMock = vi.fn();
 const applyPluginAutoEnableMock = vi.fn<ApplyPluginAutoEnable>();
+let generationRegistry: PluginRegistry | undefined;
 
 let resolveOwningPluginIdsForProvider: typeof import("./providers.js").resolveOwningPluginIdsForProvider;
 let resolveOwningPluginIdsForProviderRef: typeof import("./providers.js").resolveOwningPluginIdsForProviderRef;
@@ -500,6 +502,9 @@ describe("resolvePluginProviders", () => {
       getCurrentPluginMetadataSnapshot: (...args: unknown[]) =>
         getCurrentPluginMetadataSnapshotMock(...args),
     }));
+    vi.doMock("./runtime/generation-scope.js", () => ({
+      getPluginRuntimeGenerationRegistry: () => generationRegistry,
+    }));
     vi.doMock("./plugin-registry.js", async () => {
       const actual =
         await vi.importActual<typeof import("./plugin-registry.js")>("./plugin-registry.js");
@@ -747,6 +752,7 @@ describe("resolvePluginProviders", () => {
   });
 
   beforeEach(() => {
+    generationRegistry = undefined;
     setActivePluginRegistry(createEmptyPluginRegistry());
     resolveRuntimePluginRegistryMock.mockReset();
     getRuntimePluginRegistryForLoadOptionsMock.mockReset();
@@ -1108,6 +1114,31 @@ describe("resolvePluginProviders", () => {
       cache: true,
       activate: false,
     });
+  });
+
+  it("discovers only the requested providers from the exact prepared generation", () => {
+    setOwningProviderManifestPlugins();
+    generationRegistry = createEmptyPluginRegistry();
+    const provider: ProviderPlugin = { id: "openai", label: "Prepared OpenAI", auth: [] };
+    generationRegistry.providers.push(
+      { pluginId: "openai", provider, source: "prepared" },
+      {
+        pluginId: "anthropic",
+        provider: { id: "anthropic", label: "Other scope", auth: [] },
+        source: "prepared",
+      },
+    );
+
+    expect(resolvePluginProviders({ providerRefs: ["openai"], onlyPluginIds: ["openai"] })).toEqual(
+      [{ ...provider, pluginId: "openai" }],
+    );
+    expect(getRuntimePluginRegistryForLoadOptionsMock).not.toHaveBeenCalled();
+
+    generationRegistry = createEmptyPluginRegistry();
+    expect(resolvePluginProviders({ providerRefs: ["openai"], onlyPluginIds: ["openai"] })).toEqual(
+      [],
+    );
+    expect(getRuntimePluginRegistryForLoadOptionsMock).not.toHaveBeenCalled();
   });
 
   it("inherits workspaceDir from the active registry when provider resolution omits it", () => {

@@ -91,7 +91,7 @@ function classifyOpenAiFailoverCode(code: string | undefined) {
 const OPENAI_MODELS_ENDPOINT = "https://api.openai.com/v1/models";
 // Keep synchronized with extensions/codex's exact @openai/codex dependency;
 // the provider contract test fails when that managed-runtime pin changes.
-const OPENAI_CODEX_CLIENT_VERSION = "0.148.0";
+const OPENAI_CODEX_CLIENT_VERSION = "0.160.0";
 const OPENAI_CODEX_MODELS_ENDPOINT = `${OPENAI_CODEX_RESPONSES_BASE_URL}/models?client_version=${OPENAI_CODEX_CLIENT_VERSION}`;
 const OPENAI_MODELS_CACHE_TTL_MS = 60_000;
 const OPENAI_CODEX_MODELS_CACHE_TTL_MS = 60_000;
@@ -209,6 +209,13 @@ function buildOpenAIManifestModelsForBaseUrl(baseUrl: string): ModelDefinitionCo
 function buildOpenAIDiscoverablePlatformModels(baseUrl: string): ModelDefinitionConfig[] {
   const models = [
     {
+      id: OPENAI_GPT_56_MODEL_ID,
+      name: "GPT-5.6",
+      reasoning: true,
+      cost: OPENAI_GPT_56_SOL_COST,
+      contextWindow: OPENAI_GPT_56_DIRECT_CONTEXT_WINDOW,
+    },
+    {
       id: OPENAI_CHAT_LATEST_MODEL_ID,
       name: "Chat Latest",
       reasoning: false,
@@ -302,32 +309,67 @@ async function buildOpenAILiveProviderConfig(
       ttlMs: OPENAI_MODELS_CACHE_TTL_MS,
       auditContext: "openai-model-discovery",
     });
-    const discoveredIds = new Set(
-      rows.flatMap((row) => {
-        if (!row || typeof row !== "object" || Array.isArray(row)) {
-          return [];
-        }
-        const candidate = row as { id?: unknown; object?: unknown };
-        if (candidate.object !== undefined && candidate.object !== "model") {
-          return [];
-        }
-        const modelId = typeof candidate.id === "string" ? candidate.id.trim() : "";
-        return modelId ? [modelId] : [];
-      }),
+    const knownModels = new Map(
+      [...buildOpenAIDiscoverablePlatformModels(baseUrl), ...models].map((model) => [
+        model.id,
+        model,
+      ]),
     );
-    const selectedIds = new Set<string>();
+    const discoveredModels = rows.flatMap((row): ModelDefinitionConfig[] => {
+      if (!row || typeof row !== "object" || Array.isArray(row)) {
+        return [];
+      }
+      const candidate = row as { id?: unknown; object?: unknown };
+      if (
+        (candidate.object !== undefined && candidate.object !== "model") ||
+        !shouldIncludeCodexModelRow(row)
+      ) {
+        return [];
+      }
+      const id = readLiveModelCatalogStringField(row, "id");
+      if (!id || isOpenAISubscriptionOnlyRouteModelId(id)) {
+        return [];
+      }
+      const known = knownModels.get(id);
+      if (known) {
+        return [known];
+      }
+      if (
+        !/^(?:gpt-\d|o\d)[a-z\d._-]*$/i.test(id) ||
+        /(?:^|[-_.])(?:audio|realtime|transcri(?:b\w*|ption)|speech|tts|embed(?:ding)?|moderation|image|video)(?:[-_.]|$)/i.test(
+          id,
+        )
+      ) {
+        return [];
+      }
+      const contextWindow = readLiveModelCatalogPositiveSafeIntegerField(row, [
+        "context_window",
+        "contextWindow",
+      ]);
+      // ponytail: ID-only catalogs infer text/reasoning by family; richer provider metadata
+      // can replace the heuristic. Zero cost means unknown; context/image support stay unset.
+      return [
+        {
+          id,
+          name: readLiveModelCatalogStringField(row, ["display_name", "name"]) ?? id,
+          api: "openai-responses",
+          baseUrl,
+          reasoning: /^(?:o\d|gpt-(?:[5-9](?:[.-]|$)|[1-9]\d+))/i.test(id),
+          input: ["text"],
+          cost: OPENAI_UNKNOWN_MODEL_COST,
+          ...(contextWindow ? { contextWindow } : {}),
+          maxTokens:
+            readLiveModelCatalogPositiveSafeIntegerField(row, ["max_output_tokens", "maxTokens"]) ??
+            Math.min(contextWindow ?? 8192, 8192),
+        },
+      ];
+    });
     // A successful account catalog is authoritative even when it has no
     // visible supported models; static rows cannot grant model access.
     return {
       provider: {
         ...fallback,
-        models: [...models, ...buildOpenAIDiscoverablePlatformModels(baseUrl)].filter((model) => {
-          if (!discoveredIds.has(model.id) || selectedIds.has(model.id)) {
-            return false;
-          }
-          selectedIds.add(model.id);
-          return true;
-        }),
+        models: [...new Map(discoveredModels.map((model) => [model.id, model])).values()],
       },
       outcome: { provider: PROVIDER_ID, status: "ready" },
     };

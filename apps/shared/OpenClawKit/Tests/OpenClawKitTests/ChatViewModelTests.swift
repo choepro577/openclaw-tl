@@ -3169,6 +3169,36 @@ struct ChatViewModelTests {
         }
     }
 
+    @Test func `inactive history retires a missed terminal run without a final message`() async throws {
+        let historyCalls = AsyncCounter()
+        let (transport, vm) = await makeViewModel(
+            historyResponses: [historyPayload()],
+            requestHistoryHook: { _ in _ = await historyCalls.increment() },
+            historyResponseHook: { _, index, sentRunIds in
+                guard index > 0, let runId = sentRunIds.last else { return nil }
+                return index == 1
+                    ? historyPayload(inFlightRun: OpenClawChatInFlightRun(runId: runId, text: "working"))
+                    : historyPayload()
+            },
+            sendMessageStatus: "pending",
+            waitForRunCompletionHook: { _, _ in .checkAgain })
+        await MainActor.run {
+            vm.pendingRunTerminalHistoryGraceMs = 50
+            vm.pendingRunRefreshDelaysMs = [10, 300, 300]
+        }
+        try await loadAndWaitBootstrap(vm: vm)
+
+        await sendUserMessage(vm, text: "create all branches")
+        try await waitUntil("first inactive history applies") { await historyCalls.current() >= 3 }
+        #expect(await MainActor.run { vm.pendingRunCount == 1 })
+        try await waitUntil("second inactive history clears stale run") {
+            await MainActor.run {
+                vm.pendingRunCount == 0 && vm.streamingAssistantText == nil && !vm.hasBlockingRunActivity
+            }
+        }
+        #expect(await !(transport.waitCompletionRunIds()).isEmpty)
+    }
+
     @Test func `foreground synthesizes activity when no run snapshot or local run exists`() async throws {
         let now = Date().timeIntervalSince1970 * 1000
         let historyCalls = AsyncCounter()

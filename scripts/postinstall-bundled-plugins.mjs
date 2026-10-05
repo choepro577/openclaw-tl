@@ -888,6 +888,15 @@ export function pruneBundledPluginSourceNodeModules(params = {}) {
     if (!pathExists(join(pluginDir, "package.json"))) {
       continue;
     }
+    const packageJson = JSON.parse(readFileSync(join(pluginDir, "package.json"), "utf8"));
+    // Separately installed runtime dependencies may have versions that cannot
+    // be hoisted into the core graph; pnpm owns those plugin-local directories.
+    if (
+      packageJson.openclaw?.build?.bundledDist === false ||
+      packageJson.openclaw?.release?.bundleRuntimeDependencies === false
+    ) {
+      continue;
+    }
 
     removePath(join(pluginDir, "node_modules"), { recursive: true, force: true });
   }

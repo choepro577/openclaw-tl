@@ -45,6 +45,7 @@ extension OpenClawChatViewModel {
         // A terminal ID stays retired until an authoritative session snapshot
         // explicitly removes it; late deltas/history cannot resurrect the run.
         guard self.liveRunStateByRunID[runId]?.terminal != true else { return }
+        self.pendingRunInactiveSinceMs[runId] = nil
         let replacedRun = self.pendingRuns.count != 1 || !self.pendingRuns.contains(runId)
         if replacedRun {
             // Gateway snapshots and live deltas are canonical for this session.

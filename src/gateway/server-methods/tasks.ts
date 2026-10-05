@@ -94,7 +94,7 @@ function isTaskToolMessage(message: unknown): boolean {
     : false;
 }
 
-function withoutLiveToolCalls(message: unknown, liveIds: ReadonlySet<string>): unknown | null {
+function withoutLiveToolCalls(message: unknown, liveIds: ReadonlySet<string>): unknown {
   const record = asOptionalRecord(message);
   if (!record) {
     return message;
@@ -275,7 +275,12 @@ export const tasksHandlers: GatewayRequestHandlers = {
       await import("../../tasks/task-executor-cancel.runtime.js");
     const cfg = context.getRuntimeConfig();
     const task = getTaskById(taskId);
-    if (task && !canAccessTaskRequesterSession({ access: "write", cfg, client, task })) {
+    // Runtime-only orphan cancellation has no durable session owner to check.
+    // Keep that operator recovery path outside the Enterprise User Portal.
+    const cannotCancel = task
+      ? !canAccessTaskRequesterSession({ access: "write", cfg, client, task })
+      : client?.internal?.enterpriseSession?.audience === "user";
+    if (cannotCancel) {
       respond(true, { found: false, cancelled: false });
       return;
     }

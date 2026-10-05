@@ -1,5 +1,9 @@
 import { runWithoutOwnedSessionTranscriptWrites } from "../../../config/sessions/transcript-write-context.js";
-import { clearGatewayContextResolver } from "../../../plugins/runtime/gateway-request-scope.js";
+import { runWithScheduledGatewayContext } from "../../../gateway/scheduled-run-gateway-context.js";
+import {
+  clearGatewayContextResolver,
+  getGatewayContextResolver,
+} from "../../../plugins/runtime/gateway-request-scope.js";
 import {
   runWithGatewayIndependentRootWorkContinuation,
   runWithGatewayIndependentRootWorkAdmission,
@@ -330,16 +334,21 @@ export function scheduleRequesterSettleWake(
   context.markRequesterSettleWakeRunScheduled(runId);
   // Wake turns outlive their spawning attempt; clear its owner before both
   // dispatch and chained re-arms so transcript writes acquire a fresh lock.
+  // The bound Gateway supplies the host wake; do not inherit a child client.
   runWithoutOwnedSessionTranscriptWrites(() => {
     void runWithGatewayIndependentRootWorkContinuation(() =>
-      params.maybeWakeRequesterAfterAllChildrenSettled({
-        requesterSessionKey,
-        requesterOrigin: entry.requesterOrigin,
-        settledEntry: entry,
-        transitionBatch: (runIds, state) =>
-          transitionRequesterSettleWakeBatch(context, runIds, state),
-        completeBatch: (runIds, rearmGeneration, outcome) =>
-          completeRequesterSettleWakeBatch(context, runIds, rearmGeneration, outcome),
+      runWithScheduledGatewayContext({
+        resolveGatewayContext: getGatewayContextResolver(entry),
+        run: () =>
+          params.maybeWakeRequesterAfterAllChildrenSettled({
+            requesterSessionKey,
+            requesterOrigin: entry.requesterOrigin,
+            settledEntry: entry,
+            transitionBatch: (runIds, state) =>
+              transitionRequesterSettleWakeBatch(context, runIds, state),
+            completeBatch: (runIds, rearmGeneration, outcome) =>
+              completeRequesterSettleWakeBatch(context, runIds, rearmGeneration, outcome),
+          }),
       }),
     )
       .catch((error: unknown) => {

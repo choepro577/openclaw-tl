@@ -10,6 +10,9 @@ import {
   loadGatewayModelCatalogSnapshot,
   loadPreparedGatewayModelCatalogSnapshot,
 } from "../gateway/server-model-catalog.js";
+import { withPluginMetadataSnapshotScope } from "../plugins/current-plugin-metadata-snapshot.js";
+import { resolveInstalledPluginIndexPolicyHash } from "../plugins/installed-plugin-index-policy.js";
+import { loadPluginMetadataSnapshot } from "../plugins/plugin-metadata-snapshot.js";
 import { closeOpenClawAgentDatabasesForTest } from "../state/openclaw-agent-db.js";
 import { OPENAI_CODEX_DEFAULT_PROFILE_ID } from "./auth-profiles/constants.js";
 import { getRuntimeExternalCliProfileIds } from "./auth-profiles/runtime-external-profile-references.js";
@@ -201,7 +204,7 @@ module.exports = {
 async function createStaticSnapshot(
   spinMs: number,
   envOverride: NodeJS.ProcessEnv = {},
-  options?: { hydrateExternalCliProviderIds?: readonly string[] },
+  options?: { hydrateExternalCliProviderIds?: readonly string[]; sourceMetadata?: boolean },
 ) {
   const root = tempDirs.make("openclaw-model-catalog-worker-");
   const stateDir = path.join(root, "state");
@@ -287,13 +290,26 @@ async function createStaticSnapshot(
     },
   });
   let current = true;
-  const build = await startSerializedSnapshotBuild(
-    { agentId: "main", agentDir, inheritedAuthDir: agentDir, workspaceDir, config, env },
-    new Map(),
-    30_000,
-    "static",
-    () => current,
-  ).pending;
+  const prepare = () =>
+    startSerializedSnapshotBuild(
+      { agentId: "main", agentDir, inheritedAuthDir: agentDir, workspaceDir, config, env },
+      new Map(),
+      30_000,
+      "static",
+      () => current,
+    ).pending;
+  const sourceConfig = { ...config, plugins: { ...config.plugins, entries: {} } };
+  const sourceMetadata = options?.sourceMetadata
+    ? loadPluginMetadataSnapshot({ config: sourceConfig, env, workspaceDir })
+    : undefined;
+  const build = sourceMetadata
+    ? await withPluginMetadataSnapshotScope(sourceMetadata, prepare, {
+        config: sourceConfig,
+        compatibleConfigs: [config],
+        env,
+        workspaceDir,
+      })
+    : await prepare();
   return {
     agentDir,
     config,
@@ -314,6 +330,20 @@ async function waitForMarker(marker: string): Promise<void> {
 }
 
 describe("prepared model catalog worker boundary", () => {
+  it("retains source-owned metadata when startup publishes a compatible runtime config", async () => {
+    const fixture = await createStaticSnapshot(0, {}, { sourceMetadata: true });
+    expect(fixture.pluginMetadataSnapshot.policyHash).not.toBe(
+      resolveInstalledPluginIndexPolicyHash(fixture.config),
+    );
+
+    const catalog = await fixture.snapshot.loadFullModelCatalog?.({ refresh: true });
+
+    expect(catalog?.entries).toContainEqual(
+      expect.objectContaining({ provider: PROVIDER_ID, id: "account-scoped-model" }),
+    );
+    expect(getPreparedModelFullCatalogAuth(catalog!)).toBeDefined();
+  });
+
   it("publishes account-scoped harness models only in the full catalog", async () => {
     const fixture = await createStaticSnapshot(0);
 

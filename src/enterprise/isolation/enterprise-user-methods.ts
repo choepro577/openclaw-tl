@@ -1,3 +1,8 @@
+import {
+  validateTasksCancelParams,
+  validateTasksRecoveryParams,
+} from "../../../packages/gateway-protocol/src/index.js";
+
 const USER_PORTAL_BROWSER_METHODS = new Set([
   "agent.identity.get",
   "agent.wait",
@@ -34,8 +39,11 @@ const USER_PORTAL_BROWSER_METHODS = new Set([
   "sessions.resolve",
   "sessions.rewind",
   "sessions.subscribe",
+  "tasks.cancel",
+  "tasks.dismiss",
   "tasks.get",
   "tasks.list",
+  "tasks.retry",
 ]);
 
 const USER_PORTAL_SYNTHETIC_METHODS = new Set([
@@ -100,13 +108,19 @@ export function enterpriseUserGatewayMethodAllowed(method: string, synthetic = f
 }
 
 export function enterpriseUserGatewayParamsAllowed(method: string, params: unknown): boolean {
+  if (method === "tasks.cancel") {
+    return validateTasksCancelParams(params);
+  }
+  if (method === "tasks.retry" || method === "tasks.dismiss") {
+    return validateTasksRecoveryParams(params);
+  }
   if (method === "tasks.list" || method === "tasks.get") {
     if (!params || typeof params !== "object" || Array.isArray(params)) {
       return false;
     }
     const record = params as Record<string, unknown>;
     // Canonical task handlers additionally check durable session ownership.
-    // Portals cannot enumerate the global registry or mutate task lifecycle.
+    // Portals cannot enumerate the global registry.
     return method === "tasks.list"
       ? typeof record.sessionKey === "string" &&
           record.sessionKey.trim().length > 0 &&

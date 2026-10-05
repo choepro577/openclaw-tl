@@ -5,12 +5,18 @@ import {
   type ProgressCardPutResult,
 } from "../../../packages/gateway-protocol/src/index.js";
 import {
+  putProgressCard,
+  resolveProgressCardSessionKey,
+} from "../../gateway/progress-card-store.js";
+import { getInProcessGatewayRequestContext } from "../../gateway/server-plugins.js";
+import {
   normalizeProgressCardInput,
   PROGRESS_CARD_MAX_STEPS,
   ProgressCardInputError,
 } from "../../session-cards/progress-card-input.js";
 import type { AnyAgentTool } from "./common.js";
 import { jsonResult, ToolInputError } from "./common.js";
+import { getGatewayToolCallerIdentity } from "./gateway-caller-context.js";
 import { callInProcessGatewayTool, type InProcessGatewayCaller } from "./in-process-gateway.js";
 
 const ProgressCardToolSchema = Type.Object(
@@ -52,11 +58,50 @@ export function createProgressCardTool(options: ProgressCardToolOptions = {}): A
         }
         throw error;
       }
-      const result = await gatewayCall<ProgressCardPutResult>("progressCard.put", {
-        sessionKey,
-        ...(input.markdown ? { markdown: input.markdown } : {}),
-        ...(input.steps ? { plan: input.steps } : {}),
-      });
+      const caller = getGatewayToolCallerIdentity();
+      const context = options.callGateway
+        ? undefined
+        : caller?.gatewayContextResolver
+          ? caller.gatewayContextResolver()
+          : getInProcessGatewayRequestContext();
+      const assertActive = () => {
+        if (caller?.operationalRunInstance && caller.receiptAuthority?.() !== true) {
+          throw new Error("admitted run authority is no longer active");
+        }
+        // An explicit owner may retire; never borrow another Gateway or dial
+        // the process-global transport after that instance disappears.
+        if (
+          !options.callGateway &&
+          caller?.gatewayContextResolver &&
+          (!context || caller.gatewayContextResolver() !== context)
+        ) {
+          throw new Error("owning Gateway is no longer active");
+        }
+      };
+      assertActive();
+      let result: ProgressCardPutResult;
+      if (context) {
+        const cfg = context.getRuntimeConfig();
+        const requested = resolveProgressCardSessionKey(cfg, sessionKey);
+        if (!requested.ok) {
+          throw new ToolInputError(requested.error.message);
+        }
+        if (caller) {
+          const owner = resolveProgressCardSessionKey(cfg, caller.sessionKey);
+          if (!owner.ok || owner.sessionKey !== requested.sessionKey) {
+            throw new Error("agent runtime does not own this progress card session");
+          }
+        }
+        assertActive();
+        result = putProgressCard(requested.sessionKey, input, context.broadcast);
+      } else {
+        result = await gatewayCall<ProgressCardPutResult>("progressCard.put", {
+          sessionKey,
+          ...(input.markdown ? { markdown: input.markdown } : {}),
+          ...(input.steps ? { plan: input.steps } : {}),
+        });
+      }
+      assertActive();
       const completed =
         result.card?.steps?.filter((step) => step.status === "completed").length ?? 0;
       const total = result.card?.steps?.length ?? 0;

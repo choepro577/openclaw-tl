@@ -220,7 +220,8 @@ function isWritableProviderConfig(provider: ProviderConfig): boolean {
   if (!Array.isArray(provider.models) || provider.models.length === 0) {
     return true;
   }
-  return Boolean(provider.baseUrl?.trim() && provider.apiKey);
+  // OAuth credentials live in the auth store, never in generated provider catalogs.
+  return Boolean(provider.baseUrl?.trim() && (provider.apiKey || provider.auth === "oauth"));
 }
 
 function filterWritableProviders(

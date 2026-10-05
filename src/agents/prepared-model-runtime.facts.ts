@@ -587,62 +587,68 @@ export async function prepareAgentCatalogSource(
     providerDiscoveryProviderIds?: readonly string[];
   } = {},
 ): Promise<PreparedModelRuntimeCatalogSource> {
-  const { env, input, providerIds } = agentFacts;
-  const providerOutcomes = new Map<string, ProviderCatalogOutcome>();
-  const recordProviderOutcome = (outcome: ProviderCatalogOutcome) => {
-    const provider = normalizeProviderId(outcome.provider);
-    if (provider) {
-      providerOutcomes.set(`${provider}\0${outcome.profileId ?? ""}`, { ...outcome, provider });
-    }
-  };
-  const resultOutcomes = () =>
-    [...providerOutcomes.values()].toSorted(
-      (left, right) =>
-        left.provider.localeCompare(right.provider) ||
-        (left.profileId ?? "").localeCompare(right.profileId ?? ""),
-    );
-  const options = {
-    pluginMetadataSnapshot: pluginGeneration.pluginMetadataSnapshot,
-    ...(pluginGeneration.preparedStaticProviderCatalog
-      ? { preparedStaticProviderCatalog: pluginGeneration.preparedStaticProviderCatalog }
-      : {}),
-    ...(input.workspaceDir ? { workspaceDir: input.workspaceDir } : {}),
-    ...(input.env ? { env } : {}),
-    ...(catalogMode === "static"
-      ? {
-          providerDiscoveryEntriesOnly: true as const,
-          providerDiscoveryProviderIds: sourceOptions.providerDiscoveryProviderIds ?? providerIds,
+  return await withPreparedPluginGenerationScope(
+    { input: agentFacts.input, pluginGeneration },
+    async () => {
+      const { env, input, providerIds } = agentFacts;
+      const providerOutcomes = new Map<string, ProviderCatalogOutcome>();
+      const recordProviderOutcome = (outcome: ProviderCatalogOutcome) => {
+        const provider = normalizeProviderId(outcome.provider);
+        if (provider) {
+          providerOutcomes.set(`${provider}\0${outcome.profileId ?? ""}`, { ...outcome, provider });
         }
-      : {
-          providerDiscoveryTimeoutMs: MODEL_RUNTIME_PROVIDER_DISCOVERY_TIMEOUT_MS,
-          ...(sourceOptions.providerDiscoveryProviderIds
-            ? { providerDiscoveryProviderIds: sourceOptions.providerDiscoveryProviderIds }
-            : {}),
-        }),
-  };
-  if (!persist) {
-    const source = await planOpenClawModelsJsonSource(input.config, input.agentDir, {
-      ...options,
-      ...(sourceOptions.authStore ? { authStore: sourceOptions.authStore } : {}),
-      ...(catalogMode === "live" ? { onProviderCatalogOutcome: recordProviderOutcome } : {}),
-    });
-    return {
-      modelsJsonContents: source.modelsJsonContents,
-      pluginCatalogs: source.pluginCatalogs,
-      providerOutcomes: resultOutcomes(),
-    };
-  }
-  if (!input.readOnly) {
-    await ensureOpenClawModelsJson(input.config, input.agentDir, {
-      ...options,
-      ...(catalogMode === "live" ? { onProviderCatalogOutcome: recordProviderOutcome } : {}),
-    });
-  }
-  // Capture immediately after the serialized write. Another owner may share this directory and
-  // publish a different workspace generation before full-catalog parsing begins.
-  return {
-    modelsJsonContents: captureModelsJsonContents(input.agentDir),
-    pluginCatalogs: loadPersistedPluginModelCatalogsReadOnly(input.agentDir),
-    providerOutcomes: resultOutcomes(),
-  };
+      };
+      const resultOutcomes = () =>
+        [...providerOutcomes.values()].toSorted(
+          (left, right) =>
+            left.provider.localeCompare(right.provider) ||
+            (left.profileId ?? "").localeCompare(right.profileId ?? ""),
+        );
+      const options = {
+        pluginMetadataSnapshot: pluginGeneration.pluginMetadataSnapshot,
+        ...(pluginGeneration.preparedStaticProviderCatalog
+          ? { preparedStaticProviderCatalog: pluginGeneration.preparedStaticProviderCatalog }
+          : {}),
+        ...(input.workspaceDir ? { workspaceDir: input.workspaceDir } : {}),
+        ...(input.env ? { env } : {}),
+        ...(catalogMode === "static"
+          ? {
+              providerDiscoveryEntriesOnly: true as const,
+              providerDiscoveryProviderIds:
+                sourceOptions.providerDiscoveryProviderIds ?? providerIds,
+            }
+          : {
+              providerDiscoveryTimeoutMs: MODEL_RUNTIME_PROVIDER_DISCOVERY_TIMEOUT_MS,
+              ...(sourceOptions.providerDiscoveryProviderIds
+                ? { providerDiscoveryProviderIds: sourceOptions.providerDiscoveryProviderIds }
+                : {}),
+            }),
+      };
+      if (!persist) {
+        const source = await planOpenClawModelsJsonSource(input.config, input.agentDir, {
+          ...options,
+          ...(sourceOptions.authStore ? { authStore: sourceOptions.authStore } : {}),
+          ...(catalogMode === "live" ? { onProviderCatalogOutcome: recordProviderOutcome } : {}),
+        });
+        return {
+          modelsJsonContents: source.modelsJsonContents,
+          pluginCatalogs: source.pluginCatalogs,
+          providerOutcomes: resultOutcomes(),
+        };
+      }
+      if (!input.readOnly) {
+        await ensureOpenClawModelsJson(input.config, input.agentDir, {
+          ...options,
+          ...(catalogMode === "live" ? { onProviderCatalogOutcome: recordProviderOutcome } : {}),
+        });
+      }
+      // Capture immediately after the serialized write. Another owner may share this directory and
+      // publish a different workspace generation before full-catalog parsing begins.
+      return {
+        modelsJsonContents: captureModelsJsonContents(input.agentDir),
+        pluginCatalogs: loadPersistedPluginModelCatalogsReadOnly(input.agentDir),
+        providerOutcomes: resultOutcomes(),
+      };
+    },
+  );
 }

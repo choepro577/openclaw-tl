@@ -47,7 +47,7 @@ curl -N https://openclaw.example.com/api/enterprise/developer/v1/responses \
 
 SSE uses the same events as [`/v1/responses`](./openai-http-api.md), including `response.output_text.delta`, terminal response events, and `[DONE]`. If the browser disconnects from the CSKH backend, the backend should abort its upstream fetch so OpenClaw closes the agent run.
 
-Continue a conversation by sending `previous_response_id` with the same `external_conversation_id`. Cross-Integration, cross-Agent, cross-conversation, and expired IDs return `404`.
+Continue a conversation by reusing `metadata.external_conversation_id` with the same Integration and Agent. `previous_response_id` is optional: when supplied, it only validates that the referenced response belongs to that conversation and has not expired; an invalid ID returns `404`. It does not select the session.
 
 ### Background work
 

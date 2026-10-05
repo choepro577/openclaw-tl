@@ -275,6 +275,7 @@ public final class OpenClawChatViewModel {
     nonisolated(unsafe) var pendingRunOwnerTasks: [String: Task<Void, Never>] = [:]
     var nextPendingRunOwnerArmID: UInt64 = 0
     var pendingRunOwnerArmIDs: [String: UInt64] = [:]
+    var pendingRunInactiveSinceMs: [String: Double] = [:]
     @ObservationIgnored
     nonisolated(unsafe) var activeSessionRunIndicatorTimeoutTask: Task<Void, Never>?
     var pendingRunWaitTimeoutMs: UInt64 = 120_000

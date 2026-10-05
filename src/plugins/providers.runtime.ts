@@ -23,6 +23,7 @@ import {
   resolveOwningPluginIdsForProviderRef,
 } from "./providers.js";
 import { getActivePluginRegistryWorkspaceDir } from "./runtime.js";
+import { getPluginRuntimeGenerationRegistry } from "./runtime/generation-scope.js";
 import {
   buildPluginRuntimeLoadOptionsFromValues,
   createPluginRuntimeLoaderLogger,
@@ -335,6 +336,14 @@ export function resolvePluginProvidersCore(params: {
     );
   }
   const loadState = resolveRuntimeProviderPluginLoadState(params, base, snapshot);
+  const generationRegistry = getPluginRuntimeGenerationRegistry();
+  if (generationRegistry) {
+    // Discovery must use the same runtime as the prepared catalog, including an empty scope.
+    const pluginIds = loadState.loadOptions.onlyPluginIds;
+    return generationRegistry.providers
+      .filter((entry) => pluginIds === undefined || pluginIds.includes(entry.pluginId))
+      .map((entry) => Object.assign({}, entry.provider, { pluginId: entry.pluginId }));
+  }
   if (params.skipIfLoadInFlight && isPluginRegistryLoadInFlight(loadState.loadOptions)) {
     return [];
   }

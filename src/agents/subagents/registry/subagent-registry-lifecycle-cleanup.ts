@@ -1,5 +1,7 @@
 import type { cleanupBrowserSessionsForLifecycleEnd } from "../../../browser-lifecycle-cleanup.js";
 import { runWithoutOwnedSessionTranscriptWrites } from "../../../config/sessions/transcript-write-context.js";
+import { runWithScheduledGatewayContext } from "../../../gateway/scheduled-run-gateway-context.js";
+import { getGatewayContextResolver } from "../../../plugins/runtime/gateway-request-scope.js";
 import {
   isGatewayRestartDraining,
   runWithGatewayIndependentRootWorkAdmission,
@@ -109,10 +111,15 @@ export function runDetachedCleanupAttempt(
   // full detached attempt, including its final durable registry write.
   // Completion outlives the spawning attempt; inherited lock owners would
   // reject requester transcript writes after that attempt is disposed.
+  // Its request client must also be dropped: host delivery uses the run's
+  // Gateway owner, rather than the child client's session permissions.
   runWithoutOwnedSessionTranscriptWrites(() => {
     void runWithGatewayIndependentRootWorkAdmission(async () => {
       try {
-        await args.run();
+        await runWithScheduledGatewayContext({
+          resolveGatewayContext: getGatewayContextResolver(args.entry),
+          run: args.run,
+        });
         context.clearCleanupFailureCount(args.entry);
       } catch (err) {
         defaultRuntime.log(

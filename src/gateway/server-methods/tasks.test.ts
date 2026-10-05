@@ -15,15 +15,11 @@ import {
   appendTranscriptMessage,
   upsertSessionEntryCore,
 } from "../../config/sessions/session-accessor.js";
-import { addSessionMember } from "../../config/sessions/session-sharing-store.js";
-import type { GatewayOperatorRoleDefinition } from "../../config/types.gateway.js";
 import type { OpenClawConfig } from "../../config/types.openclaw.js";
 import { emitAgentEvent } from "../../infra/agent-events.js";
 import { closeOpenClawAgentDatabasesForTest } from "../../state/openclaw-agent-db.js";
 import { closeOpenClawStateDatabaseForTest } from "../../state/openclaw-state-db.js";
-import { ensureProfileForEmail } from "../../state/user-profiles.js";
 import {
-  createTaskRecord as createTaskRecordOrNull,
   getTaskById,
   listTaskRecordPage,
   markTaskTerminalById,
@@ -38,31 +34,13 @@ import {
   setTaskRegistryControlRuntimeForTests,
 } from "../../tasks/task-runtime.test-helpers.js";
 import { captureEnv, setTestEnvValue } from "../../test-utils/env.js";
-import { tasksHandlers } from "./tasks.js";
-import type { GatewayClient, RespondFn } from "./types.js";
+import { createTaskRecord, runTaskHandler } from "./tasks.test-helpers.js";
 
 const stateDirEnvSnapshot = captureEnv(["OPENCLAW_STATE_DIR"]);
 const cancelSessionMock = vi.fn();
 const killSubagentRunAdminMock = vi.fn();
-type TaskResponsePayload = {
-  tasks?: Array<Record<string, unknown>>;
-  task?: Record<string, unknown>;
-  toolMessages?: unknown[];
-  found?: boolean;
-  cancelled?: boolean;
-  nextCursor?: string;
-  results?: Array<{ taskId?: string; ok?: boolean; reason?: string }>;
-};
 
 let stateDir: string;
-
-function createTaskRecord(params: Parameters<typeof createTaskRecordOrNull>[0]): TaskRecord {
-  const task = createTaskRecordOrNull(params);
-  if (!task) {
-    throw new Error("expected task creation to succeed");
-  }
-  return task;
-}
 
 beforeEach(async () => {
   stateDir = await fs.mkdtemp(path.join(os.tmpdir(), "openclaw-gateway-tasks-"));
@@ -88,39 +66,6 @@ afterEach(async () => {
   await fs.rm(stateDir, { recursive: true, force: true });
 });
 
-function identifiedClient(scopes: string[], profileId = "viewer@example.com"): GatewayClient {
-  return {
-    connect: {
-      minProtocol: 1,
-      maxProtocol: 1,
-      client: { id: "openclaw-control-ui", version: "test", platform: "test", mode: "webchat" },
-      role: "operator",
-      scopes,
-    },
-    authenticatedUserId: "viewer@example.com",
-    authenticatedUserProfile: {
-      profileId,
-      displayName: null,
-      hasAvatar: false,
-      updatedAt: 1,
-    },
-  };
-}
-
-function captureRespond() {
-  const calls: Parameters<RespondFn>[] = [];
-  const respond: RespondFn = (...args) => {
-    calls.push(args);
-  };
-  return { calls, respond };
-}
-
-function createContext(config: Record<string, unknown> = {}) {
-  return {
-    getRuntimeConfig: () => config,
-  } as never;
-}
-
 function createSnapshotTask(overrides: Partial<TaskRecord>): TaskRecord {
   return {
     taskId: "task-snapshot",
@@ -137,30 +82,6 @@ function createSnapshotTask(overrides: Partial<TaskRecord>): TaskRecord {
     startedAt: 1_010,
     lastEventAt: 1_010,
     ...overrides,
-  };
-}
-
-async function runTaskHandler(
-  method: "tasks.list" | "tasks.get" | "tasks.cancel" | "tasks.retry" | "tasks.dismiss",
-  params: Record<string, unknown>,
-  config: Record<string, unknown> = {},
-  client: GatewayClient | null = null,
-) {
-  const { calls, respond } = captureRespond();
-  await expectDefined(
-    tasksHandlers[method],
-    "tasksHandlers[method] test invariant",
-  )({
-    req: { type: "req", id: `req-${method}`, method },
-    params,
-    respond,
-    context: createContext(config),
-    client,
-    isWebchatConnect: () => false,
-  });
-  return {
-    calls,
-    payload: calls[0]?.[1] as TaskResponsePayload | undefined,
   };
 }
 
@@ -543,170 +464,6 @@ describe("tasks gateway handlers", () => {
       cloneSpy.mockRestore();
     }
   });
-
-  it.each(["incognito", "none", "view"] as const)(
-    "enforces %s session access on indirect task selectors",
-    async (access) => {
-      const profileId =
-        access === "incognito"
-          ? "viewer@example.com"
-          : ensureProfileForEmail("viewer@example.com").id;
-      const foreignKey = `agent:main:dashboard:${access === "incognito" ? "incognito-" : ""}foreign`;
-      const ownKey = "agent:main:own-task";
-      for (const [sessionKey, actorId] of [
-        [foreignKey, "owner@example.com"],
-        [ownKey, profileId],
-      ] satisfies [string, string][]) {
-        await upsertSessionEntryCore(
-          { agentId: "main", sessionKey },
-          {
-            sessionId: `session-${sessionKey}`,
-            updatedAt: 1,
-            createdActor: { type: "human", id: actorId },
-            visibility: "shared",
-            ...(access === "incognito" && sessionKey === foreignKey ? { incognito: true } : {}),
-          },
-        );
-      }
-      const createTask = (sessionKey: string, lastEventAt: number) =>
-        createTaskRecord({
-          runtime: "cli",
-          requesterSessionKey: sessionKey,
-          requesterAgentId: "main",
-          ownerKey: sessionKey,
-          scopeKind: "session",
-          task: sessionKey,
-          status: "running",
-          deliveryStatus: "pending",
-          lastEventAt,
-        });
-      const foreign = createTask(foreignKey, 2_000);
-      const own = createTask(ownKey, 1_000);
-      const guest: GatewayOperatorRoleDefinition = {
-        sessions: { others: access === "none" ? "none" : "view" },
-        agents: "*",
-        scopes: ["operator.read", "operator.write"],
-      };
-      const config: OpenClawConfig =
-        access === "incognito"
-          ? {}
-          : { gateway: { roles: { default: "guest", definitions: { guest } } } };
-      const viewer = identifiedClient(["operator.read", "operator.write"], profileId);
-      const taskId = foreign.taskId;
-      const selection = { taskIds: [taskId] };
-      const list = await runTaskHandler("tasks.list", { limit: 1 }, config, viewer);
-      const visibleForeign = access === "view";
-      expect(list.payload?.tasks?.map((task) => task.taskId)).toEqual([
-        visibleForeign ? taskId : own.taskId,
-      ]);
-      expect(list.payload?.nextCursor).toBe(visibleForeign ? "1" : undefined);
-      const get = await runTaskHandler("tasks.get", { taskId }, config, viewer);
-      if (visibleForeign) {
-        expect(get.payload?.task?.taskId).toBe(taskId);
-      } else {
-        expect(get.calls[0]).toMatchObject([
-          false,
-          undefined,
-          { message: `task not found: ${taskId}` },
-        ]);
-      }
-      const cancel = await runTaskHandler("tasks.cancel", { taskId }, config, viewer);
-      expect(cancel.payload).toMatchObject({ found: false, cancelled: false });
-      for (const method of ["tasks.retry", "tasks.dismiss"] as const) {
-        const result = await runTaskHandler(method, selection, config, viewer);
-        expect(result.payload?.results).toEqual([{ taskId, ok: false, reason: "task not found" }]);
-      }
-      if (visibleForeign) {
-        addSessionMember(
-          { agentId: "main", sessionKey: foreignKey },
-          {
-            identityId: profileId,
-            addedBy: "owner@example.com",
-            expectedSessionId: `session-${foreignKey}`,
-          },
-        );
-        const invited = await runTaskHandler("tasks.retry", selection, config, viewer);
-        expect(invited.payload?.results?.[0]?.reason).not.toBe("task not found");
-      }
-      const admin = await runTaskHandler(
-        "tasks.get",
-        { taskId },
-        config,
-        identifiedClient(["operator.admin"], profileId),
-      );
-      expect(admin.calls[0]?.[0]).toBe(true);
-      expect(admin.payload?.task?.taskId).toBe(taskId);
-    },
-  );
-
-  it.each(["administrator", "employee"] as const)(
-    "isolates Enterprise %s task reads by session creator",
-    async (accountRole) => {
-      const ownKey = "agent:main:dashboard:enterprise-own";
-      const foreignKey = "agent:main:dashboard:enterprise-foreign";
-      const created: TaskRecord[] = [];
-      for (const [sessionKey, profileId] of [
-        [ownKey, "profile-a"],
-        [foreignKey, "profile-b"],
-      ]) {
-        await upsertSessionEntryCore(
-          { agentId: "main", sessionKey },
-          {
-            sessionId: sessionKey,
-            updatedAt: 1,
-            createdActor: { type: "human", id: profileId },
-            visibility: "shared",
-          },
-        );
-        created.push(
-          createTaskRecord({
-            runtime: "subagent",
-            requesterSessionKey: sessionKey,
-            requesterAgentId: "main",
-            ownerKey: sessionKey,
-            scopeKind: "session",
-            task: "Private work",
-            status: "running",
-            deliveryStatus: "pending",
-          }),
-        );
-      }
-      const global = createTaskRecord({
-        runtime: "cli",
-        ownerKey: "global",
-        scopeKind: "session",
-        task: "Global work",
-        status: "running",
-        deliveryStatus: "pending",
-      });
-      const portal: GatewayClient = {
-        ...identifiedClient(["operator.admin"], "profile-a"),
-        internal: {
-          enterpriseSession: {
-            sessionId: "enterprise-a",
-            audience: "user",
-            accountId: "a",
-            accountRole,
-          },
-        },
-      };
-      const list = await runTaskHandler("tasks.list", { sessionKey: ownKey }, {}, portal);
-      expect(list.payload?.tasks?.map((task) => task.taskId)).toEqual([created[0].taskId]);
-      for (const task of [created[1], global]) {
-        const get = await runTaskHandler("tasks.get", { taskId: task.taskId }, {}, portal);
-        expect(get.calls[0]?.[0]).toBe(false);
-      }
-      const foreignList = await runTaskHandler(
-        "tasks.list",
-        { sessionKey: foreignKey },
-        {},
-        portal,
-      );
-      expect(foreignList.payload?.tasks ?? []).toEqual([]);
-      const own = await runTaskHandler("tasks.get", { taskId: created[0].taskId }, {}, portal);
-      expect(own.payload?.task?.taskId).toBe(created[0].taskId);
-    },
-  );
 
   it("returns page records isolated from the registry", () => {
     const created = createTaskRecord({

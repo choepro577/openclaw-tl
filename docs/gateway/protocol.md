@@ -1079,17 +1079,23 @@ context.
 - `"all"`: full gateway catalog, bypassing `agents.defaults.modelPolicy.allow`. Use for
   diagnostics/discovery UIs, not normal model pickers.
 
-Two optional controls separate automatic reads from operator-requested discovery:
+Two optional controls separate prepared reads from provider discovery:
 
 - `preparedOnly: true` reuses the current prepared catalog or a completed catalog for that
-  runtime generation without starting provider discovery. Control UI startup and polling use
-  this mode.
+  runtime generation without starting provider discovery. Control UI startup and polling outside
+  Models settings use this mode.
 - `refresh: true` replaces a completed full catalog when the selected view requires discovery.
   Concurrent refreshes share one build; a failed refresh leaves the previous completed catalog
   available and returns the failure to the caller.
 
 `preparedOnly: true` and `refresh: true` are mutually exclusive because one forbids discovery
 while the other requests it.
+
+Models settings loads the current account's provider catalog for the selected agent on entry.
+While the page is visible and focused, it automatically refreshes catalogs that are at least
+five minutes old.
+The **Refresh** button requests discovery immediately, even within that interval. Its model
+selectors still apply the `"configured"` view policy described above.
 
 ## Exec approvals
 

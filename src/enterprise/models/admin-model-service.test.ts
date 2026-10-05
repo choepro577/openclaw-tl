@@ -1,6 +1,9 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { OpenClawConfig } from "../../config/types.openclaw.js";
+import type { GatewayRequestContext } from "../../gateway/server-methods/types.js";
+import { registerGatewayModelCatalogPrivateAccess } from "../../gateway/server-model-catalog-auth.js";
 import {
+  invokeEnterpriseAdminModelAction,
   isEnterpriseAdminModelMethod,
   readEnterpriseAdminModelContext,
   testApi,
@@ -56,5 +59,34 @@ describe("Enterprise Admin model bridge", () => {
         gateway: { port: 1234 },
       }),
     ).toEqual(["models.providers.openai.apiKey", "gateway.port"]);
+  });
+  it("returns a redacted catalog failure instead of hiding it behind the portal's generic error", async () => {
+    const error = new Error("catalog generation mismatch: OPENAI_API_KEY=sk-1234567890abcdef");
+    const loadGatewayModelCatalogSnapshot = vi.fn();
+    registerGatewayModelCatalogPrivateAccess(loadGatewayModelCatalogSnapshot, {
+      loadDeferred: async () => {
+        throw error;
+      },
+      readPrepared: async () => undefined,
+    });
+    const logError = vi.fn();
+    await expect(
+      invokeEnterpriseAdminModelAction({
+        method: "models.list",
+        params: { agentId: "main", refresh: true },
+        adminSessionId: "test-session",
+        context: {
+          getRuntimeConfig: () => ({}),
+          loadGatewayModelCatalogSnapshot,
+          logGateway: { error: logError },
+        } as unknown as GatewayRequestContext,
+      }),
+    ).rejects.toMatchObject({
+      shape: {
+        code: "UNAVAILABLE",
+        message: "catalog generation mismatch: OPENAI_API_KEY=sk-123…cdef",
+      },
+    });
+    expect(logError).toHaveBeenCalledWith(expect.not.stringContaining("sk-1234567890abcdef"));
   });
 });

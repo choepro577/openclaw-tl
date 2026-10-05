@@ -6,11 +6,11 @@ import {
 } from "./enterprise-user-methods.js";
 
 describe("Enterprise user Gateway method allowlist", () => {
-  it("allows only read-only, session-scoped task observation", () => {
+  it("allows session-scoped task observation and owner-checked lifecycle recovery", () => {
     expect(enterpriseUserGatewayMethodAllowed("tasks.list")).toBe(true);
     expect(enterpriseUserGatewayMethodAllowed("tasks.get")).toBe(true);
     for (const method of ["tasks.cancel", "tasks.retry", "tasks.dismiss"]) {
-      expect(enterpriseUserGatewayMethodAllowed(method)).toBe(false);
+      expect(enterpriseUserGatewayMethodAllowed(method)).toBe(true);
     }
     expect(
       enterpriseUserGatewayParamsAllowed("tasks.list", {
@@ -32,6 +32,30 @@ describe("Enterprise user Gateway method allowlist", () => {
     expect(
       enterpriseUserGatewayParamsAllowed("tasks.get", { taskId: "child", includeAll: true }),
     ).toBe(false);
+  });
+  it("limits lifecycle recovery to bounded task selectors", () => {
+    expect(enterpriseUserGatewayParamsAllowed("tasks.cancel", { taskId: "child" })).toBe(true);
+    expect(
+      enterpriseUserGatewayParamsAllowed("tasks.cancel", { taskId: "child", reason: "Stopped" }),
+    ).toBe(true);
+    for (const params of [null, [], {}, { taskId: "" }, { taskId: "child", includeAll: true }]) {
+      expect(enterpriseUserGatewayParamsAllowed("tasks.cancel", params)).toBe(false);
+    }
+    for (const method of ["tasks.retry", "tasks.dismiss"]) {
+      expect(enterpriseUserGatewayParamsAllowed(method, { taskIds: ["child"] })).toBe(true);
+      for (const params of [
+        null,
+        [],
+        {},
+        { taskIds: [] },
+        { taskIds: [""] },
+        { taskIds: [1] },
+        { taskIds: Array.from({ length: 11 }, (_, index) => `child-${index}`) },
+        { taskIds: ["child"], includeAll: true },
+      ]) {
+        expect(enterpriseUserGatewayParamsAllowed(method, params)).toBe(false);
+      }
+    }
   });
   it("allows user chat/session methods and denies operator surfaces by default", () => {
     expect(enterpriseUserGatewayMethodAllowed("chat.send")).toBe(true);
@@ -172,6 +196,9 @@ describe("Enterprise user Gateway method allowlist", () => {
         "sessions.files.get",
         "sessions.files.list",
         "models.list",
+        "tasks.cancel",
+        "tasks.retry",
+        "tasks.dismiss",
         "commands.list",
         "config.get",
         "debug.subscribe",
@@ -184,6 +211,9 @@ describe("Enterprise user Gateway method allowlist", () => {
       "sessions.files.get",
       "sessions.files.list",
       "models.list",
+      "tasks.cancel",
+      "tasks.retry",
+      "tasks.dismiss",
     ]);
   });
 });

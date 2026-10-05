@@ -473,6 +473,30 @@ describe("models-config", () => {
     expect(unauthenticatedProviderParsed.providers?.["auth-only"]).toBeDefined();
   });
 
+  it("retains discovered OAuth models without requiring a persisted API key", async () => {
+    const provider = createImplicitOpenAiProvider({ auth: "oauth" });
+    provider.models = provider.models.map((model) => ({ ...model, id: "future-model" }));
+    const plan = await planOpenClawModelsJsonWithDeps(
+      {
+        cfg: { models: { providers: {} } },
+        agentDir: "/tmp/openclaw-models-config-env-vars-test",
+        env: {},
+        existingRaw: "",
+        existingParsed: null,
+      },
+      { resolveImplicitProviders: async () => ({ "oauth-catalog": provider }) },
+    );
+
+    expect(plan.action).toBe("write");
+    if (plan.action !== "write") {
+      throw new Error("Expected OAuth catalog write plan");
+    }
+    const serialized = JSON.parse(plan.contents).providers["oauth-catalog"];
+    expect(serialized?.models.map((model: { id: string }) => model.id)).toEqual(["future-model"]);
+    expect(serialized?.auth).toBe("oauth");
+    expect(serialized?.apiKey).toBeUndefined();
+  });
+
   it("treats empty replace-mode provider sets as authoritative", async () => {
     const plan = await planOpenClawModelsJsonWithDeps(
       {

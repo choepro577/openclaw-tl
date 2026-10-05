@@ -11,32 +11,28 @@ import {
   PROGRESS_CARD_MAX_UTF8_BYTES,
   ProgressCardInputError,
 } from "../../session-cards/progress-card-input.js";
-import { progressCardStore, type ProgressCardStore } from "../progress-card-store.js";
-import { sessionObserverScopeKey } from "../session-observer-model.js";
-import { resolveRequestedSessionAgentId } from "../session-request-agent.js";
-import { resolveSessionStoreKey } from "../session-store-key.js";
+import {
+  progressCardStore,
+  type ProgressCardStore,
+  putProgressCard,
+  resolveProgressCardSessionKey,
+} from "../progress-card-store.js";
 import type { GatewayRequestHandlers } from "./types.js";
 import { assertValidParams } from "./validation.js";
 
 export { PROGRESS_CARD_MAX_STEP_UTF8_BYTES, PROGRESS_CARD_MAX_STEPS, PROGRESS_CARD_MAX_UTF8_BYTES };
 
-function resolveProgressCardSessionKey(
+function requireProgressCardSessionKey(
   sessionKey: string,
   context: Parameters<GatewayRequestHandlers[string]>[0]["context"],
   respond: Parameters<GatewayRequestHandlers[string]>[0]["respond"],
 ): string | undefined {
-  const cfg = context.getRuntimeConfig();
-  const requested = resolveRequestedSessionAgentId(cfg, sessionKey, undefined);
+  const requested = resolveProgressCardSessionKey(context.getRuntimeConfig(), sessionKey);
   if (!requested.ok) {
     respond(false, undefined, requested.error);
     return undefined;
   }
-  const canonicalKey = resolveSessionStoreKey({
-    cfg,
-    sessionKey,
-    storeAgentId: requested.agentId,
-  });
-  return sessionObserverScopeKey(canonicalKey, requested.agentId);
+  return requested.sessionKey;
 }
 
 export function createProgressCardHandlers(
@@ -47,7 +43,7 @@ export function createProgressCardHandlers(
       if (!assertValidParams(params, validateProgressCardGetParams, "progressCard.get", respond)) {
         return;
       }
-      const sessionKey = resolveProgressCardSessionKey(params.sessionKey, context, respond);
+      const sessionKey = requireProgressCardSessionKey(params.sessionKey, context, respond);
       if (!sessionKey) {
         return;
       }
@@ -82,21 +78,17 @@ export function createProgressCardHandlers(
         );
         return;
       }
-      const sessionKey = resolveProgressCardSessionKey(params.sessionKey, context, respond);
+      const sessionKey = requireProgressCardSessionKey(params.sessionKey, context, respond);
       if (!sessionKey) {
         return;
       }
       try {
-        const result = store.put(sessionKey, {
-          ...input,
-          expectedRevision: params.expectedRevision,
-        });
-        if (params.expectedRevision === undefined || result.card === null) {
-          context.broadcast("progressCard.changed", {
-            sessionKey,
-            revision: result.card?.revision ?? null,
-          });
-        }
+        const result = putProgressCard(
+          sessionKey,
+          { ...input, expectedRevision: params.expectedRevision },
+          context.broadcast,
+          store,
+        );
         respond(true, result, undefined);
       } catch (error) {
         respond(false, undefined, errorShape(ErrorCodes.UNAVAILABLE, String(error)));

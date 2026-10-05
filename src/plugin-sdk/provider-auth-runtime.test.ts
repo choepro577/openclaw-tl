@@ -1,7 +1,10 @@
 // Provider auth runtime tests cover OAuth callback handling and provider auth flow helpers.
+import { spawnSync } from "node:child_process";
+import { existsSync } from "node:fs";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 import { MAX_TIMER_TIMEOUT_MS } from "@openclaw/normalization-core/number-coercion";
 import { describe, expect, it, vi } from "vitest";
 import { saveAuthProfileStore } from "../agents/auth-profiles/store.js";
@@ -9,6 +12,25 @@ import { getFreePort } from "../test-utils/ports.js";
 import * as providerAuthRuntime from "./provider-auth-runtime.js";
 
 describe("plugin-sdk provider-auth-runtime", () => {
+  it.runIf(existsSync("dist/plugin-sdk/provider-auth-runtime.js"))(
+    "resolves provider auth from the built SDK with hashed runtime chunks",
+    () => {
+      const entry = pathToFileURL(path.resolve("dist/plugin-sdk/provider-auth-runtime.js")).href;
+      const result = spawnSync(
+        process.execPath,
+        [
+          "--input-type=module",
+          "--eval",
+          `const { resolveApiKeyForProvider } = await import(${JSON.stringify(entry)});
+           const auth = await resolveApiKeyForProvider({ provider: "openai", cfg: {} });
+           if (auth.apiKey !== process.env.OPENAI_API_KEY) throw new Error("auth mismatch");`,
+        ],
+        { env: { ...process.env, OPENAI_API_KEY: "built-sdk-fixture-not-real" }, encoding: "utf8" },
+      );
+      expect(result.status, result.stderr).toBe(0);
+    },
+  );
+
   it("exports the runtime-ready auth helper", () => {
     expect(providerAuthRuntime.getRuntimeAuthForModel).toBeTypeOf("function");
   });
