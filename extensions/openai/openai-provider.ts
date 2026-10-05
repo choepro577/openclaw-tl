@@ -666,6 +666,42 @@ async function buildOpenAICodexLiveProviderConfig(params: {
   };
 }
 
+async function resolveOpenAIAccountCatalog(
+  ctx: Pick<ProviderResolveDynamicModelContext, "config" | "agentDir" | "workspaceDir"> & {
+    env?: Record<string, string | undefined>;
+  },
+  profileId?: string,
+): Promise<OpenAILiveProviderCatalog | undefined> {
+  const { resolveApiKeyForProvider, resolveProviderAuthProfileMetadata } =
+    await import("openclaw/plugin-sdk/provider-auth-runtime");
+  const auth = await resolveApiKeyForProvider({
+    provider: PROVIDER_ID,
+    cfg: ctx.config,
+    ...(ctx.agentDir ? { agentDir: ctx.agentDir } : {}),
+    ...(ctx.workspaceDir ? { workspaceDir: ctx.workspaceDir } : {}),
+    ...(profileId ? { profileId, lockedProfile: true } : {}),
+  });
+  if (!auth?.apiKey) {
+    return undefined;
+  }
+  const selectedProfileId = auth.profileId ?? profileId;
+  const catalog = isCodexCatalogAuthMode(auth.mode)
+    ? await buildOpenAICodexLiveProviderConfig({
+        discoveryApiKey: auth.apiKey,
+        accountId: resolveProviderAuthProfileMetadata({
+          provider: PROVIDER_ID,
+          cfg: ctx.config,
+          agentDir: ctx.agentDir,
+          profileId: selectedProfileId,
+        }).accountId,
+      })
+    : await buildOpenAILiveProviderConfig({
+        apiKey: auth.apiKey,
+        baseUrl: resolveOpenAICatalogBaseUrl(ctx),
+      });
+  return scopeOpenAICatalogOutcome(catalog, selectedProfileId);
+}
+
 function isCodexCatalogAuthMode(mode: string): boolean {
   return mode === "oauth" || mode === "token";
 }
@@ -983,75 +1019,37 @@ export function buildOpenAIProvider(): ProviderPlugin {
   const codexHooks = buildOpenAICodexProviderHooks();
   const nativeResponsesHooks = buildOpenAIResponsesProviderHooks();
   const responsesHooks = buildOpenAIResponsesProviderHooks({ transport: "sse" });
+  const resolveDynamicModel = (ctx: ProviderResolveDynamicModelContext) =>
+    shouldResolveDynamicModelThroughCodex(ctx)
+      ? codexHooks.resolveDynamicModel?.(ctx)
+      : resolveOpenAIGptForwardCompatModel(ctx);
   return {
     ...providerDefinition,
     catalog: {
       order: "simple",
       run: async (ctx) => {
         const auth = ctx.resolveProviderAuth(PROVIDER_ID);
+        let catalog: OpenAILiveProviderCatalog | undefined;
         try {
-          const { resolveApiKeyForProvider, resolveProviderAuthProfileMetadata } =
-            await import("openclaw/plugin-sdk/provider-auth-runtime");
-          const runtimeAuth = await resolveApiKeyForProvider({
-            provider: PROVIDER_ID,
-            cfg: ctx.config,
-            ...(ctx.agentDir ? { agentDir: ctx.agentDir } : {}),
-            ...(ctx.workspaceDir ? { workspaceDir: ctx.workspaceDir } : {}),
-            ...(auth.profileId
-              ? {
-                  profileId: auth.profileId,
-                  lockedProfile: true,
-                }
-              : {}),
-          });
-          if (runtimeAuth && isCodexCatalogAuthMode(runtimeAuth.mode) && runtimeAuth.apiKey) {
-            const metadata = resolveProviderAuthProfileMetadata({
-              provider: PROVIDER_ID,
-              cfg: ctx.config,
-              ...(ctx.agentDir ? { agentDir: ctx.agentDir } : {}),
-              ...((runtimeAuth.profileId ?? auth.profileId)
-                ? { profileId: runtimeAuth.profileId ?? auth.profileId }
-                : {}),
-            });
-            const catalog = scopeOpenAICatalogOutcome(
-              await buildOpenAICodexLiveProviderConfig({
-                discoveryApiKey: runtimeAuth.apiKey,
-                accountId: metadata.accountId,
-              }),
-              runtimeAuth.profileId ?? auth.profileId,
-            );
-            return {
-              providers: { [PROVIDER_ID]: catalog.provider },
-              ...(catalog.outcome ? { outcomes: [catalog.outcome] } : {}),
-            };
-          }
+          catalog = await resolveOpenAIAccountCatalog(ctx, auth.profileId);
         } catch {
-          // OAuth discovery is advisory; fall through so configured API-key
-          // auth can still publish the standard OpenAI catalog.
+          // OAuth discovery is advisory; configured API-key discovery remains available.
         }
-        if (auth.mode === "api_key" && auth.apiKey) {
-          const catalog = scopeOpenAICatalogOutcome(
+        if (!catalog) {
+          const apiKey =
+            auth.mode === "api_key" && auth.apiKey ? auth : ctx.resolveProviderApiKey(PROVIDER_ID);
+          if (!apiKey.apiKey) {
+            return null;
+          }
+          catalog = scopeOpenAICatalogOutcome(
             await buildOpenAILiveProviderConfig({
-              apiKey: auth.apiKey,
+              apiKey: apiKey.apiKey,
               baseUrl: resolveOpenAICatalogBaseUrl(ctx),
-              discoveryApiKey: auth.discoveryApiKey,
+              discoveryApiKey: apiKey.discoveryApiKey,
             }),
-            auth.profileId,
+            auth.mode === "api_key" ? auth.profileId : undefined,
           );
-          return {
-            providers: { [PROVIDER_ID]: catalog.provider },
-            ...(catalog.outcome ? { outcomes: [catalog.outcome] } : {}),
-          };
         }
-        const apiKey = ctx.resolveProviderApiKey(PROVIDER_ID);
-        if (!apiKey.apiKey) {
-          return null;
-        }
-        const catalog = await buildOpenAILiveProviderConfig({
-          apiKey: apiKey.apiKey,
-          baseUrl: resolveOpenAICatalogBaseUrl(ctx),
-          discoveryApiKey: apiKey.discoveryApiKey,
-        });
         return {
           providers: { [PROVIDER_ID]: catalog.provider },
           ...(catalog.outcome ? { outcomes: [catalog.outcome] } : {}),
@@ -1062,10 +1060,37 @@ export function buildOpenAIProvider(): ProviderPlugin {
       order: "simple",
       run: async () => ({ providers: { [PROVIDER_ID]: OPENAI_MANIFEST_PROVIDER } }),
     },
-    resolveDynamicModel: (ctx) =>
-      shouldResolveDynamicModelThroughCodex(ctx)
-        ? codexHooks.resolveDynamicModel?.(ctx)
-        : resolveOpenAIGptForwardCompatModel(ctx),
+    resolveDynamicModel,
+    prepareDynamicModel: async (ctx) => {
+      // Keep known/static routes network-free. A new model must come from this
+      // exact account catalog, using the same discovery and cache as the picker.
+      const endpoint = classifyOpenAIBaseUrl(ctx.providerConfig?.baseUrl);
+      if (endpoint === "custom" || endpoint === "invalid" || resolveDynamicModel(ctx)) {
+        return undefined;
+      }
+      const catalog = await resolveOpenAIAccountCatalog(ctx, ctx.authProfileId);
+      if (!catalog || catalog.outcome?.status !== "ready") {
+        return undefined;
+      }
+      const model = catalog.provider.models.find((candidate) => candidate.id === ctx.modelId);
+      if (!model) {
+        return undefined;
+      }
+      const input = model.input.filter(
+        (modality): modality is "text" | "image" => modality === "text" || modality === "image",
+      );
+      if (model.input.length > 0 && input.length === 0) {
+        return undefined;
+      }
+      return {
+        ...model,
+        provider: PROVIDER_ID,
+        api: model.api ?? "openai-responses",
+        baseUrl: model.baseUrl ?? catalog.provider.baseUrl,
+        contextWindow: model.contextWindow ?? DEFAULT_CONTEXT_TOKENS,
+        input,
+      };
+    },
     preferRuntimeResolvedModel: (ctx) => codexHooks.preferRuntimeResolvedModel?.(ctx) ?? false,
     normalizeResolvedModel: (ctx) => {
       if (!isOpenAIProvider(ctx.provider)) {
