@@ -25,7 +25,7 @@ describe("loadModelProvidersData", () => {
     await loadModelProvidersData(client, { agentId: "writer" });
 
     expect(request).toHaveBeenCalledWith("models.list", {
-      view: "configured",
+      view: "all",
       agentId: "writer",
       refresh: true,
     });
@@ -34,7 +34,7 @@ describe("loadModelProvidersData", () => {
         ([method, params]) =>
           method === "models.list" && (params as { view?: string } | undefined)?.view === "all",
       ),
-    ).toHaveLength(0);
+    ).toHaveLength(1);
   });
 
   it("reuses the shared runtime config load instead of requesting config twice", async () => {
@@ -89,7 +89,7 @@ describe("loadModelProvidersData", () => {
       agentId: "writer",
     });
     expect(request).toHaveBeenCalledWith("models.list", {
-      view: "configured",
+      view: "all",
       agentId: "writer",
       refresh: true,
     });
@@ -195,7 +195,7 @@ describe("loadModelProvidersData", () => {
     });
   });
 
-  it("surfaces an explicit catalog refresh failure while retaining cached configured models", async () => {
+  it("surfaces an explicit catalog refresh failure while retaining the full cached inventory", async () => {
     let failing = false;
     const request = vi.fn(async (method: string, params?: unknown) => {
       if (
@@ -240,8 +240,7 @@ describe("loadModelProvidersData", () => {
     expect(
       request.mock.calls.filter(
         ([method, params]) =>
-          method === "models.list" &&
-          (params as { view?: string } | undefined)?.view === "configured",
+          method === "models.list" && (params as { view?: string } | undefined)?.view === "all",
       ),
     ).toHaveLength(1);
   });

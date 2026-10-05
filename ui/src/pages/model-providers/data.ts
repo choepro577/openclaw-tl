@@ -158,11 +158,10 @@ function addLogoutTarget(
 
 /**
  * Builds the provider card list. A provider qualifies as "configured" when it
- * has an auth row, catalog models (the default models.list view only contains
- * configured or auth-backed entries), a live usage snapshot, or recorded
- * local spend. Model presence alone is enough: a configured API-key provider
- * with a broken credential reports available=false and no auth row, and the
- * page must surface that state rather than hide the provider.
+ * has configured auth, usable catalog models, a live usage snapshot, or recorded
+ * local spend. The full inventory includes unconfigured providers, so model
+ * presence alone cannot establish configuration. Explicitly configured providers
+ * remain visible even when their credentials are broken.
  */
 export function buildModelProviderCards(input: ModelProviderCardsInput): ModelProviderCard[] {
   const drafts: CardDraft[] = [];
@@ -325,7 +324,7 @@ export function buildModelProviderCards(input: ModelProviderCardsInput): ModelPr
         (input.configProviderIds ?? []).some((id) => canonicalProviderId(id) === draft.card.id) ||
         draft.hasUsageSnapshot ||
         Boolean(draft.card.usage) ||
-        draft.card.modelCount > 0 ||
+        draft.card.availableModelCount > 0 ||
         Boolean(draft.card.catalogStatus) ||
         (draft.card.localCost?.totalTokens ?? 0) > 0,
     )

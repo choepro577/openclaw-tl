@@ -124,6 +124,8 @@ export async function loadModelProvidersData(
         : client.request<T>(method, params);
   const catalogLoad = loadModelCatalog(client, {
     agentId: opts.agentId,
+    // Settings inventories provider models independently of chat picker allowlists.
+    view: "all",
     ...(opts.refresh ? { refresh: true } : { refreshIfDue: true }),
     rejectOnFailure: true,
   }).then(
@@ -131,7 +133,11 @@ export async function loadModelProvidersData(
     async (error: unknown) => ({
       ok: false as const,
       error,
-      result: await loadModelCatalog(client, { agentId: opts.agentId, preparedOnly: true }),
+      result: await loadModelCatalog(client, {
+        agentId: opts.agentId,
+        view: "all",
+        preparedOnly: true,
+      }),
     }),
   );
   const usageLoad = opts.deferProviderUsage

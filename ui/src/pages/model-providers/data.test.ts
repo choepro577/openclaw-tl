@@ -43,13 +43,15 @@ const EMPTY_INPUT = {
 const redactedConfigValue = "[redacted]";
 
 describe("buildModelProviderCards", () => {
-  it("keeps catalog providers, including ones whose models are all unavailable", () => {
+  it("keeps configured unavailable providers without treating the full inventory as configured", () => {
     const cards = buildModelProviderCards({
       ...EMPTY_INPUT,
+      configProviderIds: ["mistral"],
       models: [
         catalogEntry({ provider: "anthropic", id: "anthropic/a", available: true }),
         catalogEntry({ provider: "anthropic", id: "anthropic/b" }),
         catalogEntry({ provider: "mistral", id: "mistral/large" }),
+        catalogEntry({ provider: "unconfigured", available: false }),
       ],
     });
     expect(cards.map((card) => card.id)).toEqual(["anthropic", "mistral"]);

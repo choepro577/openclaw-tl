@@ -1091,11 +1091,12 @@ Two optional controls separate prepared reads from provider discovery:
 `preparedOnly: true` and `refresh: true` are mutually exclusive because one forbids discovery
 while the other requests it.
 
-Models settings loads the current account's provider catalog for the selected agent on entry.
+Models settings uses the `"all"` view to load the current account's provider catalog for the
+selected agent on entry, independently of the configured chat picker selections.
 While the page is visible and focused, it automatically refreshes catalogs that are at least
 five minutes old.
 The **Refresh** button requests discovery immediately, even within that interval. Its model
-selectors still apply the `"configured"` view policy described above.
+selectors exclude unavailable models unless already selected.
 
 ## Exec approvals
 

@@ -13,6 +13,7 @@ export type ModelCatalogResult = {
 
 type ModelCatalogLoadOptions = {
   agentId: string;
+  view?: "configured" | "all";
   preparedOnly?: boolean;
   refresh?: boolean;
   refreshIfDue?: boolean;
@@ -52,9 +53,10 @@ export async function loadModelCatalog(
 ): Promise<ModelCatalogResult> {
   const cache = modelCatalogCacheFor(client);
   const agentId = opts.agentId.trim();
+  const view = opts.view ?? "configured";
   const rejectOnFailure = opts?.rejectOnFailure === true;
-  const cacheKey = `${agentId}\0${opts.preparedOnly ? "prepared" : "exact"}`;
-  const preparedCacheKey = `${agentId}\0prepared`;
+  const cacheKey = `${agentId}\0${view}\0${opts.preparedOnly ? "prepared" : "exact"}`;
+  const preparedCacheKey = `${agentId}\0${view}\0prepared`;
   const cached = cache.get(cacheKey);
   const now = Date.now();
   const refresh =
@@ -91,6 +93,7 @@ export async function loadModelCatalog(
     client,
     cached?.catalog,
     agentId,
+    view,
     opts.preparedOnly === true,
     refresh,
     rejectOnFailure,
@@ -145,13 +148,14 @@ async function requestModels(
   client: GatewayBrowserClient,
   fallback: ModelCatalogResult | undefined,
   agentId: string,
+  view: "configured" | "all",
   preparedOnly: boolean,
   refresh: boolean,
   rejectOnFailure: boolean,
 ): Promise<{ catalog: ModelCatalogResult; fresh: boolean }> {
   try {
     const result = await client.request<ModelCatalogResult>("models.list", {
-      view: "configured",
+      view,
       agentId,
       ...(preparedOnly ? { preparedOnly: true } : {}),
       ...(refresh && !preparedOnly ? { refresh: true } : {}),

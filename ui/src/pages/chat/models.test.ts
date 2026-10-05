@@ -1,9 +1,28 @@
 // Control UI tests cover models behavior.
 import { describe, expect, it, vi } from "vitest";
 import type { GatewayBrowserClient } from "../../api/gateway.ts";
-import { loadModels } from "./models.ts";
+import { loadModelCatalog, loadModels } from "./models.ts";
 
 describe("loadModels", () => {
+  it("keeps the admin inventory separate from the configured chat picker cache", async () => {
+    const configured = [{ id: "gpt-5.6-luna", name: "Luna", provider: "openai" }];
+    const discovered = [...configured, { id: "gpt-6.1-sol", name: "Sol", provider: "openai" }];
+    const request = vi.fn(async (_method: string, params: { view: string }) => ({
+      models: params.view === "all" ? discovered : configured,
+    }));
+    const client = { request } as unknown as GatewayBrowserClient;
+
+    expect(await loadModels(client, { agentId: "main" })).toEqual(configured);
+    expect(
+      (await loadModelCatalog(client, { agentId: "main", view: "all", refresh: true })).models,
+    ).toEqual(discovered);
+    expect(await loadModels(client, { agentId: "main", preparedOnly: true })).toEqual(configured);
+    expect(
+      (await loadModelCatalog(client, { agentId: "main", view: "all", preparedOnly: true })).models,
+    ).toEqual(discovered);
+    expect(request).toHaveBeenCalledTimes(2);
+  });
+
   it("requests the configured model list view", async () => {
     const request = vi.fn(async () => ({
       models: [
