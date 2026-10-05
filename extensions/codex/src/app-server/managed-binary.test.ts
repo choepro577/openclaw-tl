@@ -1,5 +1,5 @@
 // Codex tests cover managed binary plugin behavior.
-import { mkdir, mkdtemp, realpath, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -9,6 +9,7 @@ import {
   resolveManagedCodexNativeCommand,
   setManagedCodexPluginRoot,
 } from "./managed-binary.js";
+import { CODEX_APP_SERVER_VERSION } from "./version.js";
 
 function startOptions(
   commandSource: CodexAppServerStartOptions["commandSource"],
@@ -211,6 +212,89 @@ describe("managed Codex app-server binary", () => {
       managedFallbackCommandPaths: [hoistedCommand],
     });
   });
+
+  it.each(
+    ["dist", "dist-runtime"].flatMap((distRoot) =>
+      ["shim", "package-bin", "missing"].map((sourceLayout) => ({ distRoot, sourceLayout })),
+    ),
+  )(
+    "honors the source owner from $distRoot with $sourceLayout dependencies before stale ACP",
+    async ({ distRoot, sourceLayout }) => {
+      const repoRoot = await realpath(
+        await mkdtemp(path.join(os.tmpdir(), "openclaw-codex-owner-")),
+      );
+      const sourcePluginRoot = path.join(repoRoot, "extensions", "codex");
+      const builtPluginRoot = path.join(repoRoot, distRoot, "extensions", "codex");
+      const writeCodexPackage = async (root: string, version: string) => {
+        const packageRoot = path.join(root, "node_modules", "@openai", "codex");
+        const packageBin = path.join(packageRoot, "bin", "codex.js");
+        await mkdir(path.dirname(packageBin), { recursive: true });
+        await writeFile(
+          path.join(packageRoot, "package.json"),
+          JSON.stringify({ name: "@openai/codex", version, bin: { codex: "bin/codex.js" } }),
+        );
+        await writeFile(
+          packageBin,
+          `#!/usr/bin/env node\nconsole.log(${JSON.stringify(version)});\n`,
+        );
+        await chmod(packageBin, 0o755);
+        return packageBin;
+      };
+      const writeShim = async (root: string, version: string) => {
+        const command = managedCommandPath(root, "linux");
+        await mkdir(path.dirname(command), { recursive: true });
+        await writeFile(command, `#!/bin/sh\nprintf '%s\\n' '${version}'\n`);
+        await chmod(command, 0o755);
+        return command;
+      };
+
+      try {
+        // Production registers dist/extensions/codex, while pnpm installs the
+        // plugin's exact pin beside source. Root ACP intentionally owns 0.148.
+        await mkdir(builtPluginRoot, { recursive: true });
+        await mkdir(sourcePluginRoot, { recursive: true });
+        await writeFile(
+          path.join(sourcePluginRoot, "package.json"),
+          JSON.stringify({
+            name: "@openclaw/codex",
+            dependencies: { "@openai/codex": CODEX_APP_SERVER_VERSION },
+          }),
+        );
+        const ownedCommand =
+          sourceLayout === "missing"
+            ? undefined
+            : await writeCodexPackage(sourcePluginRoot, CODEX_APP_SERVER_VERSION);
+        const preferredCommand =
+          sourceLayout === "shim"
+            ? await writeShim(sourcePluginRoot, CODEX_APP_SERVER_VERSION)
+            : ownedCommand;
+        await writeCodexPackage(repoRoot, "0.148.0");
+        await writeShim(repoRoot, "0.148.0");
+        setManagedCodexPluginRoot(builtPluginRoot);
+
+        const resolving = resolveManagedCodexAppServerStartOptions(startOptions("managed"), {
+          platform: "linux",
+        });
+        if (sourceLayout === "missing") {
+          // A manifest-owned missing install must surface its repair error;
+          // successfully launching another product's older dependency hides it.
+          await expect(resolving).rejects.toThrow("Managed Codex app-server binary was not found");
+          return;
+        }
+        const resolved = await resolving;
+
+        expect(resolved.command).toBe(preferredCommand);
+        expect(resolved.commandSource).toBe("resolved-managed");
+        expect(
+          (resolved.managedFallbackCommandPaths ?? []).some((command) =>
+            command.startsWith(path.join(repoRoot, "node_modules")),
+          ),
+        ).toBe(false);
+      } finally {
+        await rm(repoRoot, { recursive: true, force: true });
+      }
+    },
+  );
 
   it("falls back to the hoisted package when the bundled plugin binary is absent", async () => {
     const installRoot = path.join("/tmp", "openclaw-package");

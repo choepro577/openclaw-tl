@@ -195,10 +195,11 @@ function resolveManagedCodexAppServerCommandCandidates(
   const pathApi = pathForPlatform(platform);
   const commandName = platform === "win32" ? "codex.cmd" : "codex";
   const roots = resolveManagedCodexAppServerCandidateRoots(pluginRoot, platform);
-  const packageCommandPaths = [
-    ...roots.map((root) => pathApi.join(root, "node_modules", ".bin", commandName)),
-    ...resolveManagedCodexPackageBinCandidates(roots, platform),
-  ];
+  const packageCommandPaths = roots.flatMap((root) => {
+    const command = pathApi.join(root, "node_modules", ".bin", commandName);
+    const packageBin = platform === "win32" ? null : resolveManagedCodexPackageBinCandidate(root);
+    return packageBin ? [command, packageBin] : [command];
+  });
   const desktopCommandPaths = resolveDesktopCodexAppServerCommandCandidates(platform);
   // Ordinary turns must honor the pinned package version. Computer Use opts
   // into the desktop app owner because its macOS TCC permissions live there.
@@ -226,6 +227,18 @@ function resolveManagedCodexAppServerCandidateRoots(
   platform: NodeJS.Platform,
 ): string[] {
   const pathApi = pathForPlatform(platform);
+  if (isDistExtensionRoot(pluginRoot, platform)) {
+    const sourcePluginRoot = pathApi.join(
+      pathApi.dirname(pathApi.dirname(pathApi.dirname(pluginRoot))),
+      "extensions",
+      pathApi.basename(pluginRoot),
+    );
+    // Builds omit node_modules; the source plugin owns the installed pin.
+    // Do not borrow a different runtime from the checkout's ACP dependency.
+    if (existsSync(pathApi.join(sourcePluginRoot, "package.json"))) {
+      return [pluginRoot, sourcePluginRoot];
+    }
+  }
   const directRoots = [
     pluginRoot,
     pathApi.dirname(pluginRoot),
@@ -262,29 +275,10 @@ function resolveNearestNodeModulesProjectRoots(
   return projectRoots;
 }
 
-function resolveManagedCodexPackageBinCandidates(
-  roots: readonly string[],
-  platform: NodeJS.Platform,
-): string[] {
-  if (platform === "win32") {
-    return [];
-  }
-
-  const candidates: string[] = [];
-  for (const root of roots) {
-    const candidate = resolveManagedCodexPackageBinCandidate(root);
-    if (candidate) {
-      candidates.push(candidate);
-    }
-  }
-  return candidates;
-}
-
 function resolveManagedCodexPackageBinCandidate(root: string): string | null {
   try {
-    const requireFromRoot = createRequire(path.join(root, "package.json"));
-    const packageJsonPath = requireFromRoot.resolve(
-      `${MANAGED_CODEX_APP_SERVER_PACKAGE}/package.json`,
+    const packageJsonPath = realpathSync(
+      path.join(root, "node_modules", MANAGED_CODEX_APP_SERVER_PACKAGE, "package.json"),
     );
     const packageRoot = path.dirname(packageJsonPath);
     const packageJson = JSON.parse(readFileSync(packageJsonPath, "utf8")) as {
