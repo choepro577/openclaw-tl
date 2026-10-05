@@ -10,7 +10,6 @@ import {
   normalizePreparedModelRuntimeInput,
   preparedModelRuntimeConfigsMatch,
   publishModelRuntimeSnapshot,
-  rebindInputToCommittedConfiguredOwner,
   resolveConfiguredOwner,
   type PreparedModelRuntimeInput,
   type PreparedModelRuntimeLease,
@@ -30,6 +29,7 @@ type PreparedModelRuntimeLeaseContext = {
   getGatewayLifecycleActive(): boolean;
   getPendingReplacement(): PreparedModelRuntimeReplacement | undefined;
   prepareSnapshot(input: PreparedModelRuntimeInput): Promise<PreparedModelRuntimeSnapshot>;
+  rebindInput(input: PreparedModelRuntimeInput): Promise<PreparedModelRuntimeInput>;
 };
 
 export async function acquirePreparedModelRuntimeLeaseFromOwners(
@@ -55,7 +55,7 @@ export async function acquirePreparedModelRuntimeLeaseFromOwners(
     !context.getPendingReplacement()
   ) {
     try {
-      normalizedInput = rebindInputToCommittedConfiguredOwner(context.owners, normalizedInput);
+      normalizedInput = await context.rebindInput(normalizedInput);
     } catch (error) {
       if (!(error instanceof PreparedModelRuntimeOwnerNotPublishedError)) {
         throw error;
@@ -76,7 +76,7 @@ export async function acquirePreparedModelRuntimeLeaseFromOwners(
         continue;
       }
       if (provenance === "run" && !options.pluginGeneration) {
-        input = rebindInputToCommittedConfiguredOwner(context.owners, input);
+        input = await context.rebindInput(input);
         key = ownerKey(input);
       }
       continue;
@@ -142,7 +142,7 @@ export async function acquirePreparedModelRuntimeLeaseFromOwners(
       // explicitly pinned workspace may differ from the configured owner. A stale leased owner
       // can share this key, so rebase its input before publishing a replacement generation.
       try {
-        input = rebindInputToCommittedConfiguredOwner(context.owners, input);
+        input = await context.rebindInput(input);
         key = ownerKey(input);
         existing = context.owners.get(key);
         staleDynamicOwner =

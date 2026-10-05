@@ -22,6 +22,7 @@ import {
   publishPreparedModelRuntimeOwnerBatch,
   publishModelRuntimeSnapshot,
   rebindInputToCommittedConfiguredOwner,
+  resolveConfiguredOwner,
   resolvePublishedOwner,
   type PreparedModelRuntimeOwner,
   type PreparedModelRuntimeInput,
@@ -78,6 +79,19 @@ const replyDispatchPublication = new PreparedReplyDispatchPublicationOwner({
 });
 export const loadPublishedGatewayReplyDispatchRuntime = replyDispatchPublication.load;
 
+async function rebindToCommittedConfiguredOwner(
+  input: PreparedModelRuntimeInput,
+): Promise<PreparedModelRuntimeInput> {
+  const owner = input.preserveConfigOnRefresh ? undefined : resolveConfiguredOwner(owners, input);
+  if (owner && (owner.pending || owner.needsRefresh)) {
+    // Auth invalidation is synchronous; its queued publisher may not have assigned owner.pending yet.
+    // Join the lifecycle publication before applying the strict committed-owner check.
+    await owner.pending?.catch(() => undefined);
+    await refreshTail;
+  }
+  return rebindInputToCommittedConfiguredOwner(owners, input);
+}
+
 /** Resolves a published owner or activates a standalone lifecycle owner. */
 export async function loadPreparedModelRuntimeSnapshot(
   rawInput: PreparedModelRuntimeInput,
@@ -94,7 +108,7 @@ export async function loadPreparedModelRuntimeSnapshot(
       if (pendingModelRuntimeReplacement) {
         continue;
       }
-      input = rebindInputToCommittedConfiguredOwner(owners, input);
+      input = await rebindToCommittedConfiguredOwner(input);
       continue;
     }
     try {
@@ -110,7 +124,7 @@ export async function loadPreparedModelRuntimeSnapshot(
       if (pendingModelRuntimeReplacement) {
         continue;
       }
-      input = rebindInputToCommittedConfiguredOwner(owners, input);
+      input = await rebindToCommittedConfiguredOwner(input);
       continue;
     }
     const activated = await activateStandalonePreparedModelRuntime(input);
@@ -120,7 +134,7 @@ export async function loadPreparedModelRuntimeSnapshot(
       if (pendingModelRuntimeReplacement) {
         continue;
       }
-      input = rebindInputToCommittedConfiguredOwner(owners, input);
+      input = await rebindToCommittedConfiguredOwner(input);
       continue;
     }
     if (!activated) {
@@ -278,6 +292,7 @@ const preparedModelRuntimeLeaseContext = {
   getGatewayLifecycleActive: () => gatewayLifecycleActive,
   getPendingReplacement: () => pendingModelRuntimeReplacement,
   prepareSnapshot: prepareModelRuntimeSnapshot,
+  rebindInput: rebindToCommittedConfiguredOwner,
 };
 
 /** Acquires the exact writable workspace generation at agent-run admission. */

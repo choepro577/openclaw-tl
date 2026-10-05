@@ -258,6 +258,10 @@ export function normalizePreparedModelRuntimeInput(
     : undefined;
   return {
     ...rest,
+    // Account projections own their config even when a caller omits the preservation hint.
+    ...(input.preserveConfigOnRefresh || getGatewayRequestRuntimeConfigIdentity(input.config)
+      ? { preserveConfigOnRefresh: true }
+      : {}),
     agentDir: path.resolve(input.agentDir),
     ...(inheritedAuthDir ? { inheritedAuthDir } : {}),
     ...(readOnly === true ? { readOnly: true } : {}),
