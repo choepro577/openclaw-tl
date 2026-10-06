@@ -40,7 +40,13 @@ import {
   resolvePlaybackModeForSource,
   resolvePlaybackTranscode,
 } from "../media/playback-transcode.js";
-import { getMediaDir, MEDIA_MAX_BYTES, saveMediaBuffer, saveMediaSource } from "../media/store.js";
+import {
+  extractOriginalFilename,
+  getMediaDir,
+  MEDIA_MAX_BYTES,
+  saveMediaBuffer,
+  saveMediaSource,
+} from "../media/store.js";
 import { normalizeAgentId, parseAgentSessionKey } from "../routing/session-key.js";
 import { safeEqualSecret } from "../security/secret-equal.js";
 import { buildAssistantMediaContentDisposition } from "./assistant-media-content-disposition.js";
@@ -658,7 +664,7 @@ function deriveAltText(source: string, index: number) {
   } catch {
     // Fall through to local path handling.
   }
-  const localName = path.basename(source).trim();
+  const localName = extractOriginalFilename(source).trim();
   return localName || fallback;
 }
 
@@ -890,7 +896,19 @@ function resolveManagedSessionOwnerAgentId(
 
 function resolveManagedRecordKind(record: ManagedImageRecord): ManagedMediaKind | null {
   const kind = mediaKindFromMime(record.original.contentType);
-  return kind === "image" || kind === "audio" || kind === "video" ? kind : "file";
+  return (kind === "image" && record.original.contentType !== "image/svg+xml") ||
+    kind === "audio" ||
+    kind === "video"
+    ? kind
+    : "file";
+}
+
+function matchesManagedArtifactFamily(family: "image" | "media", record: ManagedImageRecord) {
+  // Older SVG artifacts used image ids; retain download access while treating them as files.
+  return (
+    (family === "image") === (resolveManagedRecordKind(record) === "image") ||
+    (family === "image" && record.original.contentType === "image/svg+xml")
+  );
 }
 
 function buildManagedMediaBlock(
@@ -932,11 +950,6 @@ function buildManagedImageResizeWarningBlock(params: {
       `[Image warning] ${params.alt} exceeded gateway dimension/pixel limits and was resized from ` +
       `${params.originalWidth}×${params.originalHeight} to ${params.resizedWidth}×${params.resizedHeight}.`,
   };
-}
-
-function toRecordFilename(filePath: string) {
-  const name = path.basename(filePath).trim();
-  return name || null;
 }
 
 function asArray(value: string[] | undefined | null) {
@@ -1328,7 +1341,9 @@ async function resolveManagedOutgoingMediaArtifactDownloadForRecord(
     artifactId: buildManagedOutgoingArtifactId(record.attachmentId, kind),
     sessionKey: record.sessionKey,
     type: kind,
-    title: kind === "image" ? record.alt : (record.original.filename ?? record.alt),
+    title: extractOriginalFilename(
+      kind === "image" ? record.alt : (record.original.filename ?? record.alt),
+    ),
     ...(record.original.contentType ? { mimeType: record.original.contentType } : {}),
     ...(record.original.sizeBytes != null ? { sizeBytes: record.original.sizeBytes } : {}),
     url: `${canonicalUrl}?${params.toString()}`,
@@ -1363,7 +1378,7 @@ export async function resolveManagedOutgoingMediaArtifactDownload(params: {
     return null;
   }
   const kind = resolveManagedRecordKind(record);
-  if (!kind || (parsed.family === "image") !== (kind === "image")) {
+  if (!kind || !matchesManagedArtifactFamily(parsed.family, record)) {
     return null;
   }
   return await resolveManagedOutgoingMediaArtifactDownloadForRecord(
@@ -1371,6 +1386,74 @@ export async function resolveManagedOutgoingMediaArtifactDownload(params: {
     params.stateDir,
     params.enterprisePrincipal,
   );
+}
+
+/** Copy only byte sources owned by actual, transcript-backed artifacts in the source session. */
+export async function copyManagedOutgoingMediaBlocks(params: {
+  sourceSessionKey: string;
+  targetSessionKey: string;
+  targetAgentId?: string;
+  targetMessageId?: string;
+  artifactIds: readonly string[];
+}): Promise<ManagedMediaBlock[]> {
+  const blocks: ManagedMediaBlock[] = [];
+  for (const artifactId of [...new Set(params.artifactIds)].slice(0, 19)) {
+    const parsed = parseManagedOutgoingArtifactId(artifactId);
+    if (!parsed) {
+      continue;
+    }
+    const record = readManagedImageRecord(parsed.attachmentId);
+    const kind = record ? resolveManagedRecordKind(record) : null;
+    if (
+      !record ||
+      !kind ||
+      !matchesManagedArtifactFamily(parsed.family, record) ||
+      record.sessionKey !== params.sourceSessionKey ||
+      (await recordMatchesTranscriptMessage(record)) !== "match"
+    ) {
+      continue;
+    }
+    const prepared = await createManagedOutgoingMediaBlocks({
+      sessionKey: params.targetSessionKey,
+      agentId: params.targetAgentId,
+      messageId: params.targetMessageId,
+      mediaUrls: [resolveManagedImageOriginalPath(record)],
+      attachments: [{ name: record.original.filename ?? record.alt }],
+      localRoots: [resolveManagedImageOriginalsDir(resolveStateDir())],
+      allowLocalNonImage: true,
+      continueOnPrepareError: true,
+    });
+    blocks.push(
+      ...prepared.map((block) => Object.assign({}, block, { sourceArtifactId: artifactId })),
+    );
+  }
+  return blocks.slice(0, 19);
+}
+
+/** Internal delivery source; authorization remains the canonical session and backed record. */
+export async function resolveManagedOutgoingMediaArtifactSource(params: {
+  sessionKey: string;
+  artifactId: string;
+}): Promise<{ path: string; name: string } | null> {
+  const parsed = parseManagedOutgoingArtifactId(params.artifactId);
+  if (!parsed) {
+    return null;
+  }
+  const record = readManagedImageRecord(parsed.attachmentId);
+  const kind = record ? resolveManagedRecordKind(record) : null;
+  if (
+    !record ||
+    !kind ||
+    !matchesManagedArtifactFamily(parsed.family, record) ||
+    record.sessionKey !== params.sessionKey ||
+    (await recordMatchesTranscriptMessage(record)) !== "match"
+  ) {
+    return null;
+  }
+  return {
+    path: resolveManagedImageOriginalPath(record),
+    name: record.original.filename ?? record.alt,
+  };
 }
 
 /** Upgrade legacy managed-image URLs that predate stable artifact ids. */
@@ -1453,7 +1536,9 @@ export async function createManagedOutgoingMediaBlocks(params: {
     const fallbackLabel = `Generated ${dataUrlKind ?? "media"} ${index + 1}`;
     const isDataUrl = trimmedMediaUrl.startsWith("data:");
     const localMediaPath = isDataUrl ? undefined : resolveLocalMediaPath(mediaUrl);
-    const label = isDataUrl ? fallbackLabel : deriveAltText(localMediaPath ?? mediaUrl, index);
+    const label =
+      attachmentMetadata?.name?.trim() ||
+      (isDataUrl ? fallbackLabel : deriveAltText(localMediaPath ?? mediaUrl, index));
     const inferredKind = mediaKindFromMime(mimeTypeFromFilePath(localMediaPath ?? mediaUrl));
     const hintedKind =
       dataUrlKind === "image" || dataUrlKind === "audio" || dataUrlKind === "video"
@@ -1520,7 +1605,7 @@ export async function createManagedOutgoingMediaBlocks(params: {
       }
       const detectedMediaKind = mediaKindFromMime(savedOriginalContentType);
       const mediaKind: ManagedMediaKind =
-        detectedMediaKind === "image" ||
+        (detectedMediaKind === "image" && savedOriginalContentType !== "image/svg+xml") ||
         detectedMediaKind === "audio" ||
         detectedMediaKind === "video"
           ? detectedMediaKind
@@ -1581,7 +1666,7 @@ export async function createManagedOutgoingMediaBlocks(params: {
             resized.contentType,
             "outgoing/originals",
             limits.maxBytes,
-            toRecordFilename(savedOriginal.path) ?? `generated-image-${index + 1}`,
+            label,
           );
           await fs.rm(savedOriginal.path, { force: true }).catch(() => {});
           savedOriginal = replacement;
@@ -1632,10 +1717,7 @@ export async function createManagedOutgoingMediaBlocks(params: {
           width: originalStats.width,
           height: originalStats.height,
           sizeBytes: originalStats.sizeBytes,
-          filename:
-            mediaKind === "image"
-              ? toRecordFilename(savedOriginal.path)
-              : attachmentMetadata?.name?.trim() || label,
+          filename: label,
         },
       };
       let playback: "native" | "transcode" | undefined;

@@ -1,5 +1,8 @@
+import type { ReplyPayload } from "../../auto-reply/reply-payload.js";
+import { extractReplyFileReferences } from "../../auto-reply/reply/reply-file-references.js";
 import type { OpenClawConfig } from "../../config/types.openclaw.js";
 import type { ContextEngineHostSupport } from "../../context-engine/host-compat.js";
+import { hasOutboundMedia } from "../../infra/outbound/reply-payload-parts.js";
 import { requireActivePluginRegistry } from "../../plugins/runtime.js";
 import { buildAgentRunTerminalOutcome } from "../agent-run-terminal-outcome.js";
 import { normalizeAgentRunTerminalReceipt } from "../agent-run-terminal-receipt.js";
@@ -521,7 +524,7 @@ export async function runEmbeddedAgentEntry<T extends EmbeddedAgentRunResult>(
         : fallbackResult.result.result;
     const outcome =
       fallbackResult.outcome === "exhausted" ? ("exhausted" as const) : ("completed" as const);
-    const result = mergeRunEntryExecutionTrace({
+    let result = mergeRunEntryExecutionTrace({
       result: candidateResult,
       outcome,
       provider: fallbackResult.provider,
@@ -530,17 +533,44 @@ export async function runEmbeddedAgentEntry<T extends EmbeddedAgentRunResult>(
       requestedModel: params.selection.model,
       fallbackAttempts: fallbackResult.attempts,
     });
-    const settledResult = {
-      ...fallbackResult,
-      outcome,
-      result,
-    };
     const terminal = buildTerminal({
       result,
-      fallbackExhausted: settledResult.outcome === "exhausted",
+      fallbackExhausted: outcome === "exhausted",
       behavior: params.behavior,
       runId: params.identity.runId,
     });
+    const terminalReply = normalizeAgentRunTerminalReplySnapshot(terminal.metadata.terminalReply);
+    if (
+      (terminalReply?.disposition === "visible" &&
+        extractReplyFileReferences(terminalReply.text).length > 0) ||
+      result.payloads?.some(
+        (payload: ReplyPayload) =>
+          !payload.sensitiveMedia &&
+          !payload.isReasoning &&
+          !payload.isCommentary &&
+          (hasOutboundMedia(payload) || extractReplyFileReferences(payload.text).length > 0),
+      )
+    ) {
+      const { normalizeAgentRunReplyMedia } =
+        await import("../../auto-reply/reply/reply-media-paths.runtime.js");
+      const normalized = await normalizeAgentRunReplyMedia({
+        cfg: params.selection.cfg,
+        agentId: params.identity.agentId,
+        sessionKey: params.identity.sessionKey,
+        workspaceDir: params.harness.workspaceDir,
+        payloads: result.payloads,
+        terminalReply,
+        runId: params.identity.runId,
+        sessionId: params.identity.sessionId,
+      });
+      terminal.metadata.terminalReply = normalized.terminalReply;
+      result = {
+        ...result,
+        payloads: normalized.payloads,
+        meta: { ...result.meta, terminalReply: normalized.terminalReply },
+      };
+    }
+    const settledResult = { ...fallbackResult, outcome, result };
     if (fallbackResult.result.turnAttempt) {
       if (
         canAdvanceContextEngineTurn({

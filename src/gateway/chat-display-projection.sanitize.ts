@@ -387,11 +387,20 @@ export function sanitizeChatHistoryMessage(
     changed = true;
   }
   const openClawMeta = readRecord(entry["__openclaw"]);
-  if (openClawMeta && ("upstreamUserText" in openClawMeta || "media" in openClawMeta)) {
+  if (
+    openClawMeta &&
+    ("upstreamUserText" in openClawMeta ||
+      "media" in openClawMeta ||
+      "fileArtifacts" in openClawMeta ||
+      "taskFileSources" in openClawMeta)
+  ) {
     // Codex retains the decorated upstream prompt for transcript reconstruction.
     // It is not display data and can otherwise evict the visible row from history.
     const projectedMeta = { ...openClawMeta };
     delete projectedMeta.upstreamUserText;
+    // File custody mappings contain server paths; only managed content blocks are display data.
+    delete projectedMeta.fileArtifacts;
+    delete projectedMeta.taskFileSources;
     if ("media" in projectedMeta) {
       projectedMeta.media = projectChatHistoryMediaFacts(projectedMeta.media);
       if (projectedMeta.media === undefined) {

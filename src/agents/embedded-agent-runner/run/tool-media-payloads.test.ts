@@ -241,7 +241,10 @@ describe("mergeAttemptToolMediaPayloads", () => {
       audioAsVoice: undefined,
       trustedLocalMedia: true,
     });
-    expect(getReplyPayloadMetadata(reply ?? {})).toEqual({ assistantMessageIndex: 7 });
+    expect(getReplyPayloadMetadata(reply ?? {})).toEqual({
+      assistantMessageIndex: 7,
+      hostProducedMediaSources: [selected],
+    });
   });
 
   it("keeps unmatched local Markdown visible without selecting it", () => {

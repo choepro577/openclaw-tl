@@ -11,6 +11,7 @@ import {
 } from "../../../lib/open-external-url.ts";
 import { showToast } from "../../../lib/toast.ts";
 import { resolveAssistantAttachmentAvailability } from "./chat-message-attachment-availability.ts";
+import { renderAssistantAttachmentStatusCard } from "./chat-message-attachment-status.ts";
 import { openResolvedImage } from "./chat-message-image-open.ts";
 import {
   buildAssistantAttachmentUrl,
@@ -89,7 +90,15 @@ class ManagedImageResourceDirective extends AsyncDirective {
       image.displayUrl,
       subscriptionOptions,
       image.artifactId,
-    ).then((previewUrl) => (previewUrl ? renderImageElement(image, previewUrl) : nothing));
+    ).then((previewUrl) =>
+      previewUrl
+        ? renderImageElement(image, previewUrl)
+        : renderAssistantAttachmentStatusCard({
+            kind: "image",
+            label: image.alt?.trim() || t("chat.imageLightbox.untitled"),
+            badge: t("chat.attachments.unavailable"),
+          }),
+    );
     return until(preview, nothing);
   }
 

@@ -1,5 +1,7 @@
+import type { ReplyPayload } from "../../auto-reply/reply-payload.js";
 import { createLazyAcpElicitationHandler } from "../../auto-reply/reply/acp-elicitation-handler-lazy.js";
 import { resolveInlineAgentImageAttachments } from "../../auto-reply/reply/agent-turn-attachments.js";
+import { extractReplyFileReferences } from "../../auto-reply/reply/reply-file-references.js";
 import type { CliDeps } from "../../cli/deps.types.js";
 import type { SessionEntry } from "../../config/sessions/types.js";
 import type { OpenClawConfig } from "../../config/types.openclaw.js";
@@ -225,8 +227,26 @@ export async function runAcpAgentCommand(params: {
   }
 
   const finalTextRaw = visibleTextAccumulator.finalizeRaw();
-  const finalText = visibleTextAccumulator.finalize();
-  const terminalReply = visibleTextAccumulator.finalizeReplySnapshot();
+  let finalText = visibleTextAccumulator.finalize();
+  let terminalReply = visibleTextAccumulator.finalizeReplySnapshot();
+  let stagedPayload: ReplyPayload | undefined;
+  if (extractReplyFileReferences(finalText).length > 0) {
+    const { normalizeAgentRunReplyMedia } =
+      await import("../../auto-reply/reply/reply-media-paths.runtime.js");
+    const normalized = await normalizeAgentRunReplyMedia({
+      cfg: params.cfg,
+      agentId: params.sessionAgentId,
+      sessionKey: params.sessionKey,
+      workspaceDir: params.workspaceDir,
+      payloads: [{ text: finalText }],
+      terminalReply,
+      runId: params.runId,
+      sessionId: params.sessionId,
+    });
+    stagedPayload = normalized.payloads?.[0];
+    finalText = stagedPayload?.text ?? finalText;
+    terminalReply = normalized.terminalReply ?? terminalReply;
+  }
   let sessionEntry = params.sessionEntry;
   try {
     const { resolveAcpSessionCwd } = await loadAcpSessionIdentifiersRuntime();
@@ -314,6 +334,12 @@ export async function runAcpAgentCommand(params: {
     params.opts.abortSignal,
   );
   const { deliverAgentCommandResult } = await loadDeliveryRuntime();
+  if (stagedPayload) {
+    result.payloads = attemptExecutionRuntime.mergeStagedAcpReplyMedia(
+      result.payloads,
+      stagedPayload,
+    );
+  }
   return await deliverAgentCommandResult({
     cfg: params.cfg,
     deps: params.deps,

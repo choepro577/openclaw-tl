@@ -21,6 +21,7 @@ import {
 import { INTERNAL_MESSAGE_CHANNEL } from "../../../utils/message-channel.js";
 import { buildAnnounceIdempotencyKey } from "../../announce-idempotency.js";
 import { resolveSubagentRequesterAgentId } from "../../subagent-requester-owner.js";
+import { deliverSubagentCompletionFiles } from "../completion/subagent-completion-files.js";
 import {
   getLatestSubagentRunByChildSessionKey,
   hasDescendantRunAwaitingSettle,
@@ -525,7 +526,7 @@ export async function maybeWakeRequesterAfterAllChildrenSettled(params: {
       canonicalKey,
     });
     const requireVisibleReply = requesterYieldedAfterDelivery && !newerRequesterContext;
-    const wakeMessage = buildRequesterSettleWakeMessage({
+    let wakeMessage = buildRequesterSettleWakeMessage({
       findings,
       requireVisibleReply,
       newerRequesterContext,
@@ -564,6 +565,51 @@ export async function maybeWakeRequesterAfterAllChildrenSettled(params: {
 
     let delivery: Awaited<ReturnType<typeof deliverSubagentAnnouncement>>;
     try {
+      const isFileDeliveryAllowed = () => {
+        const currentRuns = new Map(
+          listSubagentRunsForRequester(requesterSessionKey, { requesterAgentId }).map((entry) => [
+            entry.runId,
+            entry,
+          ]),
+        );
+        return (
+          !params.signal?.aborted &&
+          !requesterHasUnsettledDescendants() &&
+          loadRequesterSessionEntry(requesterSessionKey, requesterAgentId, cfg).entry?.sessionId ===
+            requesterEntry?.sessionId &&
+          settledBatch.every((entry) => {
+            const currentRun = currentRuns.get(entry.runId);
+            const current = currentRun?.requesterSettleWake;
+            return (
+              currentRun?.generation === entry.generation &&
+              currentRun?.execution.status !== "running" &&
+              current?.status === "dispatching" &&
+              current.rearmGeneration === state.rearmGeneration &&
+              current.attemptCount === state.attemptCount &&
+              current.batchRunIds?.length === batchRunIds.length &&
+              current.batchRunIds.every((runId) => batchRunIds.includes(runId))
+            );
+          })
+        );
+      };
+      let filesReturned = false;
+      for (const entry of settledBatch) {
+        filesReturned =
+          (await deliverSubagentCompletionFiles({
+            cfg,
+            childSessionKey: entry.childSessionKey,
+            childRunId: entry.runId,
+            requesterSessionKey,
+            isDeliveryAllowed: isFileDeliveryAllowed,
+          })) || filesReturned;
+        if (!isFileDeliveryAllowed()) {
+          return false;
+        }
+      }
+      if (filesReturned) {
+        wakeMessage +=
+          "\n\nThe files have already been returned as attachments in this conversation.";
+      }
       delivery = await deliverSubagentAnnouncement({
         requesterSessionKey,
         requesterAgentId,

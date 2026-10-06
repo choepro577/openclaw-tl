@@ -2,6 +2,10 @@
 import path from "node:path";
 import { isPassThroughRemoteMediaSource } from "@openclaw/media-core/media-source-url";
 import { resolveSendableOutboundReplyParts } from "openclaw/plugin-sdk/reply-payload";
+import {
+  sanitizeAgentRunTerminalReplyText,
+  type AgentRunTerminalReplySnapshot,
+} from "../../agents/agent-run-terminal-reply.js";
 import { resolveSessionAgentId } from "../../agents/agent-scope.js";
 import { resolvePathFromInput, toRelativeWorkspacePath } from "../../agents/path-policy.js";
 import {
@@ -13,10 +17,23 @@ import { ensureSandboxWorkspaceForSession } from "../../agents/sandbox.js";
 import type { OpenClawConfig } from "../../config/types.openclaw.js";
 import { logVerbose } from "../../globals.js";
 import { resolveOutboundMediaMaxBytes } from "../../media/configured-max-bytes.js";
+import { resolveLocalMediaPath } from "../../media/local-media-path.js";
 import { resolveOutboundAttachmentFromUrl } from "../../media/outbound-attachment.js";
 import { resolveAgentScopedOutboundMediaAccess } from "../../media/read-capability.js";
-import { appendReplyMediaFailureWarning, copyReplyPayloadMetadata } from "../reply-payload.js";
+import { extractOriginalFilename } from "../../media/store.js";
+import { isSubagentSessionKey } from "../../routing/session-key.js";
+import {
+  appendReplyMediaFailureWarning,
+  copyReplyPayloadMetadata,
+  getReplyPayloadMetadata,
+  isReplyPayloadTerminalContent,
+  setReplyPayloadMetadata,
+} from "../reply-payload.js";
 import type { ReplyPayload } from "../types.js";
+import {
+  extractReplyFileReferences,
+  stripReplyFileReferenceText,
+} from "./reply-file-references.js";
 
 const FILE_URL_RE = /^file:/i;
 const WINDOWS_DRIVE_RE = /^[a-zA-Z]:[\\/]/;
@@ -39,6 +56,16 @@ function isLikelyLocalMediaSource(media: string): boolean {
 
 function getPayloadMediaList(payload: ReplyPayload): string[] {
   return resolveSendableOutboundReplyParts(payload).mediaUrls;
+}
+
+/** Private production proof survives host clones; serialized trust flags never grant reads. */
+export function hasHostProducedReplyMediaSource(payload: ReplyPayload, source: string): boolean {
+  const metadata = getReplyPayloadMetadata(payload);
+  const canonicalSource = resolveLocalMediaPath(source) ?? source;
+  return [
+    ...(metadata?.hostProducedMediaSources ?? []),
+    ...(metadata?.stagedFileSources?.map((entry) => entry.mediaUrl) ?? []),
+  ].some((produced) => (resolveLocalMediaPath(produced) ?? produced) === canonicalSource);
 }
 
 export function createReplyMediaPathNormalizer(params: {
@@ -208,40 +235,85 @@ export function createReplyMediaPathNormalizer(params: {
   };
 
   return async (payload) => {
-    const mediaList = getPayloadMediaList(payload);
+    const fileReferences =
+      payload.sensitiveMedia || payload.isReasoning ? [] : extractReplyFileReferences(payload.text);
+    const mediaList = [
+      ...new Set([
+        ...getPayloadMediaList(payload),
+        ...fileReferences.map((reference) => reference.source),
+      ]),
+    ];
     if (mediaList.length === 0) {
       return payload;
     }
 
     const normalizedMedia: string[] = [];
+    const normalizedAttachments: NonNullable<ReplyPayload["attachments"]> = [];
+    const inferredSources = new Set(fileReferences.map((reference) => reference.source));
     const seen = new Set<string>();
+    const normalizedSources = new Map<string, string>();
     let firstMediaDropError: unknown;
     let sawNormalizedLocalMedia = false;
     let allNormalizedLocalMediaTrusted = true;
     for (const media of mediaList) {
       let normalized: Awaited<ReturnType<typeof normalizeMediaSource>>;
       try {
+        const managedPath = await resolveAllowedManagedMediaPath(
+          resolveLocalMediaPath(media) ?? media,
+        );
+        if (managedPath && !hasHostProducedReplyMediaSource(payload, managedPath)) {
+          throw new Error(
+            "Managed media requires host-produced provenance, not a model-provided path or trust flag.",
+          );
+        }
         normalized = await normalizeMediaSource(media);
       } catch (err) {
         firstMediaDropError ??= err;
         logVerbose(`dropping blocked reply media ${media}: ${String(err)}`);
         continue;
       }
-      if (!normalized.source || seen.has(normalized.source)) {
+      if (!normalized.source) {
+        continue;
+      }
+      normalizedSources.set(media, normalized.source);
+      if (seen.has(normalized.source)) {
         continue;
       }
       seen.add(normalized.source);
       normalizedMedia.push(normalized.source);
+      const attachment =
+        payload.attachments?.find((entry) =>
+          [entry.path, entry.url, entry.mediaUrl, entry.filePath].includes(media),
+        ) ?? payload.attachments?.[mediaList.indexOf(media)];
+      normalizedAttachments.push({
+        ...attachment,
+        path: normalized.source,
+        ...(inferredSources.has(media)
+          ? {
+              name:
+                attachment?.name ??
+                extractOriginalFilename(
+                  FILE_URL_RE.test(media) ? decodeURIComponent(media) : media,
+                ),
+              // Successful local normalization either staged the file or validated its managed root.
+              trustedLocalMedia: isLikelyLocalMediaSource(normalized.source),
+            }
+          : {}),
+      });
       if (isLikelyLocalMediaSource(normalized.source)) {
         sawNormalizedLocalMedia = true;
         allNormalizedLocalMediaTrusted &&= normalized.trustedLocalMedia;
       }
     }
 
+    const referenceText =
+      payload.text === undefined
+        ? undefined
+        : stripReplyFileReferenceText(payload.text, fileReferences);
     const text =
       firstMediaDropError === undefined
-        ? payload.text
-        : appendReplyMediaFailureWarning(payload.text);
+        ? referenceText
+        : appendReplyMediaFailureWarning(referenceText);
 
     if (normalizedMedia.length === 0) {
       return copyReplyPayloadMetadata(payload, {
@@ -249,19 +321,40 @@ export function createReplyMediaPathNormalizer(params: {
         text,
         mediaUrl: undefined,
         mediaUrls: undefined,
+        attachments: undefined,
       });
     }
 
-    return copyReplyPayloadMetadata(payload, {
-      ...payload,
-      text,
-      mediaUrl: normalizedMedia[0],
-      mediaUrls: normalizedMedia,
-      ...(payload.trustedLocalMedia === true ||
-      (sawNormalizedLocalMedia && allNormalizedLocalMediaTrusted)
-        ? { trustedLocalMedia: true }
-        : {}),
-    });
+    return setReplyPayloadMetadata(
+      copyReplyPayloadMetadata(payload, {
+        ...payload,
+        text,
+        mediaUrl: normalizedMedia[0],
+        mediaUrls: normalizedMedia,
+        ...(fileReferences.length > 0 || payload.attachments
+          ? { attachments: normalizedAttachments }
+          : {}),
+        ...(payload.trustedLocalMedia === true ||
+        (sawNormalizedLocalMedia && allNormalizedLocalMediaTrusted)
+          ? { trustedLocalMedia: true }
+          : {}),
+      }),
+      {
+        stagedFileSources: normalizedMedia.map((mediaUrl) => ({
+          mediaUrl,
+          sources: [
+            ...new Set([
+              ...(getReplyPayloadMetadata(payload)?.stagedFileSources?.find(
+                (entry) => entry.mediaUrl === mediaUrl,
+              )?.sources ?? []),
+              ...[...normalizedSources]
+                .filter(([, source]) => source === mediaUrl)
+                .map(([source]) => source),
+            ]),
+          ],
+        })),
+      },
+    );
   };
 }
 
@@ -275,4 +368,112 @@ export function createReplyMediaContext(
   return {
     normalizePayload: createReplyMediaPathNormalizer(params),
   };
+}
+
+/** Stage final file references while the producing session still owns its sandbox. */
+export async function normalizeAgentRunReplyMedia(
+  params: Parameters<typeof createReplyMediaPathNormalizer>[0] & {
+    payloads?: ReplyPayload[];
+    terminalReply?: AgentRunTerminalReplySnapshot;
+    runId?: string;
+    sessionId?: string;
+  },
+): Promise<{ payloads?: ReplyPayload[]; terminalReply?: AgentRunTerminalReplySnapshot }> {
+  const normalize = createReplyMediaPathNormalizer(params);
+  const payloads: ReplyPayload[] = [];
+  for (const payload of params.payloads ?? []) {
+    payloads.push(payload.sensitiveMedia ? payload : await normalize(payload));
+  }
+  let terminalReply = params.terminalReply;
+  let terminalPayload: ReplyPayload | undefined;
+  if (terminalReply?.disposition === "visible") {
+    const terminalText = terminalReply.text;
+    const terminalSource = params.payloads?.findLast(
+      (payload) =>
+        sanitizeAgentRunTerminalReplyText(payload.text ?? "") ===
+        sanitizeAgentRunTerminalReplyText(terminalText),
+    );
+    if (
+      terminalSource?.sensitiveMedia ||
+      (terminalSource && !isReplyPayloadTerminalContent(terminalSource))
+    ) {
+      terminalReply = { disposition: "visible", text: stripReplyFileReferenceText(terminalText) };
+    } else {
+      const visiblePayloads = payloads.filter(
+        (payload) => !payload.sensitiveMedia && isReplyPayloadTerminalContent(payload),
+      );
+      const input = setReplyPayloadMetadata(
+        { text: terminalText },
+        {
+          hostProducedMediaSources: visiblePayloads.flatMap(
+            (payload) => getReplyPayloadMetadata(payload)?.hostProducedMediaSources ?? [],
+          ),
+          stagedFileSources: visiblePayloads.flatMap(
+            (payload) => getReplyPayloadMetadata(payload)?.stagedFileSources ?? [],
+          ),
+        },
+      );
+      terminalPayload = await normalize(input);
+      terminalReply = { disposition: "visible", text: terminalPayload.text ?? terminalText };
+      const deliveredSources = new Set(payloads.flatMap(getPayloadMediaList));
+      const missingMedia = getPayloadMediaList(terminalPayload).filter(
+        (source) => !deliveredSources.has(source),
+      );
+      if (missingMedia.length > 0) {
+        payloads.push(
+          copyReplyPayloadMetadata(terminalPayload, {
+            ...terminalPayload,
+            text: undefined,
+            mediaUrl: missingMedia[0],
+            mediaUrls: missingMedia,
+            attachments: missingMedia.map(
+              (source) =>
+                terminalPayload?.attachments?.find((attachment) => attachment.path === source) ??
+                {},
+            ),
+          }),
+        );
+      }
+    }
+  }
+  const artifactPayloads = payloads.filter(
+    (payload) =>
+      !payload.sensitiveMedia &&
+      !payload.isReasoning &&
+      !payload.isCommentary &&
+      getPayloadMediaList(payload).length > 0,
+  );
+  if (
+    artifactPayloads.length > 0 &&
+    params.runId &&
+    params.sessionId &&
+    params.agentId &&
+    params.sessionKey &&
+    isSubagentSessionKey(params.sessionKey)
+  ) {
+    try {
+      const { stageRunReplyFiles } =
+        await import("../../gateway/server-methods/chat-history-files.runtime.js");
+      await stageRunReplyFiles({
+        cfg: params.cfg,
+        sessionKey: params.sessionKey,
+        agentId: params.agentId,
+        sessionId: params.sessionId,
+        runId: params.runId,
+        payloads: artifactPayloads,
+      });
+    } catch (error) {
+      logVerbose(`reply file transcript staging failed: ${String(error)}`);
+      if (terminalReply?.disposition === "visible") {
+        terminalReply = {
+          disposition: "visible",
+          text: appendReplyMediaFailureWarning(terminalReply.text),
+        };
+      }
+      for (const payload of payloads) {
+        payload.text = appendReplyMediaFailureWarning(payload.text);
+      }
+    }
+  }
+  return { payloads: payloads.length > 0 ? payloads : params.payloads, terminalReply };
 }

@@ -424,6 +424,37 @@ export function readSessionTranscriptHistoryEventById(
   );
 }
 
+/** Latest active message in an indexed, caller-owned event-id namespace. */
+export function readSessionTranscriptHistoryEventByIdPrefix(
+  scope: SessionTranscriptReadScope,
+  prefix: string,
+): SessionTranscriptMessageEvent | undefined {
+  if (!prefix) {
+    return undefined;
+  }
+  return withCurrentProjectionSnapshot(scope, (projection) => {
+    const db = getActiveTranscriptKysely(projection.database);
+    const row = executeSqliteQueryTakeFirstSync(
+      projection.database.db,
+      db
+        .selectFrom("transcript_event_identities as identity")
+        .innerJoin("session_transcript_active_events as active", (join) =>
+          join
+            .onRef("active.session_id", "=", "identity.session_id")
+            .onRef("active.event_seq", "=", "identity.seq"),
+        )
+        .select("identity.event_id")
+        .where("identity.session_id", "=", projection.resolved.sessionId)
+        .where("identity.event_type", "=", "message")
+        .where("identity.event_id", ">=", prefix)
+        .where("identity.event_id", "<", `${prefix}\uffff`)
+        .orderBy("identity.seq", "desc")
+        .limit(1),
+    );
+    return row ? resolveHistoryEventById(projection, row.event_id) : undefined;
+  });
+}
+
 export function readSessionTranscriptHistoryAnchorPage(
   scope: SessionTranscriptReadScope,
   options: { maxMessages: number; messageId: string },

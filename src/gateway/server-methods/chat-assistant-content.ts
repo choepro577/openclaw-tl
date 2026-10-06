@@ -1,9 +1,11 @@
+import { basenameFromAnyPath } from "@openclaw/media-core/file-name";
 import { expectDefined } from "@openclaw/normalization-core";
 import {
   appendReplyMediaFailureWarning,
   readPairingQrReplyChannelData,
   type ReplyPayload,
 } from "../../auto-reply/reply-payload.js";
+import { extractReplyFileReferences } from "../../auto-reply/reply/reply-file-references.js";
 import { createOutboundPayloadPlan } from "../../infra/outbound/payloads.js";
 import { renderQrPngDataUrl } from "../../media/qr-image.js";
 import { renderQrTerminal } from "../../media/qr-terminal.js";
@@ -146,7 +148,9 @@ export function isMediaBearingPayload(payload: ReplyPayload): boolean {
   if (payload.mediaUrl?.trim()) {
     return true;
   }
-  return Boolean(payload.mediaUrls?.some((url) => url.trim()));
+  return Boolean(
+    payload.mediaUrls?.some((url) => url.trim()) || extractReplyFileReferences(payload.text).length,
+  );
 }
 
 export function hasSensitiveMediaPayload(payloads: ReplyPayload[]): boolean {
@@ -180,13 +184,23 @@ async function buildPairingQrAssistantContentBlock(
 
 export function sanitizeAssistantDisplayText(
   value?: string | null,
-  options?: { preserveBoundaries?: boolean },
+  options?: { preserveBoundaries?: boolean; mediaSources?: readonly string[] },
 ): string | undefined {
   if (!value) {
     return undefined;
   }
-  const withoutEnvelope = stripEnvelopeFromMessage(value);
-  const normalized = typeof withoutEnvelope === "string" ? withoutEnvelope : value;
+  let displayValue = value;
+  const mediaSources = new Set(options?.mediaSources?.map((source) => source.trim()));
+  for (const reference of extractReplyFileReferences(value).toReversed()) {
+    if (mediaSources.has(reference.source)) {
+      displayValue =
+        displayValue.slice(0, reference.referenceStart) +
+        (reference.label || basenameFromAnyPath(reference.source) || "Attachment") +
+        displayValue.slice(reference.referenceEnd);
+    }
+  }
+  const withoutEnvelope = stripEnvelopeFromMessage(displayValue);
+  const normalized = typeof withoutEnvelope === "string" ? withoutEnvelope : displayValue;
   const stripped = stripInlineDirectiveTagsForDelivery(normalized);
   const visible = stripped.text.trim();
   return visible
@@ -243,8 +257,10 @@ export async function buildAssistantDisplayContentFromReplyPayloads(params: {
   for (const entry of plan) {
     const payload = entry.payload;
     let managedMediaPrepareFailed = false;
+    const media = resolveAlignedReplyMedia(payload, params.payloads[entry.sourceIndex] ?? payload);
     const text = sanitizeAssistantDisplayText(payload.text, {
       preserveBoundaries: preserveTextBoundaries,
+      mediaSources: media.mediaUrls,
     });
     if (text) {
       const previousBlock = content.at(-1);
@@ -269,7 +285,6 @@ export async function buildAssistantDisplayContentFromReplyPayloads(params: {
     if (params.includeSensitiveMedia === false && payload.sensitiveMedia === true) {
       continue;
     }
-    const media = resolveAlignedReplyMedia(payload, params.payloads[entry.sourceIndex] ?? payload);
     const preparedMedia: Array<{ sourceIndex: number; blocks: AssistantDisplayContentBlock[] }> =
       [];
     for (const mediaGroup of splitReplyMediaByTrust(media, payload.trustedLocalMedia === true)) {
@@ -373,7 +388,12 @@ export function stripManagedOutgoingAssistantContentBlocks(
     return undefined;
   }
   const filtered = content.filter((block) => {
-    if (block?.type !== "image" && block?.type !== "audio" && block?.type !== "video") {
+    if (
+      block?.type !== "image" &&
+      block?.type !== "audio" &&
+      block?.type !== "video" &&
+      block?.type !== "file"
+    ) {
       return true;
     }
     return !(isManagedOutgoingMediaUrl(block.url) || isManagedOutgoingMediaUrl(block.openUrl));
@@ -429,7 +449,10 @@ export function hasManagedOutgoingAssistantContent(
   return Boolean(
     content?.some(
       (block) =>
-        (block?.type === "image" || block?.type === "audio" || block?.type === "video") &&
+        (block?.type === "image" ||
+          block?.type === "audio" ||
+          block?.type === "video" ||
+          block?.type === "file") &&
         (isManagedOutgoingMediaUrl(block.url) || isManagedOutgoingMediaUrl(block.openUrl)),
     ),
   );

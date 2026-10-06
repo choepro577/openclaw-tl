@@ -6,6 +6,10 @@ import type { SubagentRunRecord } from "../registry/subagent-registry.types.js";
 import type { SubagentAnnounceDeliveryResult } from "./subagent-announce-dispatch.js";
 import { makeSettledChild } from "./subagent-announce.requester-settle-wake.fixture.js";
 
+vi.mock("../completion/subagent-completion-files.js", () => ({
+  deliverSubagentCompletionFiles: async () => false,
+}));
+
 const deliverSpy = vi.fn(
   async (
     _params: Record<string, unknown>,
@@ -773,11 +777,12 @@ describe("maybeWakeRequesterAfterAllChildrenSettled", () => {
     const secondChild = makeSettledChild({ runId: "run-b" });
     const children = [firstChild, secondChild];
     registryRuntimeMock.listSubagentRunsForRequester.mockReturnValue(children);
-    registryRuntimeMock.hasDescendantRunAwaitingSettle
-      .mockReturnValueOnce(false)
-      .mockReturnValueOnce(false)
-      .mockReturnValue(true);
-    deliverSpy.mockResolvedValueOnce({ delivered: false, path: "direct" });
+    let hasNewDescendant = false;
+    registryRuntimeMock.hasDescendantRunAwaitingSettle.mockImplementation(() => hasNewDescendant);
+    deliverSpy.mockImplementationOnce(async () => {
+      hasNewDescendant = true;
+      return { delivered: false, path: "direct" };
+    });
 
     vi.useFakeTimers();
     vi.setSystemTime(0);

@@ -25,6 +25,7 @@ import {
 } from "./chat-background-tasks-shared.ts";
 import type { BackgroundTasksProps } from "./chat-background-tasks.types.ts";
 import { renderDiffStatChips } from "./chat-diff-render.ts";
+import { renderGroupedMessage } from "./chat-message-bubble.ts";
 import { renderReadOnlyTranscript } from "./chat-read-only-transcript.ts";
 import {
   readTaskTranscript,
@@ -102,7 +103,7 @@ export function renderTaskDetailPanel(params: {
   const content =
     !useTaskInspector && transcriptSessionKey
       ? renderTaskTranscript({ ...params, task: currentTask, sessionKey: transcriptSessionKey })
-      : renderTaskFallback(currentTask, backgroundTasks, params.host);
+      : renderTaskFallback(currentTask, backgroundTasks, params.host, params.chat);
   return html`
     <div class="sidebar-panel chat-task-detail" data-task-detail-panel>
       ${renderTaskHeader(taskTitle(currentTask), currentTask, backgroundTasks, params.onBack)}
@@ -226,6 +227,7 @@ function renderTaskFallback(
   task: TaskSummary,
   backgroundTasks: BackgroundTasksProps,
   host: TaskDetailHost,
+  chat: ChatProps,
 ): TemplateResult {
   resetTaskDetail(host);
   if (
@@ -236,14 +238,19 @@ function renderTaskFallback(
     backgroundTasks.onLoadDetail?.(task);
   }
   return html`<div class="sidebar-content chat-task-detail__fallback">
-    ${renderTaskInspector(task, backgroundTasks)}
+    ${renderTaskInspector(task, backgroundTasks, chat)}
   </div>`;
 }
 
-function renderTaskInspector(task: TaskSummary, props: BackgroundTasksProps): TemplateResult {
+function renderTaskInspector(
+  task: TaskSummary,
+  props: BackgroundTasksProps,
+  chat: ChatProps,
+): TemplateResult {
   const detailedTask = props.taskDetails.get(task.id);
   const newest = newestTaskSnapshot(task, detailedTask);
   const output = detailedTask?.result ?? taskDetail(newest);
+  const resultContent = detailedTask?.resultContent ?? newest.resultContent;
   const detailLoading = props.taskDetailLoadingIds.has(task.id);
   const detailError = props.taskDetailErrors.get(task.id);
   return html`
@@ -266,7 +273,7 @@ function renderTaskInspector(task: TaskSummary, props: BackgroundTasksProps): Te
         </div>`
       : nothing}
     ${newest.runtime === "subagent"
-      ? renderSubagentActivity(newest, output, detailLoading, props)
+      ? renderSubagentActivity(newest, output, resultContent, detailLoading, props, chat)
       : html`<div class="chat-tasks-rail__detail-blocks">
           <section class="chat-tasks-rail__task-inspector-block">
             <div class="chat-tasks-rail__task-inspector-label">
@@ -290,8 +297,10 @@ ${detailLoading
 function renderSubagentActivity(
   task: TaskSummary,
   output: string | null,
+  content: TaskSummary["resultContent"],
   detailLoading: boolean,
   props: BackgroundTasksProps,
+  chat: ChatProps,
 ): TemplateResult {
   const subagentsOnly = props.subagentsOnly ?? false;
   const active = isActiveTask(task);
@@ -300,6 +309,7 @@ function renderSubagentActivity(
     normalizeOptionalString(task.lastActivity) ?? normalizeOptionalString(task.progressSummary);
   const activity = boundedSubagentActivity(rawActivity);
   const result = active ? null : output;
+  const resultContent = active ? undefined : content;
   const toolName = boundedSubagentActivity(task.lastToolName);
   const tool = toolName ? resolveToolDisplay({ name: toolName }).label : null;
   const toolUseCount = Math.max(0, task.toolUseCount ?? 0);
@@ -369,7 +379,7 @@ function renderSubagentActivity(
         : activity
           ? html`<p class="chat-task-detail__activity-message">${activity}</p>`
           : nothing}
-    ${result && result !== rawActivity
+    ${resultContent?.length || (result && result !== rawActivity)
       ? html`<div class="chat-task-detail__activity-result">
           <span
             class="chat-task-detail__activity-result-icon chat-task-detail__activity-result-icon--${task.status ===
@@ -379,10 +389,27 @@ function renderSubagentActivity(
             aria-hidden="true"
             >${task.status === "completed" ? icons.check : icons.alertTriangle}</span
           >
-          <p>${result}</p>
+          ${renderGroupedMessage(
+            { role: "assistant", content: resultContent?.length ? resultContent : result },
+            `${task.id}:result`,
+            {
+              isStreaming: false,
+              showReasoning: false,
+              showToolCalls: false,
+              sessionKey: task.sessionKey,
+              resourceBasePath: chat.resourceBasePath,
+              localMediaPreviewRoots: chat.localMediaPreviewRoots,
+              assistantAttachmentAuthToken: chat.assistantAttachmentAuthToken,
+              resolveArtifactDownload: chat.resolveArtifactDownload,
+              onOpenArtifact: chat.onOpenArtifact,
+              onRequestOpenImage: chat.onRequestOpenImage,
+              onOpenImage: chat.onOpenImage,
+              onRequestUpdate: chat.onRequestUpdate,
+            },
+          )}
         </div>`
       : nothing}
-    ${!activity && !result
+    ${!activity && !result && !resultContent?.length
       ? html`<div class="chat-task-detail__activity-empty">
           ${detailLoading
             ? t("chat.backgroundTasks.detailLoading")

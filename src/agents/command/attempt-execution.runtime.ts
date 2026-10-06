@@ -2,6 +2,7 @@
 // light shared helpers without pulling the full command attempt graph.
 export {
   buildAcpResult,
+  mergeStagedAcpReplyMedia,
   createAcpToolLifecycleTracker,
   createAcpVisibleTextAccumulator,
   emitAcpAssistantDelta,

@@ -72,6 +72,8 @@ export const TaskSummarySchema = closedObject({
   terminalOutcome: Type.Optional(TaskTerminalOutcomeSchema),
   /** Bounded canonical completion result. Returned only by tasks.get. */
   result: Type.Optional(Type.String()),
+  /** Parent-session managed attachments for the authorized tasks.get result. */
+  resultContent: Type.Optional(Type.Array(Type.Unknown(), { maxItems: 20 })),
   /** Bounded task input. Returned by tasks.get; omitted from list/event summaries. */
   prompt: Type.Optional(Type.String()),
 });

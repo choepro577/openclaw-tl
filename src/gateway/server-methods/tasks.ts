@@ -32,6 +32,7 @@ import { getMaxChatHistoryMessagesBytes } from "../server-constants.js";
 import { resolveRequestedSessionAgentId } from "../session-request-agent.js";
 import { loadGatewaySessionEntryReadOnly, resolveSessionModelRef } from "../session-utils.js";
 import { canAccessTaskRequesterSession } from "../task-session-access.js";
+import { readTaskResultFiles } from "./chat-history-files.js";
 import { readChatHistoryPage } from "./chat-history-pages.js";
 import { mapTaskSummary } from "./task-summary.js";
 import type { GatewayRequestHandlers } from "./types.js";
@@ -260,8 +261,10 @@ export const tasksHandlers: GatewayRequestHandlers = {
     }
     // The potentially longer task input is lookup-only. List and event payloads
     // stay compact while detail views can show the operator what was requested.
+    const summary = mapTaskSummary(task, { includePrompt: true });
+    const resultContent = await readTaskResultFiles(task, summary.result, cfg);
     respond(true, {
-      task: mapTaskSummary(task, { includePrompt: true }),
+      task: { ...summary, ...(resultContent.length ? { resultContent } : {}) },
       toolMessages: await readTaskToolMessages(task, cfg),
     });
   },

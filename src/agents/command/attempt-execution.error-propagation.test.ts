@@ -3,6 +3,10 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { ACP_TURN_TIMEOUT_DETAIL_CODE } from "../../acp/control-plane/manager.turn-timeout.js";
 import { AcpRuntimeError, formatAcpErrorChain } from "../../acp/runtime/errors.js";
 import {
+  getReplyPayloadMetadata,
+  setReplyPayloadMetadata,
+} from "../../auto-reply/reply-payload.js";
+import {
   type AgentEventPayload,
   onAgentAuditEvent,
   onAgentEvent,
@@ -15,6 +19,7 @@ import {
 } from "../../infra/diagnostic-events.js";
 import {
   buildAcpResult,
+  mergeStagedAcpReplyMedia,
   createAcpToolLifecycleTracker,
   emitAcpLifecycleStart,
   emitAcpLifecycleEnd as emitAcpLifecycleEndBase,
@@ -64,6 +69,62 @@ beforeEach(() => {
 });
 
 describe("ACP diagnostic events", () => {
+  it("retains every ACP sibling output while merging staged files into the visible terminal text", () => {
+    const earlyText = { text: "First reply" };
+    const reasoning = { text: "Thinking", isReasoning: true };
+    const finalText = setReplyPayloadMetadata(
+      {
+        text: "Final reply",
+        mediaUrls: ["/out/photo.png"],
+        attachments: [{ path: "/out/photo.png", name: "Photo.png" }],
+      },
+      {
+        assistantMessageIndex: 7,
+        hostProducedMediaSources: ["/out/photo.png"],
+      },
+    );
+    const laterToolMedia = { mediaUrls: ["/out/tool.png"] };
+    const status = { text: "Finished", isStatusNotice: true };
+    const staged = setReplyPayloadMetadata(
+      {
+        text: "Final reply",
+        mediaUrls: ["/out/report.csv"],
+        attachments: [{ path: "/out/report.csv", name: "Report.csv" }],
+      },
+      {
+        stagedFileSources: [{ mediaUrl: "/out/report.csv", sources: ["./report.csv"] }],
+      },
+    );
+    const original = [earlyText, reasoning, finalText, laterToolMedia, status];
+    const merged = mergeStagedAcpReplyMedia(original, staged);
+    expect(merged).toHaveLength(original.length);
+    for (const index of [0, 1, 3, 4]) {
+      expect(merged[index]).toBe(original[index]);
+    }
+    expect(merged[2]).toMatchObject({
+      text: "Final reply",
+      mediaUrls: ["/out/photo.png", "/out/report.csv"],
+      attachments: [{ name: "Photo.png" }, { name: "Report.csv" }],
+    });
+    expect(getReplyPayloadMetadata(merged[2] ?? {})).toEqual({
+      assistantMessageIndex: 7,
+      hostProducedMediaSources: ["/out/photo.png"],
+      stagedFileSources: [{ mediaUrl: "/out/report.csv", sources: ["./report.csv"] }],
+    });
+    expect(original[2]).toBe(finalText);
+  });
+
+  it("appends staged ACP media when no eligible terminal text exists", () => {
+    const reasoning = { text: "Thinking", isReasoning: true };
+    const sensitive = { text: "Private", sensitiveMedia: true };
+    const staged = { mediaUrls: ["/out/report.csv"] };
+    expect(mergeStagedAcpReplyMedia([reasoning, sensitive], staged)).toEqual([
+      reasoning,
+      sensitive,
+      staged,
+    ]);
+  });
+
   it("preserves cancelled result metadata without a stop reason", () => {
     const result = buildAcpResult({
       payloadText: "",

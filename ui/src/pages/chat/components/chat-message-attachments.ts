@@ -1,6 +1,8 @@
+import { formatByteSize } from "@openclaw/normalization-core";
 import { html, nothing } from "lit";
 import { icons } from "../../../components/icons.ts";
 import { t } from "../../../i18n/index.ts";
+import { getMediaFileExtension } from "../../../lib/media-file-extension.ts";
 import "./chat-audio-player.ts";
 import "./chat-video-player.ts";
 import { safeAttachmentHref } from "./chat-attachment-href.ts";
@@ -35,6 +37,24 @@ import {
   type ChatMediaResource,
   type ImageRenderOptions,
 } from "./chat-message-media.ts";
+
+// Type hints also identify generated files whose display label omits the suffix.
+const DOCUMENT_EXTENSION_BY_MIME: Record<string, string> = {
+  "application/pdf": "pdf",
+  "application/msword": "doc",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "docx",
+  "application/vnd.oasis.opendocument.text": "odt",
+  "application/vnd.ms-excel": "xls",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": "xlsx",
+  "application/vnd.oasis.opendocument.spreadsheet": "ods",
+  "text/csv": "csv",
+  "application/zip": "zip",
+  "application/x-zip-compressed": "zip",
+  "application/vnd.rar": "rar",
+  "application/x-7z-compressed": "7z",
+  "application/x-tar": "tar",
+  "application/gzip": "gz",
+};
 
 function retainManagedAttachmentUntilExpiry(
   resource: ChatMediaResource<ManagedAttachmentAvailability>,
@@ -490,42 +510,84 @@ export function renderAssistantAttachments(
         const previewText = texty
           ? resolveDocumentPreviewText(attachmentUrl, attachment.url, sizeBytes, onRequestUpdate)
           : null;
+        const mimeType = attachment.mimeType?.split(";", 1)[0]?.trim().toLowerCase();
+        const extension =
+          (mimeType ? DOCUMENT_EXTENSION_BY_MIME[mimeType] : undefined) ??
+          getMediaFileExtension(attachment.label);
+        const fileKind = ["xls", "xlsx", "ods", "csv", "tsv"].includes(extension ?? "")
+          ? "spreadsheet"
+          : extension === "pdf"
+            ? "pdf"
+            : ["doc", "docx", "odt"].includes(extension ?? "")
+              ? "word"
+              : ["zip", "rar", "7z", "tar", "gz"].includes(extension ?? "")
+                ? "archive"
+                : "file";
+        const fileIcon =
+          fileKind === "spreadsheet"
+            ? icons.fileSpreadsheet
+            : fileKind === "archive"
+              ? icons.archive
+              : fileKind === "file" && !texty
+                ? icons.file
+                : icons.fileText;
+        const metadata = [
+          extension?.toUpperCase(),
+          sizeBytes === undefined
+            ? undefined
+            : formatByteSize(sizeBytes, {
+                style: "legacy-binary",
+                maxUnit: "giga",
+                separator: " ",
+                fractionDigits: (value, unit) => (unit === "byte" ? null : value < 10 ? 1 : 0),
+              }),
+        ]
+          .filter(Boolean)
+          .join(" · ");
         return html`
-          <div class="chat-assistant-attachment-card chat-assistant-attachment-card--document">
+          <div
+            class="chat-assistant-attachment-card chat-assistant-attachment-card--document"
+            data-file-kind=${fileKind}
+          >
             <div class="chat-assistant-attachment-card__header">
-              <span class="chat-assistant-attachment-card__icon"
-                >${texty ? icons.fileText : icons.paperclip}</span
+              <span class="chat-assistant-attachment-card__icon" aria-hidden="true"
+                >${fileIcon}</span
               >
-              ${attachment.artifactId && onOpenArtifact
-                ? html`<button
-                    class="chat-assistant-attachment-card__link"
-                    type="button"
-                    @click=${() => onOpenArtifact(attachment.artifactId!)}
-                  >
-                    ${attachment.label}
-                  </button>`
-                : assistantAvailability.status === "available" &&
-                    assistantAvailability.workspacePath &&
-                    onOpenWorkspaceFile
+              <span class="chat-assistant-attachment-card__body" title=${attachment.label}>
+                ${attachment.artifactId && onOpenArtifact
                   ? html`<button
                       class="chat-assistant-attachment-card__link"
                       type="button"
-                      @click=${() =>
-                        onOpenWorkspaceFile({ path: assistantAvailability.workspacePath! })}
+                      @click=${() => onOpenArtifact(attachment.artifactId!)}
                     >
                       ${attachment.label}
                     </button>`
-                  : downloadHref
-                    ? html`<a
+                  : assistantAvailability.status === "available" &&
+                      assistantAvailability.workspacePath &&
+                      onOpenWorkspaceFile
+                    ? html`<button
                         class="chat-assistant-attachment-card__link"
-                        href=${downloadHref}
-                        target="_blank"
-                        rel="noreferrer"
-                        >${attachment.label}</a
-                      >`
-                    : html`<span class="chat-assistant-attachment-card__title"
-                        >${attachment.label}</span
-                      >`}
+                        type="button"
+                        @click=${() =>
+                          onOpenWorkspaceFile({ path: assistantAvailability.workspacePath! })}
+                      >
+                        ${attachment.label}
+                      </button>`
+                    : downloadHref
+                      ? html`<a
+                          class="chat-assistant-attachment-card__link"
+                          href=${downloadHref}
+                          target="_blank"
+                          rel="noreferrer"
+                          >${attachment.label}</a
+                        >`
+                      : html`<span class="chat-assistant-attachment-card__title"
+                          >${attachment.label}</span
+                        >`}
+                ${metadata
+                  ? html`<span class="chat-assistant-attachment-card__meta">${metadata}</span>`
+                  : nothing}
+              </span>
               <span class="chat-assistant-attachment-card__actions">
                 ${downloadHref
                   ? html`<a

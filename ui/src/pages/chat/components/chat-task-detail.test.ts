@@ -1,9 +1,10 @@
-import { html, render } from "lit";
+import { html, nothing, render } from "lit";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { GatewayBrowserClient } from "../../../api/gateway.ts";
 import type { TaskSummary } from "../../../lib/tasks/task-summary.ts";
 import type { ChatProps } from "../chat-view.ts";
 import type { BackgroundTasksProps } from "./chat-background-tasks.types.ts";
+import { releaseChatMediaResourceSubscriber } from "./chat-message-media.ts";
 import { deriveSubagentActivity } from "./chat-subagent-activity.ts";
 import type { TaskDetailHost } from "./chat-task-detail-state.ts";
 import { renderTaskDetailPanel } from "./chat-task-detail.ts";
@@ -46,9 +47,128 @@ function backgroundTasks(
 afterEach(() => {
   document.body.replaceChildren();
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
 });
 
 describe("task detail panel", () => {
+  it("renders specialist files and images with requester-scoped download tickets", async () => {
+    const sessionKey = "agent:personal:dashboard:requester";
+    const mediaUrl = (id: string) =>
+      `/api/chat/media/outgoing/${encodeURIComponent(sessionKey)}/${id}/full`;
+    const fileId = crypto.randomUUID();
+    const imageId = crypto.randomUUID();
+    const task: TaskSummary = {
+      id: "task-result-artifacts",
+      taskId: "task-result-artifacts",
+      status: "completed",
+      runtime: "subagent",
+      sessionKey,
+      childSessionKey: "agent:hr:subagent:private-child",
+      updatedAt: 2_000,
+    };
+    const detailedTask: TaskSummary = {
+      ...task,
+      result: "Exported a report and chart.",
+      resultContent: [
+        { type: "text", text: "Exported a report and chart." },
+        {
+          type: "file",
+          artifactId: `artifact_managed_media_${fileId}`,
+          url: mediaUrl(fileId),
+          fileName: "Báo cáo tháng 9.xlsx",
+          mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+          sizeBytes: 2048,
+        },
+        {
+          type: "image",
+          artifactId: `artifact_managed_image_${imageId}`,
+          url: mediaUrl(imageId),
+          alt: "Biểu đồ tháng 9.png",
+        },
+      ],
+    };
+    const NativeUrl = URL;
+    vi.stubGlobal(
+      "URL",
+      class extends NativeUrl {
+        static override createObjectURL = vi.fn(() => "blob:specialist-chart");
+        static override revokeObjectURL = vi.fn();
+      },
+    );
+    const resolveArtifactDownload = vi.fn(async ({ artifactId }: { artifactId: string }) => ({
+      url: `${mediaUrl(artifactId.endsWith(fileId) ? fileId : imageId)}?mediaTicket=download-ticket`,
+      expiresAt: new Date(Date.now() + 300_000).toISOString(),
+    }));
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      blob: async () => new Blob(["image"], { type: "image/png" }),
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+    const onOpenArtifact = vi.fn();
+    const onOpenImage = vi.fn();
+    const container = document.body.appendChild(document.createElement("div"));
+    const request = vi.fn();
+    const renderPanel = () =>
+      render(
+        html`${renderTaskDetailPanel({
+          backgroundTasks: backgroundTasks(task, {
+            taskDetails: new Map([[task.id, detailedTask]]),
+          }),
+          chat: {
+            paneId: "pane-result-artifacts",
+            enterpriseUserPresentation: true,
+            resolveArtifactDownload,
+            onOpenArtifact,
+            onOpenImage,
+            onRequestUpdate: renderPanel,
+          } as ChatProps,
+          host: {
+            sessionKey,
+            client: { request } as unknown as GatewayBrowserClient,
+            connected: true,
+            hello: null,
+          },
+          task,
+          transcript: {} as ChatTranscriptController,
+        })}`,
+        container,
+      );
+    try {
+      renderPanel();
+      await vi.waitFor(() => {
+        expect(
+          container
+            .querySelector<HTMLAnchorElement>(".chat-assistant-attachment-card__download")
+            ?.getAttribute("href"),
+        ).toBe(`${mediaUrl(fileId)}?mediaTicket=download-ticket`);
+        expect(
+          container.querySelector<HTMLImageElement>(".chat-message-image")?.getAttribute("src"),
+        ).toBe("blob:specialist-chart");
+      });
+      expect(container.textContent).toContain("XLSX · 2.0 KB");
+      expect(resolveArtifactDownload).toHaveBeenCalledWith({
+        sessionKey,
+        artifactId: `artifact_managed_media_${fileId}`,
+      });
+      expect(resolveArtifactDownload).toHaveBeenCalledWith({
+        sessionKey,
+        artifactId: `artifact_managed_image_${imageId}`,
+      });
+      expect(request).not.toHaveBeenCalled();
+      container.querySelector<HTMLButtonElement>(".chat-assistant-attachment-card__link")?.click();
+      expect(onOpenArtifact).toHaveBeenCalledWith(`artifact_managed_media_${fileId}`);
+      container.querySelector<HTMLButtonElement>(".chat-message-image-button")?.click();
+      await vi.waitFor(() =>
+        expect(onOpenImage).toHaveBeenCalledWith(
+          expect.objectContaining({ src: "blob:specialist-chart", title: "Biểu đồ tháng 9.png" }),
+        ),
+      );
+      onOpenImage.mock.calls[0]?.[0]?.release?.();
+    } finally {
+      render(nothing, container);
+      releaseChatMediaResourceSubscriber(renderPanel);
+    }
+  });
   it("uses the inspector for the pane's canonical session and identifies the runtime", () => {
     const task: TaskSummary = {
       id: "task-cli",

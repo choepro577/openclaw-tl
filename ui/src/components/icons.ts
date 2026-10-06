@@ -45,6 +45,11 @@ export const icons = {
     <line x1="10" x2="8" y1="9" y2="9" />`),
   file: strokeIcon(svg` <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
     <polyline points="14 2 14 8 20 8" />`),
+  fileSpreadsheet:
+    strokeIcon(svg` <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+    <polyline points="14 2 14 8 20 8" />
+    <rect x="8" y="12" width="8" height="6" rx="1" />
+    <path d="M8 15h8M12 12v6" />`),
   // Lucide file-diff. The outline keeps the cut corner but drops the fold line
   // the other file glyphs draw: at the header's 18px the fold collides with the
   // plus stroke and both marks turn to mush, and the missing fold is also what

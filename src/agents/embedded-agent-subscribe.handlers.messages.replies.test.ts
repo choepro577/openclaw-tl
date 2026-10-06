@@ -198,14 +198,22 @@ describe("pending tool-media reply ownership", () => {
       pendingToolMediaDeliveryFailed: false,
     };
 
-    restorePendingToolMediaReply(state, {
-      mediaUrls: ["/tmp/trusted.opus", "/tmp/untrusted.opus"],
-      attachments: [
-        { path: "/tmp/trusted.opus", mimeType: "audio/ogg", trustedLocalMedia: true },
-        { path: "/tmp/untrusted.opus", mimeType: "audio/ogg" },
-      ],
-      audioAsVoice: true,
-    });
+    const produced = consumePendingToolMediaIntoReply(
+      {
+        pendingToolMediaUrls: ["/tmp/trusted.opus", "/tmp/untrusted.opus"],
+        pendingToolMediaAttachments: [
+          { path: "/tmp/trusted.opus", mimeType: "audio/ogg" },
+          { path: "/tmp/untrusted.opus", mimeType: "audio/ogg" },
+        ],
+        pendingToolMediaTrustByUrl: new Map([
+          ["/tmp/trusted.opus", true],
+          ["/tmp/untrusted.opus", false],
+        ]),
+        pendingToolAudioAsVoice: true,
+      },
+      {},
+    );
+    restorePendingToolMediaReply(state, produced);
 
     expect(readPendingToolMediaReply(state)).toEqual({
       mediaUrls: ["/tmp/trusted.opus", "/tmp/untrusted.opus", "/tmp/newer.png"],
@@ -224,5 +232,20 @@ describe("pending tool-media reply ownership", () => {
       ]),
     );
     expect(state.pendingToolMediaDeliveryFailed).toBe(true);
+  });
+
+  it("does not restore trust from serialized flags without private host provenance", () => {
+    const state = {
+      pendingToolMediaUrls: [],
+      pendingToolMediaTrustByUrl: new Map<string, boolean>(),
+      pendingToolAudioAsVoice: false,
+      pendingToolMediaDeliveryFailed: false,
+    };
+    restorePendingToolMediaReply(state, {
+      mediaUrls: ["/tmp/foreign.png"],
+      trustedLocalMedia: true,
+      attachments: [{ path: "/tmp/foreign.png", trustedLocalMedia: true }],
+    });
+    expect(state.pendingToolMediaTrustByUrl.get("/tmp/foreign.png")).toBe(false);
   });
 });

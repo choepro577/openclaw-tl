@@ -11,6 +11,7 @@ import { assertLocalMediaAllowed, LocalMediaAccessError } from "../../media/loca
 import { resolveSendableOutboundReplyParts } from "../../plugin-sdk/reply-payload.js";
 import { sanitizeReplyDirectiveId } from "../../utils/directive-tags.js";
 import { isSuppressedControlReplyText } from "../control-reply-text.js";
+import { sanitizeAssistantDisplayText } from "./chat-assistant-content.js";
 
 /** Cap local audio files exposed through assistant media. */
 const MAX_WEBCHAT_AUDIO_BYTES = 15 * 1024 * 1024;
@@ -226,14 +227,16 @@ export async function buildWebchatAssistantMessageFromReplyPayloads(
     if (payload.isReasoning === true) {
       continue;
     }
-    const visibleText = payload.text?.trim();
+    const parts = resolveSendableOutboundReplyParts(payload);
+    const visibleText = sanitizeAssistantDisplayText(payload.text, {
+      mediaSources: parts.mediaUrls,
+    });
     const text =
       visibleText && !isSuppressedControlReplyText(visibleText) ? visibleText : undefined;
     const replyDirectivePrefix = resolveReplyDirectivePrefix(payload);
     let payloadHasAudio = false;
     let payloadHasImage = false;
     const payloadMediaBlocks: Array<Record<string, unknown>> = [];
-    const parts = resolveSendableOutboundReplyParts(payload);
     for (const raw of parts.mediaUrls) {
       const media = await resolveReplyMediaAudioEmbedding(payload, raw, seenAudio, options);
       if (!media) {

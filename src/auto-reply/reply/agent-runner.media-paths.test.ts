@@ -190,7 +190,9 @@ vi.mock("./reply-media-paths.js", () => ({
         if (mediaUrls.length === 0) {
           return payload;
         }
-        const normalized = await Promise.all(mediaUrls.map((media) => persist(media)));
+        const normalized = [
+          ...new Set(await Promise.all(mediaUrls.map((media) => persist(media)))),
+        ];
         return {
           ...payload,
           mediaUrl: normalized[0],
@@ -283,12 +285,15 @@ vi.mock("../../media/outbound-attachment.js", () => ({
 // that the fix prevents a second media context from being created inside executeAgentTurn.
 vi.mock("./reply-media-paths.runtime.js", async (importOriginal) => {
   const mod = await importOriginal<typeof import("./reply-media-paths.runtime.js")>();
+  const actual =
+    await vi.importActual<typeof import("./reply-media-paths.js")>("./reply-media-paths.js");
   return {
     createReplyMediaContext: (...args: Parameters<typeof mod.createReplyMediaContext>) => {
       createReplyMediaContextRuntimeMock(...args);
       return mod.createReplyMediaContext(...args);
     },
     createReplyMediaPathNormalizer: mod.createReplyMediaPathNormalizer,
+    normalizeAgentRunReplyMedia: actual.normalizeAgentRunReplyMedia,
   };
 });
 
@@ -752,6 +757,7 @@ describe("runReplyAgent media path normalization", () => {
       text: "here is the chart",
       mediaUrl: "/tmp/outbound-media/1-chart.png",
       mediaUrls: ["/tmp/outbound-media/1-chart.png"],
+      trustedLocalMedia: true,
     });
     expect(finalPayload).toEqual(blockPayload);
     expect(resolveOutboundAttachmentFromUrlMock).toHaveBeenCalledTimes(1);

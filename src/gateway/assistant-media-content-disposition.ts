@@ -12,7 +12,10 @@ export function buildAssistantMediaContentDisposition(filename: string, mime?: s
     (char) => `%${char.charCodeAt(0).toString(16).toUpperCase()}`,
   );
   const kind = kindFromMime(mime);
-  const inline = kind === "image" || kind === "audio" || kind === "video";
+  const inline =
+    (kind === "image" && !/^image\/svg\+xml(?:\s*;|$)/i.test(mime?.trim() ?? "")) ||
+    kind === "audio" ||
+    kind === "video";
   return `${inline ? "inline" : "attachment"}; filename="${fallback}"; filename*=UTF-8''${extended}`;
 }
 

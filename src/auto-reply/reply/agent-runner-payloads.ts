@@ -29,6 +29,7 @@ import {
   resolveOriginMessageTo,
 } from "./origin-routing.js";
 import { normalizeReplyPayloadDirectives } from "./reply-delivery.js";
+import { extractReplyFileReferences } from "./reply-file-references.js";
 import {
   applyReplyThreading,
   isRenderablePayload,
@@ -49,7 +50,11 @@ async function normalizeReplyPayloadMedia(params: {
   normalizeMediaPaths?: (payload: ReplyPayload) => Promise<ReplyPayload>;
   suppressMediaFailureWarning?: boolean;
 }): Promise<ReplyPayload> {
-  if (!params.normalizeMediaPaths || !resolveSendableOutboundReplyParts(params.payload).hasMedia) {
+  if (
+    !params.normalizeMediaPaths ||
+    (!resolveSendableOutboundReplyParts(params.payload).hasMedia &&
+      extractReplyFileReferences(params.payload.text).length === 0)
+  ) {
     return params.payload;
   }
 

@@ -11,6 +11,13 @@ import { sanitizeForLog } from "../../../packages/terminal-core/src/ansi.js";
 import { ACP_TURN_TIMEOUT_DETAIL_CODE } from "../../acp/control-plane/manager.turn-timeout.js";
 import { formatAcpErrorChain } from "../../acp/runtime/errors.js";
 import { resolveAcpToolTerminalOutcome } from "../../acp/tool-status.js";
+import {
+  copyReplyPayloadMetadata,
+  getReplyPayloadMetadata,
+  isReplyPayloadTerminalContent,
+  setReplyPayloadMetadata,
+  type ReplyPayload,
+} from "../../auto-reply/reply-payload.js";
 import { normalizeReplyPayload } from "../../auto-reply/reply/normalize-reply.js";
 import {
   readChannelSourceTurnId,
@@ -33,6 +40,7 @@ import {
 } from "../../gateway/server-methods/agent-timestamp.js";
 import { emitAgentAuditEvent, emitAgentEvent } from "../../infra/agent-events.js";
 import { emitTrustedDiagnosticEvent } from "../../infra/diagnostic-events.js";
+import { resolveSendableOutboundReplyParts } from "../../infra/outbound/reply-payload-parts.js";
 import { redactSensitiveText } from "../../logging/redact.js";
 import { createSubsystemLogger } from "../../logging/subsystem.js";
 import type { PluginMetadataSnapshot } from "../../plugins/plugin-metadata-snapshot.types.js";
@@ -1248,6 +1256,58 @@ export function runAgentAttempt(params: {
     readChannelSourceTurnSameThreadRequired(params.runContext),
   );
   return runEmbeddedAgent(embeddedRunParams);
+}
+
+/** Attaches staged files to the terminal text without discarding ACP sibling outputs. */
+export function mergeStagedAcpReplyMedia(
+  payloads: ReplyPayload[],
+  staged: ReplyPayload,
+): ReplyPayload[] {
+  const index = payloads.findLastIndex(
+    (payload) =>
+      !payload.sensitiveMedia &&
+      isReplyPayloadTerminalContent(payload) &&
+      Boolean(payload.text?.trim()),
+  );
+  const original = payloads[index];
+  if (index < 0 || !original) {
+    return [...payloads, staged];
+  }
+  const entries = [original, staged].flatMap((payload) =>
+    resolveSendableOutboundReplyParts(payload).mediaUrls.map((source, mediaIndex) => ({
+      source,
+      attachment:
+        payload.attachments?.find((entry) =>
+          [entry.path, entry.url, entry.mediaUrl, entry.filePath].includes(source),
+        ) ?? payload.attachments?.[mediaIndex],
+    })),
+  );
+  const mediaUrls = [...new Set(entries.map((entry) => entry.source))];
+  const merged = copyReplyPayloadMetadata(
+    staged,
+    copyReplyPayloadMetadata(original, {
+      ...original,
+      ...staged,
+      text: original.text,
+      mediaUrls,
+      mediaUrl: mediaUrls[0],
+      attachments: mediaUrls.map(
+        (source) => entries.findLast((entry) => entry.source === source)?.attachment ?? {},
+      ),
+    }),
+  );
+  const metadata = [original, staged].map((payload) => getReplyPayloadMetadata(payload));
+  const hostProducedMediaSources = [
+    ...new Set(metadata.flatMap((entry) => entry?.hostProducedMediaSources ?? [])),
+  ];
+  const stagedFileSources = metadata.flatMap((entry) => entry?.stagedFileSources ?? []);
+  if (hostProducedMediaSources.length || stagedFileSources.length) {
+    setReplyPayloadMetadata(merged, {
+      ...(hostProducedMediaSources.length ? { hostProducedMediaSources } : {}),
+      ...(stagedFileSources.length ? { stagedFileSources } : {}),
+    });
+  }
+  return payloads.map((payload, payloadIndex) => (payloadIndex === index ? merged : payload));
 }
 
 export function buildAcpResult(params: {

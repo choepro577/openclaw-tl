@@ -14,6 +14,7 @@ import {
 import {
   readRecentSessionTranscriptHistoryEvents,
   readSessionTranscriptHistoryEventById,
+  readSessionTranscriptHistoryEventByIdPrefix,
   readSessionTranscriptHistoryEventCount,
   readSessionTranscriptHistoryEventPage,
   readSessionTranscriptHistoryEvents,
@@ -64,6 +65,26 @@ type ReadSessionMessageByIdResult = {
   oversized: boolean;
   found: boolean;
 };
+
+/** Scoped indexed lookup; returns its actual canonical id, including legacy caller probes. */
+export async function readSessionMessageByIdPrefixAsync(
+  scope: SessionTranscriptReadScope,
+  prefix: string,
+): Promise<ReadSessionMessageByIdResult & { messageId?: string }> {
+  const found = readSessionTranscriptHistoryEventByIdPrefix(
+    toTranscriptReadScope(resolveTranscriptReadTarget(scope)),
+    prefix,
+  );
+  return found
+    ? {
+        found: true,
+        oversized: false,
+        seq: found.seq,
+        messageId: String(found.event.id),
+        message: projectTranscriptEntryMessage(found.event, found.seq),
+      }
+    : { found: false, oversized: false };
+}
 
 export type ResolvedTranscriptReadTarget = {
   agentId?: string;

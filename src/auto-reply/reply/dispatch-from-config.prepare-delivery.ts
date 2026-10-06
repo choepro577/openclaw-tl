@@ -18,6 +18,7 @@ import {
   loadRouteReplyRuntime,
 } from "./dispatch-from-config.runtime-loaders.js";
 import type { ReplyDispatchKind } from "./reply-dispatcher.types.js";
+import { extractReplyFileReferences } from "./reply-file-references.js";
 import {
   createReplyDeliveryContext,
   resolveReplyDeliveryAccountId,
@@ -123,7 +124,10 @@ export async function prepareDispatchDelivery(state: GatherDispatchRequestReadyS
     return normalizeReplyMediaPaths;
   };
   const normalizeReplyMediaPayload = async (payload: ReplyPayload): Promise<ReplyPayload> => {
-    if (!resolveSendableOutboundReplyParts(payload).hasMedia) {
+    if (
+      !resolveSendableOutboundReplyParts(payload).hasMedia &&
+      extractReplyFileReferences(payload.text).length === 0
+    ) {
       return payload;
     }
     const normalizeReplyMediaPayloadPaths = await getNormalizeReplyMediaPaths();

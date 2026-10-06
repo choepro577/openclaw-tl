@@ -9,6 +9,7 @@ import { getReplyPayloadMetadata, setReplyPayloadMetadata } from "../reply-paylo
 const ensureSandboxWorkspaceForSession = vi.hoisted(() => vi.fn());
 const resolveOutboundAttachmentFromUrl = vi.hoisted(() => vi.fn());
 const resolveAgentScopedOutboundMediaAccess = vi.hoisted(() => vi.fn());
+const stageRunReplyFiles = vi.hoisted(() => vi.fn());
 const stateDirEnvSnapshot = captureEnv(["OPENCLAW_STATE_DIR"]);
 
 vi.mock("../../agents/sandbox.js", () => ({
@@ -22,8 +23,17 @@ vi.mock("../../media/outbound-attachment.js", () => ({
 vi.mock("../../media/read-capability.js", () => ({
   resolveAgentScopedOutboundMediaAccess,
 }));
+vi.mock("../../gateway/server-methods/chat-history-files.runtime.js", () => ({
+  stageRunReplyFiles,
+}));
 
-import { createReplyMediaPathNormalizer } from "./reply-media-paths.js";
+import { mergeAttemptToolMediaPayloads } from "../../agents/embedded-agent-runner/run/tool-media-payloads.js";
+import { consumePendingToolMediaIntoReply } from "../../agents/embedded-agent-subscribe.handlers.messages.replies.js";
+import { normalizeReplyPayloadDirectives } from "./reply-delivery.js";
+import {
+  createReplyMediaPathNormalizer,
+  normalizeAgentRunReplyMedia,
+} from "./reply-media-paths.js";
 
 type NormalizedReply = {
   mediaUrl?: string;
@@ -92,6 +102,7 @@ function createTestReplyMediaNormalizer(
 
 describe("createReplyMediaPathNormalizer", () => {
   beforeEach(() => {
+    stageRunReplyFiles.mockReset().mockResolvedValue([]);
     ensureSandboxWorkspaceForSession.mockReset().mockResolvedValue(null);
     resolveOutboundAttachmentFromUrl.mockReset().mockImplementation(async (mediaUrl: string) => ({
       path: path.join("/tmp/outbound-media", path.basename(mediaUrl.replace(/^file:\/\//i, ""))),
@@ -125,6 +136,315 @@ describe("createReplyMediaPathNormalizer", () => {
     );
     const mediaAccess = requireRecord(options.mediaAccess, "media access");
     expect(mediaAccess.workspaceDir).toBe("/tmp/agent-workspace");
+  });
+
+  it("stages local markdown files and images with the same sandbox policy as explicit media", async () => {
+    ensureSandboxWorkspaceForSession.mockResolvedValue({ workspaceDir: "/tmp/sandboxes/child" });
+    const normalize = createTestReplyMediaNormalizer();
+    const result = await normalize({
+      text: "[Tải Excel](</workspace/report.xlsx>)\n![Chart](./chart.png)",
+      mediaUrls: ["./chart.png"],
+    });
+    expect(result.mediaUrls).toEqual([
+      "/tmp/outbound-media/chart.png",
+      "/tmp/outbound-media/report.xlsx",
+    ]);
+    expect(result.text).toBe("Tải Excel\nChart");
+    expect(resolveOutboundAttachmentFromUrl).toHaveBeenCalledTimes(2);
+    expectOutboundAttachmentCall(1, "/tmp/sandboxes/child/report.xlsx", 5 * 1024 * 1024);
+  });
+
+  it("deduplicates repeated MEDIA directives plus an implicit link across producer and final delivery", async () => {
+    setTestEnvValue("OPENCLAW_STATE_DIR", "/tmp/reply-files-state");
+    const managedPath = "/tmp/reply-files-state/media/outbound/report.xlsx";
+    resolveOutboundAttachmentFromUrl.mockResolvedValue({ path: managedPath });
+    const normalize = createTestReplyMediaNormalizer();
+    const producer = await normalize({
+      text: "[Tải báo cáo](./out/report.xlsx)\nMEDIA:./out/report.xlsx\nMEDIA:./out/report.xlsx",
+    });
+    const final = await normalize(normalizeReplyPayloadDirectives({ payload: producer }).payload);
+    expect(final.mediaUrls).toEqual([managedPath]);
+    expect(final.attachments).toHaveLength(1);
+    expect(final.text).toBe("Tải báo cáo");
+    expect(resolveOutboundAttachmentFromUrl).toHaveBeenCalledTimes(1);
+  });
+
+  it("stages child CSV and image links containing mixed raw and encoded spaces", async () => {
+    ensureSandboxWorkspaceForSession.mockResolvedValue({ workspaceDir: "/tmp/sandboxes/child" });
+    const text =
+      '[Báo cáo](sandbox:/workspace/qa/Báo cáo%20nhân%20sự%20QA.csv "Tải CSV")\n![Biểu đồ](/workspace/qa/Biểu đồ%20QA (1).png)';
+    const child = await normalizeAgentRunReplyMedia({
+      cfg: {},
+      agentId: "hrm",
+      sessionKey: "agent:hrm:subagent:child",
+      workspaceDir: "/tmp/hrm-workspace",
+      payloads: [{ text }],
+      terminalReply: { disposition: "visible", text },
+    });
+    expect(child.payloads?.[0]?.mediaUrls).toEqual([
+      "/tmp/outbound-media/Báo cáo nhân sự QA.csv",
+      "/tmp/outbound-media/Biểu đồ QA (1).png",
+    ]);
+    expect(child.payloads?.[0]?.attachments?.map((attachment) => attachment.name)).toEqual([
+      "Báo cáo nhân sự QA.csv",
+      "Biểu đồ QA (1).png",
+    ]);
+    expect(child.payloads?.[0]?.text).toBe("Báo cáo\nBiểu đồ");
+    expect(child.terminalReply).toEqual({
+      disposition: "visible",
+      text: "Báo cáo\nBiểu đồ",
+    });
+    expect(resolveOutboundAttachmentFromUrl).toHaveBeenCalledTimes(2);
+    expectOutboundAttachmentCall(
+      0,
+      "/tmp/sandboxes/child/qa/Báo cáo nhân sự QA.csv",
+      5 * 1024 * 1024,
+    );
+    expectOutboundAttachmentCall(1, "/tmp/sandboxes/child/qa/Biểu đồ QA (1).png", 5 * 1024 * 1024);
+  });
+
+  it("never attaches ordinary credentials or source file mentions", async () => {
+    const payload = {
+      text: "Edit `credentials.json`, see `src/config.ts`, or open /workspace/private.json.",
+    };
+    expect(await createTestReplyMediaNormalizer()(payload)).toBe(payload);
+    expect(resolveOutboundAttachmentFromUrl).not.toHaveBeenCalled();
+  });
+
+  it("stages an ordinary terminal-only file independently from a sensitive sibling", async () => {
+    const sensitive = { text: "Private image", mediaUrls: ["./private.png"], sensitiveMedia: true };
+    const terminalText = "[Report](./report.csv)";
+    const result = await normalizeAgentRunReplyMedia({
+      cfg: {},
+      agentId: "hrm",
+      sessionKey: "agent:hrm:subagent:child",
+      sessionId: "child-session",
+      runId: "child-run",
+      workspaceDir: "/tmp/hrm-workspace",
+      payloads: [sensitive],
+      terminalReply: { disposition: "visible", text: terminalText },
+    });
+    expect(result.payloads?.[0]).toBe(sensitive);
+    expect(result.payloads?.[1]).toMatchObject({
+      text: undefined,
+      mediaUrls: ["/tmp/outbound-media/report.csv"],
+    });
+    expect(result.terminalReply).toEqual({ disposition: "visible", text: "Report" });
+    expect(resolveOutboundAttachmentFromUrl).toHaveBeenCalledTimes(1);
+    expectOutboundAttachmentCall(0, "/tmp/hrm-workspace/report.csv", 5 * 1024 * 1024);
+    expect(stageRunReplyFiles.mock.calls[0][0].payloads).toHaveLength(1);
+    expect(stageRunReplyFiles.mock.calls[0][0].payloads[0].mediaUrls).toEqual([
+      "/tmp/outbound-media/report.csv",
+    ]);
+  });
+
+  it("keeps a sensitive terminal path out of completion text without reading or staging it", async () => {
+    const text = "[Private report](./private.csv)";
+    const sensitive = { text, sensitiveMedia: true };
+    const result = await normalizeAgentRunReplyMedia({
+      cfg: {},
+      agentId: "hrm",
+      sessionKey: "agent:hrm:subagent:child",
+      sessionId: "child-session",
+      runId: "child-run",
+      workspaceDir: "/tmp/hrm-workspace",
+      payloads: [sensitive],
+      terminalReply: { disposition: "visible", text },
+    });
+    expect(result.payloads?.[0]).toBe(sensitive);
+    expect(result.terminalReply).toEqual({ disposition: "visible", text: "Private report" });
+    expect(resolveOutboundAttachmentFromUrl).not.toHaveBeenCalled();
+    expect(stageRunReplyFiles).not.toHaveBeenCalled();
+  });
+
+  it("returns terminal-only files when the producer has no payload array", async () => {
+    const result = await normalizeAgentRunReplyMedia({
+      cfg: {},
+      workspaceDir: "/tmp/hrm-workspace",
+      terminalReply: { disposition: "visible", text: "[Report](./report.csv)" },
+    });
+    expect(result.payloads).toHaveLength(1);
+    expect(result.payloads?.[0]).toMatchObject({
+      text: undefined,
+      mediaUrls: ["/tmp/outbound-media/report.csv"],
+    });
+    expect(getReplyPayloadMetadata(result.payloads?.[0] ?? {})?.stagedFileSources).toEqual([
+      { mediaUrl: "/tmp/outbound-media/report.csv", sources: ["./report.csv"] },
+    ]);
+  });
+
+  it("strips quoted MEDIA delivery paths from outbound text while retaining attachments", async () => {
+    ensureSandboxWorkspaceForSession.mockResolvedValue({ workspaceDir: "/tmp/sandboxes/child" });
+    const result = await createTestReplyMediaNormalizer()({
+      text: 'Đã tạo báo cáo.\nMEDIA:"/workspace/Báo cáo%20QA.csv"\nMEDIA:<./Biểu đồ QA.png>',
+    });
+    expect(result.text?.trim()).toBe("Đã tạo báo cáo.");
+    expect(result.text).not.toContain("/tmp");
+    expect(result.text).not.toContain("/workspace");
+    expect(result.text).not.toContain("MEDIA:");
+    expect(result.mediaUrls).toEqual([
+      "/tmp/outbound-media/Báo cáo QA.csv",
+      "/tmp/outbound-media/Biểu đồ QA.png",
+    ]);
+    expect(result.attachments?.map((attachment) => attachment.name)).toEqual([
+      "Báo cáo QA.csv",
+      "Biểu đồ QA.png",
+    ]);
+  });
+
+  it("retains structured child file payloads while keeping terminal text free of host paths", async () => {
+    setTestEnvValue("OPENCLAW_STATE_DIR", "/tmp/reply-files-state");
+    const managedPath = "/tmp/reply-files-state/media/outbound/report.xlsx";
+    resolveOutboundAttachmentFromUrl.mockResolvedValue({ path: managedPath });
+    ensureSandboxWorkspaceForSession.mockResolvedValue({ workspaceDir: "/tmp/sandboxes/child" });
+    const text = "[Tải báo cáo](</workspace/report.xlsx>)";
+    const child = await normalizeAgentRunReplyMedia({
+      cfg: {},
+      agentId: "hrm",
+      sessionKey: "agent:hrm:subagent:child",
+      workspaceDir: "/tmp/hrm-workspace",
+      payloads: [{ text }],
+      terminalReply: { disposition: "visible", text },
+    });
+    expect(child.terminalReply).toEqual({
+      disposition: "visible",
+      text: "Tải báo cáo",
+    });
+    expect(expectAgentScopedMediaAccessCall()).toMatchObject({
+      agentId: "hrm",
+      sessionKey: "agent:hrm:subagent:child",
+    });
+    ensureSandboxWorkspaceForSession.mockResolvedValue({ workspaceDir: "/tmp/sandboxes/parent" });
+    const parent = await createTestReplyMediaNormalizer()(child.payloads?.[0] ?? {});
+    expect(parent.mediaUrls).toEqual([managedPath]);
+    expect(resolveOutboundAttachmentFromUrl).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps a failed reference and a visible failure receipt while delivering surviving files", async () => {
+    resolveOutboundAttachmentFromUrl.mockRejectedValueOnce(new Error("file not found"));
+    const result = await createTestReplyMediaNormalizer()({
+      text: "[Missing](./missing.xlsx) [Good](./report.pdf)",
+    });
+    expect(result.text).toContain("Missing");
+    expect(result.text).not.toContain("./missing.xlsx");
+    expect(result.text).toContain("Media failed");
+    expect(result.mediaUrls).toEqual(["/tmp/outbound-media/report.pdf"]);
+  });
+
+  it.each(["path", "file URL"])(
+    "rejects a globally managed %s mentioned without host-staged structured media",
+    async (style) => {
+      setTestEnvValue("OPENCLAW_STATE_DIR", "/tmp/reply-files-state");
+      const managedPath = "/tmp/reply-files-state/media/outbound/other-session-secret.csv";
+      const source = style === "file URL" ? `file://${managedPath}` : managedPath;
+      ensureSandboxWorkspaceForSession.mockResolvedValue({ workspaceDir: "/tmp/sandboxes/child" });
+      const result = await createTestReplyMediaNormalizer()({ text: `[Other file](${source})` });
+      expectNoMedia(result);
+      expect(result.text).toContain("Media failed");
+      expect(result.text).not.toContain(managedPath);
+      expect(resolveOutboundAttachmentFromUrl).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([false, true])(
+    "rejects raw managed mediaUrls even with serialized trustedLocalMedia=%s",
+    async (trustedLocalMedia) => {
+      setTestEnvValue("OPENCLAW_STATE_DIR", "/tmp/reply-files-state");
+      const source = "/tmp/reply-files-state/media/outbound/foreign.csv";
+      const rawPayload = {
+        mediaUrls: [source],
+        trustedLocalMedia,
+        attachments: [{ path: source, trustedLocalMedia: true }],
+        hostProducedMediaSources: [source],
+      };
+      const result = await createTestReplyMediaNormalizer()(rawPayload);
+      expectNoMedia(result);
+      expect(result.text).toContain("Media failed");
+      expect(resolveOutboundAttachmentFromUrl).not.toHaveBeenCalled();
+    },
+  );
+
+  it("preserves host tool provenance through normalization while public cloning cannot replay it", async () => {
+    setTestEnvValue("OPENCLAW_STATE_DIR", "/tmp/reply-files-state");
+    const source = "/tmp/reply-files-state/media/outbound/generated.png";
+    const payload = consumePendingToolMediaIntoReply(
+      {
+        pendingToolMediaUrls: [source],
+        pendingToolMediaTrustByUrl: new Map([[source, true]]),
+        pendingToolAudioAsVoice: false,
+      },
+      {},
+    );
+    const normalized = await createTestReplyMediaNormalizer()(payload);
+    expectMedia(normalized, source, [source]);
+    expectMedia(await createTestReplyMediaNormalizer()(normalized), source, [source]);
+    expectNoMedia(await createTestReplyMediaNormalizer()(structuredClone(normalized)));
+    expect(resolveOutboundAttachmentFromUrl).not.toHaveBeenCalled();
+  });
+
+  it("awaits canonical child artifact persistence before returning terminal output", async () => {
+    let finishStage: (() => void) | undefined;
+    stageRunReplyFiles.mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          finishStage = resolve;
+        }),
+    );
+    const text = "[Report](./report.csv)";
+    const resultPromise = normalizeAgentRunReplyMedia({
+      cfg: {},
+      agentId: "hrm",
+      sessionKey: "agent:hrm:subagent:child",
+      sessionId: "child-session",
+      runId: "child-run",
+      workspaceDir: "/tmp/hrm-workspace",
+      payloads: [{ text }],
+      terminalReply: { disposition: "visible", text },
+    });
+    await vi.waitFor(() => expect(stageRunReplyFiles).toHaveBeenCalledOnce());
+    expect(stageRunReplyFiles).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agentId: "hrm",
+        sessionKey: "agent:hrm:subagent:child",
+        sessionId: "child-session",
+        runId: "child-run",
+      }),
+    );
+    const stagedPayload = stageRunReplyFiles.mock.calls[0][0].payloads[0];
+    expect(getReplyPayloadMetadata(stagedPayload)?.stagedFileSources).toEqual([
+      { mediaUrl: "/tmp/outbound-media/report.csv", sources: ["./report.csv"] },
+    ]);
+    finishStage?.();
+    expect((await resultPromise).terminalReply).toEqual({ disposition: "visible", text: "Report" });
+  });
+
+  it("reports canonical child artifact persistence failure without exposing a host path", async () => {
+    stageRunReplyFiles.mockRejectedValueOnce(new Error("stale transcript writer"));
+    const text = "[Report](./report.csv)";
+    const result = await normalizeAgentRunReplyMedia({
+      cfg: {},
+      agentId: "hrm",
+      sessionKey: "agent:hrm:subagent:child",
+      sessionId: "child-session",
+      runId: "child-run",
+      workspaceDir: "/tmp/hrm-workspace",
+      payloads: [{ text }],
+      terminalReply: { disposition: "visible", text },
+    });
+    expect(result.terminalReply?.disposition === "visible" && result.terminalReply.text).toContain(
+      "Media failed",
+    );
+    expect(result.payloads?.[0]?.text).toContain("Media failed");
+    expect(result.payloads?.[0]?.text).not.toContain("/tmp");
+  });
+
+  it("does not infer sensitive or reasoning file references", async () => {
+    const normalize = createTestReplyMediaNormalizer();
+    for (const flag of [{ sensitiveMedia: true }, { isReasoning: true }]) {
+      const payload = { text: "[Secret](./secret.xlsx)", ...flag };
+      expect(await normalize(payload)).toBe(payload);
+    }
+    expect(resolveOutboundAttachmentFromUrl).not.toHaveBeenCalled();
   });
 
   it("preserves reply metadata when media normalization clones the payload", async () => {
@@ -358,9 +678,12 @@ describe("createReplyMediaPathNormalizer", () => {
     setTestEnvValue("OPENCLAW_STATE_DIR", "/Users/peter/.openclaw");
     const normalize = createTestReplyMediaNormalizer();
 
-    const result = await normalize({
-      mediaUrls: ["/Users/peter/.openclaw/media/tool-image-generation/generated.png"],
-    });
+    const source = "/Users/peter/.openclaw/media/tool-image-generation/generated.png";
+    const payload = mergeAttemptToolMediaPayloads({
+      toolMediaUrls: [source],
+      hostOwnedToolMediaUrls: [source],
+    })?.[0];
+    const result = await normalize(payload ?? {});
 
     expectMedia(result, "/Users/peter/.openclaw/media/tool-image-generation/generated.png", [
       "/Users/peter/.openclaw/media/tool-image-generation/generated.png",
@@ -376,9 +699,12 @@ describe("createReplyMediaPathNormalizer", () => {
     setTestEnvValue("OPENCLAW_STATE_DIR", "/Users/peter/.openclaw");
     const normalize = createTestReplyMediaNormalizer();
 
-    const result = await normalize({
-      mediaUrls: ["/Users/peter/.openclaw/media/outbound/generated.png"],
-    });
+    const source = "/Users/peter/.openclaw/media/outbound/generated.png";
+    const payload = mergeAttemptToolMediaPayloads({
+      toolMediaUrls: [source],
+      hostOwnedToolMediaUrls: [source],
+    })?.[0];
+    const result = await normalize(payload ?? {});
 
     expectMedia(result, "/Users/peter/.openclaw/media/outbound/generated.png", [
       "/Users/peter/.openclaw/media/outbound/generated.png",

@@ -46,7 +46,7 @@ function createHost(options?: {
   connected?: boolean;
 }): {
   host: BackgroundTasksHost;
-  request: ReturnType<typeof vi.fn>;
+  request: ReturnType<typeof vi.fn<(method: string, params?: unknown) => Promise<unknown>>>;
   requestUpdate: ReturnType<typeof vi.fn>;
 } {
   const request = vi.fn(
@@ -685,31 +685,51 @@ describe("background tasks rail events", () => {
     expect(createBackgroundTasksProps(host).tasks).toEqual([progress]);
   });
 
-  it("preserves an opened prompt when a terminal event corrects its output", async () => {
+  it("preserves lookup text and files for the same terminal run, without leaking them into a replacement", async () => {
     const completed = makeTask({
       id: "task-1",
       status: "completed",
       updatedAt: 2_000,
       terminalSummary: "Previous terminal details",
+      runId: "completed-run",
     });
     const prompt = "Inspect the concurrent task owner";
     const result = "Complete specialist result with all analysis sections.";
+    const resultContent = [
+      { type: "text", text: result },
+      {
+        type: "file",
+        fileName: "Report.xlsx",
+        artifactId: "parent-file",
+        url: "/api/chat/media/outgoing/parent/file/full",
+      },
+      {
+        type: "image",
+        alt: "Chart.png",
+        artifactId: "parent-image",
+        url: "/api/chat/media/outgoing/parent/image/full",
+      },
+    ];
     const correction = makeTask({
       id: "task-1",
       status: "completed",
       updatedAt: 2_000,
       terminalSummary: "Authoritative terminal details",
+      runId: completed.runId,
     });
     const { host } = createHost({
       request: (method) =>
         method === "tasks.get"
-          ? Promise.resolve({ task: { ...completed, prompt, result } })
+          ? Promise.resolve({ task: { ...completed, prompt, result, resultContent } })
           : Promise.resolve({ tasks: [completed] }),
     });
     createBackgroundTasksProps(host);
     await flushAsync();
     createBackgroundTasksProps(host).onLoadDetail?.(completed);
     await flushAsync();
+    expect(createBackgroundTasksProps(host).taskDetails.get("task-1")?.resultContent).toEqual(
+      resultContent,
+    );
 
     handleBackgroundTasksEvent(host, { action: "upserted", task: correction });
 
@@ -718,8 +738,22 @@ describe("background tasks rail events", () => {
     expect(props.taskDetails.get("task-1")).toMatchObject({
       prompt,
       result,
+      resultContent,
       terminalSummary: "Authoritative terminal details",
     });
+    handleBackgroundTasksEvent(host, {
+      action: "upserted",
+      task: makeTask({
+        id: "task-1",
+        status: "running",
+        updatedAt: 3_000,
+        runId: "replacement-run",
+      }),
+    });
+    const replacement = createBackgroundTasksProps(host).taskDetails.get("task-1");
+    expect(replacement?.prompt).toBe(prompt);
+    expect(replacement?.result).toBeUndefined();
+    expect(replacement?.resultContent).toBeUndefined();
   });
 
   it("ignores upserts for other sessions, including the same agent", async () => {

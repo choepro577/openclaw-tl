@@ -13,6 +13,13 @@ type AgentCallResponse = {
   disposition?: "ambiguous";
 };
 
+const { completionFilesMock } = vi.hoisted(() => ({
+  completionFilesMock: vi.fn(async (_params: { isDeliveryAllowed: () => boolean }) => false),
+}));
+vi.mock("../completion/subagent-completion-files.js", () => ({
+  deliverSubagentCompletionFiles: completionFilesMock,
+}));
+
 const agentSpy = vi.fn(
   async (_req: AgentCallRequest): Promise<AgentCallResponse> => ({
     runId: "run-main",
@@ -266,6 +273,7 @@ describe("subagent wait outcome timing", () => {
 
 describe("subagent announce seam flow", () => {
   beforeEach(() => {
+    completionFilesMock.mockReset().mockResolvedValue(false);
     agentSpy.mockClear();
     sessionsDeleteSpy.mockClear();
     callGatewayMock.mockReset().mockImplementation(async (req: unknown) => {
@@ -322,6 +330,45 @@ describe("subagent announce seam flow", () => {
     subagentRegistryRuntimeMock.resolveRequesterForChildSession.mockReset();
     subagentRegistryRuntimeMock.resolveRequesterForChildSession.mockReturnValue(null);
   });
+
+  it.each([false, true])(
+    "returns backed files before parent wake unless yield owns completion (yield=%s)",
+    async (yieldOwned) => {
+      const order: string[] = [];
+      loadSessionStoreMock.mockReturnValue({
+        "agent:main:subagent:files": { sessionId: "child-files-session" },
+      });
+      completionFilesMock.mockImplementation(async (params) => {
+        if (!params.isDeliveryAllowed()) {
+          return false;
+        }
+        order.push("files-published");
+        return true;
+      });
+      agentSpy.mockImplementationOnce(async () => {
+        order.push("parent-wake");
+        return { status: "ok" };
+      });
+      await runSubagentAnnounceFlow({
+        childSessionKey: "agent:main:subagent:files",
+        childRunId: "run-files",
+        requesterSessionKey: "agent:main:main",
+        requesterDisplayKey: "main",
+        task: "Export spreadsheet and image",
+        timeoutMs: 10,
+        cleanup: "keep",
+        waitForCompletion: false,
+        outcome: { status: "ok" },
+        terminalReply: { disposition: "visible", text: "Report.xlsx and chart.png are ready." },
+        isCompletionOwnedByRequesterYield: () => yieldOwned,
+      });
+      expect(order).toEqual(yieldOwned ? ["parent-wake"] : ["files-published", "parent-wake"]);
+      expect(requireAgentCall().params?.message).toContain("Report.xlsx and chart.png are ready.");
+      expect(
+        String(requireAgentCall().params?.message).includes("already been returned as attachments"),
+      ).toBe(!yieldOwned);
+    },
+  );
 
   it("suppresses ANNOUNCE_SKIP delivery while still deleting the child session", async () => {
     loadSessionStoreMock.mockReturnValue({

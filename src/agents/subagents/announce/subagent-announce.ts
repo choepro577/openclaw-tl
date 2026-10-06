@@ -31,6 +31,7 @@ import {
   type AgentInternalEvent,
 } from "../../internal-events.js";
 import { isAnnounceSkip } from "../../tools/sessions-send-tokens.js";
+import { deliverSubagentCompletionFiles } from "../completion/subagent-completion-files.js";
 import {
   countPendingDescendantRuns,
   getLatestSubagentRunByChildSessionKey,
@@ -469,7 +470,7 @@ export async function runSubagentAnnounceFlow(params: {
     const announceSessionId = childSessionEffectsAllowed()
       ? childSessionId || "unknown"
       : "unknown";
-    const findings = childCompletionFindings || reply || "(no output)";
+    let findings = childCompletionFindings || reply || "(no output)";
 
     let requesterIsSubagent = requesterIsInternalSession();
     if (requesterIsSubagent) {
@@ -512,6 +513,26 @@ export async function runSubagentAnnounceFlow(params: {
           endedAt: params.endedAt,
         });
     const statsLine = childSessionEffectsAllowed() ? candidateStatsLine : undefined;
+    if (
+      outcome.status === "ok" &&
+      announceType === "subagent task" &&
+      (await deliverSubagentCompletionFiles({
+        cfg: subagentAnnounceDeps.getRuntimeConfig(),
+        childSessionKey: params.childSessionKey,
+        childRunId: params.childRunId,
+        requesterSessionKey: targetRequesterSessionKey,
+        isDeliveryAllowed: () =>
+          childSessionEffectsAllowed() &&
+          completionDeliveryAllowed() &&
+          !params.signal?.aborted &&
+          !params.isCompletionOwnedByRequesterYield?.() &&
+          childSessionId !== undefined &&
+          loadSessionEntryByKey(params.childSessionKey)?.sessionId === childSessionId,
+      }))
+    ) {
+      findings +=
+        "\n\nThe files have already been returned as attachments in the requester conversation.";
+    }
     const internalEvents: AgentInternalEvent[] = [
       {
         type: "task_completion",

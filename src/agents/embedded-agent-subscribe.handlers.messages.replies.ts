@@ -3,6 +3,11 @@
  */
 import { uniqueStrings } from "@openclaw/normalization-core/string-normalization";
 import { resolveSendableOutboundReplyParts } from "openclaw/plugin-sdk/reply-payload";
+import {
+  copyReplyPayloadMetadata,
+  getReplyPayloadMetadata,
+  setReplyPayloadMetadata,
+} from "../auto-reply/reply-payload.js";
 import type { ReplyDirectiveParseResult } from "../auto-reply/reply/reply-directives.js";
 import type { BlockReplyPayload } from "./embedded-agent-payloads.js";
 import type { EmbeddedAgentSubscribeState } from "./embedded-agent-subscribe.handlers.types.js";
@@ -97,6 +102,26 @@ function readAlignedPendingToolMedia(
   };
 }
 
+function markHostProducedToolMedia(
+  state: Pick<EmbeddedAgentSubscribeState, "pendingToolMediaTrustByUrl">,
+  payload: BlockReplyPayload,
+): BlockReplyPayload {
+  const sources = (payload.mediaUrls ?? []).filter(
+    (url) => state.pendingToolMediaTrustByUrl.get(url.trim()) === true,
+  );
+  if (sources.length === 0) {
+    return payload;
+  }
+  return setReplyPayloadMetadata(payload, {
+    hostProducedMediaSources: [
+      ...new Set([
+        ...(getReplyPayloadMetadata(payload)?.hostProducedMediaSources ?? []),
+        ...sources,
+      ]),
+    ],
+  });
+}
+
 /** Moves queued tool media into a non-reasoning assistant reply payload. */
 export function consumePendingToolMediaIntoReply(
   state: Pick<
@@ -142,8 +167,12 @@ export function consumePendingToolMediaIntoReply(
       )
         ? { ...payloadWithMetadata, trustedLocalMedia: true }
         : payloadWithMetadata;
+    const trustedPayload = markHostProducedToolMedia(
+      state,
+      copyReplyPayloadMetadata(payload, selectedPayload),
+    );
     clearPendingToolMedia(state);
-    return selectedPayload;
+    return trustedPayload;
   }
   const pendingMedia = readAlignedPendingToolMedia(state);
   const allPendingMediaTrusted =
@@ -156,8 +185,12 @@ export function consumePendingToolMediaIntoReply(
     audioAsVoice: payload.audioAsVoice || state.pendingToolAudioAsVoice || undefined,
     ...(payload.trustedLocalMedia || allPendingMediaTrusted ? { trustedLocalMedia: true } : {}),
   };
+  const trustedPayload = markHostProducedToolMedia(
+    state,
+    copyReplyPayloadMetadata(payload, mergedPayload),
+  );
   clearPendingToolMedia(state);
-  return mergedPayload;
+  return trustedPayload;
 }
 
 /** Restores reserved tool media after its outbound delivery was rejected. */
@@ -184,8 +217,12 @@ export function restorePendingToolMediaReply(
       seen.has(url) ? [] : [pendingAttachments[index] ?? {}],
     ),
   ];
-  for (const [index, url] of restoredUrls.entries()) {
-    if (payload.trustedLocalMedia || restoredAttachments[index]?.trustedLocalMedia) {
+  const hostProduced = new Set([
+    ...(getReplyPayloadMetadata(payload)?.hostProducedMediaSources ?? []),
+    ...(getReplyPayloadMetadata(payload)?.stagedFileSources?.map((entry) => entry.mediaUrl) ?? []),
+  ]);
+  for (const url of restoredUrls) {
+    if (hostProduced.has(url)) {
       state.pendingToolMediaTrustByUrl.set(url, true);
     } else if (!state.pendingToolMediaTrustByUrl.has(url)) {
       state.pendingToolMediaTrustByUrl.set(url, false);
@@ -212,12 +249,12 @@ export function readPendingToolMediaReply(
   const allPendingMediaTrusted =
     pendingMedia.mediaUrls.length > 0 &&
     pendingMedia.mediaUrls.every((url) => state.pendingToolMediaTrustByUrl.get(url) === true);
-  return {
+  return markHostProducedToolMedia(state, {
     mediaUrls: pendingMedia.mediaUrls.length ? pendingMedia.mediaUrls : undefined,
     attachments: pendingMedia.attachments,
     audioAsVoice: state.pendingToolAudioAsVoice || undefined,
     ...(allPendingMediaTrusted ? { trustedLocalMedia: true } : {}),
-  };
+  });
 }
 
 export function recordPendingAssistantReplyDirectives(
@@ -253,14 +290,14 @@ export function consumePendingAssistantReplyDirectivesIntoReply(
     new Set([...(payload.mediaUrls ?? []), ...(pending.mediaUrls ?? [])]),
   );
   state.pendingAssistantReplyDirectives = undefined;
-  return {
+  return copyReplyPayloadMetadata(payload, {
     ...payload,
     mediaUrls: mediaUrls.length ? mediaUrls : undefined,
     audioAsVoice: payload.audioAsVoice || pending.audioAsVoice || undefined,
     replyToId: payload.replyToId ?? pending.replyToId,
     replyToTag: Boolean(payload.replyToTag || pending.replyToTag) || undefined,
     replyToCurrent: Boolean(payload.replyToCurrent || pending.replyToCurrent) || undefined,
-  };
+  });
 }
 
 /** True when a reply payload has text, media, or voice content worth sending. */

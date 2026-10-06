@@ -1,4 +1,5 @@
 // Read-side chat handlers own history projection, startup metadata, and message lookup.
+import { isRecord } from "@openclaw/normalization-core/record-coerce";
 import {
   ErrorCodes,
   errorShape,
@@ -44,6 +45,7 @@ import {
   reportOmittedChatHistory,
 } from "./chat-history-budget.js";
 import { readChatHistoryDelta } from "./chat-history-delta.js";
+import { enrichChatHistoryFiles } from "./chat-history-files.js";
 import {
   capChatHistoryAroundMessage,
   enrichChatHistoryCompactionMarkers,
@@ -399,7 +401,17 @@ async function handleChatHistoryRequest({
     respondChatHistoryUnavailable(method, respond);
     return;
   }
-  const normalized = enrichChatHistoryCompactionMarkers(historyPage.messages, historyEntry);
+  const normalized = enrichChatHistoryCompactionMarkers(
+    await enrichChatHistoryFiles({
+      cfg,
+      sessionKey: canonicalKey,
+      agentId: sessionAgentId,
+      sessionId,
+      storePath,
+      messages: historyPage.messages,
+    }),
+    historyEntry,
+  );
   const perMessageHardCap = Math.min(CHAT_HISTORY_MAX_SINGLE_MESSAGE_BYTES, maxHistoryBytes);
   const byteCounter = createChatHistoryByteCounter();
   const replaced = replaceOversizedChatHistoryMessages({
@@ -571,6 +583,15 @@ async function handleChatHistoryRequest({
       respond(true, delta);
       return;
     }
+    const enrichedMessages = await enrichChatHistoryFiles({
+      cfg,
+      sessionKey: canonicalKey,
+      agentId: sessionAgentId,
+      sessionId,
+      storePath,
+      messages: delta.messages,
+    });
+    delta.messages = enrichedMessages.filter(isRecord);
     sessionInfo.activeLeafEntryId = delta.activeLeafEntryId;
     respond(true, {
       kind: "delta",

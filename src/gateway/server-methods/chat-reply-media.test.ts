@@ -5,6 +5,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { consumePendingToolMediaIntoReply } from "../../agents/embedded-agent-subscribe.handlers.messages.replies.js";
+import { normalizeAgentRunReplyMedia } from "../../auto-reply/reply/reply-media-paths.js";
 import type { OpenClawConfig } from "../../config/types.openclaw.js";
 import { getAgentScopedMediaLocalRoots } from "../../media/local-roots.js";
 import {
@@ -12,7 +13,11 @@ import {
   type OpenClawTestState,
 } from "../../test-utils/openclaw-test-state.js";
 import { createManagedOutgoingMediaBlocks as createManagedOutgoingImageBlocks } from "../managed-image-attachments.js";
-import { buildAssistantDisplayContentFromReplyPayloads } from "./chat-assistant-content.js";
+import {
+  buildAssistantDisplayContentFromReplyPayloads,
+  hasManagedOutgoingAssistantContent,
+  stripManagedOutgoingAssistantContentBlocks,
+} from "./chat-assistant-content.js";
 import { normalizeWebchatReplyMediaPathsForDisplay } from "./chat-reply-media.js";
 
 const PNG_BYTES = Buffer.from(
@@ -233,7 +238,16 @@ describe("normalizeWebchatReplyMediaPathsForDisplay", () => {
 
     const payload = await normalizeReplyMedia({
       cfg,
-      payloads: [{ mediaUrls: [audioPath], trustedLocalMedia: true, audioAsVoice: true }],
+      payloads: [
+        consumePendingToolMediaIntoReply(
+          {
+            pendingToolMediaUrls: [audioPath],
+            pendingToolMediaTrustByUrl: new Map([[audioPath, true]]),
+            pendingToolAudioAsVoice: true,
+          },
+          {},
+        ),
+      ],
     });
 
     expect(payload?.mediaUrl).toBeUndefined();
@@ -241,6 +255,18 @@ describe("normalizeWebchatReplyMediaPathsForDisplay", () => {
     expect(payload?.trustedLocalMedia).toBe(true);
     expect(payload?.audioAsVoice).toBe(true);
     await expectOutboundMediaMissing(stateDir);
+  });
+
+  it("does not let a serialized trust flag preserve foreign local audio", async () => {
+    const { cfg } = createMediaTestContext({ allowRead: false });
+    const audioPath = path.join(testState.root, "outside", "foreign.mp3");
+    await createAudioFile(audioPath);
+    const payload = await normalizeReplyMedia({
+      cfg,
+      payloads: [{ mediaUrls: [audioPath], trustedLocalMedia: true }],
+    });
+    expect(payload?.mediaUrls).toBeUndefined();
+    expect(payload?.text).toContain("Media failed");
   });
 
   it.each([
@@ -373,6 +399,11 @@ describe("normalizeWebchatReplyMediaPathsForDisplay", () => {
     ]);
     expect(JSON.stringify(content)).not.toContain(documentPath);
     expect(JSON.stringify(content)).not.toContain("MEDIA:");
+    // Files must obey the same transcript backing gate as image/audio/video.
+    expect(hasManagedOutgoingAssistantContent(content)).toBe(true);
+    expect(stripManagedOutgoingAssistantContentBlocks(content)).toEqual([
+      { type: "text", text: "Tôi đã tạo file." },
+    ]);
   });
 
   it("keeps a sandbox-generated DOCX trusted through display normalization", async () => {
@@ -407,6 +438,64 @@ describe("normalizeWebchatReplyMediaPathsForDisplay", () => {
       }),
     ]);
     expect(JSON.stringify(content)).not.toContain(documentPath);
+  });
+
+  it("projects trusted structured child file and image payloads into parent-owned managed attachments", async () => {
+    const { cfg, workspaceDir } = createMediaTestContext({ allowRead: true });
+    const childWorkspace = path.join(testState.stateDir, "child-workspace");
+    const fileName = "Báo cáo TECH tháng 9.docx";
+    const childDocument = path.join(childWorkspace, fileName);
+    const childImage = path.join(childWorkspace, "biểu đồ.png");
+    await fs.mkdir(childWorkspace, { recursive: true });
+    await fs.writeFile(
+      childDocument,
+      Buffer.from("PK\u0003\u0004[Content_Types].xml word/document.xml", "utf8"),
+    );
+    await fs.writeFile(childImage, PNG_BYTES);
+    cfg.agents?.list?.push({ id: "hrm", workspace: childWorkspace });
+    const text = `[Tải báo cáo](<${childDocument}>)\n![Biểu đồ](<${childImage}>)`;
+    const child = await normalizeAgentRunReplyMedia({
+      cfg,
+      agentId: "hrm",
+      sessionKey: "agent:hrm:subagent:child",
+      workspaceDir: childWorkspace,
+      payloads: [{ text }],
+      terminalReply: { disposition: "visible", text },
+    });
+    expect(child.payloads?.[0]?.attachments?.[0]?.name).toBe(fileName);
+    expect(child.terminalReply).toEqual({ disposition: "visible", text: "Tải báo cáo\nBiểu đồ" });
+    expect(JSON.stringify(child.terminalReply)).not.toContain(childWorkspace);
+    expect(JSON.stringify(child.terminalReply)).not.toContain("media/outbound");
+    await fs.rm(childWorkspace, { recursive: true });
+    const parentPayloads = await normalizeWebchatReplyMediaPathsForDisplay({
+      cfg,
+      sessionKey: TEST_SESSION_KEY,
+      agentId: "main",
+      workspaceDir,
+      payloads: child.payloads ?? [],
+    });
+    const content = await buildAssistantDisplayContentFromReplyPayloads({
+      sessionKey: TEST_SESSION_KEY,
+      agentId: "main",
+      payloads: parentPayloads,
+      managedMediaLocalRoots: getAgentScopedMediaLocalRoots(cfg, "main"),
+    });
+    expect(content).toEqual([
+      { type: "text", text: "Tải báo cáo\nBiểu đồ" },
+      expect.objectContaining({
+        type: "file",
+        artifactId: expect.stringMatching(/^artifact_managed_media_/u),
+        fileName,
+      }),
+      expect.objectContaining({
+        type: "image",
+        artifactId: expect.stringMatching(/^artifact_managed_image_/u),
+        alt: "biểu đồ.png",
+      }),
+    ]);
+    expect(JSON.stringify(content)).not.toContain(childWorkspace);
+    expect(JSON.stringify(content)).not.toContain("media/outbound");
+    expect(hasManagedOutgoingAssistantContent(content)).toBe(true);
   });
 
   it("splits a mixed pending batch so only trusted local media reaches managed history", async () => {

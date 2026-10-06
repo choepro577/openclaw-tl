@@ -2,8 +2,16 @@
 import { isPassThroughRemoteMediaSource } from "@openclaw/media-core/media-source-url";
 import { isAudioFileName } from "@openclaw/media-core/mime";
 import { resolveAgentWorkspaceDir } from "../../agents/agent-scope.js";
-import type { ReplyPayload } from "../../auto-reply/reply-payload.js";
-import { createReplyMediaPathNormalizer } from "../../auto-reply/reply/reply-media-paths.runtime.js";
+import {
+  copyReplyPayloadMetadata,
+  getReplyPayloadMetadata,
+  setReplyPayloadMetadata,
+  type ReplyPayload,
+} from "../../auto-reply/reply-payload.js";
+import {
+  createReplyMediaPathNormalizer,
+  hasHostProducedReplyMediaSource,
+} from "../../auto-reply/reply/reply-media-paths.runtime.js";
 import type { OpenClawConfig } from "../../config/types.openclaw.js";
 import { resolveSendableOutboundReplyParts } from "../../plugin-sdk/reply-payload.js";
 
@@ -22,7 +30,7 @@ function shouldPreserveDisplayMediaUrl(payload: ReplyPayload, mediaUrl: string):
     return true;
   }
   // Local audio is preserved only after the producer marks it as already trust-scoped.
-  return payload.trustedLocalMedia === true;
+  return hasHostProducedReplyMediaSource(payload, mediaUrl);
 }
 
 /** Normalize reply media paths for webchat display without leaking sensitive media. */
@@ -65,18 +73,24 @@ export async function normalizeWebchatReplyMediaPathsForDisplay(params: {
       continue;
     }
     const mergedMediaUrls: string[] = [];
+    const stagedFileSources = [...(getReplyPayloadMetadata(payload)?.stagedFileSources ?? [])];
     let text = payload.text;
     for (const mediaUrl of mediaUrls) {
       if (shouldPreserveDisplayMediaUrl(payload, mediaUrl)) {
         mergedMediaUrls.push(mediaUrl);
         continue;
       }
-      const normalizedPayload = await normalizeMediaPaths({
-        ...payload,
-        text,
-        mediaUrl,
-        mediaUrls: [mediaUrl],
-      });
+      const normalizedPayload = await normalizeMediaPaths(
+        copyReplyPayloadMetadata(payload, {
+          ...payload,
+          text,
+          mediaUrl,
+          mediaUrls: [mediaUrl],
+        }),
+      );
+      stagedFileSources.push(
+        ...(getReplyPayloadMetadata(normalizedPayload)?.stagedFileSources ?? []),
+      );
       const normalizedMediaUrls = resolveSendableOutboundReplyParts(normalizedPayload).mediaUrls;
       text = normalizedPayload.text;
       if (normalizedMediaUrls.length === 0) {
@@ -84,12 +98,17 @@ export async function normalizeWebchatReplyMediaPathsForDisplay(params: {
       }
       mergedMediaUrls.push(...normalizedMediaUrls);
     }
-    normalized.push({
-      ...payload,
-      text,
-      mediaUrl: mergedMediaUrls[0],
-      mediaUrls: mergedMediaUrls,
-    });
+    normalized.push(
+      setReplyPayloadMetadata(
+        copyReplyPayloadMetadata(payload, {
+          ...payload,
+          text,
+          mediaUrl: mergedMediaUrls[0],
+          mediaUrls: mergedMediaUrls,
+        }),
+        { stagedFileSources },
+      ),
+    );
   }
   return normalized;
 }

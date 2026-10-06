@@ -12,6 +12,7 @@ import {
   replaceOversizedChatHistoryMessages,
 } from "./server-methods/chat-history-budget.js";
 import { buildSessionHistorySnapshot, SessionHistorySseState } from "./session-history-state.js";
+import { projectSessionMessagePayload } from "./session-transcript-message.js";
 
 function projectHistoryTransports(message: Record<string, unknown>) {
   const websocket = replaceOversizedChatHistoryMessages({
@@ -338,6 +339,36 @@ describe("oversized multimodal chat history", () => {
 });
 
 describe("transcript metadata projection", () => {
+  it("keeps managed files but hides custody paths in history and live messages", () => {
+    const content = [
+      {
+        type: "file",
+        fileName: "Báo cáo QA.csv",
+        artifactId: "artifact_managed_media_qa",
+        url: "/api/chat/media/outgoing/parent/qa/full",
+        mimeType: "text/csv",
+      },
+    ];
+    const message = {
+      role: "assistant",
+      content,
+      __openclaw: {
+        id: "files-message",
+        messageTaskId: "qa-task",
+        fileArtifacts: [{ source: "/private/child/report.csv", artifactId: "child-artifact" }],
+        taskFileSources: ["/private/staging/report.csv"],
+      },
+    };
+    const live = projectSessionMessagePayload({ sessionKey: "parent", message }).payload;
+    for (const projected of [...projectHistoryTransports(message).flat(), live?.message]) {
+      expect(projected).toMatchObject({ content, __openclaw: { messageTaskId: "qa-task" } });
+      expect(projected).not.toHaveProperty("__openclaw.fileArtifacts");
+      expect(projected).not.toHaveProperty("__openclaw.taskFileSources");
+      expect(JSON.stringify(projected)).not.toContain("/private/");
+    }
+    expect(message["__openclaw"].fileArtifacts).toHaveLength(1);
+  });
+
   it("keeps display metadata while omitting oversized upstream prompt metadata", () => {
     const message = {
       role: "user",

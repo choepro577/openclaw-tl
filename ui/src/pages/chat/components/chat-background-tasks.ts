@@ -169,13 +169,16 @@ function prepareTaskSnapshot(state: BackgroundTasksState, task: TaskSummary): Ta
   return retained;
 }
 
-/** Keep lookup-only fields on the private detail copy while lifecycle fields
- * continue to follow the newest compact list/event snapshot. */
+/** The task retains its prompt; completion text/files belong to the exact run.
+ * Lifecycle fields continue to follow the newest compact list/event snapshot. */
 function preserveTaskLookupDetail(snapshot: TaskSummary, detail: TaskSummary): TaskSummary {
+  const sameRun =
+    snapshot.runId === detail.runId && snapshot.childSessionKey === detail.childSessionKey;
   return {
     ...snapshot,
     ...(detail.prompt ? { prompt: detail.prompt } : {}),
-    ...(detail.result ? { result: detail.result } : {}),
+    ...(sameRun && detail.result ? { result: detail.result } : {}),
+    ...(sameRun && detail.resultContent ? { resultContent: detail.resultContent } : {}),
   };
 }
 

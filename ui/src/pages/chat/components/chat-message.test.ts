@@ -4034,36 +4034,74 @@ describe("grouped chat rendering", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
-  it("renders a non-text document card without fetching a preview", () => {
-    const fetchMock = vi.fn();
-    vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
-    const container = document.createElement("div");
+  it.each([
+    [
+      "Quarterly report",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "spreadsheet",
+      "XLSX",
+    ],
+    ["report.pdf", "application/octet-stream", "pdf", "PDF"],
+    [
+      "Nội quy công ty.docx",
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      "word",
+      "DOCX",
+    ],
+    ["Package", "application/zip", "archive", "ZIP"],
+    ["report.bin", "application/octet-stream", "file", "BIN"],
+  ])(
+    "renders %s with its file type, metadata, and download action without fetching a preview",
+    (fileName, mimeType, fileKind, typeHint) => {
+      const fetchMock = vi.fn();
+      vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
+      const container = document.createElement("div");
 
-    renderAssistantMessage(
-      container,
-      createAssistantMessage(
-        [
-          createAttachmentBlock(
-            "https://example.com/report.pdf",
-            "document",
-            "report.pdf",
-            "application/pdf",
-          ),
-        ],
-        { id: "assistant-pdf-document-card" },
-      ),
-      { showToolCalls: false },
-    );
+      renderAssistantMessage(
+        container,
+        createAssistantMessage(
+          [
+            createAttachmentBlock(
+              "https://example.com/returned-file",
+              "document",
+              fileName,
+              mimeType,
+              { sizeBytes: 2048 },
+            ),
+          ],
+          { id: "assistant-pdf-document-card" },
+        ),
+        { showToolCalls: false },
+      );
 
-    const card = expectElement(container, ".chat-assistant-attachment-card--document", HTMLElement);
-    expect(
-      card
-        .querySelector<HTMLAnchorElement>(".chat-assistant-attachment-card__download")
-        ?.getAttribute("download"),
-    ).toBe("report.pdf");
-    expect(card.querySelector(".chat-assistant-attachment-card__preview-text")).toBeNull();
-    expect(fetchMock).not.toHaveBeenCalled();
-  });
+      const card = expectElement(
+        container,
+        ".chat-assistant-attachment-card--document",
+        HTMLElement,
+      );
+      expect(card.dataset.fileKind).toBe(fileKind);
+      expect(card.querySelector(".chat-assistant-attachment-card__meta")?.textContent).toBe(
+        `${typeHint} · 2.0 KB`,
+      );
+      expect(
+        card.querySelector(".chat-assistant-attachment-card__body")?.getAttribute("title"),
+      ).toBe(fileName);
+      expect(
+        card.querySelector(".chat-assistant-attachment-card__icon")?.getAttribute("aria-hidden"),
+      ).toBe("true");
+      expect(card.querySelector(".chat-assistant-attachment-card__icon svg")).not.toBeNull();
+      expect(
+        card
+          .querySelector<HTMLAnchorElement>(".chat-assistant-attachment-card__download")
+          ?.getAttribute("download"),
+      ).toBe(fileName);
+      expect(
+        card.querySelector(".chat-assistant-attachment-card__download")?.getAttribute("aria-label"),
+      ).toContain(fileName);
+      expect(card.querySelector(".chat-assistant-attachment-card__preview-text")).toBeNull();
+      expect(fetchMock).not.toHaveBeenCalled();
+    },
+  );
 
   it("opens a managed file artifact in Review and keeps a ticketed download action", async () => {
     const attachmentId = crypto.randomUUID();
@@ -4097,6 +4135,9 @@ describe("grouped chat rendering", () => {
     rerender();
     await vi.waitFor(() =>
       expect(container.querySelector(".chat-assistant-attachment-card__download")).not.toBeNull(),
+    );
+    expect(container.querySelector(".chat-assistant-attachment-card__meta")?.textContent).toBe(
+      "DOCX · 7.5 KB",
     );
     expect(resolveArtifactDownload).toHaveBeenCalledWith({
       sessionKey: "agent:main:main",
@@ -4367,7 +4408,7 @@ describe("grouped chat rendering", () => {
 
     rerender();
     await flushAssistantAttachmentAvailabilityChecks();
-    const metaCall = fetchMock.mock.calls.find(([url]) => String(url).includes("meta=1"));
+    const metaCall = fetchMock.mock.calls.find(([url]) => url.includes("meta=1"));
     expect(metaCall).toBeDefined();
     const metaUrl = new URL(String(metaCall?.[0]), "http://control.test");
     expect(metaUrl.searchParams.get("sessionKey")).toBe(sessionKey);
@@ -5190,7 +5231,7 @@ describe("grouped chat rendering", () => {
     expect(vi.getTimerCount()).toBe(0);
   });
 
-  it("treats a failed managed outgoing image fetch as a missing preview", async () => {
+  it("shows an unavailable image card when a managed outgoing image fetch fails", async () => {
     const managedChatImageUrl = `/api/chat/media/outgoing/agent%3Amain%3Amain/${crypto.randomUUID()}/full`;
     const fetchMock = vi.fn(async () => {
       throw new Error("gateway unavailable");
@@ -5206,6 +5247,12 @@ describe("grouped chat rendering", () => {
     await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
     await flushAssistantAttachmentAvailabilityChecks();
     expect(container.querySelector(".chat-message-image")).toBeNull();
+    expect(
+      container.querySelector(".chat-assistant-attachment-card--blocked")?.textContent,
+    ).toContain("Unavailable generated image");
+    expect(container.querySelector(".chat-assistant-attachment-badge")?.textContent).toContain(
+      "Unavailable",
+    );
   });
 
   it("bounds managed outgoing image blob URLs with least-recently-used eviction", async () => {

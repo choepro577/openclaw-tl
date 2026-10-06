@@ -28,6 +28,7 @@ import {
 } from "../state/openclaw-agent-db.js";
 import { closeOpenClawStateDatabaseForTest } from "../state/openclaw-state-db.js";
 import { withEnvAsync } from "../test-utils/env.js";
+import { buildAssistantMediaContentDisposition } from "./assistant-media-content-disposition.js";
 import {
   attachManagedImageRecordToMessage,
   insertManagedImageRecord,
@@ -1589,6 +1590,14 @@ describe("createManagedOutgoingImageBlocks", () => {
         mimeType: "application/zip",
       },
       {
+        relativePath: "vectors/Biểu đồ.svg",
+        body: Buffer.from(
+          '<svg xmlns="http://www.w3.org/2000/svg" width="2" height="2"><script>alert(1)</script><rect width="2" height="2" fill="blue"/></svg>',
+          "utf8",
+        ),
+        mimeType: "image/svg+xml",
+      },
+      {
         relativePath: "first/notes.txt",
         body: Buffer.from("first text document", "utf8"),
         mimeType: "text/plain",
@@ -1623,6 +1632,12 @@ describe("createManagedOutgoingImageBlocks", () => {
         mimeType: fixture.mimeType,
         sizeBytes: fixture.body.byteLength,
       });
+      expect(
+        buildAssistantMediaContentDisposition(
+          path.basename(fixture.relativePath),
+          fixture.mimeType,
+        ),
+      ).toMatch(/^attachment;/);
     }
     expect(new Set(blocks.map((block) => block.artifactId)).size).toBe(fixtures.length);
   });

@@ -6,6 +6,7 @@ import {
   copyReplyPayloadMetadata,
   getReplyPayloadMetadata,
   markReplyPayloadForSourceSuppressionDelivery,
+  setReplyPayloadMetadata,
 } from "../../../auto-reply/reply-payload.js";
 import { splitMediaFromOutput } from "../../../media/parse.js";
 import type { EmbeddedAgentRunResult } from "../types.js";
@@ -63,13 +64,29 @@ export function mergeAttemptToolMediaPayloads(params: {
   if (mediaUrls.length === 0 && !params.toolAudioAsVoice && !params.toolTrustedLocalMedia) {
     return params.payloads;
   }
+  const producedSources = new Set(params.toolTrustedLocalMedia ? mediaUrls : hostOwnedMediaUrls);
+  const markProducedMedia = (payload: EmbeddedRunPayload): EmbeddedRunPayload => {
+    const sources = (payload.mediaUrls ?? []).filter((url) => producedSources.has(url));
+    if (sources.length === 0) {
+      return payload;
+    }
+    return setReplyPayloadMetadata(payload, {
+      hostProducedMediaSources: [
+        ...new Set([
+          ...(getReplyPayloadMetadata(payload)?.hostProducedMediaSources ?? []),
+          ...sources,
+        ]),
+      ],
+    });
+  };
 
-  const buildMediaPayload = (urls: string[], includeAudio: boolean): EmbeddedRunPayload => ({
-    mediaUrls: urls.length ? urls : undefined,
-    mediaUrl: urls[0],
-    audioAsVoice: (includeAudio && params.toolAudioAsVoice) || undefined,
-    trustedLocalMedia: params.toolTrustedLocalMedia || undefined,
-  });
+  const buildMediaPayload = (urls: string[], includeAudio: boolean): EmbeddedRunPayload =>
+    markProducedMedia({
+      mediaUrls: urls.length ? urls : undefined,
+      mediaUrl: urls[0],
+      audioAsVoice: (includeAudio && params.toolAudioAsVoice) || undefined,
+      trustedLocalMedia: params.toolTrustedLocalMedia || undefined,
+    });
   const shouldSplitHostOwnedMedia =
     params.sourceReplyDeliveryMode === "message_tool_only" && hostOwnedMediaUrls.length > 0;
   const hostOwnedMediaUrlSet = new Set(hostOwnedMediaUrls);
@@ -105,13 +122,15 @@ export function mergeAttemptToolMediaPayloads(params: {
     const mergedMediaUrls = Array.from(
       new Set([...(payload.mediaUrls ?? []), ...mergeableMediaUrls]),
     );
-    payloads[payloadIndex] = copyReplyPayloadMetadata(payload, {
-      ...payload,
-      mediaUrls: mergedMediaUrls.length ? mergedMediaUrls : undefined,
-      mediaUrl: payload.mediaUrl ?? mergedMediaUrls[0],
-      audioAsVoice: payload.audioAsVoice || params.toolAudioAsVoice || undefined,
-      trustedLocalMedia: payload.trustedLocalMedia || params.toolTrustedLocalMedia || undefined,
-    });
+    payloads[payloadIndex] = markProducedMedia(
+      copyReplyPayloadMetadata(payload, {
+        ...payload,
+        mediaUrls: mergedMediaUrls.length ? mergedMediaUrls : undefined,
+        mediaUrl: payload.mediaUrl ?? mergedMediaUrls[0],
+        audioAsVoice: payload.audioAsVoice || params.toolAudioAsVoice || undefined,
+        trustedLocalMedia: payload.trustedLocalMedia || params.toolTrustedLocalMedia || undefined,
+      }),
+    );
     return appendHostOwnedMedia(payloads);
   }
 
