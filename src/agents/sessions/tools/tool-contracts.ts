@@ -130,7 +130,7 @@ export interface WriteToolInput {
   content: string;
 }
 
-export type WriteToolDetails =
+export type WriteToolDetails = (
   | { changed: false }
   | {
       changed: true;
@@ -146,4 +146,12 @@ export type WriteToolDetails =
       patch: string;
       firstChangedLine?: number;
     }
-  | { changed: true; created?: boolean };
+  | { changed: true; created?: boolean }
+) & {
+  media?: {
+    mediaUrls: string[];
+    trustedLocalMedia: true;
+    replacedMediaUrls?: string[];
+    stagedFileSources?: Array<{ mediaUrl: string; sources: string[] }>;
+  };
+};

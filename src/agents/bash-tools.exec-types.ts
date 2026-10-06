@@ -97,6 +97,16 @@ export type ExecToolDefaults = {
   notifyOnExit?: boolean;
   notifyOnExitEmptySuccess?: boolean;
   cwd?: string;
+  /** Run owner supplies the permission-scoped immutable export snapshot reader. */
+  snapshotExports?: (
+    paths: readonly string[],
+    signal?: AbortSignal,
+  ) => Promise<{
+    mediaUrls: string[];
+    trustedLocalMedia: true;
+    replacedMediaUrls?: string[];
+    stagedFileSources?: Array<{ mediaUrl: string; sources: string[] }>;
+  }>;
 };
 
 /** Outcome passed to approval follow-up factories after approved async exec. */
@@ -141,6 +151,12 @@ export type ExecToolApprovalReview = {
 
 /** Structured details returned by exec tool calls. */
 export type ExecToolDetails = {
+  media?: {
+    mediaUrls: string[];
+    trustedLocalMedia: true;
+    replacedMediaUrls?: string[];
+    stagedFileSources?: Array<{ mediaUrl: string; sources: string[] }>;
+  };
   approvalReviews?: readonly ExecToolApprovalReview[];
   approvalReviewOutcome?: "approved" | "denied" | "reviewing";
 } & (

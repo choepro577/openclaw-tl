@@ -1,3 +1,4 @@
+import { getReplyPayloadMetadata } from "../../../auto-reply/reply-payload.js";
 /**
  * Projects stream state into the stable embedded-attempt result contract.
  */
@@ -419,6 +420,9 @@ export function completeEmbeddedAttemptResult(
     messagingToolSourceReplyPayloads,
     heartbeatToolResponse,
     toolMediaUrls: pendingToolMediaReply?.mediaUrls,
+    toolStagedFileSources: pendingToolMediaReply
+      ? getReplyPayloadMetadata(pendingToolMediaReply)?.stagedFileSources
+      : undefined,
     toolAudioAsVoice: pendingToolMediaReply?.audioAsVoice,
     toolTrustedLocalMedia: pendingToolMediaReply?.trustedLocalMedia,
     hasToolMediaBlockReply: hasToolMediaBlockReplyNow,

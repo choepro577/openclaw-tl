@@ -1,5 +1,6 @@
 import path from "node:path";
 import { parseDateFirstTimestampMs } from "@openclaw/normalization-core/number-coercion";
+import { asOptionalRecord } from "@openclaw/normalization-core/record-coerce";
 import {
   isSessionTranscriptProjectionUnavailableError,
   readRecentSessionTranscriptMessageEvents,
@@ -75,12 +76,13 @@ export async function readSessionMessageByIdPrefixAsync(
     toTranscriptReadScope(resolveTranscriptReadTarget(scope)),
     prefix,
   );
-  return found
+  const messageId = found && asOptionalRecord(found.event)?.id;
+  return found && typeof messageId === "string"
     ? {
         found: true,
         oversized: false,
         seq: found.seq,
-        messageId: String(found.event.id),
+        messageId,
         message: projectTranscriptEntryMessage(found.event, found.seq),
       }
     : { found: false, oversized: false };

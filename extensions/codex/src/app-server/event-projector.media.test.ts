@@ -557,7 +557,7 @@ describe("CodexAppServerEventProjector media projection", () => {
           id: "ig_123",
           status: "completed",
           revisedPrompt: null,
-          result: "Zm9v",
+          result: tinyPngBase64,
           savedPath,
         },
       ]),
@@ -571,6 +571,16 @@ describe("CodexAppServerEventProjector media projection", () => {
 
     expect(result.toolMediaUrls).toStrictEqual([]);
     expect(result.hostOwnedToolMediaUrls).toBeUndefined();
+
+    const exportedPath = "/tmp/media/outbound/report.xlsx";
+    const withExport = projector.buildResult({
+      ...buildEmptyToolTelemetry(),
+      messagingToolSentMediaUrls: [savedPath],
+      toolMediaUrls: [savedPath, exportedPath],
+      hostOwnedToolMediaUrls: [savedPath, exportedPath, exportedPath],
+    });
+    expect(withExport.toolMediaUrls).toEqual([savedPath, exportedPath]);
+    expect(withExport.hostOwnedToolMediaUrls).toEqual([exportedPath]);
   });
 
   it("propagates message-tool-only source reply delivery telemetry", async () => {

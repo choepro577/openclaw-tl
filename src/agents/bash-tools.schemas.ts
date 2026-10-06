@@ -24,6 +24,14 @@ const PROCESS_TOOL_ACTIONS = [
 /** Parameters accepted by the exec tool. */
 export const execSchema = Type.Object({
   command: Type.String({ description: "Shell command to execute" }),
+  exportPaths: Type.Optional(
+    Type.Array(Type.String(), {
+      minItems: 1,
+      maxItems: 19,
+      description:
+        "For every file/image created for user download, declare its workspace-relative path here (or absolute workspace path). Successful foreground execution snapshots these files as attachments, even if your final answer only names them. Do not export private/config/memory files. Exports require foreground completion; background/node exports are unsupported.",
+    }),
+  ),
   workdir: Type.Optional(
     Type.String({
       description:

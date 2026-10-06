@@ -23,6 +23,7 @@ export function mergeAttemptToolMediaPayloads(params: {
   payloads?: EmbeddedRunPayload[];
   toolMediaUrls?: string[];
   hostOwnedToolMediaUrls?: string[];
+  toolStagedFileSources?: Array<{ mediaUrl: string; sources: string[]; deliveredToSource?: true }>;
   toolAudioAsVoice?: boolean;
   toolTrustedLocalMedia?: boolean;
   sourceReplyDeliveryMode?: SourceReplyDeliveryMode;
@@ -31,7 +32,27 @@ export function mergeAttemptToolMediaPayloads(params: {
   let mediaUrls = Array.from(
     new Set(params.toolMediaUrls?.map((url) => url.trim()).filter(Boolean) ?? []),
   );
-  const payloads = params.payloads?.length ? [...params.payloads] : [];
+  const delivered = (params.toolStagedFileSources ?? []).filter((entry) => entry.deliveredToSource);
+  const inputPayloads =
+    delivered.length > 0
+      ? params.payloads?.map((payload) =>
+          payload.isReasoning
+            ? payload
+            : setReplyPayloadMetadata(payload, {
+                stagedFileSources: [
+                  ...(getReplyPayloadMetadata(payload)?.stagedFileSources ?? []),
+                  ...delivered,
+                ],
+                hostProducedMediaSources: [
+                  ...new Set([
+                    ...(getReplyPayloadMetadata(payload)?.hostProducedMediaSources ?? []),
+                    ...delivered.map((entry) => entry.mediaUrl),
+                  ]),
+                ],
+              }),
+        )
+      : params.payloads;
+  const payloads = inputPayloads?.length ? [...inputPayloads] : [];
   const payloadIndex = payloads.findIndex((payload) => !payload.isReasoning);
   const visiblePayload = payloads.at(payloadIndex);
   const isSourceReplyTranscriptMirror =
@@ -62,7 +83,7 @@ export function mergeAttemptToolMediaPayloads(params: {
     ),
   );
   if (mediaUrls.length === 0 && !params.toolAudioAsVoice && !params.toolTrustedLocalMedia) {
-    return params.payloads;
+    return inputPayloads;
   }
   const producedSources = new Set(params.toolTrustedLocalMedia ? mediaUrls : hostOwnedMediaUrls);
   const markProducedMedia = (payload: EmbeddedRunPayload): EmbeddedRunPayload => {
@@ -70,7 +91,12 @@ export function mergeAttemptToolMediaPayloads(params: {
     if (sources.length === 0) {
       return payload;
     }
+    const stagedFileSources = [
+      ...(getReplyPayloadMetadata(payload)?.stagedFileSources ?? []),
+      ...(params.toolStagedFileSources ?? []).filter((entry) => sources.includes(entry.mediaUrl)),
+    ];
     return setReplyPayloadMetadata(payload, {
+      ...(stagedFileSources.length > 0 ? { stagedFileSources } : {}),
       hostProducedMediaSources: [
         ...new Set([
           ...(getReplyPayloadMetadata(payload)?.hostProducedMediaSources ?? []),

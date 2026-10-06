@@ -21,6 +21,7 @@ import type { CodexResponseCompletionProjection } from "./event-projector-usage.
 import type { CodexTurn } from "./protocol.js";
 
 export type CodexAppServerToolTelemetry = {
+  toolStagedFileSources?: Array<{ mediaUrl: string; sources: string[]; deliveredToSource?: true }>;
   didSendViaMessagingTool: boolean;
   didDeliverSourceReplyViaMessageTool?: boolean;
   messagingToolSentTexts: string[];
@@ -214,6 +215,7 @@ export function buildCodexAttemptResult(
     messagingToolSourceReplyPayloads: input.toolTelemetry.messagingToolSourceReplyPayloads ?? [],
     heartbeatToolResponse: input.toolTelemetry.heartbeatToolResponse,
     toolMediaUrls: input.generatedMediaProjection.buildToolMediaUrls(input.toolTelemetry),
+    toolStagedFileSources: input.toolTelemetry.toolStagedFileSources,
     hostOwnedToolMediaUrls: input.generatedMediaProjection.buildHostOwnedMediaUrls(
       input.toolTelemetry,
     ),

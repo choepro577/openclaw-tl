@@ -9,6 +9,8 @@ import {
 const CODEX_PLUGIN_ROOT = path.dirname(fileURLToPath(import.meta.url));
 
 export { CODEX_MANAGED_APP_SERVER_CHECK_ID };
+export { createCodexDynamicToolBridge } from "./src/app-server/dynamic-tools.js";
+export { CodexGeneratedMediaProjection } from "./src/app-server/event-projector-media.js";
 
 export {
   createCodexEnterprisePluginRuntime,

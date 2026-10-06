@@ -249,7 +249,12 @@ export type ReplyPayloadMetadata = {
   /** Original runtime MEDIA references used to identify the persisted assistant row. */
   assistantTranscriptMediaUrls?: string[];
   /** Host-staged source provenance; never serialized or used as cross-session read authority. */
-  stagedFileSources?: Array<{ mediaUrl: string; sources: string[] }>;
+  stagedFileSources?: Array<{
+    mediaUrl: string;
+    sources: string[];
+    /** Host-observed successful current-source send of this exact snapshot; never serialized. */
+    deliveredToSource?: true;
+  }>;
   /** Exact sources admitted by host tool-media production; never serialized. */
   hostProducedMediaSources?: string[];
   /** The runtime owns the transcript decision for this assistant payload. */

@@ -22,6 +22,7 @@ import { createLazyImportLoader } from "../shared/lazy-promise.js";
 import { hasTopLevelShellControlOperator, splitShellArgs } from "../utils/shell-argv.js";
 import type { ApplyPatchSummary } from "./apply-patch.js";
 import type { ExecToolDetails } from "./bash-tools.exec-types.js";
+import { removePendingToolMedia } from "./embedded-agent-subscribe.handlers.messages.replies.js";
 import type { ToolHandlerContext } from "./embedded-agent-subscribe.handlers.types.js";
 import {
   extractToolResultMediaArtifact,
@@ -458,12 +459,28 @@ export function hasMessagingRichContent(record: Record<string, unknown>): boolea
 
 function queuePendingToolMedia(
   ctx: ToolHandlerContext,
-  mediaReply: { mediaUrls: string[]; audioAsVoice?: boolean; trustedLocalMedia?: boolean },
+  mediaReply: {
+    mediaUrls: string[];
+    replacedMediaUrls: string[];
+    stagedFileSources: Array<{ mediaUrl: string; sources: string[] }>;
+    audioAsVoice?: boolean;
+    trustedLocalMedia?: boolean;
+  },
 ) {
+  const superseded = (ctx.state.supersededToolMediaUrls ??= new Set<string>());
+  for (const url of mediaReply.replacedMediaUrls) {
+    superseded.add(url);
+    ctx.state.pendingToolMediaTrustByUrl.delete(url);
+  }
+  removePendingToolMedia(ctx.state, superseded);
+  ctx.state.pendingToolStagedFileSources = [
+    ...(ctx.state.pendingToolStagedFileSources ?? []),
+    ...mediaReply.stagedFileSources,
+  ].filter((entry) => !superseded.has(entry.mediaUrl));
   const seen = new Set(ctx.state.pendingToolMediaUrls.map((url) => url.trim()));
   for (const mediaUrl of mediaReply.mediaUrls) {
     const normalized = mediaUrl.trim();
-    if (!normalized) {
+    if (!normalized || superseded.has(normalized)) {
       continue;
     }
     if (mediaReply.trustedLocalMedia) {
@@ -476,6 +493,7 @@ function queuePendingToolMedia(
     }
     seen.add(normalized);
     ctx.state.pendingToolMediaUrls.push(normalized);
+    ctx.state.pendingToolMediaAttachments?.push({});
   }
   if (mediaReply.audioAsVoice) {
     ctx.state.pendingToolAudioAsVoice = true;
@@ -703,6 +721,23 @@ export async function emitToolResultOutput(params: {
   }
   queuePendingToolMedia(ctx, {
     mediaUrls,
+    stagedFileSources:
+      mediaReply.trustedLocalMedia === true
+        ? (mediaReply.stagedFileSources ?? []).filter(
+            (entry) =>
+              mediaUrls.includes(entry.mediaUrl) && /^(?:\/|[a-z]:[\\/])/i.test(entry.mediaUrl),
+          )
+        : [],
+    replacedMediaUrls:
+      mediaReply.trustedLocalMedia === true &&
+      mediaUrls.some((url) => /^(?:\/|[a-z]:[\\/])/i.test(url))
+        ? filterToolResultMediaUrls(
+            rawToolName,
+            mediaReply.replacedMediaUrls ?? [],
+            result,
+            ctx.trustedLocalMediaToolNames,
+          )
+        : [],
     ...(mediaReply.audioAsVoice ? { audioAsVoice: true } : {}),
     ...(mediaReply.trustedLocalMedia ? { trustedLocalMedia: true } : {}),
   });

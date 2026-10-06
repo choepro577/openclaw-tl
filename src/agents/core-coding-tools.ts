@@ -108,6 +108,7 @@ type CoreCodingToolsOptions = {
 
 /** Materialize only the core file and shell families selected by the runtime owner. */
 export function createCoreCodingTools(options: CoreCodingToolsOptions): AnyAgentTool[] {
+  const exportSnapshots = new Map<string, string>();
   const sandbox = options.sandbox;
   const sandboxRoot = sandbox?.workspaceDir;
   const sandboxFsBridge = sandbox?.fsBridge;
@@ -191,6 +192,7 @@ export function createCoreCodingTools(options: CoreCodingToolsOptions): AnyAgent
     }
     if (!options.readOnly && !sandboxRoot && baseToolNames.has("write")) {
       const write = createHostWorkspaceWriteTool(options.codingRoot, {
+        exportSnapshots,
         containmentRoot: options.containmentRoot,
         workspaceOnly: options.workspaceOnly,
         memoryWriteProvenance: options.memoryWriteProvenance,
@@ -211,6 +213,7 @@ export function createCoreCodingTools(options: CoreCodingToolsOptions): AnyAgent
       createTool: options.baseToolFactories?.createEditTool,
     });
     const write = createSandboxedWriteTool({
+      exportSnapshots,
       ...toolOptions,
       createTool: options.baseToolFactories?.createWriteTool,
     });
@@ -249,6 +252,18 @@ export function createCoreCodingTools(options: CoreCodingToolsOptions): AnyAgent
       createLazyExecTool({
         ...options.execDefaults,
         cwd: options.codingRoot,
+        snapshotExports: async (paths, signal) =>
+          (await import("./workspace-exec-exports.js")).createWorkspaceExecExportSnapshot({
+            workspaceDir: options.codingRoot,
+            bridge: sandboxFsBridge,
+            snapshots: exportSnapshots,
+            containerWorkdir: sandbox?.containerWorkdir,
+            cfg: options.execDefaults.config ?? {},
+            agentId: options.execDefaults.agentId,
+            sessionKey: options.execDefaults.sessionKey,
+            messageProvider: options.execDefaults.messageProvider,
+            accountId: options.execDefaults.accountId,
+          })(paths, signal),
         sandbox: sandbox
           ? {
               containerName: sandbox.containerName,

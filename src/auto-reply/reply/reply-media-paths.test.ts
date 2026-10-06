@@ -170,6 +170,11 @@ describe("createReplyMediaPathNormalizer", () => {
   });
 
   it("stages child CSV and image links containing mixed raw and encoded spaces", async () => {
+    setTestEnvValue("OPENCLAW_STATE_DIR", "/tmp/reply-files-state");
+    const outboundRoot = "/tmp/reply-files-state/media/outbound";
+    resolveOutboundAttachmentFromUrl.mockImplementation(async (source: string) => ({
+      path: `${outboundRoot}/${path.basename(source)}`,
+    }));
     ensureSandboxWorkspaceForSession.mockResolvedValue({ workspaceDir: "/tmp/sandboxes/child" });
     const text =
       '[Báo cáo](sandbox:/workspace/qa/Báo cáo%20nhân%20sự%20QA.csv "Tải CSV")\n![Biểu đồ](/workspace/qa/Biểu đồ%20QA (1).png)';
@@ -182,8 +187,8 @@ describe("createReplyMediaPathNormalizer", () => {
       terminalReply: { disposition: "visible", text },
     });
     expect(child.payloads?.[0]?.mediaUrls).toEqual([
-      "/tmp/outbound-media/Báo cáo nhân sự QA.csv",
-      "/tmp/outbound-media/Biểu đồ QA (1).png",
+      `${outboundRoot}/Báo cáo nhân sự QA.csv`,
+      `${outboundRoot}/Biểu đồ QA (1).png`,
     ]);
     expect(child.payloads?.[0]?.attachments?.map((attachment) => attachment.name)).toEqual([
       "Báo cáo nhân sự QA.csv",
@@ -383,6 +388,9 @@ describe("createReplyMediaPathNormalizer", () => {
   });
 
   it("awaits canonical child artifact persistence before returning terminal output", async () => {
+    setTestEnvValue("OPENCLAW_STATE_DIR", "/tmp/reply-files-state");
+    const stagedPath = "/tmp/reply-files-state/media/outbound/report.csv";
+    resolveOutboundAttachmentFromUrl.mockResolvedValue({ path: stagedPath });
     let finishStage: (() => void) | undefined;
     stageRunReplyFiles.mockImplementation(
       () =>
@@ -412,7 +420,7 @@ describe("createReplyMediaPathNormalizer", () => {
     );
     const stagedPayload = stageRunReplyFiles.mock.calls[0][0].payloads[0];
     expect(getReplyPayloadMetadata(stagedPayload)?.stagedFileSources).toEqual([
-      { mediaUrl: "/tmp/outbound-media/report.csv", sources: ["./report.csv"] },
+      { mediaUrl: stagedPath, sources: ["./report.csv"] },
     ]);
     finishStage?.();
     expect((await resultPromise).terminalReply).toEqual({ disposition: "visible", text: "Report" });
@@ -709,7 +717,7 @@ describe("createReplyMediaPathNormalizer", () => {
     expectMedia(result, "/Users/peter/.openclaw/media/outbound/generated.png", [
       "/Users/peter/.openclaw/media/outbound/generated.png",
     ]);
-    expect(result.trustedLocalMedia).toBeUndefined();
+    expect(result.trustedLocalMedia).toBe(true);
     expect(resolveOutboundAttachmentFromUrl).not.toHaveBeenCalled();
   });
 

@@ -30,6 +30,7 @@ import { ToolInputError } from "./tools/common.js";
 
 export type ExecToolArgs = Record<string, unknown> & {
   command: string;
+  exportPaths?: string[];
   workdir?: string;
   env?: Record<string, string>;
   yieldMs?: number;

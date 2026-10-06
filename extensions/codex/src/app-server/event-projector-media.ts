@@ -197,21 +197,42 @@ export class CodexGeneratedMediaProjection {
   buildToolMediaUrls(params: {
     toolMediaUrls?: string[];
     messagingToolSentMediaUrls?: string[];
+    toolStagedFileSources?: Array<{ mediaUrl: string; deliveredToSource?: true }>;
   }): string[] | undefined {
-    const mediaUrls = new Set(params.toolMediaUrls?.map((url) => url.trim()).filter(Boolean) ?? []);
+    const delivered = new Set(
+      params.toolStagedFileSources
+        ?.filter((entry) => entry.deliveredToSource)
+        .map((entry) => entry.mediaUrl),
+    );
+    const mediaUrls = new Set(
+      params.toolMediaUrls?.map((url) => url.trim()).filter((url) => url && !delivered.has(url)) ??
+        [],
+    );
     if ((params.messagingToolSentMediaUrls?.length ?? 0) === 0) {
       for (const mediaUrl of this.urlsByItemId.values()) {
         mediaUrls.add(mediaUrl);
       }
     }
-    return mediaUrls.size > 0 ? [...mediaUrls] : params.toolMediaUrls;
+    return mediaUrls.size > 0
+      ? [...mediaUrls]
+      : params.toolMediaUrls?.filter((url) => !delivered.has(url));
   }
 
-  buildHostOwnedMediaUrls(params: { messagingToolSentMediaUrls?: string[] }): string[] | undefined {
-    if ((params.messagingToolSentMediaUrls?.length ?? 0) > 0) {
-      return undefined;
-    }
-    const mediaUrls = [...this.urlsByItemId.values()];
+  buildHostOwnedMediaUrls(params: {
+    messagingToolSentMediaUrls?: string[];
+    hostOwnedToolMediaUrls?: string[];
+    toolStagedFileSources?: Array<{ mediaUrl: string; deliveredToSource?: true }>;
+  }): string[] | undefined {
+    const sent = new Set(params.messagingToolSentMediaUrls?.map((url) => url.trim()));
+    const produced = new Map(params.toolStagedFileSources?.map((entry) => [entry.mediaUrl, entry]));
+    const mediaUrls = [
+      ...new Set([
+        ...(params.hostOwnedToolMediaUrls ?? []).filter((url) =>
+          produced.has(url) ? !produced.get(url)?.deliveredToSource : !sent.has(url.trim()),
+        ),
+        ...(sent.size === 0 ? this.urlsByItemId.values() : []),
+      ]),
+    ];
     return mediaUrls.length > 0 ? mediaUrls : undefined;
   }
 

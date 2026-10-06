@@ -3,6 +3,8 @@
  * tool-call responses.
  */
 import { createHash } from "node:crypto";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import type { AgentToolResult } from "openclaw/plugin-sdk/agent-core";
 import {
   consumeAdjustedParamsForToolCall,
@@ -49,6 +51,7 @@ import {
   validateJsonSchemaValue,
 } from "openclaw/plugin-sdk/json-schema-runtime";
 import type { ImageContent, TextContent } from "openclaw/plugin-sdk/llm";
+import { readMediaBuffer, resolveMediaBufferPath } from "openclaw/plugin-sdk/media-store";
 import { normalizeOpenAIToolSchemas } from "openclaw/plugin-sdk/provider-tools";
 import {
   asNonArrayRecord,
@@ -435,6 +438,13 @@ export type CodexDynamicToolBridge = {
     messagingToolSourceReplyPayloads: MessagingToolSourceReplyPayload[];
     heartbeatToolResponse?: HeartbeatToolResponse;
     toolMediaUrls: string[];
+    hostOwnedToolMediaUrls?: string[];
+    supersededToolMediaUrls?: Set<string>;
+    toolStagedFileSources?: Array<{
+      mediaUrl: string;
+      sources: string[];
+      deliveredToSource?: true;
+    }>;
     toolAudioAsVoice: boolean;
     successfulCronAdds?: number;
     acceptedSessionSpawns: Array<{ runId: string; childSessionKey: string }>;
@@ -902,7 +912,7 @@ export function createCodexDynamicToolBridge(params: {
           toolName === "message" &&
           (toolConfirmedSourceReply || deliveredSourceReply || receiptConfirmedSourceReply);
         const sourceReplyFinal = confirmedSourceReply ? executedArgs.final !== false : undefined;
-        collectToolTelemetry({
+        await collectToolTelemetry({
           toolName,
           args: executedArgs,
           result,
@@ -911,6 +921,9 @@ export function createCodexDynamicToolBridge(params: {
           isError: resultIsError,
           messagingTarget: confirmedMessagingTarget,
           sourceReplyFinal,
+          sourceRouteBlocked: blocksSourceReplyTermination,
+          workspaceDir: params.hookContext?.workspaceDir,
+          signal,
         });
         if (deliveredSourceReply || receiptConfirmedSourceReply || toolConfirmedSourceReply) {
           telemetry.didDeliverSourceReplyViaMessageTool = true;
@@ -974,7 +987,7 @@ export function createCodexDynamicToolBridge(params: {
           toolCallOrdinal: options?.toolCallOrdinal,
         });
         notifyAgentToolResult(options?.onAgentToolResult, toolName, failedResult, true);
-        collectToolTelemetry({
+        await collectToolTelemetry({
           toolName,
           args: executedArgs,
           result: undefined,
@@ -1414,7 +1427,7 @@ function composeAbortSignals(...signals: Array<AbortSignal | undefined>): AbortS
   }
   return AbortSignal.any(activeSignals);
 }
-function collectToolTelemetry(params: {
+async function collectToolTelemetry(params: {
   toolName: string;
   args: Record<string, unknown>;
   result: AgentToolResult<unknown> | undefined;
@@ -1423,7 +1436,10 @@ function collectToolTelemetry(params: {
   isError: boolean;
   messagingTarget?: MessagingToolSend;
   sourceReplyFinal?: boolean;
-}): MessagingToolSend | MessagingToolSourceReplyPayload | undefined {
+  sourceRouteBlocked?: boolean;
+  workspaceDir?: string;
+  signal?: AbortSignal;
+}): Promise<MessagingToolSend | MessagingToolSourceReplyPayload | undefined> {
   if (params.isError) {
     return undefined;
   }
@@ -1439,17 +1455,53 @@ function collectToolTelemetry(params: {
   if (!params.isError && params.result) {
     const media = extractToolResultMediaArtifact(params.result);
     if (media) {
+      const mediaToolName =
+        params.toolName === "sandbox_exec" && media.trustedLocalMedia === true
+          ? "exec"
+          : params.toolName;
       const mediaUrls = filterToolResultMediaUrls(
-        params.toolName,
+        mediaToolName,
         media.mediaUrls,
         params.mediaTrustResult ?? params.result,
       );
+      const superseded = (params.telemetry.supersededToolMediaUrls ??= new Set<string>());
+      const ownedUrls =
+        media.trustedLocalMedia === true
+          ? mediaUrls.filter((url) => /^(?:\/|[a-z]:[\\/])/i.test(url))
+          : [];
+      if (ownedUrls.length > 0) {
+        for (const url of filterToolResultMediaUrls(
+          mediaToolName,
+          media.replacedMediaUrls ?? [],
+          params.mediaTrustResult ?? params.result,
+        )) {
+          superseded.add(url);
+        }
+        params.telemetry.toolMediaUrls = params.telemetry.toolMediaUrls.filter(
+          (url) => !superseded.has(url),
+        );
+        params.telemetry.hostOwnedToolMediaUrls = params.telemetry.hostOwnedToolMediaUrls?.filter(
+          (url) => !superseded.has(url),
+        );
+        params.telemetry.toolStagedFileSources = [
+          ...(params.telemetry.toolStagedFileSources ?? []),
+          ...(media.stagedFileSources ?? []).filter((entry) => ownedUrls.includes(entry.mediaUrl)),
+        ].filter((entry) => !superseded.has(entry.mediaUrl));
+      }
       const seen = new Set(params.telemetry.toolMediaUrls);
       for (const mediaUrl of mediaUrls) {
-        if (!seen.has(mediaUrl)) {
+        if (!seen.has(mediaUrl) && !superseded.has(mediaUrl)) {
           seen.add(mediaUrl);
           params.telemetry.toolMediaUrls.push(mediaUrl);
         }
+      }
+      if (ownedUrls.length > 0) {
+        params.telemetry.hostOwnedToolMediaUrls = [
+          ...new Set([
+            ...(params.telemetry.hostOwnedToolMediaUrls ?? []),
+            ...ownedUrls.filter((url) => !superseded.has(url)),
+          ]),
+        ];
       }
       if (media.audioAsVoice) {
         params.telemetry.toolAudioAsVoice = true;
@@ -1477,6 +1529,91 @@ function collectToolTelemetry(params: {
   }
   params.telemetry.didSendViaMessagingTool = true;
   const sourceReplyPayload = extractInternalSourceReplyPayload(params.result?.details);
+  const internalSourceSent =
+    sourceReplyPayload &&
+    isRecord(params.result?.details) &&
+    params.result.details.deliveryStatus === "sent";
+  if (
+    params.toolName === "message" &&
+    params.sourceRouteBlocked !== true &&
+    internalSourceSent &&
+    isDeliveredMessageToolOnlySourceReplyResult({
+      sourceReplyDeliveryMode: "message_tool_only",
+      toolName: params.toolName,
+      args: params.args,
+      result: params.result,
+      hookResult: params.mediaTrustResult,
+      isError: params.isError,
+      allowExplicitSourceRoute: true,
+    })
+  ) {
+    const key = (input: string) => {
+      let value = input.trim();
+      if (value.startsWith("file:")) {
+        try {
+          value = fileURLToPath(value);
+        } catch {
+          return value;
+        }
+      }
+      return path.isAbsolute(value)
+        ? path.normalize(value)
+        : params.workspaceDir && !/^[a-z][a-z0-9+.-]*:/i.test(value)
+          ? path.resolve(params.workspaceDir, value)
+          : value;
+    };
+    const requested = [...new Set(collectMediaUrls(params.args))];
+    const actual = [...new Set(collectMediaUrls({ ...sourceReplyPayload }))];
+    // Internal staging preserves media order and rejects count changes before delivery.
+    if (requested.length > 0 && requested.length === actual.length) {
+      const readOwned = async (source: string) => {
+        const expected = key(source);
+        if (!path.isAbsolute(expected)) {
+          throw new Error("Delivered file is not an owned local snapshot.");
+        }
+        const id = path.basename(expected);
+        if (key(await resolveMediaBufferPath(id, "outbound")) !== expected) {
+          throw new Error("Delivered file is outside its exact media-store identity.");
+        }
+        const saved = await readMediaBuffer(id, "outbound");
+        if (key(saved.path) !== expected) {
+          throw new Error("Delivered file identity changed.");
+        }
+        return saved.buffer;
+      };
+      for (const entry of params.telemetry.toolStagedFileSources ?? []) {
+        const index = requested.findIndex((sent) =>
+          [entry.mediaUrl, ...entry.sources].some((source) => key(source) === key(sent)),
+        );
+        if (index < 0) {
+          continue;
+        }
+        try {
+          const [producedBytes, deliveredBytes] = await Promise.all([
+            readOwned(entry.mediaUrl),
+            readOwned(actual[index]!),
+          ]);
+          if (
+            !params.signal?.aborted &&
+            params.telemetry.toolStagedFileSources?.includes(entry) &&
+            producedBytes.equals(deliveredBytes)
+          ) {
+            entry.deliveredToSource = true;
+          }
+        } catch {
+          // A missing, oversized or unproved copy cannot retire a produced artifact.
+        }
+      }
+    }
+    const delivered = new Set(
+      params.telemetry.toolStagedFileSources
+        ?.filter((entry) => entry.deliveredToSource)
+        .map((entry) => entry.mediaUrl),
+    );
+    params.telemetry.toolMediaUrls = params.telemetry.toolMediaUrls.filter(
+      (url) => !delivered.has(url),
+    );
+  }
   if (sourceReplyPayload) {
     const record = {
       ...sourceReplyPayload,

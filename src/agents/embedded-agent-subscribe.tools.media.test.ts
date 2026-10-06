@@ -8,6 +8,26 @@ import {
 } from "./embedded-agent-tool-media.js";
 
 describe("extractToolResultMediaArtifact", () => {
+  it("does not accept a delivered marker from serialized tool descriptors", () => {
+    const result = extractToolResultMediaArtifact({
+      details: {
+        media: {
+          mediaUrls: ["/tmp/sealed.csv"],
+          trustedLocalMedia: true,
+          stagedFileSources: [
+            {
+              mediaUrl: "/tmp/sealed.csv",
+              sources: ["/workspace/report.csv"],
+              deliveredToSource: true,
+            },
+          ],
+        },
+      },
+    });
+    expect(result?.stagedFileSources).toEqual([
+      { mediaUrl: "/tmp/sealed.csv", sources: ["/workspace/report.csv"] },
+    ]);
+  });
   it("returns undefined for null/undefined", () => {
     expect(extractToolResultMediaArtifact(null)).toBeUndefined();
     expect(extractToolResultMediaArtifact(undefined)).toBeUndefined();

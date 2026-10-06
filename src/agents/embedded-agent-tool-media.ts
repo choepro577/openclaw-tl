@@ -232,6 +232,8 @@ export function filterToolResultMediaUrls(
  */
 type ToolResultMediaArtifact = {
   mediaUrls: string[];
+  replacedMediaUrls?: string[];
+  stagedFileSources?: Array<{ mediaUrl: string; sources: string[] }>;
   audioAsVoice?: boolean;
   trustedLocalMedia?: boolean;
 };
@@ -322,6 +324,44 @@ export function extractToolResultMediaArtifact(
     if (mediaUrls.length > 0) {
       return {
         mediaUrls,
+        ...(Array.isArray(detailsMedia.stagedFileSources)
+          ? {
+              stagedFileSources: detailsMedia.stagedFileSources.flatMap((entry: unknown) => {
+                if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
+                  return [];
+                }
+                const item = entry as Record<string, unknown>;
+                if (
+                  typeof item.mediaUrl !== "string" ||
+                  !mediaUrls.includes(item.mediaUrl.trim()) ||
+                  !Array.isArray(item.sources)
+                ) {
+                  return [];
+                }
+                return [
+                  {
+                    mediaUrl: item.mediaUrl.trim(),
+                    sources: uniqueStrings(
+                      item.sources
+                        .filter((source): source is string => typeof source === "string")
+                        .map((source) => source.trim())
+                        .filter(Boolean),
+                    ),
+                  },
+                ];
+              }),
+            }
+          : {}),
+        ...(Array.isArray(detailsMedia.replacedMediaUrls)
+          ? {
+              replacedMediaUrls: uniqueStrings(
+                detailsMedia.replacedMediaUrls
+                  .filter((url): url is string => typeof url === "string")
+                  .map((url) => url.trim())
+                  .filter(Boolean),
+              ),
+            }
+          : {}),
         ...(detailsMedia.audioAsVoice === true ? { audioAsVoice: true } : {}),
         ...(detailsMedia.trustedLocalMedia === true ? { trustedLocalMedia: true } : {}),
       };

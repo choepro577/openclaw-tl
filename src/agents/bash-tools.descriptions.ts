@@ -36,6 +36,7 @@ export function describeExecTool(params?: {
     ...continuation,
     params?.hasCronTool ? "No sleep/delay loops for reminders/follow-ups; use cron." : undefined,
     "TTY CLI/UI/coding agent: pty=true.",
+    "When creating files for the user (Excel, PDF, images, reports), declare their workspace paths in exportPaths. Run in the foreground; verified files are attached automatically even if your final reply only names them.",
   ]
     .filter(Boolean)
     .join(" ");

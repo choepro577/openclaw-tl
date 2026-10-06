@@ -1,5 +1,5 @@
-import { realpathSync } from "node:fs";
 import path from "node:path";
+import { resolvePathViaExistingAncestorSync } from "../infra/boundary-path.js";
 import { isMissingPathError } from "../infra/errors.js";
 import { logWarn } from "../logger.js";
 import {
@@ -28,6 +28,7 @@ type ProvenanceWriteOperations = {
 export function withMemoryWriteProvenance<T extends ProvenanceWriteOperations>(
   operations: T,
   observer: MemoryWriteProvenanceObserver | undefined,
+  resolveProvenancePath?: (absolutePath: string) => string,
 ): T {
   if (!observer) {
     return operations;
@@ -36,7 +37,8 @@ export function withMemoryWriteProvenance<T extends ProvenanceWriteOperations>(
   return {
     ...operations,
     writeFile: async (absolutePath: string, content: string) => {
-      if (!observer.classifies(absolutePath)) {
+      const provenancePath = resolveProvenancePath?.(absolutePath) ?? absolutePath;
+      if (!observer.classifies(provenancePath)) {
         await operations.writeFile(absolutePath, content);
         return;
       }
@@ -50,7 +52,7 @@ export function withMemoryWriteProvenance<T extends ProvenanceWriteOperations>(
           return "";
         });
       await observer.write({
-        absolutePath,
+        absolutePath: provenancePath,
         contentBefore,
         contentAfter: content,
         commit: () => operations.writeFile(absolutePath, content),
@@ -59,7 +61,8 @@ export function withMemoryWriteProvenance<T extends ProvenanceWriteOperations>(
     ...(remove
       ? {
           remove: async (absolutePath: string) => {
-            const contentBefore = observer.classifies(absolutePath)
+            const provenancePath = resolveProvenancePath?.(absolutePath) ?? absolutePath;
+            const contentBefore = observer.classifies(provenancePath)
               ? await operations
                   .readFile(absolutePath)
                   .then((value) => (Buffer.isBuffer(value) ? value.toString("utf8") : value))
@@ -71,7 +74,7 @@ export function withMemoryWriteProvenance<T extends ProvenanceWriteOperations>(
                   })
               : "";
             await remove(absolutePath);
-            await observer.clearAfterDelete(absolutePath, contentBefore);
+            await observer.clearAfterDelete(provenancePath, contentBefore);
           },
         }
       : {}),
@@ -79,14 +82,10 @@ export function withMemoryWriteProvenance<T extends ProvenanceWriteOperations>(
 }
 
 function resolveMemoryRelativePath(root: string, absolutePath: string): string | undefined {
-  const canonicalPath = (candidate: string) => {
-    try {
-      return realpathSync.native(candidate);
-    } catch {
-      return path.join(realpathSync.native(path.dirname(candidate)), path.basename(candidate));
-    }
-  };
-  const relativePath = path.relative(canonicalPath(root), canonicalPath(absolutePath));
+  const relativePath = path.relative(
+    resolvePathViaExistingAncestorSync(root),
+    resolvePathViaExistingAncestorSync(absolutePath),
+  );
   if (
     !relativePath ||
     path.isAbsolute(relativePath) ||

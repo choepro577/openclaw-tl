@@ -58,6 +58,7 @@ import {
   type ReadToolContinuation,
 } from "./sessions/tools/tool-contracts.js";
 import { sanitizeToolResultImages } from "./tool-images.js";
+import { createWorkspaceWriteMediaSnapshot } from "./workspace-write-media.js";
 
 // NOTE(steipete): Upstream read now does file-magic MIME detection; we keep the wrapper
 // to sanitize oversized images before they hit providers.
@@ -940,6 +941,7 @@ export function wrapToolWorkspaceRootGuardWithOptions(
 type SandboxToolParams = {
   root: string;
   bridge: SandboxFsBridge;
+  exportSnapshots?: Map<string, string>;
   memoryWriteProvenance?: MemoryWriteProvenanceObserver;
   modelContextWindowTokens?: number;
   imageSanitization?: ImageSanitizationLimits;
@@ -965,9 +967,26 @@ export function createSandboxedReadTool(
 export function createSandboxedWriteTool(
   params: SandboxToolParams & { createTool?: typeof createWriteTool },
 ) {
+  const snapshotMedia = createWorkspaceWriteMediaSnapshot(params.root, params.exportSnapshots);
   const base = eraseSessionFileTool(
     (params.createTool ?? createWriteTool)(params.root, {
       operations: createSandboxWriteOperations(params),
+      snapshotMedia: async (input) => {
+        const resolved = params.bridge.resolvePath({ filePath: input.absolutePath });
+        const source = resolveSandboxMutationIdentity(params, input.absolutePath);
+        const media = await snapshotMedia({ ...input, absolutePath: source });
+        if (!media) {
+          return undefined;
+        }
+        return {
+          ...media,
+          stagedFileSources: media.stagedFileSources.map((entry) =>
+            Object.assign({}, entry, {
+              sources: [...new Set([...entry.sources, resolved.containerPath])],
+            }),
+          ),
+        };
+      },
     }),
   );
   return wrapToolParamValidation(base, REQUIRED_PARAM_GROUPS.write);
@@ -993,11 +1012,13 @@ export function createHostWorkspaceWriteTool(
     workspaceOnly?: boolean;
     memoryWriteProvenance?: MemoryWriteProvenanceObserver;
     createTool?: typeof createWriteTool;
+    exportSnapshots?: Map<string, string>;
   },
 ) {
   const base = eraseSessionFileTool(
     (options?.createTool ?? createWriteTool)(root, {
       operations: createHostWriteOperations(options?.containmentRoot ?? root, options),
+      snapshotMedia: createWorkspaceWriteMediaSnapshot(root, options?.exportSnapshots),
     }),
   );
   return wrapToolParamValidation(base, REQUIRED_PARAM_GROUPS.write);
@@ -1203,6 +1224,7 @@ function createSandboxWriteOperations(params: SandboxToolParams) {
         params.bridge.stat({ filePath: absolutePath, cwd: params.root }),
     } as const,
     params.memoryWriteProvenance,
+    (absolutePath) => resolveSandboxMutationIdentity(params, absolutePath),
   );
 }
 
@@ -1218,7 +1240,14 @@ function createSandboxEditOperations(params: SandboxToolParams) {
       access: (absolutePath: string) => assertSandboxFileExists(params, absolutePath),
     } as const,
     params.memoryWriteProvenance,
+    (absolutePath) => resolveSandboxMutationIdentity(params, absolutePath),
   );
+}
+
+function resolveSandboxMutationIdentity(params: SandboxToolParams, absolutePath: string): string {
+  const resolved = params.bridge.resolvePath({ filePath: absolutePath, cwd: params.root });
+  // Remote identities belong to the confirmed workspace without requiring a local file read.
+  return resolved.hostPath ?? path.resolve(params.root, resolved.relativePath);
 }
 
 async function assertSandboxFileExists(params: SandboxToolParams, absolutePath: string) {

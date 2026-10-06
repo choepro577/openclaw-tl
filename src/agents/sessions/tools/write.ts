@@ -39,12 +39,34 @@ const writeSchema = Type.Object({
   }),
   content: Type.String({ description: "File content." }),
 });
+const writeMediaSchema = Type.Optional(
+  Type.Object(
+    {
+      mediaUrls: Type.Array(Type.String()),
+      trustedLocalMedia: Type.Literal(true),
+      replacedMediaUrls: Type.Optional(Type.Array(Type.String())),
+      stagedFileSources: Type.Optional(
+        Type.Array(
+          Type.Object(
+            { mediaUrl: Type.String(), sources: Type.Array(Type.String()) },
+            { additionalProperties: false },
+          ),
+        ),
+      ),
+    },
+    { additionalProperties: false },
+  ),
+);
 
 const WriteToolOutputSchema = Type.Union([
-  Type.Object({ changed: Type.Literal(false) }, { additionalProperties: false }),
+  Type.Object(
+    { changed: Type.Literal(false), media: writeMediaSchema },
+    { additionalProperties: false },
+  ),
   Type.Object(
     {
       changed: Type.Literal(true),
+      media: writeMediaSchema,
       created: Type.Literal(true),
       diff: Type.String(),
       patch: Type.String(),
@@ -55,6 +77,7 @@ const WriteToolOutputSchema = Type.Union([
   Type.Object(
     {
       changed: Type.Literal(true),
+      media: writeMediaSchema,
       created: Type.Literal(false),
       diff: Type.String(),
       patch: Type.String(),
@@ -63,7 +86,11 @@ const WriteToolOutputSchema = Type.Union([
     { additionalProperties: false },
   ),
   Type.Object(
-    { changed: Type.Literal(true), created: Type.Optional(Type.Boolean()) },
+    {
+      changed: Type.Literal(true),
+      created: Type.Optional(Type.Boolean()),
+      media: writeMediaSchema,
+    },
     { additionalProperties: false },
   ),
 ]);
@@ -106,6 +133,11 @@ const defaultWriteOperations: WriteOperations = {
 export interface WriteToolOptions {
   /** Custom operations for file writing. Default: local filesystem */
   operations?: WriteOperations;
+  /** Workspace owner may prepare outbound media only after exact write verification. */
+  snapshotMedia?: (params: {
+    absolutePath: string;
+    content: string;
+  }) => Promise<WriteToolDetails["media"] | undefined>;
 }
 
 type WriteToolPrecheck = {
@@ -483,11 +515,26 @@ function isWriteRecoveryCandidate(error: unknown, signal: AbortSignal | undefine
   );
 }
 
-function successfulWriteResult(path: string, content: string, details: WriteToolDetails) {
-  return textResult(
-    `Successfully wrote ${Buffer.byteLength(content, "utf8")} bytes to ${path}`,
-    details,
-  );
+async function successfulWriteResult(
+  path: string,
+  content: string,
+  details: WriteToolDetails,
+  absolutePath: string,
+  snapshotMedia?: WriteToolOptions["snapshotMedia"],
+  displayText?: string,
+) {
+  const text =
+    displayText ?? `Successfully wrote ${Buffer.byteLength(content, "utf8")} bytes to ${path}`;
+  try {
+    const media = await snapshotMedia?.({ absolutePath, content });
+    return textResult(text, media ? { ...details, media } : details);
+  } catch {
+    // Download preparation cannot change the outcome of an already verified write.
+    return textResult(
+      `${text}\nThe file was saved, but its download could not be prepared.`,
+      details,
+    );
+  }
 }
 
 async function recoverSuccessfulWrite(params: {
@@ -499,6 +546,7 @@ async function recoverSuccessfulWrite(params: {
   precheck: WriteToolPrecheck;
   details: WriteToolDetails;
   signal?: AbortSignal;
+  snapshotMedia?: WriteToolOptions["snapshotMedia"];
 }) {
   if (!isWriteRecoveryCandidate(params.error, params.signal)) {
     return null;
@@ -511,7 +559,13 @@ async function recoverSuccessfulWrite(params: {
   if (!verified || !changed) {
     return null;
   }
-  return successfulWriteResult(params.path, params.content, params.details);
+  return successfulWriteResult(
+    params.path,
+    params.content,
+    params.details,
+    params.absolutePath,
+    params.snapshotMedia,
+  );
 }
 
 export function createWriteToolDefinition(
@@ -547,9 +601,14 @@ export function createWriteToolDefinition(
         // Terminal no-op: file already has identical content.
         if (precheck.state === "same") {
           return {
-            ...textResult(`No changes made to ${path}. The file already has identical content.`, {
-              changed: false,
-            } satisfies WriteToolDetails),
+            ...(await successfulWriteResult(
+              path,
+              content,
+              { changed: false },
+              absolutePath,
+              options?.snapshotMedia,
+              `No changes made to ${path}. The file already has identical content.`,
+            )),
             terminate: true,
           };
         }
@@ -568,7 +627,13 @@ export function createWriteToolDefinition(
               `Write verification failed for ${path}: the persisted regular file does not match the requested content. Inspect the target and retry.`,
             );
           }
-          return successfulWriteResult(path, content, details);
+          return successfulWriteResult(
+            path,
+            content,
+            details,
+            absolutePath,
+            options?.snapshotMedia,
+          );
         } catch (error: unknown) {
           const recovered = await recoverSuccessfulWrite({
             absolutePath,
@@ -577,6 +642,7 @@ export function createWriteToolDefinition(
             ops,
             path,
             precheck,
+            snapshotMedia: options?.snapshotMedia,
             details,
             signal,
           });

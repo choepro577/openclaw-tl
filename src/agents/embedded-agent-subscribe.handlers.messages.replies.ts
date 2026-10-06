@@ -1,3 +1,4 @@
+import path from "node:path";
 /**
  * Owns pending assistant reply directives and tool-media handoff.
  */
@@ -9,6 +10,8 @@ import {
   setReplyPayloadMetadata,
 } from "../auto-reply/reply-payload.js";
 import type { ReplyDirectiveParseResult } from "../auto-reply/reply/reply-directives.js";
+import { normalizeMediaReferenceForComparison } from "../media/media-reference-comparison.js";
+import { readMediaBuffer, resolveMediaBufferPath } from "../media/store.js";
 import type { BlockReplyPayload } from "./embedded-agent-payloads.js";
 import type { EmbeddedAgentSubscribeState } from "./embedded-agent-subscribe.handlers.types.js";
 
@@ -59,12 +62,16 @@ function clearPendingToolMedia(
     | "pendingToolMediaUrls"
     | "pendingToolMediaAttachments"
     | "pendingToolMediaTrustByUrl"
+    | "pendingToolStagedFileSources"
     | "pendingToolAudioAsVoice"
   >,
 ) {
   state.pendingToolMediaUrls = [];
   state.pendingToolMediaAttachments = [];
   state.pendingToolMediaTrustByUrl.clear();
+  state.pendingToolStagedFileSources = state.pendingToolStagedFileSources?.filter(
+    (entry) => entry.deliveredToSource,
+  );
   state.pendingToolAudioAsVoice = false;
 }
 
@@ -75,7 +82,10 @@ function hasReplyMedia(payload: BlockReplyPayload): boolean {
 function readAlignedPendingToolMedia(
   state: Pick<
     EmbeddedAgentSubscribeState,
-    "pendingToolMediaUrls" | "pendingToolMediaAttachments" | "pendingToolMediaTrustByUrl"
+    | "pendingToolMediaUrls"
+    | "pendingToolMediaAttachments"
+    | "pendingToolMediaTrustByUrl"
+    | "pendingToolStagedFileSources"
   >,
 ) {
   const seen = new Set<string>();
@@ -103,20 +113,31 @@ function readAlignedPendingToolMedia(
 }
 
 function markHostProducedToolMedia(
-  state: Pick<EmbeddedAgentSubscribeState, "pendingToolMediaTrustByUrl">,
+  state: Pick<
+    EmbeddedAgentSubscribeState,
+    "pendingToolMediaTrustByUrl" | "pendingToolStagedFileSources"
+  >,
   payload: BlockReplyPayload,
 ): BlockReplyPayload {
   const sources = (payload.mediaUrls ?? []).filter(
     (url) => state.pendingToolMediaTrustByUrl.get(url.trim()) === true,
   );
-  if (sources.length === 0) {
+  const delivered = (state.pendingToolStagedFileSources ?? []).filter(
+    (entry) => entry.deliveredToSource,
+  );
+  if (sources.length === 0 && delivered.length === 0) {
     return payload;
   }
+  const stagedFileSources = (state.pendingToolStagedFileSources ?? []).filter(
+    (entry) => entry.deliveredToSource || sources.includes(entry.mediaUrl),
+  );
   return setReplyPayloadMetadata(payload, {
+    ...(stagedFileSources.length > 0 ? { stagedFileSources } : {}),
     hostProducedMediaSources: [
       ...new Set([
         ...(getReplyPayloadMetadata(payload)?.hostProducedMediaSources ?? []),
         ...sources,
+        ...delivered.map((entry) => entry.mediaUrl),
       ]),
     ],
   });
@@ -129,6 +150,7 @@ export function consumePendingToolMediaIntoReply(
     | "pendingToolMediaUrls"
     | "pendingToolMediaAttachments"
     | "pendingToolMediaTrustByUrl"
+    | "pendingToolStagedFileSources"
     | "pendingToolAudioAsVoice"
   >,
   payload: BlockReplyPayload,
@@ -137,7 +159,7 @@ export function consumePendingToolMediaIntoReply(
     return payload;
   }
   if (state.pendingToolMediaUrls.length === 0 && !state.pendingToolAudioAsVoice) {
-    return payload;
+    return markHostProducedToolMedia(state, payload);
   }
   if (hasReplyMedia(payload)) {
     // Pending tool media is a fallback delivery queue; explicit final media is
@@ -200,11 +222,16 @@ export function restorePendingToolMediaReply(
     | "pendingToolMediaUrls"
     | "pendingToolMediaAttachments"
     | "pendingToolMediaTrustByUrl"
+    | "pendingToolStagedFileSources"
     | "pendingToolAudioAsVoice"
     | "pendingToolMediaDeliveryFailed"
   >,
   payload: BlockReplyPayload,
 ): void {
+  state.pendingToolStagedFileSources = [
+    ...(state.pendingToolStagedFileSources ?? []),
+    ...(getReplyPayloadMetadata(payload)?.stagedFileSources ?? []),
+  ];
   const pendingUrls = state.pendingToolMediaUrls;
   const pendingAttachments = state.pendingToolMediaAttachments ?? [];
   const restoredUrls = payload.mediaUrls ?? [];
@@ -239,10 +266,15 @@ export function readPendingToolMediaReply(
     | "pendingToolMediaUrls"
     | "pendingToolMediaAttachments"
     | "pendingToolMediaTrustByUrl"
+    | "pendingToolStagedFileSources"
     | "pendingToolAudioAsVoice"
   >,
 ): BlockReplyPayload | null {
-  if (state.pendingToolMediaUrls.length === 0 && !state.pendingToolAudioAsVoice) {
+  if (
+    state.pendingToolMediaUrls.length === 0 &&
+    !state.pendingToolAudioAsVoice &&
+    !state.pendingToolStagedFileSources?.some((entry) => entry.deliveredToSource)
+  ) {
     return null;
   }
   const pendingMedia = readAlignedPendingToolMedia(state);
@@ -255,6 +287,87 @@ export function readPendingToolMediaReply(
     audioAsVoice: state.pendingToolAudioAsVoice || undefined,
     ...(allPendingMediaTrusted ? { trustedLocalMedia: true } : {}),
   });
+}
+
+/** Successful current-source receipt retires only exact current-run produced snapshots. */
+export async function markSentToolFiles(
+  state: Pick<
+    EmbeddedAgentSubscribeState,
+    "pendingToolMediaUrls" | "pendingToolMediaAttachments" | "pendingToolStagedFileSources"
+  >,
+  sentMediaUrls: string[],
+  deliveredMediaUrls: string[],
+  workspaceDir?: string,
+): Promise<void> {
+  if (sentMediaUrls.length === 0 || sentMediaUrls.length !== deliveredMediaUrls.length) {
+    return;
+  }
+  const key = (source: string) => {
+    const value = normalizeMediaReferenceForComparison(source);
+    return workspaceDir && !path.isAbsolute(value) && !/^[a-z][a-z0-9+.-]*:/i.test(value)
+      ? path.resolve(workspaceDir, value)
+      : value;
+  };
+  const readOwned = async (source: string) => {
+    const expected = normalizeMediaReferenceForComparison(source);
+    if (!path.isAbsolute(expected)) {
+      throw new Error("Delivered file is not an owned local snapshot.");
+    }
+    const id = path.basename(expected);
+    if (
+      normalizeMediaReferenceForComparison(await resolveMediaBufferPath(id, "outbound")) !==
+      expected
+    ) {
+      throw new Error("Delivered file is outside its exact media-store identity.");
+    }
+    const saved = await readMediaBuffer(id, "outbound");
+    if (normalizeMediaReferenceForComparison(saved.path) !== expected) {
+      throw new Error("Delivered file identity changed.");
+    }
+    return saved.buffer;
+  };
+  for (const entry of state.pendingToolStagedFileSources ?? []) {
+    const index = sentMediaUrls.findIndex((sent) =>
+      [entry.mediaUrl, ...entry.sources].some((source) => key(source) === key(sent)),
+    );
+    if (index < 0) {
+      continue;
+    }
+    try {
+      const [producedBytes, deliveredBytes] = await Promise.all([
+        readOwned(entry.mediaUrl),
+        readOwned(deliveredMediaUrls[index]!),
+      ]);
+      if (
+        state.pendingToolStagedFileSources?.includes(entry) &&
+        producedBytes.equals(deliveredBytes)
+      ) {
+        entry.deliveredToSource = true;
+      }
+    } catch {
+      // Failure to prove the actual delivered bytes keeps the automatic candidate.
+    }
+  }
+  const delivered = new Set(
+    state.pendingToolStagedFileSources
+      ?.filter((entry) => entry.deliveredToSource)
+      .map((entry) => entry.mediaUrl),
+  );
+  removePendingToolMedia(state, delivered);
+}
+
+/** Keep queued URLs and restored attachment metadata paired when an owned snapshot is removed. */
+export function removePendingToolMedia(
+  state: Pick<EmbeddedAgentSubscribeState, "pendingToolMediaUrls" | "pendingToolMediaAttachments">,
+  removed: ReadonlySet<string>,
+): void {
+  const remaining = state.pendingToolMediaUrls
+    .map((url, index) => ({ url, attachment: state.pendingToolMediaAttachments?.[index] ?? {} }))
+    .filter((entry) => !removed.has(entry.url));
+  state.pendingToolMediaUrls = remaining.map((entry) => entry.url);
+  if (state.pendingToolMediaAttachments) {
+    state.pendingToolMediaAttachments = remaining.map((entry) => entry.attachment);
+  }
 }
 
 export function recordPendingAssistantReplyDirectives(

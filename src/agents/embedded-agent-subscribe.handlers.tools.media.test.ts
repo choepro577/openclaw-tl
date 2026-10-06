@@ -1,6 +1,13 @@
+import { describe, expect, it, vi } from "vitest";
 // Tool media handler tests cover media extraction from tool results, trusted
 // local media flags, and quiet/verbose tool-output emission paths.
-import { describe, expect, it, vi } from "vitest";
+import { getReplyPayloadMetadata, setReplyPayloadMetadata } from "../auto-reply/reply-payload.js";
+import { readMediaBuffer, saveMediaBuffer } from "../media/store.js";
+import { withOpenClawTestState } from "../test-utils/openclaw-test-state.js";
+import {
+  readPendingToolMediaReply,
+  restorePendingToolMediaReply,
+} from "./embedded-agent-subscribe.handlers.messages.replies.js";
 import {
   handleToolExecutionEnd,
   handleToolExecutionStart,
@@ -218,6 +225,208 @@ async function handleProviderInventoryListResult(params: {
 }
 
 describe("handleToolExecutionEnd media emission", () => {
+  it("retains attachment tuples when a restored earlier snapshot is superseded", async () => {
+    const ctx = createMockContext({ builtinToolNames: new Set(["write"]) });
+    restorePendingToolMediaReply(
+      ctx.state,
+      setReplyPayloadMetadata(
+        {
+          mediaUrls: ["/tmp/old-a.csv", "/tmp/b.png"],
+          attachments: [
+            { path: "/tmp/old-a.csv", name: "Old A.csv", type: "file" },
+            { path: "/tmp/b.png", name: "B.png", type: "image" },
+          ],
+        },
+        {
+          hostProducedMediaSources: ["/tmp/old-a.csv", "/tmp/b.png"],
+          stagedFileSources: [
+            { mediaUrl: "/tmp/old-a.csv", sources: ["/workspace/A.csv"] },
+            { mediaUrl: "/tmp/b.png", sources: ["/workspace/B.png"] },
+          ],
+        },
+      ),
+    );
+    await handleToolExecutionEnd(ctx, {
+      type: "tool_execution_end",
+      toolName: "write",
+      toolCallId: "latest-a",
+      isError: false,
+      result: {
+        content: [{ type: "text", text: "Latest verified export." }],
+        details: {
+          media: {
+            mediaUrls: ["/tmp/latest-a.csv"],
+            trustedLocalMedia: true,
+            replacedMediaUrls: ["/tmp/old-a.csv"],
+            stagedFileSources: [{ mediaUrl: "/tmp/latest-a.csv", sources: ["/workspace/A.csv"] }],
+          },
+        },
+      },
+    });
+    const pending = readPendingToolMediaReply(ctx.state);
+    expect(pending?.mediaUrls).toEqual(["/tmp/b.png", "/tmp/latest-a.csv"]);
+    expect(pending?.attachments).toEqual([
+      { path: "/tmp/b.png", name: "B.png", type: "image", trustedLocalMedia: true },
+      { trustedLocalMedia: true },
+    ]);
+    expect(
+      getReplyPayloadMetadata(pending ?? {})?.stagedFileSources?.map((entry) => entry.mediaUrl),
+    ).toEqual(["/tmp/b.png", "/tmp/latest-a.csv"]);
+  });
+  it.each([
+    "source",
+    "internal",
+    "changed",
+    "failed",
+    "off-target",
+    "off-target-internal",
+    "missing-status",
+    "rewrite",
+    "batch",
+  ])("retires only byte-proven produced files after a %s message receipt", async (mode) => {
+    await withOpenClawTestState({ scenario: "minimal", applyEnv: true }, async () => {
+      const a = await saveMediaBuffer(Buffer.from("A_ORIGINAL,1\n"), "text/csv", "outbound");
+      const b = await saveMediaBuffer(Buffer.from("B_ORIGINAL,2\n"), "text/csv", "outbound");
+      const sent = await saveMediaBuffer(
+        Buffer.from(mode === "changed" ? "A_CHANGED_SEND,9\n" : "A_ORIGINAL,1\n"),
+        "text/csv",
+        "outbound",
+      );
+      const sentB = await saveMediaBuffer(Buffer.from("B_ORIGINAL,2\n"), "text/csv", "outbound");
+      const ctx = createMockContext({ builtinToolNames: new Set(["write"]) });
+      Object.assign(ctx.params, {
+        config: {},
+        sourceReplyDeliveryMode: "message_tool_only",
+        messageChannel: "slack",
+        currentChannelId: "C123",
+        currentMessagingTarget: "C123",
+      });
+      const produce = (url: string, source: string, replacedMediaUrls?: string[]) =>
+        handleToolExecutionEnd(ctx, {
+          type: "tool_execution_end",
+          toolName: "write",
+          toolCallId: "produce",
+          isError: false,
+          result: {
+            content: [{ type: "text", text: "Verified export." }],
+            details: {
+              media: {
+                mediaUrls: [url],
+                trustedLocalMedia: true,
+                replacedMediaUrls,
+                stagedFileSources: [{ mediaUrl: url, sources: [source] }],
+              },
+            },
+          },
+        });
+      await produce(a.path, "/workspace/A.csv");
+      await produce(b.path, "/workspace/B.csv");
+      await handleToolExecutionStart(ctx, {
+        type: "tool_execution_start",
+        toolName: "message",
+        toolCallId: "sent",
+        args: {
+          action: "send",
+          ...(["internal", "changed", "missing-status", "rewrite", "batch"].includes(mode)
+            ? {}
+            : { target: mode.startsWith("off-target") ? "C456" : "C123" }),
+          ...(mode === "batch"
+            ? { mediaUrls: ["/workspace/A.csv", "/workspace/B.csv"] }
+            : { media: "/workspace/A.csv" }),
+        },
+      });
+      await handleToolExecutionEnd(ctx, {
+        type: "tool_execution_end",
+        toolName: "message",
+        toolCallId: "sent",
+        isError: mode === "failed",
+        result: {
+          content: [{ type: "text", text: mode === "failed" ? "Failed" : "Sent" }],
+          details: {
+            messageDelivery: {
+              status: mode === "failed" ? "failed" : "settled",
+              partialDelivery: false,
+              createdThreadIds: [],
+            },
+            ...(mode === "source" ? { sourceReplyRoute: "current-source" } : {}),
+            ...([
+              "internal",
+              "changed",
+              "off-target-internal",
+              "missing-status",
+              "rewrite",
+              "batch",
+            ].includes(mode)
+              ? {
+                  sourceReplySink: "internal-ui",
+                  ...(mode === "missing-status" ? {} : { deliveryStatus: "sent" }),
+                  sourceReply: {
+                    mediaUrls: mode === "batch" ? [sent.path, sentB.path] : [sent.path],
+                  },
+                }
+              : {}),
+          },
+        },
+      });
+      const delivered = ["internal", "rewrite", "batch"].includes(mode);
+      expect(ctx.state.pendingToolMediaUrls).toEqual(
+        mode === "batch" ? [] : delivered ? [b.path] : [a.path, b.path],
+      );
+      expect(
+        getReplyPayloadMetadata(
+          readPendingToolMediaReply(ctx.state) ?? {},
+        )?.stagedFileSources?.find((entry) => entry.mediaUrl === a.path)?.deliveredToSource,
+      ).toBe(delivered ? true : undefined);
+      expect((await readMediaBuffer(a.id, "outbound")).buffer.toString()).toBe("A_ORIGINAL,1\n");
+      if (mode === "rewrite") {
+        const latest = await saveMediaBuffer(Buffer.from("A_REWRITE,3\n"), "text/csv", "outbound");
+        await produce(latest.path, "/workspace/A.csv", [a.path]);
+        expect(ctx.state.pendingToolMediaUrls).toEqual([b.path, latest.path]);
+        expect(
+          ctx.state.pendingToolStagedFileSources?.some((entry) => entry.deliveredToSource),
+        ).toBe(false);
+      }
+    });
+  });
+  it("retires only trusted superseded exports and does not restore late old candidates", async () => {
+    const ctx = createMockContext({ builtinToolNames: new Set(["write"]) });
+    const complete = async (
+      mediaUrls: string[],
+      replacedMediaUrls?: string[],
+      toolName = "write",
+    ) =>
+      handleToolExecutionEnd(ctx, {
+        type: "tool_execution_end",
+        toolName,
+        toolCallId: "replacement",
+        isError: false,
+        result: {
+          content: [{ type: "text", text: "Verified export." }],
+          details: {
+            media: {
+              mediaUrls,
+              replacedMediaUrls,
+              trustedLocalMedia: true,
+              stagedFileSources: mediaUrls.map((mediaUrl) => ({
+                mediaUrl,
+                sources: ["/workspace/report.csv"],
+              })),
+            },
+          },
+        },
+      });
+    await complete(["/tmp/first.csv"]);
+    await complete(["/tmp/latest.csv"], ["/tmp/first.csv"]);
+    await complete(["/tmp/first.csv"]);
+    expect(ctx.state.pendingToolMediaUrls).toEqual(["/tmp/latest.csv"]);
+    expect(ctx.state.pendingToolMediaTrustByUrl.has("/tmp/first.csv")).toBe(false);
+    await complete(["https://example.com/remote.csv"], ["/tmp/latest.csv"], "remote_tool");
+    expect(ctx.state.pendingToolMediaUrls).toContain("/tmp/latest.csv");
+    expect(
+      getReplyPayloadMetadata(readPendingToolMediaReply(ctx.state)!)?.stagedFileSources,
+    ).toEqual([{ mediaUrl: "/tmp/latest.csv", sources: ["/workspace/report.csv"] }]);
+  });
+
   it("does not warn for read tool when path is provided via file_path alias", async () => {
     const ctx = createMockContext();
 

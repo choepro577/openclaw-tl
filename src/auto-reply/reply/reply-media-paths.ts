@@ -18,6 +18,7 @@ import type { OpenClawConfig } from "../../config/types.openclaw.js";
 import { logVerbose } from "../../globals.js";
 import { resolveOutboundMediaMaxBytes } from "../../media/configured-max-bytes.js";
 import { resolveLocalMediaPath } from "../../media/local-media-path.js";
+import { normalizeMediaReferenceForComparison } from "../../media/media-reference-comparison.js";
 import { resolveOutboundAttachmentFromUrl } from "../../media/outbound-attachment.js";
 import { resolveAgentScopedOutboundMediaAccess } from "../../media/read-capability.js";
 import { extractOriginalFilename } from "../../media/store.js";
@@ -235,6 +236,57 @@ export function createReplyMediaPathNormalizer(params: {
   };
 
   return async (payload) => {
+    const stagedSources = (getReplyPayloadMetadata(payload)?.stagedFileSources ?? []).filter(
+      (entry) => hasHostProducedReplyMediaSource(payload, entry.mediaUrl),
+    );
+    const findStagedSource = async (media: string) => {
+      const direct = stagedSources.findLast((entry) =>
+        [entry.mediaUrl, ...entry.sources].some(
+          (source) =>
+            normalizeMediaReferenceForComparison(source) ===
+            normalizeMediaReferenceForComparison(media),
+        ),
+      );
+      if (direct) {
+        return direct;
+      }
+      if (
+        FILE_URL_RE.test(media) ||
+        isPassThroughRemoteMediaSource(media) ||
+        !isLikelyLocalMediaSource(media) ||
+        stagedSources.length === 0
+      ) {
+        return undefined;
+      }
+      const aliases = new Set<string>();
+      if (path.isAbsolute(media) || WINDOWS_DRIVE_RE.test(media)) {
+        aliases.add(path.resolve(media));
+      }
+      const workspaceSource = resolveAbsoluteWorkspaceMedia(media);
+      if (workspaceSource) {
+        aliases.add(path.resolve(workspaceSource));
+      }
+      if (!path.isAbsolute(media) && !WINDOWS_DRIVE_RE.test(media) && !media.startsWith("~")) {
+        try {
+          aliases.add(path.resolve(resolveWorkspaceRelativeMedia(media)));
+        } catch {
+          /* Scoped sandbox resolver handles container-relative paths below. */
+        }
+      }
+      let found = stagedSources.findLast((entry) =>
+        [entry.mediaUrl, ...entry.sources].some((source) => aliases.has(path.resolve(source))),
+      );
+      if (!found) {
+        const sandboxRoot = await resolveSandboxRoot();
+        if (sandboxRoot) {
+          const sandboxSource = await resolveSandboxedMediaSource({ media, sandboxRoot });
+          found = stagedSources.findLast((entry) =>
+            entry.sources.some((source) => path.resolve(source) === path.resolve(sandboxSource)),
+          );
+        }
+      }
+      return found;
+    };
     const fileReferences =
       payload.sensitiveMedia || payload.isReasoning ? [] : extractReplyFileReferences(payload.text);
     const mediaList = [
@@ -258,15 +310,29 @@ export function createReplyMediaPathNormalizer(params: {
     for (const media of mediaList) {
       let normalized: Awaited<ReturnType<typeof normalizeMediaSource>>;
       try {
-        const managedPath = await resolveAllowedManagedMediaPath(
-          resolveLocalMediaPath(media) ?? media,
-        );
-        if (managedPath && !hasHostProducedReplyMediaSource(payload, managedPath)) {
-          throw new Error(
-            "Managed media requires host-produced provenance, not a model-provided path or trust flag.",
-          );
+        const stagedSource = await findStagedSource(media);
+        if (stagedSource?.deliveredToSource) {
+          // This exact run snapshot already reached the source; clean its label without another read/send.
+          normalizedSources.set(media, stagedSource.mediaUrl);
+          continue;
         }
-        normalized = await normalizeMediaSource(media);
+        if (stagedSource) {
+          const sealedPath = await resolveAllowedManagedMediaPath(stagedSource.mediaUrl);
+          if (!sealedPath) {
+            throw new Error("The produced file snapshot is no longer available.");
+          }
+          normalized = { source: sealedPath, trustedLocalMedia: true };
+        } else {
+          const managedPath = await resolveAllowedManagedMediaPath(
+            resolveLocalMediaPath(media) ?? media,
+          );
+          if (managedPath && !hasHostProducedReplyMediaSource(payload, managedPath)) {
+            throw new Error(
+              "Managed media requires host-produced provenance, not a model-provided path or trust flag.",
+            );
+          }
+          normalized = await normalizeMediaSource(media);
+        }
       } catch (err) {
         firstMediaDropError ??= err;
         logVerbose(`dropping blocked reply media ${media}: ${String(err)}`);
@@ -277,6 +343,10 @@ export function createReplyMediaPathNormalizer(params: {
       }
       normalizedSources.set(media, normalized.source);
       if (seen.has(normalized.source)) {
+        const existing = normalizedAttachments.find((entry) => entry.path === normalized.source);
+        if (existing && !existing.name && inferredSources.has(media)) {
+          existing.name = extractOriginalFilename(media);
+        }
         continue;
       }
       seen.add(normalized.source);
@@ -285,15 +355,17 @@ export function createReplyMediaPathNormalizer(params: {
         payload.attachments?.find((entry) =>
           [entry.path, entry.url, entry.mediaUrl, entry.filePath].includes(media),
         ) ?? payload.attachments?.[mediaList.indexOf(media)];
+      const producedSource = stagedSources.findLast((entry) => entry.mediaUrl === normalized.source)
+        ?.sources[0];
       normalizedAttachments.push({
         ...attachment,
         path: normalized.source,
-        ...(inferredSources.has(media)
+        ...(inferredSources.has(media) || producedSource
           ? {
               name:
                 attachment?.name ??
                 extractOriginalFilename(
-                  FILE_URL_RE.test(media) ? decodeURIComponent(media) : media,
+                  producedSource ?? (FILE_URL_RE.test(media) ? decodeURIComponent(media) : media),
                 ),
               // Successful local normalization either staged the file or validated its managed root.
               trustedLocalMedia: isLikelyLocalMediaSource(normalized.source),
@@ -302,7 +374,8 @@ export function createReplyMediaPathNormalizer(params: {
       });
       if (isLikelyLocalMediaSource(normalized.source)) {
         sawNormalizedLocalMedia = true;
-        allNormalizedLocalMediaTrusted &&= normalized.trustedLocalMedia;
+        allNormalizedLocalMediaTrusted &&=
+          normalized.trustedLocalMedia || hasHostProducedReplyMediaSource(payload, media);
       }
     }
 
@@ -331,7 +404,7 @@ export function createReplyMediaPathNormalizer(params: {
         text,
         mediaUrl: normalizedMedia[0],
         mediaUrls: normalizedMedia,
-        ...(fileReferences.length > 0 || payload.attachments
+        ...(fileReferences.length > 0 || payload.attachments || stagedSources.length > 0
           ? { attachments: normalizedAttachments }
           : {}),
         ...(payload.trustedLocalMedia === true ||
@@ -340,19 +413,22 @@ export function createReplyMediaPathNormalizer(params: {
           : {}),
       }),
       {
-        stagedFileSources: normalizedMedia.map((mediaUrl) => ({
-          mediaUrl,
-          sources: [
-            ...new Set([
-              ...(getReplyPayloadMetadata(payload)?.stagedFileSources?.find(
-                (entry) => entry.mediaUrl === mediaUrl,
-              )?.sources ?? []),
-              ...[...normalizedSources]
-                .filter(([, source]) => source === mediaUrl)
-                .map(([source]) => source),
-            ]),
-          ],
-        })),
+        stagedFileSources: [
+          ...stagedSources.filter((entry) => entry.deliveredToSource),
+          ...normalizedMedia.map((mediaUrl) => ({
+            mediaUrl,
+            sources: [
+              ...new Set([
+                ...(getReplyPayloadMetadata(payload)?.stagedFileSources?.find(
+                  (entry) => entry.mediaUrl === mediaUrl,
+                )?.sources ?? []),
+                ...[...normalizedSources]
+                  .filter(([, source]) => source === mediaUrl)
+                  .map(([source]) => source),
+              ]),
+            ],
+          })),
+        ],
       },
     );
   };

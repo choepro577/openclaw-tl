@@ -891,7 +891,7 @@ function addSandboxShellDynamicToolsIfAvailable(
     ...execTool,
     name: "sandbox_exec",
     description:
-      "Run a shell command through OpenClaw's configured sandbox backend for this session. Use when OpenClaw sandboxing is active or when a command must execute in the sandbox backend, such as an SSH-backed sandbox or Docker container-path bind layout. Use Codex's native shell only when no OpenClaw sandbox is active and native Code Mode is available.",
+      "Run a shell command through OpenClaw's configured sandbox backend for this session. Use when OpenClaw sandboxing is active or when a command must execute in the sandbox backend, such as an SSH-backed sandbox or Docker container-path bind layout. When creating user deliverables (Excel, PDF, images, reports), declare their workspace paths in exportPaths and run in the foreground. Verified files are attached automatically even if your final reply only names them. Use Codex's native shell only when no OpenClaw sandbox is active and native Code Mode is available.",
     execute: async (toolCallId, args, signal, onUpdate) => {
       const result = await execTool.execute(toolCallId, args, signal, onUpdate);
       return {

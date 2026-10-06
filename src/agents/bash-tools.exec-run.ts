@@ -77,6 +77,7 @@ import { createModelExecAutoReviewer } from "./exec-auto-reviewer.js";
 import type { AgentToolResult } from "./runtime/index.js";
 import { EXEC_TOOL_DISPLAY_SUMMARY } from "./tool-description-presets.js";
 import type { AgentToolWithMeta } from "./tools/common.js";
+import { withWorkspaceExecExports } from "./workspace-exec-exports.js";
 
 type GatewayApprovalRevalidator = () => Promise<AgentToolResult<ExecToolDetails> | undefined>;
 
@@ -170,7 +171,7 @@ export function createExecTool(
     agentId,
     resolveHostForParams,
   });
-  return {
+  const tool: AgentToolWithMeta<typeof execSchema, ExecToolDetails> = {
     name: "exec",
     label: "exec",
     displaySummary: EXEC_TOOL_DISPLAY_SUMMARY,
@@ -193,11 +194,8 @@ export function createExecTool(
           signal,
         });
       let params = requestPreparation.normalizeParams(args);
-      const resolveExecEnvPrepared = requestPreparation.isResolveExecEnvPrepared(
-        args as ExecToolArgs,
-      );
-      const deferredResolveExecEnvState =
-        requestPreparation.getDeferredResolveExecEnvPreparedState(params);
+      const envPrepared = requestPreparation.isResolveExecEnvPrepared(args as ExecToolArgs);
+      const deferredEnvState = requestPreparation.getDeferredResolveExecEnvPreparedState(params);
       const preparedWorkdirState = requestPreparation.getResolvedExecWorkdirPreparedState(params);
 
       const maxOutput = DEFAULT_MAX_OUTPUT;
@@ -216,16 +214,17 @@ export function createExecTool(
         !allowBackground && (params.background === true || typeof params.yieldMs === "number")
           ? "Warning: continuation options are unavailable; running synchronously."
           : undefined;
-      const yieldWindow = allowBackground
-        ? params.background === true
-          ? 0
-          : clampWithDefault(
-              params.yieldMs ?? defaultBackgroundMs,
-              defaultBackgroundMs,
-              10,
-              120_000,
-            )
-        : null;
+      const yieldWindow =
+        allowBackground && !params.exportPaths?.length
+          ? params.background === true
+            ? 0
+            : clampWithDefault(
+                params.yieldMs ?? defaultBackgroundMs,
+                defaultBackgroundMs,
+                10,
+                120_000,
+              )
+          : null;
       const elevatedDefaults = defaults?.elevated;
       const elevatedAllowed = Boolean(elevatedDefaults?.enabled && elevatedDefaults.allowed);
       const elevatedDefaultMode =
@@ -404,9 +403,9 @@ export function createExecTool(
         if (elevatedRequested) {
           logInfo(`exec: elevated command ${truncateMiddle(params.command, 120)}`);
         }
-        if (!resolveExecEnvPrepared) {
+        if (!envPrepared) {
           params = await requestPreparation.prepareParamsWithResolvedExecEnv(params, {
-            hookContext: deferredResolveExecEnvState?.hookContext,
+            hookContext: deferredEnvState?.hookContext,
           });
         }
 
@@ -746,6 +745,7 @@ export function createExecTool(
       });
     },
   };
+  return withWorkspaceExecExports(tool, defaults);
 }
 
 /** Default exec tool instance used by agent tool registries. */

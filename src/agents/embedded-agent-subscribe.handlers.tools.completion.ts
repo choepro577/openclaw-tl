@@ -28,7 +28,7 @@ import {
   isDeliveredMessageToolOnlySourceReplyResult,
   isDeliveredMessagingToolResult,
   readMessageToolSourceReplyText,
-  resolveMessageToolSourceReplyFinal,
+  resolveMessageToolSourceReplyFinal as resolveSourceFinal,
 } from "./embedded-agent-message-tool-source-reply.js";
 import {
   extractMessagingToolSend,
@@ -44,6 +44,7 @@ import {
 } from "./embedded-agent-messaging.js";
 import { mergeEmbeddedRunReplayState } from "./embedded-agent-runner/replay-state.js";
 import { runBestEffortCallback } from "./embedded-agent-subscribe.callback.js";
+import { markSentToolFiles } from "./embedded-agent-subscribe.handlers.messages.replies.js";
 import {
   applyCurrentMessageProvider,
   applyToolSendReceiptForExtraction,
@@ -82,7 +83,7 @@ import {
 } from "./embedded-agent-subscribe.handlers.tools.start.js";
 import type { ToolHandlerContext } from "./embedded-agent-subscribe.handlers.types.js";
 import {
-  collectMessagingMediaUrlsFromRecord,
+  collectMessagingMediaUrlsFromRecord as collectMedia,
   collectMessagingMediaUrlsFromToolResult,
 } from "./embedded-agent-tool-media.js";
 import {
@@ -102,7 +103,7 @@ import {
 } from "./tool-error-summary.js";
 import { resolveFileMutationToolName } from "./tool-mutation-names.js";
 import { normalizeToolPolicyName } from "./tool-policy.js";
-import { isToolResultError, readToolResultDetails } from "./tool-result-error.js";
+import { isToolResultError, readToolResultDetails as readDetails } from "./tool-result-error.js";
 import { cancelAskUserPromptDelivery } from "./tools/ask-user-tool.js";
 import { isAutomationsToolName } from "./tools/automations-tool-name.js";
 
@@ -262,14 +263,13 @@ export async function handleToolExecutionEnd(
     });
   }
 
-  // Commit messaging tool evidence on success, discard on error.
   const messagingArgs = applyCurrentMessageProvider(toolName, startArgs, ctx.params.messageChannel);
   const isMessagingInvocation = isMessagingTool(toolName);
   const isMessagingSend = isMessagingInvocation && isMessagingToolSendAction(toolName, startArgs);
   const hasMessagingTargetEvidence =
     isMessagingInvocation && isMessagingToolTargetEvidenceAction(toolName, startArgs);
   const messageDelivery = readEmbeddedMessageDeliveryFact(
-    readToolResultDetails(toolSendReceiptResult)?.messageDelivery,
+    readDetails(toolSendReceiptResult)?.messageDelivery,
   );
   const didDeliverMessagingResult =
     isMessagingInvocation &&
@@ -284,7 +284,7 @@ export async function handleToolExecutionEnd(
           isError: isToolError,
         }));
   const messageText = isMessagingSend ? readMessagingText(startArgs) : undefined;
-  const argumentMediaUrls = isMessagingSend ? collectMessagingMediaUrlsFromRecord(startArgs) : [];
+  const argumentMediaUrls = isMessagingSend ? collectMedia(startArgs) : [];
   const hasRichContent = isMessagingSend && hasMessagingRichContent(startArgs);
   const messageTarget = hasMessagingTargetEvidence
     ? extractMessagingToolSend(toolName, messagingArgs, {
@@ -305,7 +305,7 @@ export async function handleToolExecutionEnd(
   const extractionResult = applyToolSendReceiptForExtraction(result, toolSendReceiptResult);
   const confirmedMessageTarget =
     messageTarget && extractMessagingToolSendResult(messageTarget, extractionResult);
-  const deliveredMessageToolSourceReply =
+  const deliveredSourceReply =
     didDeliverMessagingResult &&
     isDeliveredMessageToolOnlySourceReplyResult({
       sourceReplyDeliveryMode: ctx.params.sourceReplyDeliveryMode,
@@ -328,7 +328,7 @@ export async function handleToolExecutionEnd(
       deliveryConfirmed: didDeliverMessagingResult,
     });
   const deliveredCurrentSourceReply =
-    deliveredMessageToolSourceReply ||
+    deliveredSourceReply ||
     isDeliveredCoreCurrentChannelWidgetResult({
       coreBuiltinToolNames: ctx.params.coreBuiltinToolNames,
       sourceReplyDeliveryMode: ctx.params.sourceReplyDeliveryMode,
@@ -336,9 +336,7 @@ export async function handleToolExecutionEnd(
       result,
       isToolError,
     });
-  const sourceReplyFinal = deliveredMessageToolSourceReply
-    ? resolveMessageToolSourceReplyFinal(startArgs)
-    : undefined;
+  const sourceFinal = deliveredSourceReply ? resolveSourceFinal(startArgs) : undefined;
   ctx.state.pendingMessagingTexts.delete(toolCallId);
   ctx.state.pendingMessagingTargets.delete(toolCallId);
   ctx.state.pendingMessagingMediaUrls.delete(toolCallId);
@@ -354,13 +352,13 @@ export async function handleToolExecutionEnd(
       ...(messageText ? { text: messageText } : {}),
       ...(committedMediaUrls.length > 0 ? { mediaUrls: committedMediaUrls.slice() } : {}),
       ...(hasRichContent ? { hasRichContent: true as const } : {}),
-      ...(sourceReplyFinal !== undefined ? { sourceReplyFinal } : {}),
+      ...(sourceFinal !== undefined ? { sourceReplyFinal: sourceFinal } : {}),
     });
     ctx.trimMessagingToolSent();
   }
   if (deliveredCurrentSourceReply) {
     ctx.state.messageToolOnlySourceReplyDelivered = true;
-    if (deliveredMessageToolSourceReply) {
+    if (deliveredSourceReply) {
       const sourceReplyText = readMessageToolSourceReplyText(startArgs);
       const normalizedSourceReplyText = sourceReplyText
         ? normalizeTextForComparison(sourceReplyText)
@@ -373,15 +371,19 @@ export async function handleToolExecutionEnd(
     ctx.params.onDeliveredMessageToolOnlySourceReply?.();
   }
   if (didDeliverMessagingResult && isMessagingSend) {
+    const sourceReply = extractMessagingToolSourceReplyPayload(result);
+    if (deliveredSourceReply && sourceReply && readDetails(result)?.deliveryStatus === "sent") {
+      const cwd = ctx.params.session?.sessionManager.getCwd();
+      await markSentToolFiles(ctx.state, argumentMediaUrls, collectMedia({ ...sourceReply }), cwd);
+    }
     if (committedMediaUrls.length > 0) {
       ctx.state.messagingToolSentMediaUrls.push(...committedMediaUrls);
       ctx.trimMessagingToolSent();
     }
-    const sourceReplyPayload = extractMessagingToolSourceReplyPayload(result);
-    if (sourceReplyPayload) {
+    if (sourceReply) {
       ctx.state.messagingToolSourceReplyPayloads.push({
-        ...sourceReplyPayload,
-        ...(sourceReplyFinal !== undefined ? { sourceReplyFinal } : {}),
+        ...sourceReply,
+        ...(sourceFinal !== undefined ? { sourceReplyFinal: sourceFinal } : {}),
       });
       ctx.trimMessagingToolSent();
     }
